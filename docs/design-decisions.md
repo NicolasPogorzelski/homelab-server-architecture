@@ -156,3 +156,31 @@ The system prioritizes:
 - Minimal coupling between layers
 - Operational predictability over theoretical elegance
 
+
+---
+
+## 8. LAN Exposure for Media Workloads (Performance Trade-off)
+
+### Decision
+
+Media services (Jellyfin, Audiobookshelf) remain reachable from the local network.
+
+### Rationale
+
+Remote access is secured via Tailscale (identity-based Zero-Trust overlay).
+
+However, local media streaming is intentionally allowed over LAN to avoid unnecessary bandwidth constraints.
+
+The current upstream bandwidth (~50 Mbit/s) would significantly limit high-bitrate media streaming if all traffic were forced through the overlay network.
+
+LAN access is therefore maintained as a performance-oriented exception.
+
+### Security Consideration
+
+- No public exposure
+- Identity-based remote access enforced via Tailscale
+- LAN exposure restricted to media workloads only
+- Sensitive services (Nextcloud, Vaultwarden) are not exposed on LAN without authentication
+
+This represents a deliberate trade-off between strict network isolation and practical throughput requirements.
+
