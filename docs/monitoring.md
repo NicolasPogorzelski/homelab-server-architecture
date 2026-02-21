@@ -13,17 +13,15 @@ Monitoring is implemented using a Prometheus + Grafana stack running inside a de
 - Prometheus binds to loopback only (`127.0.0.1:9090`)
 - Grafana binds to loopback only (`127.0.0.1:3000`)
 - Node Exporter binds to loopback only (`127.0.0.1:9100`)
-- No public exposure; remote access is handled through the zero-trust overlay model
+- No public exposure; remote access follows the zero-trust overlay model (Tailscale)
 
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
 - Separate scrape jobs for:
   - Prometheus self-scrape
-  - Node Exporter on the monitoring node
-  - Node Exporter on the Proxmox host
-
-Targets are intentionally anonymized in the repository.
+  - Node Exporter on the monitoring node (loopback)
+  - Node Exporter on the Proxmox host (anonymized in repo)
 
 ## Alerting
 

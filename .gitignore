@@ -2,3 +2,7 @@
 # Monitoring secrets / local env
 **/grafana.env
 **/*.env
+
+# Secrets / local env files
+**/grafana.env
+**/*.env
