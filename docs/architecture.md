@@ -51,6 +51,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ## Services
 
+- [VM100 (GPU VM) – Jellyfin & Audiobookshelf](services-vm100.md)
 - [Nextcloud (LXC210)](nextcloud.md)
 - [Calibre-Web (LXC212)](calibre-web.md)
 - [Vaultwarden (LXC230)](vaultwarden.md)
