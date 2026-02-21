@@ -1,5 +1,53 @@
 # Homelab Platform Architecture
 
+[Badges remain here]
+
+> A self-designed, security-focused platform architecture built on Proxmox.
+
+This project models real-world platform engineering principles and serves as a structured environment to deliberately practice architectural decision-making, operational discipline, and recovery-oriented design.
+
+It is not built as a collection of services, but as a layered infrastructure platform with explicit trade-offs, documented design decisions, and clearly defined trust boundaries.
+
+---
+
+## Architectural Intent
+
+This homelab is intentionally structured around:
+
+- Clear separation of responsibility layers
+- Deterministic reboot behavior
+- Storage abstraction with explicit trade-offs
+- Identity-based access control
+- Least-privilege service segmentation
+- Observability-first operations
+- Recovery-focused design
+
+---
+
+## Quick Overview
+
+| Layer | Component | Purpose |
+|-------|----------|---------|
+| Hypervisor | Proxmox | Virtualization platform |
+| Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
+| Compute | Docker on VM100 | GPU-enabled workloads |
+| Services | Unprivileged LXCs | Isolation and segmentation |
+| Access | Tailscale | Identity-based remote access |
+| Monitoring | Prometheus + Grafana | Observability layer |
+
+---
+
+## Scope & Limitations
+
+This platform is not designed as a high-availability (HA) cluster.
+
+It prioritizes deterministic recovery, explicit dependency modeling, and documented failure procedures over automatic failover.
+
+The focus is operational clarity and controlled recovery rather than zero-downtime guarantees.
+
+---
+
+
 [![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![MergerFS](https://img.shields.io/badge/MergerFS-Union--Filesystem-5C2D91)](https://github.com/trapexit/mergerfs) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 
 
