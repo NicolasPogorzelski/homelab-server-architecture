@@ -1,0 +1,25 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+
+    # Run as a non-root service user (UID/GID aligned across storage boundaries).
+    user: "1000:1000"
+
+    # Secrets are provided locally via env file (intentionally NOT committed).
+    env_file:
+      - .env
+
+    volumes:
+      - /opt/vaultwarden:/data
+
+    # Local-only exposure. Remote access follows the zero-trust overlay model (Tailscale).
+    ports:
+      - "127.0.0.1:8080:80"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

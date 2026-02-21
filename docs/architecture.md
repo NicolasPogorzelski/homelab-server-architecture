@@ -38,7 +38,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 - Separation of concerns (compute, storage, services)
 - Minimal coupling between components
-- Zero-trust inspired access model (no public reverse proxy / no router port forwarding)
+- Zero-trust inspired access model (no public internet exposure (access restricted to private overlay network))
 - Least privilege access (RO/RW separation where applicable)
 - Reboot-safe operation (mount and startup dependency modeling)
 
@@ -48,3 +48,9 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - Identity-based overlay networking (Tailscale)
 - Explicit ACL segmentation between tiers
 - No public service exposure
+
+## Services
+- [Vaultwarden (LXC230)](vaultwarden.md)
+
+- [Nextcloud (LXC210)](nextcloud.md)
+- [Monitoring (LXC200)](monitoring.md)
