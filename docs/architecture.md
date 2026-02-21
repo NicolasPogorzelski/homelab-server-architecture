@@ -57,3 +57,8 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [Vaultwarden (LXC230)](vaultwarden.md)
 - [Monitoring (LXC200)](monitoring.md)
 
+
+## Storage Docs
+
+- [Storage Design (SnapRAID + MergerFS)](storage-design.md)
+- [Samba Shares (VM102)](samba.md)
