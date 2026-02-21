@@ -50,7 +50,9 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - No public service exposure
 
 ## Services
-- [Vaultwarden (LXC230)](vaultwarden.md)
 
 - [Nextcloud (LXC210)](nextcloud.md)
+- [Calibre-Web (LXC212)](calibre-web.md)
+- [Vaultwarden (LXC230)](vaultwarden.md)
 - [Monitoring (LXC200)](monitoring.md)
+
