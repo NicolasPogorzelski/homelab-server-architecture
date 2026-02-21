@@ -1,18 +1,21 @@
 # Infrastructure Exposure Model
 
-This diagram shows which services are reachable from which network layer.
+This diagram shows how services are accessed and how public ingress is prevented.
 
 ```mermaid
 flowchart TB
 
   Internet((Internet))
   LAN((Local Network))
-  TS[Tailscale Overlay Network]
-
+  TS[Tailscale Overlay Network<br/>Identity-based Access]
   NoPublic[No Public Ingress<br/>No router port-forwarding]
 
+  %% Internet access model
+  Internet --> TS
   Internet --> NoPublic
-  NoPublic -.-> TS
+
+  %% No direct exposure
+  NoPublic -.-> Services
 
   subgraph Services
     Jellyfin[Jellyfin]
@@ -34,13 +37,3 @@ flowchart TB
   TS --> Vaultwarden
   TS --> CalibreWeb
   TS --> Monitoring
-
-  %% No direct Internet access
-  NoPublic -.-> Jellyfin
-  NoPublic -.-> ABS
-  NoPublic -.-> Nextcloud
-  NoPublic -.-> Vaultwarden
-  NoPublic -.-> CalibreWeb
-  NoPublic -.-> Monitoring
-
-```
