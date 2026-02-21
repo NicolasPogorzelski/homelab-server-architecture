@@ -1,0 +1,22 @@
+services:
+  calibreweb:
+    image: lscr.io/linuxserver/calibre-web:latest
+    container_name: calibre-web
+
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+
+    # Local-only exposure. Remote access follows the zero-trust overlay model (Tailscale).
+    ports:
+      - "127.0.0.1:8083:8083"
+
+    volumes:
+      # Persisted application configuration
+      - /srv/calibreweb/config:/config:rw
+
+      # Read-only library mount from storage
+      - /books:/books:ro
+
+    restart: unless-stopped
