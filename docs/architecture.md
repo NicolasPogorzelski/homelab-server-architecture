@@ -41,3 +41,10 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - Zero-trust inspired access model (no public reverse proxy / no router port forwarding)
 - Least privilege access (RO/RW separation where applicable)
 - Reboot-safe operation (mount and startup dependency modeling)
+
+## Networking Layer
+
+- Zero-trust inspired access model
+- Identity-based overlay networking (Tailscale)
+- Explicit ACL segmentation between tiers
+- No public service exposure
