@@ -54,15 +54,15 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
 
 - OS disk: `sda1` (ext4) mounted at `/`
 - Data disks (SnapRAID data):
-  - `disk01` → `/mnt/disk01`
-  - `disk02` → `/mnt/disk02`
-  - `disk03` → `/mnt/disk03`
-  - `disk04` → `/mnt/disk04`
-  - `disk05` → `/mnt/disk05`
+  - `disk01` -> `/mnt/disk01`
+  - `disk02` -> `/mnt/disk02`
+  - `disk03` -> `/mnt/disk03`
+  - `disk04` -> `/mnt/disk04`
+  - `disk05` -> `/mnt/disk05`
 - Parity disk:
-  - `parity1` → `/mnt/parity`
+  - `parity1` -> `/mnt/parity`
 - Auxiliary disk:
-  - `aux02tb` → `/mnt/aux3TB`
+  - `aux02tb` -> `/mnt/aux3TB`
 
 All data/parity disks are formatted as `ext4` and mounted persistently.
 
@@ -123,8 +123,8 @@ Global settings (high-level):
 - Mandatory signing (`server signing = mandatory`)
 
 Service shares (read-write, per-service user):
-- `[Nextcloud]` → `/mnt/mergerfs/Nextcloud` (valid user: `nextcloud`, RW)
-- `[Vaultwarden]` → `/mnt/mergerfs/Vaultwarden` (valid user: `vaultwarden`, RW)
+- `[Nextcloud]` -> `/mnt/mergerfs/Nextcloud` (valid user: `nextcloud`, RW)
+- `[Vaultwarden]` -> `/mnt/mergerfs/Vaultwarden` (valid user: `vaultwarden`, RW)
 
 Owner mapping (current state for RW shares):
 - `force user = storage`
@@ -133,11 +133,11 @@ Owner mapping (current state for RW shares):
 - `directory mask = 0770`
 
 Media shares:
-- `[Filme]`, `[Serien]`, `[Audiobooks]`, `[Books]` → RW for `storage`
+- `[Filme]`, `[Serien]`, `[Audiobooks]`, `[Books]` -> RW for `storage`
 - Read-only consumers:
-  - `[media-jf]` → `/mnt/mergerfs` (valid user: `media-jf`, RO, not browseable)
-  - `[media-abs]` → `/mnt/mergerfs` (valid user: `media-abs`, RO, not browseable)
-  - `[Books-service]` → `/mnt/mergerfs/Books` (valid user: `books-svc`, RO, not browseable)
+  - `[media-jf]` -> `/mnt/mergerfs` (valid user: `<svc-jellyfin>`, RO, not browseable)
+  - `[media-abs]` -> `/mnt/mergerfs` (valid user: `<svc-audiobookshelf>`, RO, not browseable)
+  - `[Books-service]` -> `/mnt/mergerfs/Books` (valid user: `<svc-books>`, RO, not browseable)
 
 This model enforces least-privilege:
 - RW only where needed (Nextcloud/Vaultwarden/service admin)
@@ -149,7 +149,7 @@ This model enforces least-privilege:
 MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot, systemd generates the mount unit automatically via `systemd-fstab-generator`:
 
 - Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
-- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05` → `/mnt/mergerfs`
+- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05` -> `/mnt/mergerfs`
 - Type: `fuse.mergerfs`
 - Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
 
