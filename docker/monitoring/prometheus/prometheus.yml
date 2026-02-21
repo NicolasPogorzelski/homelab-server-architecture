@@ -9,13 +9,13 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
-  # Node Exporter on the monitoring node (host network). Target anonymized intentionally.
+  # Node Exporter on the monitoring node (loopback-only).
   - job_name: "node"
     static_configs:
       - targets:
-          - "DOCKER_HOST_LOOPBACK:9100"
+          - "127.0.0.1:9100"
 
-  # Proxmox host Node Exporter. Target anonymized intentionally.
+  # Proxmox host Node Exporter (anonymized).
   - job_name: "proxmox-host-node"
     static_configs:
       - targets: ["PROXMOX_HOST_NODE_EXPORTER:9100"]
