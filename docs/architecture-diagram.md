@@ -1,9 +1,10 @@
 # Infrastructure Architecture – Logical View
 
-This diagram shows the logical separation of layers, storage dependencies, and the **access model**:
-- **Remote access:** identity-based overlay (Tailscale) for *all* services
-- **LAN access:** only for media services on VM100 (performance trade-off)
-- **No public ingress:** no router port-forwarding / no public reverse proxy
+This diagram shows the logical separation of layers, storage dependencies, and the access model:
+
+- Remote access: Tailscale overlay for all services
+- LAN access: only media services on VM100 (performance trade-off)
+- No public ingress: no router port-forwarding / no public reverse proxy
 
 ```mermaid
 flowchart TB
@@ -11,10 +12,11 @@ flowchart TB
   %% Access Layers
   Internet((Internet))
   LAN((Local Network))
-  TS[Tailscale Overlay (Zero Trust)]
-  NoPublic[No Public Ingress<br/>(no port-forwarding / no public reverse proxy)]
+  TS[Tailscale Overlay - Zero Trust]
+  NoPublic[No Public Ingress<br/>no port-forwarding / no public reverse proxy]
 
   Internet --> NoPublic
+  NoPublic -.-> TS
 
   %% Proxmox Layer
   subgraph Proxmox Host
@@ -30,7 +32,7 @@ flowchart TB
   Disks[(Data Disks)]
   Parity[(Parity Disk)]
   MergerFS[/mnt/mergerfs/]
-  Samba[SMB Shares (segmented)]
+  Samba[SMB Shares - segmented]
 
   Disks --> MergerFS
   Parity --> MergerFS
@@ -38,7 +40,7 @@ flowchart TB
   VM102 --> MergerFS
   VM102 --> Samba
 
-  %% Storage Consumers (mounts / dependencies)
+  %% Storage Consumers (mount dependencies)
   Samba --> VM100
   Samba --> LXC210
   Samba --> LXC212
@@ -56,21 +58,19 @@ flowchart TB
   LXC200 --> LXC230
 
   %% Access Model
-  %% Remote: Tailscale provides access to ALL services (even if some bind loopback internally, access is mediated via TS tooling)
+  %% Remote: Tailscale provides access to all services
   TS --> VM100
+  TS --> VM102
   TS --> LXC200
   TS --> LXC210
   TS --> LXC212
   TS --> LXC230
-  TS --> VM102
 
-  %% LAN: only media services are intentionally reachable on LAN for performance
+  %% LAN: only media services are intentionally reachable on LAN
   LAN --> Jellyfin
   LAN --> ABS
 
-  %% Remote usage: media services can still be reached via Tailscale when needed (policy-driven)
+  %% Remote: media can also be reached via Tailscale when needed
   TS --> Jellyfin
   TS --> ABS
-
-  %% Optional: show that most services are not exposed directly on LAN
-  NoPublic -.-> TS
+```
