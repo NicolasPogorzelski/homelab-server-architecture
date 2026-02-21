@@ -1,5 +1,19 @@
 # Architecture Design Decisions
 
+# Design Philosophy
+
+The system prioritizes:
+
+- Deterministic recovery
+- Explicit dependency modeling
+- Operational transparency
+- Security by segmentation
+- Minimal coupling between layers
+- Operational predictability over theoretical elegance
+
+
+---
+
 This document outlines key architectural decisions, alternatives considered, and trade-offs.
 
 ---
@@ -142,20 +156,6 @@ Monitoring stack isolated in LXC200.
 ### Trade-offs
 - Slight resource overhead
 - Additional configuration and maintenance surface
-
----
-
-# Design Philosophy
-
-The system prioritizes:
-
-- Deterministic recovery
-- Explicit dependency modeling
-- Operational transparency
-- Security by segmentation
-- Minimal coupling between layers
-- Operational predictability over theoretical elegance
-
 
 ---
 
