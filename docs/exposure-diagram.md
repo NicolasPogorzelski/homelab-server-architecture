@@ -37,6 +37,10 @@ flowchart TB
 
   %% No direct Internet access
   NoPublic -.-> Jellyfin
+  NoPublic -.-> ABS
   NoPublic -.-> Nextcloud
   NoPublic -.-> Vaultwarden
+  NoPublic -.-> CalibreWeb
+  NoPublic -.-> Monitoring
+
 ```
