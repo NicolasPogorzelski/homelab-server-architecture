@@ -184,3 +184,35 @@ LAN access is therefore maintained as a performance-oriented exception.
 
 This represents a deliberate trade-off between strict network isolation and practical throughput requirements.
 
+
+---
+
+## 8. Planned Architectural Evolution (Network Hardening – Phase 2)
+
+The current hybrid LAN + Tailscale access model is a documented performance trade-off influenced by upstream bandwidth limitations (~50 Mbit upload).
+
+Media workloads (e.g., Jellyfin, Audiobookshelf) are intentionally reachable via LAN to avoid performance bottlenecks and unnecessary overlay overhead.
+
+With increased upstream capacity (~500 Mbit planned), the architecture is designed to evolve toward a stricter identity-bound model:
+
+### Planned Changes
+
+- Restrict SMB exposure to the Tailscale interface only
+- Remove implicit LAN trust for storage services
+- Enforce identity-bound access for all service mounts
+- Eliminate direct LAN service exposure (media included)
+- Introduce optional VLAN-based segmentation for internal traffic separation
+
+### Rationale
+
+This evolution reflects a shift from a pragmatic hybrid networking model toward full zero-trust enforcement once bandwidth constraints no longer justify LAN-level exposure.
+
+The design prioritizes:
+
+- Explicit trust boundaries
+- Reduced lateral movement potential
+- Consistent access control semantics
+- Security model clarity over convenience
+
+The current implementation is therefore intentionally transitional and documented as such.
+
