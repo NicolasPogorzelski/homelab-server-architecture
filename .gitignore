@@ -1,0 +1,4 @@
+
+# Monitoring secrets / local env
+**/grafana.env
+**/*.env
