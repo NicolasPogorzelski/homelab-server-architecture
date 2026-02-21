@@ -143,3 +143,19 @@ This model enforces least-privilege:
 - RW only where needed (Nextcloud/Vaultwarden/service admin)
 - RO for consumers (Jellyfin/Audiobookshelf/Calibre-Web)
 
+
+### Mount Persistence (fstab + systemd)
+
+MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot, systemd generates the mount unit automatically via `systemd-fstab-generator`:
+
+- Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
+- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05` → `/mnt/mergerfs`
+- Type: `fuse.mergerfs`
+- Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
+
+Effective runtime state can be inspected via:
+
+- `findmnt -T /mnt/mergerfs -o TARGET,SOURCE,FSTYPE,OPTIONS`
+
+Sanitized fstab excerpt is stored in:
+- `snippets/storage/fstab.storage-vm102.sanitized.conf`
