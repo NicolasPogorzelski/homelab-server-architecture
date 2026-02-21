@@ -187,7 +187,7 @@ This represents a deliberate trade-off between strict network isolation and prac
 
 ---
 
-## 8. Planned Architectural Evolution (Network Hardening – Phase 2)
+## 9. Planned Architectural Evolution (Network Hardening – Phase 2)
 
 The current hybrid LAN + Tailscale access model is a documented performance trade-off influenced by upstream bandwidth limitations (~50 Mbit upload).
 
