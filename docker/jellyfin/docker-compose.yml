@@ -1,0 +1,23 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+
+    user: 1000:1000
+    gpus: all
+
+    environment:
+      - TZ=Europe/Berlin
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
+
+    volumes:
+      - /mnt/vm-data/jellyfin/config:/config
+      - /mnt/vm-data/jellyfin/cache:/cache
+      - /mnt/vm-data/jellyfin/metadata:/metadata
+      - /media/jellyfin/Filme:/media/Filme:ro
+      - /media/jellyfin/Serien:/media/Serien:ro
+
+    ports:
+      - 8096:8096
