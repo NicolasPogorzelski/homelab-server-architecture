@@ -6,3 +6,9 @@
 # Secrets / local env files
 **/grafana.env
 **/*.env
+
+# Vaultwarden (never commit secrets/keys/db)
+docker/vaultwarden/.env
+**/db.sqlite3*
+**/rsa_key.pem
+**/backup/rsa_key.pem
