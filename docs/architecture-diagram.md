@@ -40,7 +40,7 @@ flowchart TB
   VM102 --> MergerFS
   VM102 --> Samba
 
-  %% Storage Consumers (mount dependencies)
+  %% Storage Consumers
   Samba --> VM100
   Samba --> LXC210
   Samba --> LXC212
@@ -50,7 +50,7 @@ flowchart TB
   VM100 --> Jellyfin[Jellyfin]
   VM100 --> ABS[Audiobookshelf]
 
-  %% Monitoring Targets (conceptual)
+  %% Monitoring Targets
   LXC200 --> VM102
   LXC200 --> VM100
   LXC200 --> LXC210
@@ -58,7 +58,6 @@ flowchart TB
   LXC200 --> LXC230
 
   %% Access Model
-  %% Remote: Tailscale provides access to all services
   TS --> VM100
   TS --> VM102
   TS --> LXC200
@@ -66,11 +65,8 @@ flowchart TB
   TS --> LXC212
   TS --> LXC230
 
-  %% LAN: only media services are intentionally reachable on LAN
   LAN --> Jellyfin
   LAN --> ABS
 
-  %% Remote: media can also be reached via Tailscale when needed
   TS --> Jellyfin
   TS --> ABS
-```
