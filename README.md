@@ -6,8 +6,6 @@
 
 ## Architecture Overview
 
-![Architecture Diagram](docs/architecture-diagram.md)
-
 The system is built on Proxmox and structured into clear responsibility layers:
 
 ### Storage Layer – VM102
@@ -27,6 +25,9 @@ The system is built on Proxmox and structured into clear responsibility layers:
 - Calibre-Web
 - Monitoring (Prometheus + Grafana)
 
+📌 **Logical Architecture Diagram**  
+→ [View Architecture Diagram](docs/architecture-diagram.md)
+
 ---
 
 ## Security Model (Zero Trust)
@@ -44,8 +45,8 @@ Internet → Tailscale → Services
 
 LAN exposure is restricted to media workloads only.
 
-📌 Exposure Model  
-→ `docs/exposure-diagram.md`
+📌 **Exposure Model**  
+→ [View Exposure Diagram](docs/exposure-diagram.md)
 
 ---
 
@@ -56,8 +57,8 @@ LAN exposure is restricted to media workloads only.
 - Heterogeneous ext4 data disks
 - Service-specific segmented shares
 
-📌 Storage Design  
-→ `docs/storage-design.md`
+📌 **Storage Design Documentation**  
+→ [View Storage Design](docs/storage-design.md)
 
 ---
 
@@ -68,8 +69,8 @@ LAN exposure is restricted to media workloads only.
 - Documented recovery procedures
 - Monitoring independent from application layer
 
-📌 Operations Documentation  
-→ `docs/operations.md`
+📌 **Operations Documentation**  
+→ [View Operations Model](docs/operations.md)
 
 ---
 
