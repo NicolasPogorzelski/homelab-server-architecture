@@ -1,56 +1,76 @@
 # Infrastructure Architecture – Logical View
 
-This diagram represents the logical separation of layers and service dependencies.
+This diagram shows the logical separation of layers, storage dependencies, and the **access model**:
+- **Remote access:** identity-based overlay (Tailscale) for *all* services
+- **LAN access:** only for media services on VM100 (performance trade-off)
+- **No public ingress:** no router port-forwarding / no public reverse proxy
 
 ```mermaid
 flowchart TB
 
-    %% External Layers
-    Internet((Internet))
-    LAN((Local Network))
-    TS[Tailscale Overlay Network]
+  %% Access Layers
+  Internet((Internet))
+  LAN((Local Network))
+  TS[Tailscale Overlay (Zero Trust)]
+  NoPublic[No Public Ingress<br/>(no port-forwarding / no public reverse proxy)]
 
-    %% Hypervisor
-    subgraph Proxmox Host
-        VM102[VM102 - Storage<br/>SnapRAID + MergerFS + Samba]
-        VM100[VM100 - GPU / Compute<br/>Docker + NVIDIA]
-        LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
-        LXC210[LXC210 - Nextcloud]
-        LXC212[LXC212 - Calibre-Web]
-        LXC230[LXC230 - Vaultwarden]
-    end
+  Internet --> NoPublic
 
-    %% Storage
-    Disks[(Data Disks)]
-    Parity[(Parity Disk)]
-    MergerFS[/mnt/mergerfs/]
-    Samba[SMB Segmented Shares]
+  %% Proxmox Layer
+  subgraph Proxmox Host
+    VM102[VM102 - Storage<br/>SnapRAID + MergerFS + Samba]
+    VM100[VM100 - GPU / Compute<br/>Docker + NVIDIA]
+    LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
+    LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
+    LXC212[LXC212 - Calibre-Web<br/>Docker]
+    LXC230[LXC230 - Vaultwarden<br/>Docker]
+  end
 
-    Disks --> MergerFS
-    Parity --> MergerFS
-    MergerFS --> Samba
-    VM102 --> MergerFS
-    VM102 --> Samba
+  %% Storage Internals
+  Disks[(Data Disks)]
+  Parity[(Parity Disk)]
+  MergerFS[/mnt/mergerfs/]
+  Samba[SMB Shares (segmented)]
 
-    %% Compute Layer
-    Samba --> VM100
-    Samba --> LXC210
-    Samba --> LXC212
-    Samba --> LXC230
+  Disks --> MergerFS
+  Parity --> MergerFS
+  MergerFS --> Samba
+  VM102 --> MergerFS
+  VM102 --> Samba
 
-    %% Docker Services
-    VM100 --> Jellyfin[Jellyfin]
-    VM100 --> ABS[Audiobookshelf]
+  %% Storage Consumers (mounts / dependencies)
+  Samba --> VM100
+  Samba --> LXC210
+  Samba --> LXC212
+  Samba --> LXC230
 
-    %% Monitoring
-    LXC200 --> VM102
-    LXC200 --> VM100
-    LXC200 --> LXC210
-    LXC200 --> LXC212
-    LXC200 --> LXC230
+  %% VM100 Services
+  VM100 --> Jellyfin[Jellyfin]
+  VM100 --> ABS[Audiobookshelf]
 
-    %% Network Exposure
-    LAN --> VM100
-    TS --> LXC210
-    TS --> LXC200
-```
+  %% Monitoring Targets (conceptual)
+  LXC200 --> VM102
+  LXC200 --> VM100
+  LXC200 --> LXC210
+  LXC200 --> LXC212
+  LXC200 --> LXC230
+
+  %% Access Model
+  %% Remote: Tailscale provides access to ALL services (even if some bind loopback internally, access is mediated via TS tooling)
+  TS --> VM100
+  TS --> LXC200
+  TS --> LXC210
+  TS --> LXC212
+  TS --> LXC230
+  TS --> VM102
+
+  %% LAN: only media services are intentionally reachable on LAN for performance
+  LAN --> Jellyfin
+  LAN --> ABS
+
+  %% Remote usage: media services can still be reached via Tailscale when needed (policy-driven)
+  TS --> Jellyfin
+  TS --> ABS
+
+  %% Optional: show that most services are not exposed directly on LAN
+  NoPublic -.-> TS
