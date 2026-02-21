@@ -1,5 +1,15 @@
 # Homelab Platform Architecture
 
+![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
+![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)
+![MergerFS](https://img.shields.io/badge/MergerFS-Union--Filesystem-5C2D91)
+![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)
+![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)
+
+
 > A layered infrastructure designed with platform engineering principles and a Zero-Trust access model.
 
 ---
