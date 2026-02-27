@@ -9,6 +9,8 @@ Principles:
 - access is identity-based and explicitly allowed
 - policy is managed as code (Tailscale ACL JSON), not ad-hoc per service
 
+Source of truth: The active policy is the Tailscale ACL JSON in the Tailscale admin console. This repo documents the intended model; a sanitized JSON export may be added later for auditability.
+
 ---
 
 ## Core Concepts
