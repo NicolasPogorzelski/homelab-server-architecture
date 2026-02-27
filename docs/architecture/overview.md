@@ -63,4 +63,4 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [Storage Design (SnapRAID + MergerFS)](storage-design.md)
 - [Samba Shares (VM102)](samba.md)
 
-See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
+See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)

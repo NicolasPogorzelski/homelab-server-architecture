@@ -20,7 +20,7 @@ Remote access is exclusively provided through an identity-based overlay network 
 ACL enforcement is implemented via **Tailscale ACL policy (JSON)** using
 node tags and identity-based allow rules (policy-as-code).
 
-See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
+See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
 
 ## Node Segmentation
 
