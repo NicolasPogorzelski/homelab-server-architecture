@@ -57,4 +57,4 @@ docs/services/postgresql-platform.md
 ## Access Model (Zero Trust)
 - Exposed via Tailscale only (no LAN / no public ingress)
 - Network policy is enforced via Tailscale ACL (node tags + ACL JSON)
-- See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
+- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
