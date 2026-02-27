@@ -11,6 +11,8 @@
 - Storage design (SnapRAID + MergerFS): [docs/platform/storage-design.md](docs/platform/storage-design.md)
 - Samba model (VM102): [docs/platform/samba.md](docs/platform/samba.md)
 - Tailscale ACL & tagging model (policy-as-code): [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
+- OpenWebUI (AI interface): [docs/services/openwebui.md](docs/services/openwebui.md)
+- PostgreSQL platform service: [docs/services/postgresql-platform.md](docs/services/postgresql-platform.md)
 
 ---
 
