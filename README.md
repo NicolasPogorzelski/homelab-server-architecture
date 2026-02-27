@@ -10,6 +10,7 @@
 - Operations (runbooks, recovery): [docs/platform/operations.md](docs/platform/operations.md)
 - Storage design (SnapRAID + MergerFS): [docs/platform/storage-design.md](docs/platform/storage-design.md)
 - Samba model (VM102): [docs/platform/samba.md](docs/platform/samba.md)
+- Tailscale ACL & tagging model (policy-as-code): [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
 
 ---
 
