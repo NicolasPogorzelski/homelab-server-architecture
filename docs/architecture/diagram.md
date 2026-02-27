@@ -73,4 +73,4 @@ flowchart TB
 
 ```
 
-Note: Network policy is enforced via Tailscale ACL (tags + ACL JSON). See: docs/platform/tailscale-acl.md
+Note: Network policy is enforced via Tailscale ACL (tags + ACL JSON). See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
