@@ -47,12 +47,11 @@
 ## Database Dependency
 
 OpenWebUI relies on a centralized PostgreSQL platform service
-running in a dedicated infrastructure LXC (250).
+running in a dedicated PostgreSQL platform LXC (250).
 
 The database is accessed exclusively via the Tailnet.
 
-See:
-docs/services/postgresql-platform.md
+See: [PostgreSQL platform service](postgresql-platform.md)
 
 ## Access Model (Zero Trust)
 - Exposed via Tailscale only (no LAN / no public ingress)
