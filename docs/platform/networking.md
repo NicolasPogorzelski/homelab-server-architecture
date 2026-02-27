@@ -17,6 +17,11 @@ Remote access is exclusively provided through an identity-based overlay network 
 - Explicit ACL rules between nodes
 - Tiered segmentation model
 
+ACL enforcement is implemented via **Tailscale ACL policy (JSON)** using
+node tags and identity-based allow rules (policy-as-code).
+
+See: `docs/platform/tailscale-acl.md`
+
 ## Node Segmentation
 
 Nodes are grouped into logical tiers to reduce lateral movement:

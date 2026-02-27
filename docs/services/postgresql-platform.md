@@ -46,6 +46,8 @@ Example policy concept:
 
     tag:ai-stack  →  tag:postgres
 
+See: docs/platform/tailscale-acl.md
+
 Meaning:
 
 - OpenWebUI (CT230) may connect
