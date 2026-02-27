@@ -28,7 +28,7 @@ not an application-local dependency.
 
 ---
 
-## Zero-Trust Access Model
+## Access Model (Zero Trust)
 
 Database access is enforced through multiple independent control layers.
 

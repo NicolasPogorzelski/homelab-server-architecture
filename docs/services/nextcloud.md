@@ -30,8 +30,18 @@ cleanly decoupled.
 
 ## Access Model (Zero Trust)
 
+### Exposure
 - No public reverse proxy.
-- HTTPS access is provided via the Tailscale overlay network (MagicDNS + certificates).
+- No router port forwarding.
+- Service is not publicly reachable.
+
+### Network Enforcement
+- Remote access is exclusively provided via the Tailscale overlay network.
+- Network policy is enforced through Tailscale ACL (node tags + ACL JSON).
+- See: docs/platform/tailscale-acl.md
+
+### Transport Security
+- HTTPS is provided via Tailscale (MagicDNS + automatic certificates).
 - TLS certificates are stored under `/var/lib/tailscale/certs/` and used by Apache vhosts.
 
 ## Apache VirtualHosts (Conceptual)

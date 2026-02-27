@@ -25,3 +25,8 @@ Calibre-Web is deployed via Docker Compose inside an unprivileged Debian LXC con
   - `PUID=1000`
   - `PGID=1000`
 - This supports consistent ownership handling across storage boundaries (unprivileged LXC + CIFS mounts).
+
+## Access Model (Zero Trust)
+- Remote access follows the zero-trust overlay model (Tailscale); no public ingress.
+- Network policy is enforced via Tailscale ACL (node tags + ACL JSON).
+- See: docs/platform/tailscale-acl.md

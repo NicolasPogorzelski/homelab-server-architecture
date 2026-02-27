@@ -216,3 +216,5 @@ The design prioritizes:
 
 The current implementation is therefore intentionally transitional and documented as such.
 
+
+See: docs/platform/tailscale-acl.md

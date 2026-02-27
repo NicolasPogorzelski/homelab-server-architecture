@@ -72,3 +72,5 @@ flowchart TB
   TS --> ABS
 
 ```
+
+Note: Network policy is enforced via Tailscale ACL (tags + ACL JSON). See: docs/platform/tailscale-acl.md
