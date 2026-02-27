@@ -38,7 +38,7 @@ cleanly decoupled.
 ### Network Enforcement
 - Remote access is exclusively provided via the Tailscale overlay network.
 - Network policy is enforced through Tailscale ACL (node tags + ACL JSON).
-- See: docs/platform/tailscale-acl.md
+- See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
 
 ### Transport Security
 - HTTPS is provided via Tailscale (MagicDNS + automatic certificates).

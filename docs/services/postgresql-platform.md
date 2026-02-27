@@ -46,7 +46,7 @@ Example policy concept:
 
     tag:ai-stack  →  tag:postgres
 
-See: docs/platform/tailscale-acl.md
+See: [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
 
 Meaning:
 
