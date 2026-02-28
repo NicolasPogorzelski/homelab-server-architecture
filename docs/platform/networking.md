@@ -1,6 +1,6 @@
 # Networking & Zero-Trust Model
 
-The infrastructure follows a zero-trust inspired network design using an identity-based overlay network.
+The infrastructure follows a Zero-Trust access model using an identity-based overlay network (Tailscale).
 
 ## External Exposure
 
@@ -20,6 +20,9 @@ Remote access is exclusively provided through an identity-based overlay network 
 ACL enforcement is implemented via **Tailscale ACL policy (JSON)** using
 node tags and identity-based allow rules (policy-as-code).
 
+The active ACL policy is managed in Tailscale as JSON (source of truth).
+This repository documents the intended model and tagging structure.
+
 See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
 
 ## Node Segmentation
@@ -34,7 +37,6 @@ Nodes are grouped into logical tiers to reduce lateral movement:
 Access between tiers is explicitly controlled via ACL policies.
 
 ## LAN Access
-
 Certain performance-sensitive services (e.g., media streaming) are additionally reachable in the local network. This is a deliberate trade-off between security and performance under a defined threat model.
 
 ## Design Goal
