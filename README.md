@@ -13,6 +13,7 @@
 - Tailscale ACL & tagging model (policy-as-code): [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
 - OpenWebUI (AI interface): [docs/services/openwebui.md](docs/services/openwebui.md)
 - PostgreSQL platform service: [docs/services/postgresql-platform.md](docs/services/postgresql-platform.md)
+- Runbooks (procedures): [runbooks/README.md](runbooks/README.md)
 
 ---
 
@@ -90,6 +91,8 @@ The system is built on Proxmox and structured into clear responsibility layers:
 - LAN-optimized streaming
 
 ### Service Layer – Unprivileged LXCs
+- Platform services (PostgreSQL)
+- OpenWebUI (AI stack entrypoint)
 - Nextcloud
 - Vaultwarden
 - Calibre-Web
@@ -108,6 +111,7 @@ The system is built on Proxmox and structured into clear responsibility layers:
 - No implicit network trust
 - Strict least-privilege SMB segmentation
 - Unprivileged containers
+- Network policy enforcement via Tailscale ACL JSON + node tags (policy-as-code)
 
 Remote access path:
 
