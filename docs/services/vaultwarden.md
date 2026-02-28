@@ -1,4 +1,4 @@
-# Vaultwarden (LXC230)
+# Vaultwarden (LXC240)
 
 Vaultwarden is deployed via Docker Compose inside an unprivileged Debian LXC container.
 
@@ -9,11 +9,19 @@ Vaultwarden is deployed via Docker Compose inside an unprivileged Debian LXC con
 - Persistent data: `/opt/vaultwarden` mounted to `/data` inside the container
 - Healthcheck: HTTP probe against `http://localhost:80/`
 
+Important:
+- Vaultwarden uses SQLite for its database.
+- The database resides on local container storage (`/opt/vaultwarden`).
+- SQLite is not stored on CIFS/SMB mounts.
+
 ## Security / Exposure
 
 - Loopback-only binding: `127.0.0.1:8080 -> container:80`
+- No LAN exposure
 - No public exposure / no router port forwarding
-- Remote access follows the zero-trust overlay model (Tailscale)
+- Remote access is provided exclusively via Tailscale (identity-based overlay).
+- Network policy is enforced via Tailscale ACL (node tags + ACL JSON).
+- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 
 ## Identity / Permissions
 
@@ -31,3 +39,13 @@ Vaultwarden is deployed via Docker Compose inside an unprivileged Debian LXC con
 - Exposed via Tailscale only (no LAN / no public ingress).
 - Network policy is enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+
+## Failure Impact
+
+If the persistent storage (`/opt/vaultwarden`) becomes unavailable:
+
+- Vaultwarden cannot access its SQLite database.
+- Encryption keys may become inaccessible.
+- Service startup may fail or data integrity may be compromised.
+
+Backups of the database and key material are critical.
