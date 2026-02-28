@@ -13,20 +13,38 @@ Calibre-Web is deployed via Docker Compose inside an unprivileged Debian LXC con
 - Library mount: `/books` (CIFS-mounted storage from the dedicated storage VM)
 - Mount mode: read-only (`/books:/books:ro`) to enforce least-privilege for a consumer service
 
+Important:
+- The library is mounted read-only.
+- Calibre-Web does not modify library files.
+- No database or stateful workload is stored on CIFS.
+
 ## Security / Exposure
 
 - Loopback-only binding: `127.0.0.1:8083 -> container:8083`
-- No public exposure / no router port forwarding
-- Remote access follows the zero-trust overlay model (Tailscale)
+- No LAN exposure.
+- No public ingress / no router port forwarding.
+- Remote access is provided exclusively via Tailscale (identity-based overlay).
 
 ## Identity / Permissions
 
 - Container process UID/GID configured via:
   - `PUID=1000`
   - `PGID=1000`
-- This supports consistent ownership handling across storage boundaries (unprivileged LXC + CIFS mounts).
+- Library is mounted read-only via CIFS.
+- No stateful or write-heavy workload is stored on network mounts.
+- Ownership consistency is preserved across unprivileged LXC + CIFS boundaries.
 
 ## Access Model (Zero Trust)
-- Remote access follows the zero-trust overlay model (Tailscale); no public ingress.
-- Network policy is enforced via Tailscale ACL (node tags + ACL JSON).
+
+- Service acts as a **read-only consumer node** in the platform.
+- No service-to-service provider role.
+- Network segmentation is enforced via Tailscale ACL (node tags + policy rules).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+
+## Failure Impact
+
+If the CIFS mount (`/books`) becomes unavailable:
+
+- Calibre-Web may start but show an empty or inaccessible library.
+- No data loss occurs due to read-only mount configuration.
+- Monitoring should detect mount degradation.
