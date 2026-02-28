@@ -4,6 +4,8 @@ This document describes the operational model of the homelab infrastructure: mon
 
 The goal is **reboot-safe**, **least-privilege**, and **operationally explainable** infrastructure (runbook-friendly, deterministic recovery).
 
+See: [Runbook index](../../runbooks/README.md)
+
 ---
 
 ## 0. System Overview (Operational View)
@@ -17,7 +19,7 @@ The goal is **reboot-safe**, **least-privilege**, and **operationally explainabl
   - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
   - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
   - **LXC212**: Calibre-Web (Docker in LXC)
-  - **LXC230**: Vaultwarden (Docker in LXC)
+  - **LXC240**: Vaultwarden (Docker in LXC)
 
 ### Trust Boundaries
 
@@ -48,7 +50,7 @@ The goal is **reboot-safe**, **least-privilege**, and **operationally explainabl
 - Proxmox host
 - Storage VM (VM102)
 - GPU VM (VM100)
-- Service LXCs (210/212/230)
+- Service LXCs (210/212/240)
 - Monitoring LXC itself (200)
 
 ### Key Metrics (Minimum Set)
@@ -144,7 +146,7 @@ Planned improvements:
 - Media mounts available (autofs/systemd automount)
 
 **Layer 3: Services**
-- LXCs online (210/212/230/200)
+- LXCs online (210/212/240/200)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
