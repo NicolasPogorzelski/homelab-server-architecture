@@ -44,7 +44,7 @@ flowchart TB
   Samba --> VM100
   Samba --> LXC210
   Samba --> LXC212
-  Samba --> LXC230
+  Samba --> LXC240
 
   %% VM100 Services
   VM100 --> Jellyfin[Jellyfin]
@@ -55,7 +55,7 @@ flowchart TB
   LXC200 --> VM100
   LXC200 --> LXC210
   LXC200 --> LXC212
-  LXC200 --> LXC230
+  LXC200 --> LXC240
 
   %% Access Model
   TS --> VM100
@@ -63,7 +63,7 @@ flowchart TB
   TS --> LXC200
   TS --> LXC210
   TS --> LXC212
-  TS --> LXC230
+  TS --> LXC240
 
   LAN --> Jellyfin
   LAN --> ABS
