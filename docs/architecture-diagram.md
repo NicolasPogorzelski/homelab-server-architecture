@@ -25,7 +25,7 @@ flowchart TB
     LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
     LXC212[LXC212 - Calibre-Web<br/>Docker]
-    LXC230[LXC230 - Vaultwarden<br/>Docker]
+    LXC240[LXC240 - Vaultwarden<br/>Docker]
   end
 
   %% Storage Internals
@@ -44,7 +44,7 @@ flowchart TB
   Samba --> VM100
   Samba --> LXC210
   Samba --> LXC212
-  Samba --> LXC230
+  Samba --> LXC240
 
   %% VM100 Services
   VM100 --> Jellyfin[Jellyfin]
