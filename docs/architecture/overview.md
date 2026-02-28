@@ -56,7 +56,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [Nextcloud (LXC210)](../services/nextcloud.md)
 - [Calibre-Web (LXC212)](../services/calibre-web.md)
 - [OpenWebUI (LXC230)](../services/openwebui.md)
-- [Vaultwarden](../services/vaultwarden.md)
+- [Vaultwarden (LXC 240)](../services/vaultwarden.md)
 - [Monitoring (LXC200)](../platform/monitoring.md)
 
 ## Storage Docs
