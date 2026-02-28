@@ -17,6 +17,13 @@ Goals:
 
 ## Container Placement
 
+### Runtime Characteristics
+
+- Unprivileged Debian LXC (CT250)
+- Local block storage only (no CIFS/SMB for runtime data)
+- PostgreSQL data directory: `/var/lib/postgresql/<version>/main`
+- No bind-mounts from network storage
+
 Recommended deployment:
 
 - Dedicated infrastructure LXC
@@ -86,24 +93,45 @@ Even LAN compromise cannot reach PostgreSQL.
 
 ### Layer 3 — Host-Based Authentication (pg_hba.conf)
 
-PostgreSQL performs an additional allowlist verification.
+PostgreSQL enforces an additional allowlist at the database layer via `pg_hba.conf`.
+This is **independent** from Tailscale ACL (Layer 1) and binding (Layer 2).
 
-Example:
+Key goals:
+- require TLS (`hostssl`)
+- restrict by (DB, user) tuple
+- restrict by client identity (single tailnet node `/32`)
+- require strong password auth (`scram-sha-256`)
+- optional later: require client certificates (mTLS)
 
-    hostssl openwebui_db openwebui_user 100.x.y.z/32 scram-sha-256
+Example (minimal, per-service allowlist):
+
+    # 1) Always allow local admin / maintenance on the DB node itself
+    local   all             postgres                                peer
+
+    # 2) Service allowlist (TLS required + per-service DB/user + /32 client)
+    hostssl openwebui_db    openwebui_user   100.x.y.z/32           scram-sha-256
+
+    # 3) Default deny (everything else)
+    host    all             all             0.0.0.0/0              reject
+    host    all             all             ::/0                    reject
 
 Meaning:
-
-- TLS required
-- specific database
-- specific service user
-- single approved client node
+- Only the OpenWebUI service user may access `openwebui_db`.
+- Only from the approved client node (single Tailscale IP `/32`).
+- Only over TLS (`hostssl`).
+- Authentication must use SCRAM.
 
 Result:
+- Even if another node can reach the port (misconfig / future change), it still cannot authenticate.
+- Blast radius is reduced to explicitly allowed service identities.
+- Explicit deny prevents accidental broad access if defaults change.
 
-- Only approved service nodes authenticate
-- Lateral movement reduced
-- Blast radius minimized
+Optional hardening (later):
+- enforce client certificates (mTLS):
+
+    hostssl openwebui_db    openwebui_user   100.x.y.z/32           scram-sha-256 clientcert=verify-full
+
+(Use mTLS only when you are ready to manage client cert lifecycle operationally.)
 
 ---
 
@@ -137,6 +165,15 @@ For each new service:
 4. add pg_hba allow entry
 5. update Tailscale ACL policy
 
+## Monitoring
+
+PostgreSQL is monitored via:
+
+- Node-level metrics (CPU, RAM, disk)
+- Planned PostgreSQL exporter integration
+- Connection count monitoring
+- Replication status (future, if HA introduced)
+
 ---
 
 ## Backup Strategy
@@ -154,6 +191,16 @@ Database backups → SMB allowed
 
 ---
 
+## Durability Stance
+
+- fsync = on
+- synchronous_commit = on
+- Full ACID compliance is preserved.
+
+Performance optimizations must not weaken data integrity guarantees.
+
+---
+
 ## Failure Domain Consideration
 
 Central PostgreSQL introduces a shared dependency.
@@ -164,6 +211,15 @@ Mitigations:
 - restore runbooks
 - documented recovery procedures
 - deterministic deployment
+
+Failure Impact:
+
+- All dependent services lose database connectivity.
+- Application startup may fail.
+- Existing connections are terminated.
+- No data loss if WAL and fsync guarantees are intact.
+
+Recovery priority: restore database service before application restart.
 
 ---
 
