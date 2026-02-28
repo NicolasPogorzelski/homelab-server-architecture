@@ -33,7 +33,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - LXC210 – Nextcloud (classic stack; no Docker)
 - LXC212 – Calibre-Web (Docker in LXC)
 - LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
-- LXC240 – Docker in LXC, secrets tier
+- LXC240 – Vaultwarden Docker in LXC, secrets tier
 
 ## Design Principles
 
