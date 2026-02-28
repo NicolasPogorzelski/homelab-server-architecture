@@ -12,8 +12,9 @@ Create a systemd oneshot unit that triggers all `/mnt/smb/*` automounts after `n
 ## Implementation (script-based, recommended)
 
 Repo snippets (source of truth for this runbook):
-- Unit: ../../snippets/systemd/trigger-smb.mounts.service
-- Script: ../../snippets/scripts/trigger-smb-automounts.sh
+
+- Unit: [trigger-smb.mounts.service](../../snippets/systemd/trigger-smb.mounts.service)
+- Script: [trigger-smb-automounts.sh](../../snippets/scripts/trigger-smb-automounts.sh)
 
 Rationale:
 - Avoid complex quoting in ExecStart (common systemd failure mode)
