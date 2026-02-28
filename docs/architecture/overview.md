@@ -30,15 +30,16 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ### Service LXCs
 
-- LXC210 – Nextcloud (not containerized via Docker)
+- LXC210 – Nextcloud (classic stack; no Docker)
 - LXC212 – Calibre-Web (Docker in LXC)
-- LXC230 – Vaultwarden (Docker in LXC, UID/GID pinning)
+- LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
+- LXC240 – Docker in LXC, secrets tier
 
 ## Design Principles
 
 - Separation of concerns (compute, storage, services)
 - Minimal coupling between components
-- Zero-trust inspired access model (no public internet exposure (access restricted to private overlay network))
+- Zero-Trust access model (no public exposure; access enforced via Tailscale overlay + ACL policy-as-code)
 - Least privilege access (RO/RW separation where applicable)
 - Reboot-safe operation (mount and startup dependency modeling)
 
@@ -51,12 +52,12 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ## Services
 
-- [VM100 (GPU VM) – Jellyfin & Audiobookshelf](services-vm100.md)
-- [Nextcloud (LXC210)](nextcloud.md)
-- [Calibre-Web (LXC212)](calibre-web.md)
-- [Vaultwarden (LXC230)](vaultwarden.md)
-- [Monitoring (LXC200)](monitoring.md)
-
+- [VM100 (GPU VM) – Jellyfin & Audiobookshelf](../nodes/vm100.md)
+- [Nextcloud (LXC210)](../services/nextcloud.md)
+- [Calibre-Web (LXC212)](../services/calibre-web.md)
+- [OpenWebUI (LXC230)](../services/openwebui.md)
+- [Vaultwarden](../services/vaultwarden.md)
+- [Monitoring (LXC200)](../platform/monitoring.md)
 
 ## Storage Docs
 
