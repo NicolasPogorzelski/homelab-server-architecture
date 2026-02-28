@@ -27,6 +27,16 @@ Example categories (conceptual):
 
 Tags are assigned to nodes and then referenced in ACL rules.
 
+## Administrative Access Model
+
+Administrative access is separated from service-to-service communication.
+
+- Human operators are authenticated via Tailscale identity (user-based auth).
+- Service-to-service communication is controlled via tags.
+- Administrative privileges are not granted implicitly to service tags.
+
+Break-glass access is documented and intentionally minimal.
+
 ### ACL Rules
 ACL rules define which tagged identities may connect to which destinations.
 
@@ -41,6 +51,14 @@ Example:
 Meaning:
 - AI services may open TCP connections to the PostgreSQL service node(s)
 - other nodes are blocked at the network layer
+
+ACL rules are defined per protocol and port where applicable.
+Default posture:
+- No wildcard port allowances
+- No subnet-based implicit trust
+- Explicit TCP port scoping for infrastructure services (e.g., 5432 for PostgreSQL)
+
+This prevents over-permissive east-west traffic within the tailnet.
 
 ---
 
