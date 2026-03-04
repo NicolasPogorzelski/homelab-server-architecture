@@ -19,7 +19,7 @@ Goals:
 
 ### Runtime Characteristics
 
-- Unprivileged Debian LXC (CT250)
+- Unprivileged Debian LXC (CT260)
 - Local block storage only (no CIFS/SMB for runtime data)
 - PostgreSQL data directory: `/var/lib/postgresql/<version>/main`
 - No bind-mounts from network storage
@@ -27,7 +27,7 @@ Goals:
 Recommended deployment:
 
 - Dedicated infrastructure LXC
-- Platform range: **CT250**
+- Platform range: **CT260**
 - No co-location with application services
 
 PostgreSQL is treated as shared platform infrastructure,

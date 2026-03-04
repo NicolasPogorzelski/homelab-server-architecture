@@ -38,7 +38,7 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 
 **Architectural decision:**  
 - SQLite was removed.
-- PostgreSQL (platform service, CT250) is used instead.
+- PostgreSQL (platform service, CT260) is used instead.
 - No database (SQLite or PostgreSQL data directory) may reside on CIFS/SMB or automount-backed network shares.
 
 ---
@@ -47,7 +47,7 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 
 | Data type | Critical | Location | Notes |
 |---|---:|---|---|
-| DB (PostgreSQL) | Yes | Local block FS (ext4/xfs/zfs) | Runs in **CT250** (platform service) |
+| DB (PostgreSQL) | Yes | Local block FS (ext4/xfs/zfs) | Runs in **CT260** (platform service) |
 | App state / config | Medium | Local (Aux1TB) | Stable, fast, reboot-safe |
 | Logs | Low | Local (Aux1TB) | Avoids network noise |
 | Uploads | Yes | MergerFS/SMB | Large payloads, acceptable on SMB |
@@ -86,7 +86,7 @@ OpenWebUI must only be considered “healthy” if all dependencies are satisfie
    - Runbook: [SMB autofs trigger](../../runbooks/storage/smb-autofs-trigger.md)
 2. **Aux1TB path exists** for local runtime state (`mp1`)  
    - This prevents DB-like state from living on SMB.
-3. **PostgreSQL platform service is reachable on Tailnet** (CT250)  
+3. **PostgreSQL platform service is reachable on Tailnet** (CT260)  
    - See: [PostgreSQL platform service](./postgresql-platform.md)
 
 ---
@@ -94,7 +94,7 @@ OpenWebUI must only be considered “healthy” if all dependencies are satisfie
 ## Database Dependency
 
 OpenWebUI relies on a centralized PostgreSQL platform service
-running in a dedicated PostgreSQL platform LXC (**CT250**).
+running in a dedicated PostgreSQL platform LXC (**CT260**).
 
 Database access is **Tailnet-only**.
 
