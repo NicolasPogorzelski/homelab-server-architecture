@@ -31,7 +31,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 ### Service LXCs
 
 - LXC210 – Nextcloud (classic stack; no Docker)
-- LXC212 – Calibre-Web (Docker in LXC)
+- LXC220 – Calibre-Web (Docker in LXC)
 - LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
 - LXC240 – Vaultwarden Docker in LXC, secrets tier
 - LXC250  ^`^s DevOps (central management workstation; Git, Ansible, IaC)
@@ -55,7 +55,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 - [VM100 (GPU VM) – Jellyfin & Audiobookshelf](../nodes/vm100.md)
 - [Nextcloud (LXC210)](../services/nextcloud.md)
-- [Calibre-Web (LXC212)](../services/calibre-web.md)
+- [Calibre-Web (LXC220)](../services/calibre-web.md)
 - [OpenWebUI (LXC230)](../services/openwebui.md)
 - [Vaultwarden (LXC 240)](../services/vaultwarden.md)
 - [Monitoring (LXC200)](../platform/monitoring.md)
