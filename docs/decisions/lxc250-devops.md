@@ -68,8 +68,8 @@ The CTID 250 follows the established numbering model:
 - 220–229: Media (Calibre-Web)
 - 230–239: AI Stack (OpenWebUI)
 - 240–249: Secrets (Vaultwarden)
-- **250–259: DevOps / Management Tooling**
-- **260 ^`^s269: Database / Platform Services (planned)
+- 250–259: DevOps / Management Tooling
+- 260–269: Database / Platform Services (planned)
 ---
 
 ## Tailscale Tag Rationale
