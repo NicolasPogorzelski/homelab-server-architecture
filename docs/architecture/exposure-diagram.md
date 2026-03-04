@@ -24,6 +24,7 @@ flowchart TB
     Vaultwarden[Vaultwarden]
     CalibreWeb[Calibre-Web]
     Monitoring[Monitoring<br/>Grafana + Prometheus]
+    DevOps[DevOps Workstation]
   end
 
   %% LAN exposure (media only)
@@ -37,3 +38,4 @@ flowchart TB
   TS --> Vaultwarden
   TS --> CalibreWeb
   TS --> Monitoring
+  TS --> DevOps
