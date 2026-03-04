@@ -34,6 +34,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - LXC212 – Calibre-Web (Docker in LXC)
 - LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
 - LXC240 – Vaultwarden Docker in LXC, secrets tier
+- LXC250  ^`^s DevOps (central management workstation; Git, Ansible, IaC)
 
 ## Design Principles
 
@@ -58,6 +59,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [OpenWebUI (LXC230)](../services/openwebui.md)
 - [Vaultwarden (LXC 240)](../services/vaultwarden.md)
 - [Monitoring (LXC200)](../platform/monitoring.md)
+- [DevOps Workstation (LXC250)](../nodes/lxc250.md)
 
 ## Storage Docs
 
