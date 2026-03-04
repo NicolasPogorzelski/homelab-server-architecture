@@ -9,32 +9,23 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - Hosts VMs and unprivileged LXCs
 - Startup order modeled to ensure dependencies are met during reboot
 
-### VM102 – Storage
+### VMs
 
-- Dedicated storage VM (Debian)
-- MergerFS pooled storage
-- SnapRAID parity-based protection
-- Exports storage to service containers via controlled mounts/shares
-
-### VM100 – Compute / GPU
-
-- Dedicated compute VM (Ubuntu)
-- Docker + Docker Compose for media services
-- NVIDIA GPU passthrough for hardware acceleration
-- Media directories mounted via systemd automount (autofs) to support reboot-safe operation
-
-### LXC200 – Monitoring
-
-- Dedicated monitoring container
-- Prometheus + Grafana + Node Exporter
+- VM100 – Compute / GPU (Ubuntu, Docker, NVIDIA passthrough, media services)
+- VM102 – Storage (Debian, MergerFS + SnapRAID + Samba)
 
 ### Service LXCs
 
-- LXC210 – Nextcloud (classic stack; no Docker)
+- LXC200 – Monitoring (Prometheus + Grafana + Node Exporter)
+- LXC210 – Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
 - LXC220 – Calibre-Web (Docker in LXC)
+- LXC240 – Vaultwarden (Docker in LXC, secrets tier)
+- LXC250 – DevOps (central management workstation; Git, Ansible, IaC)
+
+### Planned
+
 - LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
-- LXC240 – Vaultwarden Docker in LXC, secrets tier
-- LXC250  ^`^s DevOps (central management workstation; Git, Ansible, IaC)
+- LXC260 – PostgreSQL platform service (centralized database)
 
 ## Design Principles
 
@@ -51,19 +42,29 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - Explicit ACL segmentation between tiers
 - No public service exposure
 
+## Nodes
+
+- [VM100 – GPU / Compute](../nodes/vm100.md)
+- [VM102 – Storage](../nodes/vm102.md)
+- [LXC200 – Monitoring](../nodes/lxc200.md)
+- [LXC210 – Nextcloud](../nodes/lxc210.md)
+- [LXC220 – Calibre-Web](../nodes/lxc220.md)
+- [LXC240 – Vaultwarden](../nodes/lxc240.md)
+- [LXC250 – DevOps](../nodes/lxc250.md)
+
 ## Services
 
-- [VM100 (GPU VM) – Jellyfin & Audiobookshelf](../nodes/vm100.md)
-- [Nextcloud (LXC210)](../services/nextcloud.md)
-- [Calibre-Web (LXC220)](../services/calibre-web.md)
-- [OpenWebUI (LXC230)](../services/openwebui.md)
-- [Vaultwarden (LXC 240)](../services/vaultwarden.md)
-- [Monitoring (LXC200)](../platform/monitoring.md)
-- [DevOps Workstation (LXC250)](../nodes/lxc250.md)
+- [Nextcloud](../services/nextcloud.md)
+- [Calibre-Web](../services/calibre-web.md)
+- [OpenWebUI (planned)](../services/openwebui.md)
+- [Vaultwarden](../services/vaultwarden.md)
+- [PostgreSQL Platform (planned)](../services/postgresql-platform.md)
 
-## Storage Docs
+## Platform
 
-- [Storage Design (SnapRAID + MergerFS)](../platform/storage-design.md)
-- [Samba Shares (VM102)](../platform/samba.md)
-
-See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+- [Storage Design](../platform/storage-design.md)
+- [Samba](../platform/samba.md)
+- [Monitoring](../platform/monitoring.md)
+- [Tailscale ACL](../platform/tailscale-acl.md)
+- [Networking](../platform/networking.md)
+- [Operations](../platform/operations.md)
