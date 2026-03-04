@@ -21,7 +21,7 @@ See: [Runbook index](../../runbooks/README.md)
   - **LXC212**: Calibre-Web (Docker in LXC)
   - **LXC230**: OpenWebUI (AI stack entrypoint)
   - **LXC240**: Vaultwarden (Docker in LXC)
-  - **LXC240**: Vaultwarden (Docker in LXC)
+  - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
 
 ### Trust Boundaries
 
@@ -54,6 +54,7 @@ See: [Runbook index](../../runbooks/README.md)
 - GPU VM (VM100)
 - Service LXCs (210/212/240)
 - Monitoring LXC itself (200)
+- DevOps LXC (250) - planned
 
 ### Key Metrics (Minimum Set)
 
@@ -111,7 +112,7 @@ It is an abstraction layer to keep service paths stable while disks are added/re
   - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)
   - DB is local MariaDB (inside container)
   - Future improvement: automated DB dumps + integrity verification
-- **PostgreSQL Platform (LXC250)**:
+- **PostgreSQL Platform (LXC260)**:
   - Dedicated infrastructure container
   - Databases stored on local block storage (no CIFS)
   - Backups via periodic `pg_dump`
@@ -154,7 +155,7 @@ Planned improvements:
 - Media mounts available (autofs/systemd automount)
 
 **Layer 3: Services**
-- LXCs online (210/212/240/200)
+- LXCs online (210/212/240/200/250)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
