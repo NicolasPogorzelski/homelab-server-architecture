@@ -26,6 +26,7 @@ flowchart TB
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
     LXC212[LXC212 - Calibre-Web<br/>Docker]
     LXC240[LXC240 - Vaultwarden<br/>Docker]
+    LXC250[LXC250 - DevOps<br/>Git + Ansible + IaC]
   end
 
   %% Storage Internals
@@ -64,6 +65,7 @@ flowchart TB
   TS --> LXC210
   TS --> LXC212
   TS --> LXC240
+  TS --> LXC250
 
   LAN --> Jellyfin
   LAN --> ABS
