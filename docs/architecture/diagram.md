@@ -24,7 +24,7 @@ flowchart TB
     VM100[VM100 - GPU / Compute<br/>Docker + NVIDIA]
     LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
-    LXC212[LXC212 - Calibre-Web<br/>Docker]
+    LXC220[LXC220 - Calibre-Web<br/>Docker]
     LXC240[LXC240 - Vaultwarden<br/>Docker]
     LXC250[LXC250 - DevOps<br/>Git + Ansible + IaC]
   end
@@ -44,7 +44,7 @@ flowchart TB
   %% Storage Consumers
   Samba --> VM100
   Samba --> LXC210
-  Samba --> LXC212
+  Samba --> LXC220
   Samba --> LXC240
 
   %% VM100 Services
@@ -55,7 +55,7 @@ flowchart TB
   LXC200 --> VM102
   LXC200 --> VM100
   LXC200 --> LXC210
-  LXC200 --> LXC212
+  LXC200 --> LXC220
   LXC200 --> LXC240
 
   %% Access Model
@@ -63,7 +63,7 @@ flowchart TB
   TS --> VM102
   TS --> LXC200
   TS --> LXC210
-  TS --> LXC212
+  TS --> LXC220
   TS --> LXC240
   TS --> LXC250
 
