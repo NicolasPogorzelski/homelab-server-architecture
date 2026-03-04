@@ -18,8 +18,8 @@ See: [Runbook index](../../runbooks/README.md)
 - **Service LXCs**:
   - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
   - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
-  - **LXC212**: Calibre-Web (Docker in LXC)
-  - **LXC230**: OpenWebUI (AI stack entrypoint)
+  - **LXC220**: Calibre-Web (Docker in LXC)
+  - **LXC230**: OpenWebUI (AI stack entrypoint) (planned)
   - **LXC240**: Vaultwarden (Docker in LXC)
   - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
 
@@ -52,7 +52,7 @@ See: [Runbook index](../../runbooks/README.md)
 - Proxmox host
 - Storage VM (VM102)
 - GPU VM (VM100)
-- Service LXCs (210/212/240)
+- Service LXCs (210/220/240)
 - Monitoring LXC itself (200)
 - DevOps LXC (250) - planned
 
@@ -155,7 +155,7 @@ Planned improvements:
 - Media mounts available (autofs/systemd automount)
 
 **Layer 3: Services**
-- LXCs online (210/212/240/200/250)
+- LXCs online (200/210/220/240/250)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
