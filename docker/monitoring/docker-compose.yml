@@ -9,7 +9,6 @@ services:
       - --storage.tsdb.retention.time=${PROM_RETENTION}
       - --web.enable-lifecycle
       - --web.listen-address=${PROM_BIND_ADDRESS}:${PROM_PORT}
-      - --web.external-url=/prometheus
 
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
