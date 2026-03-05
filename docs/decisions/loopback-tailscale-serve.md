@@ -1,4 +1,3 @@
-# Decision: Loopback-Only Binding + Tailscale Serve as Reverse Proxy
 
 ## Context
 
@@ -104,7 +103,7 @@ Traefik's automatic container discovery was considered:
 
 ### Current Port Assignments
 
-#### Nodes mit Loopback + Tailscale Serve (Pattern vollständig umgesetzt)
+#### Nodes with Loopback + Tailscale Serve (pattern fully implemented)
 
 | Node | Service | Loopback Port | Tailscale Serve Port | Hostname |
 |---|---|---|---|---|
@@ -113,57 +112,57 @@ Traefik's automatic container discovery was considered:
 | LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
 | LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
 
-#### Dokumentierte Ausnahmen (kein Tailscale Serve, `0.0.0.0` Binding)
+#### Documented Exceptions (no Tailscale Serve, `0.0.0.0` binding)
 
-| Node | Service | Bind Address | Port | Grund |
+| Node | Service | Bind Address | Port | Reason |
 |---|---|---|---|---|
-| VM100 | Jellyfin | 0.0.0.0 | 8096 | LAN-Streaming, Bandbreiten-Trade-off (siehe DD#8) |
-| VM100 | Audiobookshelf | 0.0.0.0 | 13378 | LAN-Streaming, Bandbreiten-Trade-off (siehe DD#8) |
-| LXC210 | Nextcloud | 0.0.0.0 | 80, 443 | LAN-Upload-Performance für große Datenmengen; Apache-eigenes TLS |
+| VM100 | Jellyfin | 0.0.0.0 | 8096 | LAN streaming, bandwidth trade-off (see DD#8) |
+| VM100 | Audiobookshelf | 0.0.0.0 | 13378 | LAN streaming, bandwidth trade-off (see DD#8) |
+| LXC210 | Nextcloud | 0.0.0.0 | 80, 443 | LAN upload performance for large data volumes; Apache-managed TLS |
 
-#### Nodes ohne Web-Services
+#### Nodes Without Web Services
 
-| Node | Grund |
+| Node | Reason |
 |---|---|
-| LXC250 | DevOps-Workstation, nur SSH-Zugriff |
-| LXC230 | Noch nicht eingerichtet (OpenWebUI geplant) |
+| LXC250 | DevOps workstation, SSH access only |
+| LXC230 | Not yet provisioned (OpenWebUI planned) |
 
-#### Hinweis zu den Ausnahmen
+#### Notes on Exceptions
 
-VM100 und LXC210 folgen bewusst nicht dem Loopback-Pattern.
-Der Grund ist in beiden Fällen Performance:
+VM100 and LXC210 intentionally do not follow the loopback pattern.
+The reason in both cases is performance:
 
-- **VM100 (Media):** Hochbitratige Streams über LAN vermeiden den Tailscale-Overhead.
-  Remote-Zugriff erfolgt aktuell über die Tailscale-IP direkt (HTTP, kein TLS).
-  Tailscale Serve könnte nachgerüstet werden, um Remote-Zugriff mit TLS-Hostname zu ermöglichen,
-  ohne das LAN-Binding aufzugeben — das erfordert dann Binding auf `0.0.0.0` statt `127.0.0.1`.
-  Aktuell nicht priorisiert (Komfortgewinn, kein Sicherheitsgewinn — siehe Abschnitt unten).
-- **LXC210 (Nextcloud):** Upload großer Datenmengen (z.B. mehrere GB PDFs) über LAN
-  ist deutlich schneller als über das Tailscale-Overlay. Apache übernimmt TLS-Terminierung
-  selbst auf Port 443 — damit ist auch LAN-Zugriff verschlüsselt. Tailscale Serve ist hier nicht im Einsatz.
-  Nextcloud ist trotzdem über `nextcloud.<tailnet-id>.ts.net` erreichbar — MagicDNS löst den Hostnamen
-  auf die Tailscale-IP auf, und Apache beantwortet die Anfrage direkt (kein Tailscale Serve beteiligt).
+- **VM100 (Media):** High-bitrate streams over LAN avoid the Tailscale overhead.
+  Remote access currently uses the Tailscale IP directly (HTTP, no TLS).
+  Tailscale Serve could be added later to provide TLS-secured remote access with a hostname,
+  without removing the LAN binding — this would require keeping the `0.0.0.0` bind instead of `127.0.0.1`.
+  Not prioritized at this time (convenience improvement, not a security improvement — see section below).
+- **LXC210 (Nextcloud):** Uploading large data volumes (e.g. multi-GB PDFs) over LAN
+  is significantly faster than routing through the Tailscale overlay. Apache handles TLS termination
+  on port 443 — LAN access is therefore also encrypted. Tailscale Serve is not in use here.
+  Nextcloud is still reachable via `nextcloud.<tailnet-id>.ts.net` — MagicDNS resolves the hostname
+  to the Tailscale IP, and Apache answers the request directly (no Tailscale Serve involved).
 
-#### Sicherheitsbewertung der Ausnahmen
+#### Security Assessment of Exceptions
 
-Wichtige Klarstellung: Auch ohne Tailscale Serve ist der Remote-Zugriff über Tailscale geschützt.
+Important clarification: even without Tailscale Serve, remote access via Tailscale is protected.
 
-Tailscale baut zwischen allen Nodes einen **WireGuard-Tunnel** auf. Jeglicher Traffic über
-Tailscale-IPs (`100.x.y.z`) ist auf Netzwerkebene verschlüsselt — unabhängig davon,
-ob der Service selbst HTTP oder HTTPS spricht.
+Tailscale establishes a **WireGuard tunnel** between all nodes. All traffic over
+Tailscale IPs (`100.x.y.z`) is encrypted at the network level — regardless of whether
+the service itself speaks HTTP or HTTPS.
 
-| Zugriffsweg | Verschlüsselung | Beispiel |
+| Access Path | Encryption | Example |
 |---|---|---|
-| LAN → VM100 (HTTP) | Keine (Klartext im LAN) | `http://192.168.x.x:8096` |
-| Tailscale → VM100 (HTTP) | WireGuard-Tunnel (verschlüsselt) | `http://100.x.y.z:8096` |
-| LAN → LXC210 (HTTPS) | Apache-TLS (verschlüsselt) | `https://192.168.x.x` |
-| Tailscale → LXC210 (HTTPS) | WireGuard + Apache-TLS (doppelt) | `https://nextcloud.<tailnet-id>.ts.net` |
+| LAN → VM100 (HTTP) | None (cleartext on LAN) | `http://192.168.x.x:8096` |
+| Tailscale → VM100 (HTTP) | WireGuard tunnel (encrypted) | `http://100.x.y.z:8096` |
+| LAN → LXC210 (HTTPS) | Apache TLS (encrypted) | `https://192.168.x.x` |
+| Tailscale → LXC210 (HTTPS) | WireGuard + Apache TLS (double) | `https://nextcloud.<tailnet-id>.ts.net` |
 
-Der fehlende Tailscale Serve auf VM100 bedeutet: kein TLS-Zertifikat, kein MagicDNS-HTTPS-Hostname.
-Das ist ein Komfort-Defizit, kein Sicherheits-Defizit. Die WireGuard-Verschlüsselung schützt den Traffic.
+The absence of Tailscale Serve on VM100 means: no TLS certificate, no MagicDNS HTTPS hostname.
+This is a convenience gap, not a security gap. The WireGuard encryption protects the traffic.
 
-Perspektivisch (siehe DD#9) soll bei ausreichender Upstream-Bandbreite (~500 Mbit)
-die LAN-Exposition reduziert und ein konsistenteres Modell angestrebt werden.
+With sufficient upstream bandwidth (~500 Mbit, see DD#9), LAN exposure will be reduced
+and a more consistent model adopted.
 
 ---
 
@@ -178,94 +177,93 @@ but the service only speaks HTTP on loopback.
 
 **Fix:**
 ```bash
-# Erst die fehlerhafte Konfiguration entfernen
+# Remove the misconfigured serve entry
 tailscale serve off
-# Dann korrekt mit http:// Backend neu hinzufügen
+# Re-add with correct http:// backend
 tailscale serve --bg --https=<port> http://127.0.0.1:<backend-port>
 ```
 
-- `serve off` — entfernt alle aktiven Serve-Konfigurationen auf diesem Node
-- `--bg` — startet den Serve-Prozess im Hintergrund (bleibt nach Terminal-Schließung aktiv)
-- `--https=<port>` — der Port, auf dem Tailscale Serve extern lauscht (TLS-terminiert)
-- `http://...` — das Backend-Ziel; muss `http://` sein, weil der lokale Service kein TLS spricht
+- `serve off` — removes all active serve configurations on this node
+- `--bg` — runs the serve process in the background (persists after terminal close)
+- `--https=<port>` — the port Tailscale Serve listens on externally (TLS-terminated)
+- `http://...` — the backend target; must be `http://` because the local service does not speak TLS
 
 ### 2. One Service per Port
 
-**Symptom:** Zweiter Service auf demselben Tailscale-Serve-Port überschreibt den ersten.
+**Symptom:** Second service on the same Tailscale Serve port overwrites the first.
 
-**Cause:** Tailscale Serve unterstützt kein Subpath-Routing
-(`/grafana` → Service A, `/prometheus` → Service B` funktioniert nicht).
+**Cause:** Tailscale Serve does not support subpath routing
+(`/grafana` → Service A, `/prometheus` → Service B does not work).
 
-**Fix:** Jedem Service einen eigenen Port zuweisen und in der Port-Tabelle oben dokumentieren.
+**Fix:** Assign each service a unique port and document it in the port table above.
 
-### 3. Serve-Konfiguration: Persistenz-Verhalten
+### 3. Serve Configuration: Persistence Behavior
 
-**Beobachtung (Stand März 2026):** Bei einzelnen LXC/VM-Reboots blieb die Serve-Konfiguration
-bisher stabil persistent. Ein vollständiger Proxmox-Host-Reboot (alle Nodes gleichzeitig)
-wurde noch nicht durchgeführt.
+**Observation (as of March 2026):** Serve configurations have remained persistent
+across individual LXC/VM reboots. A full Proxmox host reboot (all nodes simultaneously)
+has not yet been performed.
 
-**Prüfung nach Neustart:**
+**Verification after restart:**
 ```bash
 tailscale serve status
 ```
 
-- `serve status` — zeigt alle aktuell aktiven Serve-Konfigurationen auf diesem Node
+- `serve status` — shows all currently active serve configurations on this node
 
-Falls leer: Serve-Befehle erneut ausführen. Perspektivisch über systemd oder Ansible automatisieren.
+If empty: re-run the serve commands. Long-term, automate via systemd or Ansible.
 
-**Offener Punkt:** Vollständiger Host-Reboot als Test durchführen und Persistenz-Verhalten
-dokumentieren.
+**Open item:** Perform a full host reboot test and document persistence behavior.
 
 ---
 
-## Wartungsaufwand-Bewertung
+## Maintenance Overhead Assessment
 
-### Was Tailscale Serve eliminiert (vs. klassischer Reverse Proxy)
+### What Tailscale Serve Eliminates (vs. Traditional Reverse Proxy)
 
-- TLS-Zertifikatsverwaltung (kein Let's Encrypt, kein DNS-Challenge)
-- Firewall-Regelwartung (keine offenen Ports, kein Port-Forwarding)
-- Reverse-Proxy-Konfiguration (keine nginx.conf, keine Caddyfile)
-- Keine DNS-Einträge für Services notwendig
+- TLS certificate management (no Let's Encrypt, no DNS challenges)
+- Firewall rule maintenance (no open ports, no port-forwarding)
+- Reverse proxy configuration (no nginx.conf, no Caddyfile)
+- No DNS records required for services
 
-### Was bleibt
+### What Remains
 
-- Tailscale Serve muss pro Service eingerichtet werden (einmalig)
-- Port-Assignments müssen dokumentiert werden
-- Serve-Status nach Node-Neustarts prüfen
-- Tailscale-Client-Updates auf allen Nodes
+- Tailscale Serve must be configured per service (one-time)
+- Port assignments must be documented
+- Serve status should be verified after node restarts
+- Tailscale client updates across all nodes
 
-### Vendor-Lock-in-Bewusstsein
+### Vendor Lock-in Awareness
 
-Tailscale ist ein zentraler Bestandteil der Infrastruktur. Risiken:
+Tailscale is a central component of the infrastructure. Risks:
 
-- Änderungen am Free-Tier könnten Features einschränken
-- Ausfall des Coordination Servers verhindert neue Verbindungen
-  (bestehende Verbindungen über DERP bleiben temporär funktional)
-- Kein triviales Fallback auf alternatives VPN ohne Architekturänderung
+- Changes to the free tier could restrict features
+- Coordination server outage prevents new connections
+  (existing connections via DERP remain temporarily functional)
+- No trivial fallback to an alternative VPN without architectural changes
 
-**Bewertung:** Für ein Single-Operator-Homelab akzeptabel.
-Die Entscheidung spart signifikant Wartungszeit, die in Kompetenzaufbau (Ansible, IaC) investiert wird.
-Ein Migrations-Szenario (z.B. zu Headscale oder WireGuard direkt) wird bewusst nicht vorbereitet,
-aber die Loopback-Binding-Konvention bleibt auch ohne Tailscale sinnvoll.
+**Assessment:** Acceptable for a single-operator homelab.
+The decision saves significant maintenance time, which is invested in competency building (Ansible, IaC).
+A migration scenario (e.g. to Headscale or direct WireGuard) is deliberately not prepared,
+but the loopback binding convention remains valuable even without Tailscale.
 
 ---
 
 ## Trade-offs
 
-| Vorteil | Einschränkung |
+| Advantage | Limitation |
 |---|---|
-| Kein TLS-Management | Vendor-Abhängigkeit (Tailscale) |
-| Keine offenen Ports | Kein Subpath-Routing möglich |
-| Implizite Authentifizierung | Jeder Service braucht eigenen Port |
-| Minimaler Wartungsaufwand | Weniger Lerneffekt für klassische Reverse-Proxy-Setups |
-| Klares Sicherheitsmodell | Serve-Persistenz nach Full-Host-Reboot noch nicht verifiziert |
-| Konsistentes Pattern für neue Services | Performance-Ausnahmen (VM100, LXC210) erfordern separate Dokumentation |
+| No TLS management | Vendor dependency (Tailscale) |
+| No open ports | No subpath routing possible |
+| Implicit authentication | Each service requires its own port |
+| Minimal maintenance overhead | Less learning effect for traditional reverse proxy setups |
+| Clear security model | Serve persistence after full host reboot not yet verified |
+| Consistent pattern for new services | Performance exceptions (VM100, LXC210) require separate documentation |
 
 ---
 
 ## Related Documents
 
 - [Design Decisions #4: Zero-Trust Overlay](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy)
-- [Design Decisions #8/#9: LAN Exposure](design-decisions.md#8-lan-exposure-for-media-workloads-performance-trade-off)
+- [Design Decisions #8/#9: LAN Exposure](design-decisions.md#8-lan-exposure-for-performance-critical-workloads)
 - [Tailscale ACL Model](../platform/tailscale-acl.md)
 - [Networking](../platform/networking.md)
