@@ -66,3 +66,8 @@ Thumbs.db
 # =====================================================
 
 docker-compose.override.yml
+
+# =====================================================
+# Service configs with environment-specific values
+# =====================================================
+docker/monitoring/prometheus/prometheus.yml
