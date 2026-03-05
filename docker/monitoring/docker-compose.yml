@@ -27,6 +27,7 @@ services:
       - ${GF_ENV_FILE}
     volumes:
       - ${GF_DATA}:/var/lib/grafana
+      - ./grafana/provisioning/datasources/prometheus.yml:/var/lib/grafana/provisioning/datasources/prometheus.yml:ro
     restart: unless-stopped
     logging:
       options:
