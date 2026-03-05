@@ -44,6 +44,16 @@ The storage layer is implemented as a dedicated VM to enforce separation of conc
 - Read-only exports for consumer services where possible
 - SnapRAID executed with root privileges
 
+## Failure Domain
+
+The storage VM (VM102) represents a single failure domain.
+
+- All persistent service data depends on this VM.
+- Failure of VM102 results in loss of SMB access and MergerFS namespace.
+- Parity protects against individual disk failures, not VM-level outage.
+
+High availability is not implemented; recovery is procedure-based.
+
 ---
 
 ## Technical Implementation (Current State)
@@ -61,8 +71,18 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
   - `disk05` -> `/mnt/disk05`
 - Parity disk:
   - `parity1` -> `/mnt/parity`
-- Auxiliary disk:
-  - `aux02tb` -> `/mnt/aux3TB`
+- Auxiliary disks (non-parity workloads):
+  - `aux01tb` -> `/mnt/aux01tb`
+  - `aux03tb` -> `/mnt/aux03tb`
+
+Auxiliary disks are not part of the SnapRAID parity set.
+
+They are used for:
+- Performance-sensitive workloads
+- Local application state (e.g., OpenWebUI)
+- Non-critical or reproducible data
+
+If data stored on auxiliary disks is critical, it must be backed up separately.
 
 All data/parity disks are formatted as `ext4` and mounted persistently.
 
@@ -100,6 +120,11 @@ Excludes (current state):
 
 Operational note:
 - `snapraid status` is typically executed with `sudo` because SnapRAID must read content/parity state files.
+
+Important:
+
+Data written after the last `snapraid sync` is not parity-protected.
+Operational discipline (regular sync + scrub) is required to maintain protection guarantees.
 
 ### MergerFS (Unified View)
 

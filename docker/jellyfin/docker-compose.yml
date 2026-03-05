@@ -4,20 +4,20 @@ services:
     container_name: jellyfin
     restart: unless-stopped
 
-    user: 1000:1000
+    user: "${PUID}:${PGID}"
     gpus: all
 
     environment:
-      - TZ=Europe/Berlin
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
+      - TZ=${TZ}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES}
 
     volumes:
-      - /mnt/vm-data/jellyfin/config:/config
-      - /mnt/vm-data/jellyfin/cache:/cache
-      - /mnt/vm-data/jellyfin/metadata:/metadata
-      - /media/jellyfin/Filme:/media/Filme:ro
-      - /media/jellyfin/Serien:/media/Serien:ro
+      - ${JF_CONFIG}:/config
+      - ${JF_CACHE}:/cache
+      - ${JF_METADATA}:/metadata
+      - ${JF_MEDIA_FILME}:/media/Filme:ro
+      - ${JF_MEDIA_SERIEN}:/media/Serien:ro
 
     ports:
-      - 8096:8096
+      - "${JELLYFIN_PORT}:8096"

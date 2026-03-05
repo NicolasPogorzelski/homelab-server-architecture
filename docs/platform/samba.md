@@ -13,6 +13,7 @@ This layer enforces strict service segmentation and least-privilege access.
 - Enforce read-write access only where required
 - Minimize blast radius of service compromise
 - Maintain deterministic ownership behavior
+- No database workloads (SQLite/PostgreSQL) on SMB mounts
 
 ---
 
@@ -80,6 +81,9 @@ This reduces risk of accidental modification or deletion.
 - No anonymous access
 - No public exposure
 - Access restricted to LAN and Tailscale overlay
+- No implicit subnet-wide trust beyond defined ACL model
+
+SMB is not used for internet-facing services.
 
 ---
 
@@ -95,3 +99,12 @@ It is not used for public file sharing.
 
 It is an internal platform component.
 
+## Failure Impact
+
+If Samba becomes unavailable:
+
+- All dependent services lose access to their storage paths
+- Containers may start but fail due to missing mounts
+- Monitoring should detect mount and service degradation
+
+This reinforces that VM102 represents a single storage failure domain.

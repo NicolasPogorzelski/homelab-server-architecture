@@ -1,14 +1,75 @@
+# =====================================================
+# Secrets / Environment files (NEVER COMMIT)
+# =====================================================
 
-# Monitoring secrets / local env
-**/grafana.env
+.env
+.env.*
+*.env
+*.env.*
+
+**/.env
+**/.env.*
 **/*.env
+**/*.env.*
 
-# Secrets / local env files
-**/grafana.env
-**/*.env
+# allow env templates
+!.env.example
+!**/env.example
 
-# Vaultwarden (never commit secrets/keys/db)
-docker/vaultwarden/.env
+# =====================================================
+# Databases / Runtime Data
+# =====================================================
+
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3*
 **/db.sqlite3*
+**/data/
+**/backup/
+
+# =====================================================
+# Private Keys / Certificates
+# =====================================================
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 **/rsa_key.pem
-**/backup/rsa_key.pem
+
+# =====================================================
+# Logs / Temp / Cache
+# =====================================================
+
+*.log
+*.tmp
+*.temp
+*.cache
+
+# =====================================================
+# Backups / Editor / OS junk
+# =====================================================
+
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# =====================================================
+# Docker local overrides
+# =====================================================
+
+docker-compose.override.yml
+
+# =====================================================
+# Service configs with environment-specific values
+# =====================================================
+
+docker/monitoring/prometheus/prometheus.yml
+docker/monitoring/grafana/provisioning/datasources/prometheus.yml
