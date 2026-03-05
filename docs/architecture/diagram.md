@@ -24,8 +24,9 @@ flowchart TB
     VM100[VM100 - GPU / Compute<br/>Docker + NVIDIA]
     LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
-    LXC212[LXC212 - Calibre-Web<br/>Docker]
+    LXC220[LXC220 - Calibre-Web<br/>Docker]
     LXC240[LXC240 - Vaultwarden<br/>Docker]
+    LXC250[LXC250 - DevOps<br/>Git + Ansible + IaC]
   end
 
   %% Storage Internals
@@ -43,7 +44,7 @@ flowchart TB
   %% Storage Consumers
   Samba --> VM100
   Samba --> LXC210
-  Samba --> LXC212
+  Samba --> LXC220
   Samba --> LXC240
 
   %% VM100 Services
@@ -54,16 +55,17 @@ flowchart TB
   LXC200 --> VM102
   LXC200 --> VM100
   LXC200 --> LXC210
-  LXC200 --> LXC212
-  LXC200 --> LXC230
+  LXC200 --> LXC220
+  LXC200 --> LXC240
 
   %% Access Model
   TS --> VM100
   TS --> VM102
   TS --> LXC200
   TS --> LXC210
-  TS --> LXC212
-  TS --> LXC230
+  TS --> LXC220
+  TS --> LXC240
+  TS --> LXC250
 
   LAN --> Jellyfin
   LAN --> ABS
@@ -72,3 +74,5 @@ flowchart TB
   TS --> ABS
 
 ```
+
+Note: Network policy is enforced via Tailscale ACL (tags + ACL JSON). See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)

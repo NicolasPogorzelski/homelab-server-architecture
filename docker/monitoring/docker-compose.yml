@@ -6,13 +6,13 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.time=${PROM_RETENTION}
       - --web.enable-lifecycle
-      - --web.listen-address=127.0.0.1:9090
+      - --web.listen-address=${PROM_BIND_ADDRESS}:${PROM_PORT}
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
-      - /data/prometheus:/prometheus
+      - ${PROM_DATA}:/prometheus
     restart: unless-stopped
     logging:
       options:
@@ -22,13 +22,12 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    # Note: grafana.env is intentionally not committed (may contain secrets).
+    network_mode: host
     env_file:
-      - /opt/monitoring/grafana.env
-    ports:
-      - "127.0.0.1:3000:3000"
+      - ${GF_ENV_FILE}
     volumes:
-      - /data/grafana:/var/lib/grafana
+      - ${GF_DATA}:/var/lib/grafana
+      - ./grafana/provisioning/datasources/prometheus.yml:/var/lib/grafana/provisioning/datasources/prometheus.yml:ro
     restart: unless-stopped
     logging:
       options:
@@ -45,7 +44,7 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     command:
-      - '--web.listen-address=127.0.0.1:9100'
+      - '--web.listen-address=${NE_BIND_ADDRESS}:${NE_PORT}'
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'

@@ -3,13 +3,17 @@
 
 ## Documentation
 
-- Architecture overview: [docs/architecture.md](docs/architecture.md)
-- Logical architecture diagram (Mermaid): [docs/architecture-diagram.md](docs/architecture-diagram.md)
-- Exposure model diagram (Mermaid): [docs/exposure-diagram.md](docs/exposure-diagram.md)
-- Design decisions (trade-offs): [docs/design-decisions.md](docs/design-decisions.md)
-- Operations (runbooks, recovery): [docs/operations.md](docs/operations.md)
-- Storage design (SnapRAID + MergerFS): [docs/storage-design.md](docs/storage-design.md)
-- Samba model (VM102): [docs/samba.md](docs/samba.md)
+- Architecture overview: [docs/architecture/overview.md](docs/architecture/overview.md)
+- Logical architecture diagram (Mermaid): [docs/architecture/diagram.md](docs/architecture/diagram.md)
+- Exposure model diagram (Mermaid): [docs/architecture/exposure-diagram.md](docs/architecture/exposure-diagram.md)
+- Design decisions (trade-offs): [docs/decisions/design-decisions.md](docs/decisions/design-decisions.md)
+- Operations (runbooks, recovery): [docs/platform/operations.md](docs/platform/operations.md)
+- Storage design (SnapRAID + MergerFS): [docs/platform/storage-design.md](docs/platform/storage-design.md)
+- Samba model (VM102): [docs/platform/samba.md](docs/platform/samba.md)
+- Tailscale ACL & tagging model (policy-as-code): [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
+- OpenWebUI (AI interface): [docs/services/openwebui.md](docs/services/openwebui.md)
+- PostgreSQL platform service: [docs/services/postgresql-platform.md](docs/services/postgresql-platform.md)
+- Runbooks (procedures): [runbooks/README.md](runbooks/README.md)
 
 ---
 
@@ -87,13 +91,15 @@ The system is built on Proxmox and structured into clear responsibility layers:
 - LAN-optimized streaming
 
 ### Service Layer – Unprivileged LXCs
+- Platform services (PostgreSQL)
+- OpenWebUI (AI stack entrypoint)
 - Nextcloud
 - Vaultwarden
 - Calibre-Web
 - Monitoring (Prometheus + Grafana)
 
 📌 **Logical Architecture Diagram**  
-→ [View Architecture Diagram](docs/architecture-diagram.md)
+→ [View Architecture Diagram](docs/architecture/diagram.md)
 
 ---
 
@@ -105,6 +111,7 @@ The system is built on Proxmox and structured into clear responsibility layers:
 - No implicit network trust
 - Strict least-privilege SMB segmentation
 - Unprivileged containers
+- Network policy enforcement via Tailscale ACL JSON + node tags (policy-as-code)
 
 Remote access path:
 
@@ -113,7 +120,7 @@ Internet → Tailscale → Services
 LAN exposure is restricted to media workloads only.
 
 📌 **Exposure Model**  
-→ [View Exposure Diagram](docs/exposure-diagram.md)
+→ [View Exposure Diagram](docs/architecture/exposure-diagram.md)
 
 ---
 
@@ -125,7 +132,7 @@ LAN exposure is restricted to media workloads only.
 - Service-specific segmented shares
 
 📌 **Storage Design Documentation**  
-→ [View Storage Design](docs/storage-design.md)
+→ [View Storage Design](docs/platform/storage-design.md)
 
 ---
 
@@ -137,7 +144,7 @@ LAN exposure is restricted to media workloads only.
 - Monitoring independent from application layer
 
 📌 **Operations Documentation**  
-→ [View Operations Model](docs/operations.md)
+→ [View Operations Model](docs/platform/operations.md)
 
 ---
 
