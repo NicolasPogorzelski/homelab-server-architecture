@@ -159,11 +159,14 @@ Monitoring stack isolated in LXC200.
 
 ---
 
-## 8. LAN Exposure for Media Workloads (Performance Trade-off)
+## 8. LAN Exposure for Performance-Critical Workloads
 
 ### Decision
 
-Media services (Jellyfin, Audiobookshelf) remain reachable from the local network.
+Performance-critical services remain reachable from the local network:
+
+- Media services (Jellyfin, Audiobookshelf on VM100) — for high-bitrate LAN streaming
+- Nextcloud (LXC210) — for high-volume LAN uploads (e.g. multi-GB file imports)
 
 ### Rationale
 
@@ -179,8 +182,10 @@ LAN access is therefore maintained as a performance-oriented exception.
 
 - No public exposure
 - Identity-based remote access enforced via Tailscale
-- LAN exposure restricted to media workloads only
-- Sensitive services (Nextcloud, Vaultwarden) are not exposed on LAN without authentication
+- LAN exposure restricted to performance-critical workloads only
+- Vaultwarden is not LAN-exposed (loopback-only + Tailscale Serve)
+- Nextcloud is LAN-exposed but protected by Apache TLS and application-level authentication
+- All LAN-exposed services still require authentication — no anonymous access
 
 This represents a deliberate trade-off between strict network isolation and practical throughput requirements.
 
