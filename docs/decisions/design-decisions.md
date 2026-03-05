@@ -223,3 +223,46 @@ The current implementation is therefore intentionally transitional and documente
 
 
 See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+
+---
+
+## 10. Docker Host Networking Eliminates Container DNS
+
+### Context
+
+All Docker services in the monitoring stack (Prometheus, Grafana, Node Exporter) use `network_mode: host` to bind directly to loopback (`127.0.0.1`). This enables the Tailscale Serve reverse proxy pattern without exposing services on `0.0.0.0`.
+
+### Decision
+
+All inter-service communication in host-networked Docker stacks must use `127.0.0.1` (or explicit host IPs) instead of container names.
+
+### Rationale
+
+In Docker's default bridge mode, an internal DNS resolver allows containers to reach each other by name (e.g., `http://prometheus:9090`). When `network_mode: host` is enabled, containers share the host's network stack directly — Docker does not create a virtual network and therefore provides no DNS resolution between containers.
+
+This caused a concrete failure: Grafana's provisioned datasource referenced `http://prometheus:9090`, which became unresolvable after the switch to host networking. Dashboards failed silently until the URL was corrected to `http://127.0.0.1:9090`.
+
+### Implications
+
+- Any service-to-service reference in configuration files, environment variables, or provisioning templates must use `127.0.0.1` (or the host's Tailscale IP) — never container names
+- This applies to all current and future Docker stacks using `network_mode: host`
+- Provisioning files (e.g., Grafana datasources) are managed as IaC templates (`.example` with placeholders) to make this explicit
+
+### Considered Alternative
+
+Bridge mode with loopback port mapping was evaluated as an alternative:
+```yaml
+ports:
+  - "127.0.0.1:3000:3000"
+```
+
+This would preserve Docker's internal DNS (containers reachable by name) and maintain Docker-level network isolation between containers. Each port would be bound to `127.0.0.1` on the host side, remaining compatible with Tailscale Serve.
+
+This approach was not chosen because the monitoring stack runs in a dedicated unprivileged LXC (DD#7, DD#5) where all containers are expected to communicate freely. Docker-internal isolation provides no meaningful security benefit in this context. Host networking reduces configuration complexity by eliminating custom networks, port mappings, and NAT overhead.
+
+### Trade-offs
+
+- Loss of Docker's built-in service discovery and inter-container isolation
+- Configuration requires explicit address management
+- Accepted trade-off for reduced complexity, loopback-only binding, and Tailscale Serve compatibility
+- Isolation is enforced at deeper layers: unprivileged LXC (DD#5), loopback binding, and Tailscale ACL (DD#4)
