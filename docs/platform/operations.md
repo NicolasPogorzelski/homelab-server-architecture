@@ -4,6 +4,8 @@ This document describes the operational model of the homelab infrastructure: mon
 
 The goal is **reboot-safe**, **least-privilege**, and **operationally explainable** infrastructure (runbook-friendly, deterministic recovery).
 
+See: [Runbook index](../../runbooks/README.md)
+
 ---
 
 ## 0. System Overview (Operational View)
@@ -16,8 +18,10 @@ The goal is **reboot-safe**, **least-privilege**, and **operationally explainabl
 - **Service LXCs**:
   - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
   - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
-  - **LXC212**: Calibre-Web (Docker in LXC)
-  - **LXC230**: Vaultwarden (Docker in LXC)
+  - **LXC220**: Calibre-Web (Docker in LXC)
+  - **LXC230**: OpenWebUI (AI stack entrypoint) (planned)
+  - **LXC240**: Vaultwarden (Docker in LXC)
+  - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
 
 ### Trust Boundaries
 
@@ -48,8 +52,9 @@ The goal is **reboot-safe**, **least-privilege**, and **operationally explainabl
 - Proxmox host
 - Storage VM (VM102)
 - GPU VM (VM100)
-- Service LXCs (210/212/230)
+- Service LXCs (210/220/240)
 - Monitoring LXC itself (200)
+- DevOps LXC (250) - planned
 
 ### Key Metrics (Minimum Set)
 
@@ -107,6 +112,12 @@ It is an abstraction layer to keep service paths stable while disks are added/re
   - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)
   - DB is local MariaDB (inside container)
   - Future improvement: automated DB dumps + integrity verification
+- **PostgreSQL Platform (LXC260)**:
+  - Dedicated infrastructure container
+  - Databases stored on local block storage (no CIFS)
+  - Backups via periodic `pg_dump`
+  - Backups stored on SMB (separate from runtime data)
+  - Restore procedure must be periodically validated
 
 ### 2.4 Backup Scope & Residual Risk
 
@@ -144,7 +155,7 @@ Planned improvements:
 - Media mounts available (autofs/systemd automount)
 
 **Layer 3: Services**
-- LXCs online (210/212/230/200)
+- LXCs online (200/210/220/240/250)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
@@ -246,6 +257,24 @@ Actions:
 - Verify container user/UID/GID alignment
 - Verify loopback-only binding where intended
 
+### 4.6 PostgreSQL Platform Failure
+
+Symptoms:
+- Applications cannot connect (connection refused / timeout)
+- `pg_isready` fails
+- Monitoring shows DB node down
+
+Actions:
+1. Verify Tailscale interface up
+2. Validate bind address (Tailscale IP only)
+3. Inspect PostgreSQL logs
+4. Confirm pg_hba rules not modified
+5. Restore from backup if corruption detected
+
+Note:
+Database runtime storage is local block storage.
+Backups reside on SMB and are isolated from runtime failure.
+
 ---
 
 ## 5. Security Posture (Current State)
@@ -255,15 +284,31 @@ Actions:
 - No public reverse proxy
 - No router port-forwarding
 - Internal services bind to loopback where possible
-- Media services may be LAN-bound for performance trade-offs
+- Infrastructure services bind to Tailscale only
+- LAN exposure is limited to performance-critical media workloads and explicitly justified
 
 ### 5.2 Zero-Trust Overlay (Tailscale)
 
-- Identity-based overlay network for remote access
-- Services that must be remote-accessible (e.g., Nextcloud) use Tailscale DNS/certs patterns
-- Admin and service segmentation is enforced through the overlay model (policy-driven)
+Remote access and service-to-service communication are enforced via an identity-based overlay network (Tailscale).
 
-### 5.3 Least Privilege (Storage + Services)
+- All remote access requires authenticated Tailscale identity
+- Service-to-service permissions are tag-based
+- ACL rules are explicitly defined and port-scoped
+- No subnet-wide implicit trust
+
+The active ACL policy is managed as JSON in the Tailscale admin console (source of truth).
+This repository documents the intended tagging model and enforcement structure.
+
+See: [Tailscale ACL model](./tailscale-acl.md)
+
+### 5.3 Governance & Change Control
+
+- ACL changes are intentional and documented
+- Service onboarding requires tag assignment and ACL review
+- Binding rules (loopback or Tailscale-only) must be validated during deployment
+- Security exceptions (e.g., LAN-bound services) require architectural justification
+
+### 5.4 Least Privilege (Storage + Services)
 
 - RW shares only where required:
   - Nextcloud, Vaultwarden
@@ -313,3 +358,5 @@ Actions:
   - systemd units snippets (sanitized)
   - ACL/policy documentation for overlay network
 
+
+See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)

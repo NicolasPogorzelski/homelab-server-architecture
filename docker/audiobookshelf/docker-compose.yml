@@ -3,15 +3,12 @@ services:
     image: ghcr.io/advplyr/audiobookshelf:latest
     container_name: audiobookshelf
     restart: unless-stopped
-
     ports:
-      - "13378:80"
-
+      - "${ABS_HOST_PORT}:80"
     environment:
-      - TZ=Europe/Berlin
-
+      - TZ=${TZ}
     volumes:
-      - ./config:/config
-      - ./metadata:/metadata
-      - /media/audiobookshelf/Audiobooks:/audiobooks:ro
-      - /media/audiobookshelf/Podcasts:/podcasts:ro
+      - "${ABS_DATA_ROOT}/config:/config"
+      - "${ABS_DATA_ROOT}/metadata:/metadata"
+      - "${ABS_AUDIOBOOKS_ROOT}:/audiobooks:ro"
+      - "${ABS_PODCASTS_ROOT}:/podcasts:ro"
