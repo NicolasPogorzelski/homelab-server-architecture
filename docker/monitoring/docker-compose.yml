@@ -9,7 +9,6 @@ services:
       - --storage.tsdb.retention.time=${PROM_RETENTION}
       - --web.enable-lifecycle
       - --web.listen-address=${PROM_BIND_ADDRESS}:${PROM_PORT}
-
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
@@ -23,10 +22,9 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    network_mode: host
     env_file:
       - ${GF_ENV_FILE}
-    ports:
-      - "${GF_BIND_ADDRESS}:${GF_PORT}:3000"
     volumes:
       - ${GF_DATA}:/var/lib/grafana
     restart: unless-stopped
