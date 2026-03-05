@@ -70,4 +70,6 @@ docker-compose.override.yml
 # =====================================================
 # Service configs with environment-specific values
 # =====================================================
+
 docker/monitoring/prometheus/prometheus.yml
+docker/monitoring/grafana/provisioning/datasources/prometheus.yml
