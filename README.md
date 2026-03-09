@@ -1,25 +1,6 @@
 # Homelab Platform Architecture
 
-
-## Documentation
-
-- Architecture overview: [docs/architecture/overview.md](docs/architecture/overview.md)
-- Logical architecture diagram (Mermaid): [docs/architecture/diagram.md](docs/architecture/diagram.md)
-- Exposure model diagram (Mermaid): [docs/architecture/exposure-diagram.md](docs/architecture/exposure-diagram.md)
-- Design decisions (trade-offs): [docs/decisions/design-decisions.md](docs/decisions/design-decisions.md)
-- Operations (runbooks, recovery): [docs/platform/operations.md](docs/platform/operations.md)
-- Storage design (SnapRAID + MergerFS): [docs/platform/storage-design.md](docs/platform/storage-design.md)
-- Samba model (VM102): [docs/platform/samba.md](docs/platform/samba.md)
-- Tailscale ACL & tagging model (policy-as-code): [docs/platform/tailscale-acl.md](docs/platform/tailscale-acl.md)
-- OpenWebUI (AI interface): [docs/services/openwebui.md](docs/services/openwebui.md)
-- PostgreSQL platform service: [docs/services/postgresql-platform.md](docs/services/postgresql-platform.md)
-- Runbooks (procedures): [runbooks/README.md](runbooks/README.md)
-
----
-
 [![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![MergerFS](https://img.shields.io/badge/MergerFS-Union--Filesystem-5C2D91)](https://github.com/trapexit/mergerfs) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
-
-
 
 > A self-designed, security-focused platform architecture built on Proxmox.
 
@@ -29,140 +10,62 @@ It is not built as a collection of services, but as a layered infrastructure pla
 
 ---
 
-## Architectural Intent
-
-This homelab is intentionally structured around:
-
-- Clear separation of responsibility layers
-- Deterministic reboot behavior
-- Storage abstraction with explicit trade-offs
-- Identity-based access control
-- Least-privilege service segmentation
-- Observability-first operations
-- Recovery-focused design
-
----
-
 ## Quick Overview
 
 | Layer | Component | Purpose |
-|-------|----------|---------|
+|-------|-----------|---------|
 | Hypervisor | Proxmox | Virtualization platform |
 | Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
 | Compute | Docker on VM100 | GPU-enabled workloads |
 | Services | Unprivileged LXCs | Isolation and segmentation |
-| Access | Tailscale | Identity-based remote access |
+| Access | Tailscale | Identity-based remote access (Zero Trust) |
 | Monitoring | Prometheus + Grafana | Observability layer |
 
----
-
-## Scope & Limitations
-
-This platform is not designed as a high-availability (HA) cluster.
-
-It prioritizes deterministic recovery, explicit dependency modeling, and documented failure procedures over automatic failover.
-
-The focus is operational clarity and controlled recovery rather than zero-downtime guarantees.
+This platform is not designed for high availability. It prioritizes deterministic recovery, explicit dependency modeling, and documented failure procedures over automatic failover.
 
 ---
 
+## Documentation
 
+### Architecture
 
+- [Architecture Overview](docs/architecture/overview.md)
+- [Logical Architecture Diagram](docs/architecture/diagram.md) (Mermaid)
+- [Exposure Model Diagram](docs/architecture/exposure-diagram.md) (Mermaid)
 
+### Decisions
 
+- [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
+- [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
+- [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
 
-> A layered infrastructure designed with platform engineering principles and a Zero-Trust access model.
+### Nodes
 
----
+- [VM100 – GPU / Compute](docs/nodes/vm100.md) (Docker, NVIDIA, Jellyfin, Audiobookshelf)
+- [VM102 – Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
+- [LXC200 – Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
+- [LXC210 – Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
+- [LXC220 – Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
+- [LXC240 – Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
+- [LXC250 – DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
 
-## Architecture Overview
+### Services
 
-The system is built on Proxmox and structured into clear responsibility layers:
+- [Nextcloud](docs/services/nextcloud.md)
+- [Vaultwarden](docs/services/vaultwarden.md)
+- [Calibre-Web](docs/services/calibre-web.md)
+- [OpenWebUI](docs/services/openwebui.md) (planned)
+- [PostgreSQL Platform](docs/services/postgresql-platform.md) (planned)
 
-### Storage Layer – VM102
-- SnapRAID (parity-based protection)
-- MergerFS (namespace abstraction)
-- SMB3 (segmented least-privilege exports)
+### Platform
 
-### Compute Layer – VM100
-- Docker-based workloads
-- NVIDIA GPU passthrough
-- Read-only media mounts
-- LAN-optimized streaming
+- [Storage Design](docs/platform/storage-design.md) (SnapRAID + MergerFS)
+- [Samba](docs/platform/samba.md) (segmented exports, least privilege)
+- [Monitoring](docs/platform/monitoring.md) (Prometheus + Grafana stack)
+- [Networking](docs/platform/networking.md) (Zero-Trust model)
+- [Tailscale ACL](docs/platform/tailscale-acl.md) (policy-as-code, tier model)
+- [Operations](docs/platform/operations.md) (runbooks, recovery, maintenance)
 
-### Service Layer – Unprivileged LXCs
-- Platform services (PostgreSQL)
-- OpenWebUI (AI stack entrypoint)
-- Nextcloud
-- Vaultwarden
-- Calibre-Web
-- Monitoring (Prometheus + Grafana)
+### Runbooks
 
-📌 **Logical Architecture Diagram**  
-→ [View Architecture Diagram](docs/architecture/diagram.md)
-
----
-
-## Security Model (Zero Trust)
-
-- No public ingress
-- No router port forwarding
-- Identity-bound remote access via Tailscale
-- No implicit network trust
-- Strict least-privilege SMB segmentation
-- Unprivileged containers
-- Network policy enforcement via Tailscale ACL JSON + node tags (policy-as-code)
-
-Remote access path:
-
-Internet → Tailscale → Services
-
-LAN exposure is restricted to media workloads only.
-
-📌 **Exposure Model**  
-→ [View Exposure Diagram](docs/architecture/exposure-diagram.md)
-
----
-
-## Storage Architecture
-
-- SnapRAID for parity protection (scheduled sync)
-- MergerFS for flexible disk growth
-- Heterogeneous ext4 data disks
-- Service-specific segmented shares
-
-📌 **Storage Design Documentation**  
-→ [View Storage Design](docs/platform/storage-design.md)
-
----
-
-## Operational Model
-
-- Reboot-safe mounts (fstab + systemd)
-- Explicit dependency layering
-- Documented recovery procedures
-- Monitoring independent from application layer
-
-📌 **Operations Documentation**  
-→ [View Operations Model](docs/platform/operations.md)
-
----
-
-## Core Technologies
-
-Proxmox · Debian · Ubuntu · Docker · SnapRAID · MergerFS · Samba · Prometheus · Grafana · Tailscale
-
----
-
-## Design Philosophy
-
-This infrastructure prioritizes:
-
-- Deterministic recovery
-- Security through segmentation
-- Explicit trust boundaries
-- Operational transparency
-- Documented trade-offs
-
-The goal is predictable behavior under failure and controlled exposure.
-
+- [Runbook Index](runbooks/README.md)
