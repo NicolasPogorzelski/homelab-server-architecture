@@ -26,6 +26,7 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Tier 0 | `tag:tier0` | Hypervisor / infrastructure control plane | example-device |
 | Tier 1 | `tag:tier1` | Security-critical services | example-device |
 | Tier 2 | `tag:tier2` | Application services | example-device |
+| Monitoring | `tag:monitoring` | Observability stack (Prometheus, Grafana) | example-device |
 | Storage | `tag:storage` | Persistent data layer | example-device |
 | Client | `tag:client` | Trusted end-user devices | example-device |
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
@@ -37,16 +38,16 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 All tags are owned by `autogroup:admin` (Tailscale account administrators).
 
 Tags are assigned to nodes via the Tailscale admin console.
-
 ```json
 "tagOwners": {
-    "tag:admin":     ["autogroup:admin"],
-    "tag:tier0":     ["autogroup:admin"],
-    "tag:tier1":     ["autogroup:admin"],
-    "tag:tier2":     ["autogroup:admin"],
-    "tag:storage":   ["autogroup:admin"],
-    "tag:client":    ["autogroup:admin"],
-    "tag:untrusted": ["autogroup:admin"]
+    "tag:admin":      ["autogroup:admin"],
+    "tag:tier0":      ["autogroup:admin"],
+    "tag:tier1":      ["autogroup:admin"],
+    "tag:tier2":      ["autogroup:admin"],
+    "tag:monitoring": ["autogroup:admin"],
+    "tag:storage":    ["autogroup:admin"],
+    "tag:client":     ["autogroup:admin"],
+    "tag:untrusted":  ["autogroup:admin"]
 }
 ```
 
@@ -55,7 +56,6 @@ Tags are assigned to nodes via the Tailscale admin console.
 ## Host Aliases
 
 Named aliases for nodes referenced by IP in ACL rules.
-
 ```json
 "hosts": {
     "gpu-vm":    "<tailscale-ip-vm100>",
@@ -71,7 +71,6 @@ Named aliases for nodes referenced by IP in ACL rules.
 
 Admin nodes have unrestricted access to all infrastructure and service tiers.
 Admin does NOT have implicit access to client or untrusted devices.
-
 ```json
 {
     "action": "accept",
@@ -81,6 +80,7 @@ Admin does NOT have implicit access to client or untrusted devices.
         "tag:tier0:*",
         "tag:tier1:*",
         "tag:tier2:*",
+        "tag:monitoring:*",
         "tag:storage:*"
     ]
 }
@@ -89,11 +89,34 @@ Admin does NOT have implicit access to client or untrusted devices.
 Note: `tag:admin:*` was added to allow admin-to-admin communication
 (required when multiple admin-tagged nodes exist, e.g. desktop + devops LXC).
 
+### Rule 1b — Monitoring: outbound scrape access
+
+Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers.
+No other outbound access is granted.
+
+See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
+```json
+{
+    "action": "accept",
+    "src":    ["tag:monitoring"],
+    "dst": [
+        "tag:tier0:9100",
+        "tag:tier1:9100",
+        "tag:tier2:9100",
+        "tag:storage:9100"
+    ]
+}
+```
+
+Note: Tailscale ACLs are deny-by-default. Inbound access (admin → monitoring) does not
+imply outbound access (monitoring → targets). Pre-existing WireGuard tunnels can mask
+missing rules until the next connection reset (e.g. container restart). See DD#11 for
+the incident that exposed this.
+
 ### Rule 2 — Tier 0 (Proxmox): workload access only
 
 The hypervisor can reach all workload tiers and storage.
 No access to clients or untrusted devices.
-
 ```json
 {
     "action": "accept",
@@ -113,7 +136,6 @@ Tier 1 nodes can communicate with other tier 1 nodes
 and access storage via SMB (port 445) only.
 
 No access to tier 0, tier 2, clients, or untrusted.
-
 ```json
 {
     "action": "accept",
@@ -130,7 +152,6 @@ No access to tier 0, tier 2, clients, or untrusted.
 Same isolation model as tier 1.
 Tier 2 nodes can communicate with other tier 2 nodes
 and access storage via SMB (port 445) only.
-
 ```json
 {
     "action": "accept",
@@ -146,7 +167,6 @@ and access storage via SMB (port 445) only.
 
 Trusted client devices can access specific service ports only.
 No infrastructure access, no storage access.
-
 ```json
 {
     "action": "accept",
@@ -170,7 +190,6 @@ Allowed services:
 ### Rule 6 — Untrusted: minimal access
 
 Guest and restricted devices have access to media services only.
-
 ```json
 {
     "action": "accept",
@@ -196,7 +215,6 @@ Allowed services:
 ### Mullvad Exit Nodes
 
 Selected nodes are configured to route internet traffic through Mullvad VPN exit nodes via Tailscale's built-in Mullvad integration.
-
 ```json
 "nodeAttrs": [
     {"target": ["<tailscale-ip-node-a>"], "attr": ["mullvad"]},
@@ -208,14 +226,15 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | storage | client | untrusted |
-|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | all | — | — |
-| **tier1** | — | — | all | — | 445 | — | — |
-| **tier2** | — | — | — | all | 445 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — |
+| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | storage | client | untrusted |
+|---|---|---|---|---|---|---|---|---|
+| **admin** | all | all | all | all | all | all | — | — |
+| **tier0** | — | all | all | all | — | all | — | — |
+| **tier1** | — | — | all | — | — | 445 | — | — |
+| **tier2** | — | — | — | all | — | 445 | — | — |
+| **monitoring** | — | 9100 | 9100 | 9100 | — | 9100 | — | — |
+| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — | — |
+| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — |
 
 ---
 
@@ -267,3 +286,5 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 |---|---|---|
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
+| 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
+| 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
