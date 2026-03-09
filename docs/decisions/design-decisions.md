@@ -266,3 +266,51 @@ This approach was not chosen because the monitoring stack runs in a dedicated un
 - Configuration requires explicit address management
 - Accepted trade-off for reduced complexity, loopback-only binding, and Tailscale Serve compatibility
 - Isolation is enforced at deeper layers: unprivileged LXC (DD#5), loopback binding, and Tailscale ACL (DD#4)
+
+---
+
+## 11. Monitoring Requires Explicit Outbound ACLs for Scrape Targets
+
+### Context
+
+Prometheus (LXC200, `tag:monitoring`) scrapes Node Exporter on the Proxmox host (`tag:tier0`, port 9100) via Tailscale. The initial ACL policy defined inbound access to `tag:monitoring` (from `tag:admin`) but no outbound rules for `tag:monitoring` itself.
+
+### Incident
+
+After a container restart (RAM reallocation), Prometheus lost connectivity to the host Node Exporter. Disk temperature metrics (`smart_temperature_celsius`) stopped appearing in Grafana.
+
+Root cause: Tailscale evaluates ACLs when establishing new peer connections. The previous connection had survived as a pre-existing WireGuard tunnel despite the missing rule. The container restart forced a fresh connection attempt, which was correctly denied by the ACL policy.
+
+### Decision
+
+`tag:monitoring` requires explicit outbound ACL rules to all scrape targets. Access is restricted to the Node Exporter port only.
+```jsonc
+{
+    "action": "accept",
+    "src":    ["tag:monitoring"],
+    "dst": [
+        "tag:tier0:9100",
+        "tag:tier1:9100",
+        "tag:tier2:9100",
+        "tag:storage:9100",
+    ],
+}
+```
+
+### Rationale
+
+- Tailscale ACLs are deny-by-default — every direction of traffic requires an explicit rule
+- Inbound access (admin → monitoring) does not imply outbound access (monitoring → targets)
+- Pre-existing tunnels can mask missing rules until the next connection reset
+- Port restriction (9100 only) enforces least-privilege: Prometheus can scrape metrics but cannot SSH or access other services
+
+### Implications
+
+- Every new scrape target tag must be added to this rule
+- ACL changes should be validated after any container or Tailscale restart, not only after policy edits
+- Pre-existing connections are not proof that ACLs are correct
+
+### Trade-offs
+
+- Additional ACL maintenance when adding new monitoring targets
+- Accepted for explicit, auditable access control over implicit tunnel persistence
