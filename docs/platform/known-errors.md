@@ -64,3 +64,35 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 
 **References:**
 - [Nextcloud service documentation](../services/nextcloud.md)
+
+---
+
+## KE-4: Docker creates directories for missing bind-mount files
+
+**Affected services:** Any Docker service with bind-mounted config files (observed: Prometheus on LXC200)
+
+**Symptom:** Container fails to start. Error message: `error mounting "..." to rootfs: not a directory`. Exit code may be misleading (e.g. 127).
+
+**Root cause:** When a Docker bind-mount references a host path that does not exist, Docker does not fail — it silently creates an empty **directory** at that path. If the container expects a file (e.g. a config file), the mount fails with a type mismatch. This is documented Docker behavior, not a bug.
+
+**Common triggers:**
+- Config file was never created from `.example` template after initial clone
+- Config file was removed by `git clean` (especially with `-x` flag)
+- Accidental manual deletion
+
+**Fix:**
+1. Remove the empty directory: `rmdir <path>`
+2. Recreate the config from the corresponding `.example` template
+3. Restart the container
+
+**Scope:** Applies to all gitignored config files mounted as Docker bind-mounts. Currently affected files:
+- `docker/monitoring/prometheus/prometheus.yml`
+- `docker/monitoring/grafana.env`
+
+**Prevention:** The planned repo validation script (backlog item #11) should verify that all expected config files exist and are regular files before container startup.
+
+**Status:** Systematic (Docker design behavior)
+
+**References:**
+- [Monitoring platform](./monitoring.md)
+- [Design Decision #10](../decisions/design-decisions.md)
