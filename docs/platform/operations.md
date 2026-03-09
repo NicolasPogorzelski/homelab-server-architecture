@@ -5,6 +5,7 @@ This document describes the operational model of the homelab infrastructure: mon
 The goal is **reboot-safe**, **least-privilege**, and **operationally explainable** infrastructure (runbook-friendly, deterministic recovery).
 
 See: [Runbook index](../../runbooks/README.md)
+See: [Known Errors & Workarounds](./known-errors.md)
 
 ---
 
