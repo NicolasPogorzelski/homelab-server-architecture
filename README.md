@@ -65,6 +65,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Networking](docs/platform/networking.md) (Zero-Trust model)
 - [Tailscale ACL](docs/platform/tailscale-acl.md) (policy-as-code, tier model)
 - [Operations](docs/platform/operations.md) (runbooks, recovery, maintenance)
+- [Known Errors](docs/platform/known-errors.md) (observed issues and workarounds)
 
 ### Runbooks
 
