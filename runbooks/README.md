@@ -17,8 +17,9 @@ Related operational model:
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
 
-## Database (planned)
-- PostgreSQL backup & restore (planned; pg_dump + restore test + retention)
+## Database
+- PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)
+- PostgreSQL restore (planned)
 
 ## AI Stack (planned)
 - OpenWebUI health check (planned; mounts + container + DB connectivity)
