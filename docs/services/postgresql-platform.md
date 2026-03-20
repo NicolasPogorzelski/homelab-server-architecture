@@ -178,16 +178,40 @@ PostgreSQL is monitored via:
 
 ## Backup Strategy
 
-Backups are centralized:
+### Implementation
 
-- periodic pg_dump
-- stored on MergerFS / SMB storage
-- restore testing required
+- Tool: `pg_dumpall` (all databases + global objects / roles)
+- Schedule: daily at 03:00 via crontab (`postgres` user)
+- Compression: gzip
+- Target: `/mnt/backups/` (SMB mount on MergerFS, separate failure domain)
+- Retention: 7 days (automatic cleanup via `find -mtime`)
+- Script: `/usr/local/sbin/pg-backup.sh` on CT260
+- Source of truth (repo): `snippets/postgres/pg-backup.sh`
 
-Important distinction:
+### Operational Notes
 
-Runtime database storage → local block storage  
-Database backups → SMB allowed
+- Script runs as `postgres` user (peer authentication, no password required)
+- Script ownership: `root:postgres` (mode 750)
+- Pre-flight check: verifies backup directory exists before writing
+- Post-dump check: verifies dump file is non-empty
+- Crontab entry: `0 3 * * * /usr/local/sbin/pg-backup.sh`
+
+### Verification
+
+    crontab -u postgres -l
+    ls -la /mnt/backups/
+    zcat /mnt/backups/pg_dumpall_<timestamp>.sql.gz | head -20
+
+### Important Distinction
+
+Runtime database storage → local block storage (Aux1TB)
+Database backups → SMB allowed (MergerFS, separate failure domain)
+
+### Planned Improvements
+
+- Restore test runbook (periodic validation)
+- Per-database `pg_dump` once multiple consumers exist
+- Backup monitoring integration (alert on missing/stale dumps)
 
 ---
 
