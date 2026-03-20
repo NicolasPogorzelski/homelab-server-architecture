@@ -29,6 +29,7 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Monitoring | `tag:monitoring` | Observability stack (Prometheus, Grafana) | example-device |
 | Storage | `tag:storage` | Persistent data layer | example-device |
 | Client | `tag:client` | Trusted end-user devices | example-device |
+| Database | `tag:database` | Central PostgreSQL platform service | example-device |
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
 
 ---
@@ -47,6 +48,7 @@ Tags are assigned to nodes via the Tailscale admin console.
     "tag:monitoring": ["autogroup:admin"],
     "tag:storage":    ["autogroup:admin"],
     "tag:client":     ["autogroup:admin"],
+    "tag:database":   ["autogroup:admin"],
     "tag:untrusted":  ["autogroup:admin"]
 }
 ```
@@ -81,7 +83,8 @@ Admin does NOT have implicit access to client or untrusted devices.
         "tag:tier1:*",
         "tag:tier2:*",
         "tag:monitoring:*",
-        "tag:storage:*"
+        "tag:storage:*",
+        "tag:database:*",
     ]
 }
 ```
@@ -112,6 +115,18 @@ Note: Tailscale ACLs are deny-by-default. Inbound access (admin → monitoring) 
 imply outbound access (monitoring → targets). Pre-existing WireGuard tunnels can mask
 missing rules until the next connection reset (e.g. container restart). See DD#11 for
 the incident that exposed this.
+
+### Rule 1c — Monitoring: outbound scrape access to database nodes
+```json
+{
+    "action": "accept",
+    "src":    ["tag:monitoring"],
+    "dst":    ["tag:database:9100"]
+}
+```
+
+Note: Separated from Rule 1b for clarity. Database nodes are platform infrastructure
+outside the tier hierarchy and are not covered by the tier-based scrape targets in Rule 1b.
 
 ### Rule 2 — Tier 0 (Proxmox): workload access only
 
@@ -226,15 +241,16 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | storage | client | untrusted |
-|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | — | all | — | — |
-| **tier1** | — | — | all | — | — | 445 | — | — |
-| **tier2** | — | — | — | all | — | 445 | — | — |
-| **monitoring** | — | 9100 | 9100 | 9100 | — | 9100 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — |
+| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | storage | database | client | untrusted |
+|---|---|---|---|---|---|---|---|---|---|
+| **admin** | all | all | all | all | all | all | all | — | — |
+| **tier0** | — | all | all | all | — | all | — | — | — |
+| **tier1** | — | — | all | — | — | 445 | — | — | — |
+| **tier2** | — | — | — | all | — | 445 | — | — | — |
+| **monitoring** | — | 9100 | 9100 | 9100 | — | 9100 | 9100 | — | — |
+| **database** | — | — | — | — | — | — | — | — | — |
+| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
+| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
 
 ---
 
@@ -288,3 +304,4 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
 | 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
 | 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
+| 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (CT260) uses dedicated platform tag (DD#12) |
