@@ -314,3 +314,35 @@ Root cause: Tailscale evaluates ACLs when establishing new peer connections. The
 
 - Additional ACL maintenance when adding new monitoring targets
 - Accepted for explicit, auditable access control over implicit tunnel persistence
+
+---
+
+## 12. PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag
+
+### Context
+
+CT260 runs a centralized PostgreSQL instance that serves multiple consumers across different tiers (e.g., OpenWebUI in tier 2, potential future services in tier 1). A tagging decision was required to integrate the database node into the existing Tailscale ACL model.
+
+### Decision
+
+PostgreSQL is assigned `tag:database` — a new platform-level tag outside the tier hierarchy. Consumer access is granted per-service via explicit ACL rules restricted to port 5432.
+
+### Rationale
+
+Placing PostgreSQL in an existing tier (e.g., `tag:tier1` or `tag:tier2`) would create a conflict: tier rules allow intra-tier communication on all ports, which would grant unrelated services in that tier full access to the database. Cross-tier consumers would require exception rules that erode the tier isolation model.
+
+A dedicated `tag:database` avoids this by decoupling the database from the application tier hierarchy entirely. Each consumer must be explicitly allowed by tag and port — no implicit access through shared tier membership.
+
+This follows the same pattern established for `tag:monitoring` (DD#11): platform services that serve multiple tiers receive their own tag rather than being placed inside a tier.
+
+### Implications
+
+- Every new database consumer requires an explicit ACL rule (`consumer-tag → tag:database:5432`)
+- `tag:database` must be added to the admin destination list for management access
+- The tier model table and access matrix in `tailscale-acl.md` must include the new tag
+- Future shared platform services (e.g., a central Redis or message broker) should follow the same pattern
+
+### Trade-offs
+
+- Additional ACL maintenance per consumer (one rule per service)
+- Accepted for explicit, auditable, per-service access control over implicit tier-based access
