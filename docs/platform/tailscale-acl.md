@@ -30,6 +30,7 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Storage | `tag:storage` | Persistent data layer | example-device |
 | Client | `tag:client` | Trusted end-user devices | example-device |
 | Database | `tag:database` | Central PostgreSQL platform service | example-device |
+| AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
 
 ---
@@ -49,6 +50,7 @@ Tags are assigned to nodes via the Tailscale admin console.
     "tag:storage":    ["autogroup:admin"],
     "tag:client":     ["autogroup:admin"],
     "tag:database":   ["autogroup:admin"],
+    "tag:ai-stack":   ["autogroup:admin"],
     "tag:untrusted":  ["autogroup:admin"]
 }
 ```
@@ -178,7 +180,19 @@ and access storage via SMB (port 445) only.
 }
 ```
 
-### Rule 5 — Clients: explicit service access only
+### Rule 5 — AI Stack: database access only
+
+AI stack nodes can access the PostgreSQL platform service (port 5432) only.
+No access to other tiers, storage, clients, or untrusted.
+```json
+{
+    "action": "accept",
+    "src":    ["tag:ai-stack"],
+    "dst":    ["tag:database:5432"]
+}
+```
+
+### Rule 6 — Clients: explicit service access only
 
 Trusted client devices can access specific service ports only.
 No infrastructure access, no storage access.
@@ -202,7 +216,7 @@ Allowed services:
 - Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden
 - Tier 2 HTTPS (port 443): Calibre-Web
 
-### Rule 6 — Untrusted: minimal access
+### Rule 7 — Untrusted: minimal access
 
 Guest and restricted devices have access to media services only.
 ```json
@@ -249,6 +263,7 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 | **tier2** | — | — | — | all | — | 445 | — | — | — |
 | **monitoring** | — | 9100 | 9100 | 9100 | — | 9100 | 9100 | — | — |
 | **database** | — | — | — | — | — | — | — | — | — |
+| **ai-stack** | — | — | — | — | — | — | 5432 | — | — |
 | **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
 | **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
 
@@ -305,3 +320,4 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
 | 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
 | 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (CT260) uses dedicated platform tag (DD#12) |
+| 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack → database:5432) | First database consumer (OpenWebUI CT230) onboarding |
