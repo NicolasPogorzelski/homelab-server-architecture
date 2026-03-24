@@ -165,6 +165,12 @@ For each new service:
 4. add pg_hba allow entry
 5. update Tailscale ACL policy
 
+
+### Tenant Registry
+
+| Service | Database | User | ACL Rule | pg_hba Entry | Status |
+|---|---|---|---|---|---|
+| OpenWebUI (CT230) | openwebui_db | openwebui_user | tag:ai-stack → tag:database:5432 | pending (CT230 not provisioned) | partial |
 ## Monitoring
 
 PostgreSQL is monitored via:
