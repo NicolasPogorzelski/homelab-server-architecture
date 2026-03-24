@@ -46,16 +46,18 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [LXC200 – Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
 - [LXC210 – Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
 - [LXC220 – Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
+- [LXC230 – OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
 - [LXC240 – Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
 - [LXC250 – DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
+- [LXC260 – PostgreSQL](docs/nodes/lxc260.md) (centralized platform database)
 
 ### Services
 
 - [Nextcloud](docs/services/nextcloud.md)
 - [Vaultwarden](docs/services/vaultwarden.md)
 - [Calibre-Web](docs/services/calibre-web.md)
-- [OpenWebUI](docs/services/openwebui.md) (planned)
-- [PostgreSQL Platform](docs/services/postgresql-platform.md) (planned)
+- [OpenWebUI](docs/services/openwebui.md)
+- [PostgreSQL Platform](docs/services/postgresql-platform.md)
 
 ### Platform
 
@@ -70,3 +72,4 @@ This platform is not designed for high availability. It prioritizes deterministi
 ### Runbooks
 
 - [Runbook Index](runbooks/README.md)
+- [PostgreSQL Backup & Restore](runbooks/database/pg-backup.md)
