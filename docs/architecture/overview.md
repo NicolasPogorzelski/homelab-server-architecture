@@ -19,13 +19,10 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - LXC200 – Monitoring (Prometheus + Grafana + Node Exporter)
 - LXC210 – Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
 - LXC220 – Calibre-Web (Docker in LXC)
+- LXC230 – OpenWebUI (AI stack entrypoint, Docker in LXC)
 - LXC240 – Vaultwarden (Docker in LXC, secrets tier)
 - LXC250 – DevOps (central management workstation; Git, Ansible, IaC)
-
-### Planned
-
-- LXC230 – OpenWebUI (AI stack entrypoint; depends on centralized PostgreSQL platform)
-- LXC260 – PostgreSQL platform service (centralized database)
+- LXC260 – PostgreSQL (centralized platform database)
 
 ## Design Principles
 
@@ -49,16 +46,18 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [LXC200 – Monitoring](../nodes/lxc200.md)
 - [LXC210 – Nextcloud](../nodes/lxc210.md)
 - [LXC220 – Calibre-Web](../nodes/lxc220.md)
+- [LXC230 – OpenWebUI](../nodes/lxc230.md)
 - [LXC240 – Vaultwarden](../nodes/lxc240.md)
 - [LXC250 – DevOps](../nodes/lxc250.md)
+- [LXC260 – PostgreSQL](../nodes/lxc260.md)
 
 ## Services
 
 - [Nextcloud](../services/nextcloud.md)
 - [Calibre-Web](../services/calibre-web.md)
-- [OpenWebUI (planned)](../services/openwebui.md)
+- [OpenWebUI](../services/openwebui.md)
 - [Vaultwarden](../services/vaultwarden.md)
-- [PostgreSQL Platform (planned)](../services/postgresql-platform.md)
+- [PostgreSQL Platform](../services/postgresql-platform.md)
 
 ## Platform
 
