@@ -87,6 +87,7 @@ Admin does NOT have implicit access to client or untrusted devices.
         "tag:monitoring:*",
         "tag:storage:*",
         "tag:database:*",
+        "tag:ai-stack:*"
     ]
 }
 ```
@@ -100,14 +101,19 @@ Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and s
 No other outbound access is granted.
 
 See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
+
 ```json
 {
     "action": "accept",
     "src":    ["tag:monitoring"],
     "dst": [
+        "tag:admin:9100",
         "tag:tier0:9100",
         "tag:tier1:9100",
         "tag:tier2:9100",
+        "tag:monitoring:9100",
+        "tag:ai-stack:9100",
+        "tag:database:9100",
         "tag:storage:9100"
     ]
 }
@@ -117,18 +123,6 @@ Note: Tailscale ACLs are deny-by-default. Inbound access (admin → monitoring) 
 imply outbound access (monitoring → targets). Pre-existing WireGuard tunnels can mask
 missing rules until the next connection reset (e.g. container restart). See DD#11 for
 the incident that exposed this.
-
-### Rule 1c — Monitoring: outbound scrape access to database nodes
-```json
-{
-    "action": "accept",
-    "src":    ["tag:monitoring"],
-    "dst":    ["tag:database:9100"]
-}
-```
-
-Note: Separated from Rule 1b for clarity. Database nodes are platform infrastructure
-outside the tier hierarchy and are not covered by the tier-based scrape targets in Rule 1b.
 
 ### Rule 2 — Tier 0 (Proxmox): workload access only
 
@@ -142,6 +136,9 @@ No access to clients or untrusted devices.
         "tag:tier0:*",
         "tag:tier1:*",
         "tag:tier2:*",
+        "tag:monitoring:*",
+        "tag:ai-stack:*",
+        "tag:database:*",
         "tag:storage:*"
     ]
 }
@@ -182,13 +179,16 @@ and access storage via SMB (port 445) only.
 
 ### Rule 5 — AI Stack: database access only
 
-AI stack nodes can access the PostgreSQL platform service (port 5432) only.
-No access to other tiers, storage, clients, or untrusted.
+AI stack nodes can access the PostgreSQL platform service and storage via SMB
 ```json
 {
     "action": "accept",
     "src":    ["tag:ai-stack"],
-    "dst":    ["tag:database:5432"]
+    "dst": [
+        "tag:database:5432",
+        "tag:storage:445"
+    ]
+    
 }
 ```
 
@@ -204,7 +204,8 @@ No infrastructure access, no storage access.
         "gpu-vm:8096",
         "gpu-vm:13378",
         "tag:tier1:443",
-        "tag:tier2:443"
+        "tag:tier2:443",
+        "tag:ai-stack:443"
     ]
 }
 ```
@@ -215,6 +216,7 @@ Allowed services:
 - Audiobookshelf (port 13378 on gpu-vm)
 - Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden
 - Tier 2 HTTPS (port 443): Calibre-Web
+- AI stack HTTPS (port 443): OpenWebUI
 
 ### Rule 7 — Untrusted: minimal access
 
@@ -255,17 +257,17 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | storage | database | client | untrusted |
-|---|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | — | all | — | — | — |
-| **tier1** | — | — | all | — | — | 445 | — | — | — |
-| **tier2** | — | — | — | all | — | 445 | — | — | — |
-| **monitoring** | — | 9100 | 9100 | 9100 | — | 9100 | 9100 | — | — |
-| **database** | — | — | — | — | — | — | — | — | — |
-| **ai-stack** | — | — | — | — | — | — | 5432 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — |
+| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **admin** | all | all | all | all | all | all | all | all | — | — |
+| **tier0** | — | all | all | all | all | all | all | all | — | — |
+| **tier1** | — | — | all | — | — | — | — | 445 | — | — |
+| **tier2** | — | — | — | all | — | — | — | 445 | — | — |
+| **monitoring** | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | — | — |
+| **database** | — | — | — | — | — | — | — | — | — | — |
+| **ai-stack** | — | — | — | — | — | — | 5432 | 445 | — | — |
+| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — |
+| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — |
 
 ---
 
@@ -321,3 +323,5 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
 | 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (CT260) uses dedicated platform tag (DD#12) |
 | 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack → database:5432) | First database consumer (OpenWebUI CT230) onboarding |
+| 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
+
