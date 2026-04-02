@@ -7,51 +7,83 @@ It serves as the backend for OpenWebUI (CT230) and future agentic workflows.
 
 ## Deployment
 
-Two inference nodes are planned:
+Two inference nodes are operational:
 
 | Node | Hardware | Role | Tag |
 |---|---|---|---|
 | VM100 | NVIDIA RTX 2070 (8GB VRAM) | Backup | `tag:tier2` |
 | Gaming PC | AMD RX 7900 XT (20GB VRAM) | Primary | `tag:admin` |
 
-## VM100 — Current State
+## Deployment — Current State
+
+### VM100 (Backup)
 
 - Installation: native systemd service (`/etc/systemd/system/ollama.service`)
 - Override: `/etc/systemd/system/ollama.service.d/override.conf`
 - Bind address: Tailscale IP only (`<tailscale-ip-vm100>:11434`)
-- Model: `qwen3:8b-q4_K_M`
 - GPU: NVIDIA RTX 2070, driver 535, CUDA 12.2
+- Models: `qwen3-8b-16k` (16K context via Modelfile)
+- Model storage: `/mnt/vm-data/ollama/models`
+
+### Gaming PC (Primary)
+
+- Installation: `ollama-rocm` via pacman (CachyOS repository)
+- Override: `/etc/systemd/system/ollama.service.d/override.conf`
+- Bind address: Tailscale IP only (`<tailscale-ip-gaming-pc>:11434`)
+- GPU: AMD RX 7900 XT (20GB VRAM), ROCm 7.2.0, gfx1100
+- Models: `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` (context via Modelfiles)
+- Model storage: `/var/lib/ollama` (default, sufficient disk space available)
+- Known: rocBLAS probe-runner crashes on startup (non-blocking, GPU recovered automatically)
+- Known: ROCm inference is ~30-50% slower than CUDA on comparable hardware
 
 ## Model Selection
 
-| Node | Model | VRAM Usage | Context |
-|---|---|---|---|
-| VM100 (backup) | `qwen3:8b-q4_K_M` | ~5GB | 4096 (default) |
-| Gaming PC (primary) | `qwen3:32b-q4_K_M` | ~20GB | TBD |
+### VM100 (Backup)
 
-Rationale: Qwen3 leads the 8B class in multilingual performance and reasoning.
-Optimized for single-GPU deployment with up to 128K token context support.
+| Model | VRAM | Context | Use Case |
+|---|---|---|---|
+| `qwen3-8b-16k` | ~5GB | 16K | General, RAG |
+
+### Gaming PC (Primary)
+
+| Model | VRAM | Context | Use Case |
+|---|---|---|---|
+| `qwen3-32b-8k` | ~20GB | 8K | Highest quality, short prompts |
+| `qwen3-14b-64k` | ~9GB | ~40K | Long RAG sessions, agentic workflows |
+| `qwen3-8b-128k` | ~5GB | 128K | Maximum context, fast responses |
+
+### Rationale
+
+Qwen3 is selected across all nodes for consistent behavior in the inference pipeline,
+strong multilingual performance (Deutsch + English), and optimized single-GPU deployment.
+
+Context strategy: qwen3:32b fills the full 20GB VRAM leaving minimal KV-cache headroom —
+it is best suited for high-quality short-context tasks. For long RAG sessions and agentic
+workflows requiring 32K–64K token context, qwen3:14b is the appropriate choice.
+qwen3:8b provides maximum context (128K) and fastest responses for interactive use.
+
+Context window note: Context is configured per model via Modelfiles.
 
 ## Access Model (Zero Trust)
 
 - No public ingress
 - No LAN exposure
-- Ollama binds exclusively to the Tailscale IP (`<tailscale-ip-vm100>:11434`)
+- Ollama binds exclusively to the Tailscale IP on each node
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON)
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 
-Allowed sources (port 11434):
-- `tag:ai-stack` — OpenWebUI (CT230)
-- `tag:admin` — operator access for management
+| Node | Bind Address | Allowed Sources |
+|---|---|---|
+| VM100 | `<tailscale-ip-vm100>:11434` | `tag:ai-stack`, `tag:admin` |
+| Gaming PC | `<tailscale-ip-gaming-pc>:11434` | `tag:ai-stack`, `tag:admin` |
 
 ## Known Issues / Open Items
 
-- `OLLAMA_HOST` must be set explicitly when using the CLI on VM100
-  (because the service binds to Tailscale IP, not loopback):
-  `OLLAMA_HOST=<tailscale-ip-vm100>:11434 ollama <command>`
-- Default context window is 4096 tokens — increase via
-  `OLLAMA_NUM_CTX` for RAG workloads (planned)
-- Gaming PC (primary) not yet configured — ROCm setup pending
+- `OLLAMA_HOST` must be set explicitly when using the CLI on any node
+  (service binds to Tailscale IP, not loopback):
+  `OLLAMA_HOST=<tailscale-ip-node>:11434 ollama <command>`
+- Gaming PC: rocBLAS probe-runner crashes on startup (non-blocking, known ROCm/gfx1100 issue)
+- ROCm inference is ~30-50% slower than CUDA on comparable hardware
 
 ## Related Documents
 
