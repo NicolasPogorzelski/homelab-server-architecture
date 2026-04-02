@@ -85,6 +85,16 @@ Context window note: Context is configured per model via Modelfiles.
 - Gaming PC: rocBLAS probe-runner crashes on startup (non-blocking, known ROCm/gfx1100 issue)
 - ROCm inference is ~30-50% slower than CUDA on comparable hardware
 
+## Future Improvements
+
+- **Automatic backend selection:** Route inference requests based on Gaming PC
+  availability and GPU load (<30% → Gaming PC, otherwise VM100). Requires a
+  local proxy with health-check logic (planned for Phase 2, after Bash/Python
+  proficiency).
+- **Offline backend filtering:** Hide models from unavailable backends in
+  OpenWebUI dropdown. Currently offline backends still appear in model selection
+  — errors only surface on first message send.
+
 ## Related Documents
 
 - [VM100 Node](../nodes/vm100.md)
