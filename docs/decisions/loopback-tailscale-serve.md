@@ -110,6 +110,7 @@ Traefik's automatic container discovery was considered:
 | LXC200 | Grafana | 3000 | 443 | monitoring.<tailnet-id>.ts.net |
 | LXC200 | Prometheus | 9090 | 9443 | monitoring.<tailnet-id>.ts.net:9443 |
 | LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
+| LXC230 | OpenWebUI | 3000 | 443 | ai-openwebui.<tailnet-id>.ts.net |
 | LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
 
 #### Documented Exceptions (no Tailscale Serve, `0.0.0.0` binding)
@@ -125,7 +126,7 @@ Traefik's automatic container discovery was considered:
 | Node | Reason |
 |---|---|
 | LXC250 | DevOps workstation, SSH access only |
-| LXC230 | Not yet provisioned (OpenWebUI planned) |
+| CT260 | PostgreSQL platform service, Tailscale IP binding only (port 5432) |
 
 #### Notes on Exceptions
 
