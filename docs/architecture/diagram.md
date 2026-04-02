@@ -25,8 +25,10 @@ flowchart TB
     LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
     LXC220[LXC220 - Calibre-Web<br/>Docker]
+    LXC230[LXC230 - OpenWebUI<br/>Docker + AI Stack]
     LXC240[LXC240 - Vaultwarden<br/>Docker]
     LXC250[LXC250 - DevOps<br/>Git + Ansible + IaC]
+    LXC260[LXC260 - PostgreSQL<br/>Platform Database]
   end
 
   %% Storage Internals
@@ -45,7 +47,11 @@ flowchart TB
   Samba --> VM100
   Samba --> LXC210
   Samba --> LXC220
+  Samba --> LXC230
   Samba --> LXC240
+
+  %% Database Dependency
+  LXC230 --> LXC260
 
   %% VM100 Services
   VM100 --> Jellyfin[Jellyfin]
@@ -56,7 +62,9 @@ flowchart TB
   LXC200 --> VM100
   LXC200 --> LXC210
   LXC200 --> LXC220
+  LXC200 --> LXC230
   LXC200 --> LXC240
+  LXC200 --> LXC260
 
   %% Access Model
   TS --> VM100
@@ -64,8 +72,10 @@ flowchart TB
   TS --> LXC200
   TS --> LXC210
   TS --> LXC220
+  TS --> LXC230
   TS --> LXC240
   TS --> LXC250
+  TS --> LXC260
 
   LAN --> Jellyfin
   LAN --> ABS

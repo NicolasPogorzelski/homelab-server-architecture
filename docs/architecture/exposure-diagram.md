@@ -24,6 +24,7 @@ flowchart TB
     Vaultwarden[Vaultwarden]
     CalibreWeb[Calibre-Web]
     Monitoring[Monitoring<br/>Grafana + Prometheus]
+    OpenWebUI[OpenWebUI]
     DevOps[DevOps Workstation]
   end
 
@@ -39,3 +40,4 @@ flowchart TB
   TS --> CalibreWeb
   TS --> Monitoring
   TS --> DevOps
+  TS --> OpenWebUI
