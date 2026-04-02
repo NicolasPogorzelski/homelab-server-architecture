@@ -90,3 +90,4 @@ Context window note: Context is configured per model via Modelfiles.
 - [VM100 Node](../nodes/vm100.md)
 - [OpenWebUI Service](./openwebui.md)
 - [Tailscale ACL](../platform/tailscale-acl.md)
+- [Ollama Modelfiles](../../snippets/ollama/)
