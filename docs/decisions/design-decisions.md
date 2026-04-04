@@ -346,3 +346,51 @@ This follows the same pattern established for `tag:monitoring` (DD#11): platform
 
 - Additional ACL maintenance per consumer (one rule per service)
 - Accepted for explicit, auditable, per-service access control over implicit tier-based access
+
+---
+
+## 13. Standardized TUN Configuration for Tailscale-Capable LXCs
+
+### Context
+
+Multiple unprivileged LXCs require Tailscale for identity-based network access.
+During initial provisioning, TUN configuration was applied inconsistently:
+some containers were missing cgroup2 device rules or mount entries, and LXC200
+had AppArmor disabled and no capability restrictions — likely left over from
+debugging sessions.
+
+### Decision
+
+Every unprivileged LXC running Tailscale must include exactly the following
+TUN configuration (CT210-pattern):
+
+    lxc.cgroup2.devices.allow: c 10:200 rwm
+    lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+
+No additional permissive overrides are acceptable:
+- `lxc.apparmor.profile: unconfined` must not be set
+- `lxc.cap.drop:` must not be set to an empty value
+
+### Rationale
+
+Without `cgroup2.devices.allow`, the kernel denies access to the TUN device
+regardless of mount visibility. Without `mount.entry`, the device does not exist
+inside the container namespace. Both lines are required for Tailscale to use
+kernel-mode WireGuard — the absence of either causes a silent fallback to
+userspace networking, which is harder to observe and debug.
+
+`apparmor: unconfined` disables the kernel's mandatory access control layer
+for all processes in the container. Combined with an empty `cap.drop`, this
+grants the container maximum kernel privileges — unnecessary for any service
+workload and inconsistent with the least-privilege principle.
+
+### Implications
+
+- CT210-pattern is the reference for all new Tailscale-capable LXCs
+- Deviations from this pattern must be justified and documented
+- Service onboarding checklist must include TUN config verification
+
+### Trade-offs
+
+- None significant. The pattern is minimal and does not restrict
+  legitimate service operation.
