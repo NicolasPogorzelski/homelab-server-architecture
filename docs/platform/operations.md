@@ -20,9 +20,10 @@ See: [Known Errors & Workarounds](./known-errors.md)
   - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
   - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
   - **LXC220**: Calibre-Web (Docker in LXC)
-  - **LXC230**: OpenWebUI (AI stack entrypoint) (planned)
+  - **LXC230**: OpenWebUI (AI stack entrypoint)
   - **LXC240**: Vaultwarden (Docker in LXC)
   - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
+  - **LXC260**: PostgreSQL platform service (centralized database)
 
 ### Trust Boundaries
 
@@ -55,7 +56,7 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - GPU VM (VM100)
 - Service LXCs (210/220/240)
 - Monitoring LXC itself (200)
-- DevOps LXC (250) - planned
+- DevOps LXC (250)
 
 ### Key Metrics (Minimum Set)
 
