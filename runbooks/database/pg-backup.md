@@ -91,7 +91,7 @@ psql -U postgres -c '\du'
 psql -U postgres -c '\l'
 ```
 
-A full restore test runbook is planned as a separate procedure.
+Full restore procedure: [pg-restore.md](pg-restore.md)
 
 ---
 
