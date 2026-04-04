@@ -57,6 +57,7 @@
 *.old
 *.orig
 *.swp
+*.save
 *~
 .DS_Store
 Thumbs.db
