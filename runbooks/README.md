@@ -19,7 +19,7 @@ Related operational model:
 
 ## Database
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)
-- PostgreSQL restore (planned)
+- PostgreSQL restore: [database/pg-restore.md](database/pg-restore.md)
 
 ## AI Stack (planned)
 - OpenWebUI health check (planned; mounts + container + DB connectivity)
