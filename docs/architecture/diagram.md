@@ -24,6 +24,7 @@ flowchart TB
     VM100[VM100 - GPU / Compute<br/>Docker + NVIDIA]
     LXC200[LXC200 - Monitoring<br/>Prometheus + Grafana]
     LXC210[LXC210 - Nextcloud<br/>Apache + PHP + MariaDB + Redis]
+    LXC211[LXC211 - Paperless-ngx<br/>Docker + OCR]
     LXC220[LXC220 - Calibre-Web<br/>Docker]
     LXC230[LXC230 - OpenWebUI<br/>Docker + AI Stack]
     LXC240[LXC240 - Vaultwarden<br/>Docker]
@@ -46,12 +47,14 @@ flowchart TB
   %% Storage Consumers
   Samba --> VM100
   Samba --> LXC210
+  Samba --> LXC211 
   Samba --> LXC220
   Samba --> LXC230
   Samba --> LXC240
 
   %% Database Dependency
   LXC230 --> LXC260
+  LXC211 --> LXC260
 
   %% VM100 Services
   VM100 --> Jellyfin[Jellyfin]
@@ -71,6 +74,7 @@ flowchart TB
   TS --> VM102
   TS --> LXC200
   TS --> LXC210
+  TS --> LXC211
   TS --> LXC220
   TS --> LXC230
   TS --> LXC240
