@@ -1,0 +1,48 @@
+services:
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - gotenberg
+      - tika
+    env_file: .env
+    environment:
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - /data/paperless/originals:/usr/src/paperless/media
+      - /data/paperless/consumption:/usr/src/paperless/consume
+      - /data/paperless/export:/usr/src/paperless/export
+      - /data/paperless/thumbnails:/usr/src/paperless/thumbnails
+      - /var/lib/paperless/logs:/usr/src/paperless/logs
+      - paperless-data:/usr/src/paperless/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    image: apache/tika:latest
+    container_name: paperless-tika
+    restart: unless-stopped
+
+volumes:
+  paperless-data:
+  redis-data:
