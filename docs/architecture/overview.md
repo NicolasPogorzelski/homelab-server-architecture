@@ -18,6 +18,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 - LXC200 – Monitoring (Prometheus + Grafana + Node Exporter)
 - LXC210 – Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
+- LXC211 – Paperless-ngx (document management, Docker in LXC)
 - LXC220 – Calibre-Web (Docker in LXC)
 - LXC230 – OpenWebUI (AI stack entrypoint, Docker in LXC)
 - LXC240 – Vaultwarden (Docker in LXC, secrets tier)
@@ -45,6 +46,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 - [VM102 – Storage](../nodes/vm102.md)
 - [LXC200 – Monitoring](../nodes/lxc200.md)
 - [LXC210 – Nextcloud](../nodes/lxc210.md)
+- [LXC211 – Paperless-ngx](../nodes/lxc211.md)
 - [LXC220 – Calibre-Web](../nodes/lxc220.md)
 - [LXC230 – OpenWebUI](../nodes/lxc230.md)
 - [LXC240 – Vaultwarden](../nodes/lxc240.md)
@@ -54,6 +56,7 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 ## Services
 
 - [Nextcloud](../services/nextcloud.md)
+- [Paperless-ngx](../services/paperless.md)
 - [Calibre-Web](../services/calibre-web.md)
 - [OpenWebUI](../services/openwebui.md)
 - [Vaultwarden](../services/vaultwarden.md)

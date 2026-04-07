@@ -146,17 +146,19 @@ No access to clients or untrusted devices.
 
 ### Rule 3 — Tier 1 (security-critical): strictly isolated
 
-Tier 1 nodes can communicate with other tier 1 nodes
-and access storage via SMB (port 445) only.
+Tier 1 nodes can communicate with other tier 1 nodes,
+access storage via SMB (port 445), and reach the database platform (port 5432).
 
 No access to tier 0, tier 2, clients, or untrusted.
+
 ```json
 {
     "action": "accept",
     "src":    ["tag:tier1"],
     "dst": [
         "tag:tier1:*",
-        "tag:storage:445"
+        "tag:storage:445",
+        "tag:database:5432"
     ]
 }
 ```
@@ -263,7 +265,7 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 |---|---|---|---|---|---|---|---|---|---|---|
 | **admin** | all | all | all | all | all | all | all | all | — | — |
 | **tier0** | — | all | all | all | all | all | all | all | — | — |
-| **tier1** | — | — | all | — | — | — | — | 445 | — | — |
+| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — |
 | **tier2** | — | — | — | all | — | — | — | 445 | — | — |
 | **monitoring** | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | — | — |
 | **database** | — | — | — | — | — | — | — | — | — | — |
@@ -327,3 +329,4 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack → database:5432) | First database consumer (OpenWebUI CT230) onboarding |
 | 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
 | 2026-04-02 | Extended Rule 5 (ai-stack dst): added tag:admin:11434 and tag:tier2:11434 for Ollama inference backends | OpenWebUI requires direct Ollama access (Gaming PC + VM100) |
+| 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |

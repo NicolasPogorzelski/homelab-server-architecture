@@ -22,6 +22,7 @@ flowchart TB
     ABS[Audiobookshelf]
     Nextcloud[Nextcloud]
     Vaultwarden[Vaultwarden]
+    Paperless[Paperless-ngx]
     CalibreWeb[Calibre-Web]
     Monitoring[Monitoring<br/>Grafana + Prometheus]
     OpenWebUI[OpenWebUI]
@@ -36,6 +37,7 @@ flowchart TB
   TS --> Jellyfin
   TS --> ABS
   TS --> Nextcloud
+  TS --> Paperless
   TS --> Vaultwarden
   TS --> CalibreWeb
   TS --> Monitoring

@@ -109,6 +109,7 @@ Traefik's automatic container discovery was considered:
 |---|---|---|---|---|
 | LXC200 | Grafana | 3000 | 443 | monitoring.<tailnet-id>.ts.net |
 | LXC200 | Prometheus | 9090 | 9443 | monitoring.<tailnet-id>.ts.net:9443 |
+| LXC211 | Paperless-ngx | 8000 | 443 | paperless.<tailnet-id>.ts.net |
 | LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
 | LXC230 | OpenWebUI | 3000 | 443 | ai-openwebui.<tailnet-id>.ts.net |
 | LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
