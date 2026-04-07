@@ -19,6 +19,7 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - **Service LXCs**:
   - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
   - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
+  - **LXC211**: Paperless-ngx (document management, Docker in LXC)
   - **LXC220**: Calibre-Web (Docker in LXC)
   - **LXC230**: OpenWebUI (AI stack entrypoint)
   - **LXC240**: Vaultwarden (Docker in LXC)
@@ -54,7 +55,7 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - Proxmox host
 - Storage VM (VM102)
 - GPU VM (VM100)
-- Service LXCs (210/220/240)
+- Service LXCs (210/211/220/240)
 - Monitoring LXC itself (200)
 - DevOps LXC (250)
 
@@ -120,6 +121,11 @@ It is an abstraction layer to keep service paths stable while disks are added/re
   - Backups via periodic `pg_dump`
   - Backups stored on SMB (separate from runtime data)
   - Restore procedure must be periodically validated
+- **Paperless-ngx (LXC211)**:
+  - Document files on MergerFS/SMB (originals, archive, thumbnails)
+  - Database in centralized PostgreSQL (CT260)
+  - Backups via pg_dump (paperless_db) + document export
+  - Runtime state on local block storage (Aux1TB)
 
 ### 2.4 Backup Scope & Residual Risk
 
@@ -157,7 +163,7 @@ Planned improvements:
 - Media mounts available (autofs/systemd automount)
 
 **Layer 3: Services**
-- LXCs online (200/210/220/240/250)
+- LXCs online (200/210/211/220/240/250)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
