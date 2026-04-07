@@ -90,6 +90,21 @@ Paperless-ngx is only healthy if all dependencies are satisfied:
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON)
 - See: [Tailscale ACL model](../platform/tailscale-acl.md)
 
+### Environment Configuration (Security-Relevant)
+
+| Variable | Purpose |
+|---|---|
+| `PAPERLESS_URL` | Base URL for the application. Required for correct link generation, API responses, and CSRF validation. Set to the Tailscale Serve hostname. |
+| `PAPERLESS_CSRF_TRUSTED_ORIGINS` | Django CSRF origin allowlist. Must include the Tailscale Serve URL. Without this, POST requests from browsers and mobile clients are rejected (HTTP 403). |
+
+Both values must match the Tailscale Serve URL (`https://paperless.<tailnet-id>.ts.net`).
+
+### Client Access
+
+- Browser: via Tailscale Serve URL (HTTPS)
+- Mobile: Paperless Mobile (Android) — connects to the same Tailscale Serve URL
+- Both require the device to be authenticated on the Tailnet
+
 ---
 
 ## Failure Impact
