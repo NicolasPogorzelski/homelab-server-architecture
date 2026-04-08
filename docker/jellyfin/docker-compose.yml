@@ -3,21 +3,23 @@ services:
     image: jellyfin/jellyfin:latest
     container_name: jellyfin
     restart: unless-stopped
-
     user: "${PUID}:${PGID}"
-    gpus: all
-
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
       - TZ=${TZ}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES}
-
     volumes:
       - ${JF_CONFIG}:/config
       - ${JF_CACHE}:/cache
       - ${JF_METADATA}:/metadata
       - ${JF_MEDIA_FILME}:/media/Filme:ro
       - ${JF_MEDIA_SERIEN}:/media/Serien:ro
-
     ports:
       - "${JELLYFIN_PORT}:8096"
