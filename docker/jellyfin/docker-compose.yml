@@ -2,6 +2,7 @@ services:
   jellyfin:
     image: jellyfin/jellyfin:latest
     container_name: jellyfin
+    pid: "host"
     restart: unless-stopped
     user: "${PUID}:${PGID}"
     deploy:
