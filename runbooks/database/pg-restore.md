@@ -117,7 +117,7 @@ Refer to: [postgresql-platform.md](../../docs/services/postgresql-platform.md) f
 
 ---
 
-## Validated
+## Verification
 
 | Date | Scope | Result |
 |---|---|---|
