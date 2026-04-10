@@ -66,6 +66,25 @@ If the CIFS mount becomes unavailable:
 - `*:80` internal HTTP vhost (e.g. for local access / redirect patterns)
 - `*:443` HTTPS vhost using Tailscale-provided certificates
 
+## External Storage (Paperless Integration)
+
+The `files_external` app is enabled to provide Nextcloud users with direct
+upload paths into Paperless-ngx consumption directories.
+
+Each mount points to a dedicated SMB share on VM102, scoped to a single
+user's consumption subdirectory.
+
+| Mount ID | Nextcloud User | SMB Share | Target Path |
+|---|---|---|---|
+| 4 | Operator | Paperless-ingest-user1 | `/mnt/mergerfs/Paperless/consumption/user1` |
+| 5 | user2 | Paperless-ingest-user2 | `/mnt/mergerfs/Paperless/consumption/user2` |
+
+- SMB user: `paperless-ingest` (global credentials, not per-session)
+- Auth method: global credentials stored in Nextcloud config (not session-based)
+- Files uploaded here are consumed and deleted by Paperless within ~30 seconds
+
+See: [Paperless-ngx Service](./paperless.md)
+
 ## Notes / Known Issues
 
 - The container shows a failed `run-rpc_pipefs.mount` unit. This is non-blocking for Nextcloud operation and will be reviewed if NFS/RPC features are required.
