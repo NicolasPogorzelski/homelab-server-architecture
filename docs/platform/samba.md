@@ -43,6 +43,7 @@ The decision prioritizes operational predictability over theoretical performance
 
 - Nextcloud → /mnt/mergerfs/Nextcloud
 - Vaultwarden → /mnt/mergerfs/Vaultwarden
+- Paperless → /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
 
 Ownership enforcement:
 
@@ -52,6 +53,23 @@ Ownership enforcement:
 - directory mask = 0770
 
 This ensures consistent file ownership regardless of client context.
+
+### Ingest Shares (Cross-Service Write Path)
+
+Paperless consumption directories are exposed as separate shares per user,
+allowing Nextcloud External Storage to write files for automatic ingestion.
+
+- Paperless-ingest-user1 → /mnt/mergerfs/Paperless/consumption/user1
+- Paperless-ingest-user2 → /mnt/mergerfs/Paperless/consumption/user2
+
+These shares use a dedicated SMB user (`paperless-ingest`) with write access
+scoped to the consumption subdirectories only.
+
+Ownership enforcement follows the same model as other RW shares
+(`force user = storage`, `force group = storage`).
+
+Paperless workflows match documents by consumption subdirectory path
+and assign ownership to the corresponding Paperless user.
 
 ---
 

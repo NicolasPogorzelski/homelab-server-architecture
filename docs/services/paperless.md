@@ -124,6 +124,48 @@ If PostgreSQL (CT260) becomes unavailable:
 
 ---
 
+## Nextcloud Integration (Document Ingestion)
+
+Documents are ingested via Nextcloud External Storage into per-user consumption subdirectories.
+
+### Flow
+
+1. User uploads document in Nextcloud (External Storage folder)
+2. Nextcloud writes file to SMB share (`Paperless-ingest-user1` or `Paperless-ingest-user2`)
+3. File lands in `/data/paperless/consumption/user1/` or `/data/paperless/consumption/user2/`
+4. Paperless consumer polls directory every 30 seconds (`PAPERLESS_CONSUMER_POLLING=30`)
+5. Workflow matches subdirectory path and assigns document owner
+6. Document is OCR-processed, classified, and stored
+
+### Consumer Settings
+
+- `PAPERLESS_CONSUMER_RECURSIVE=true` — required for subdirectory scanning
+- `PAPERLESS_CONSUMER_POLLING=30` — inotify does not work on CIFS/SMB mounts
+
+### Workflows
+
+| Workflow | Path Filter | Assigned Owner |
+|---|---|---|
+| user1 Ingest | `*user1*` | user1 |
+| user2 Ingest | `*user2*` | user2 |
+
+Wildcard filters are required for Paperless v2.20 path matching.
+
+### SMB Shares (VM102)
+
+- `Paperless-ingest-user1` → `/mnt/mergerfs/Paperless/consumption/user1`
+- `Paperless-ingest-user2` → `/mnt/mergerfs/Paperless/consumption/user2`
+- Dedicated SMB user: `paperless-ingest` (write access, scoped to consumption subdirectories)
+
+### Nextcloud External Storage (LXC210)
+
+- App: `files_external`
+- Mount ID 4: Operator → `Paperless-ingest-user1` share
+- Mount ID 5: user2 → `Paperless-ingest-user2` share
+- Auth: global SMB credentials (not per-session)
+
+---
+
 ## Related Documents
 
 - [Node Documentation: LXC211](../nodes/lxc211.md)
