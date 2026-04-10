@@ -6,6 +6,12 @@ SMB mounts under `/mnt/smb/*` are access-triggered (autofs/systemd automount). S
 - failed migrations / startup errors
 - nondeterministic reboot behavior
 
+## Preconditions
+
+- VM102 (Storage) is running and Samba is active
+- SMB automount units exist under `/mnt/smb/*` on the Proxmox host
+- Network is reachable (automounts depend on `network-online.target`)
+
 ## Solution (Proxmox host)
 Create a systemd oneshot unit that triggers all `/mnt/smb/*` automounts after `network-online.target`, forcing early activation during boot.
 
