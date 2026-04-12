@@ -328,6 +328,12 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 
 ## 6. Maintenance Routines (Recommended Cadence)
 
+### Hourly (automated)
+
+- Nextcloud Paperless Inbox scan (`/usr/local/sbin/scan-paperless-inbox.sh` on LXC210)
+  - Synchronizes Nextcloud file cache after Paperless consumes documents from External Storage mounts
+  - Log: `/var/log/nextcloud-paperless-scan.log`
+
 ### Daily (lightweight)
 
 - Check monitoring dashboards for anomalies
