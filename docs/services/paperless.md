@@ -213,6 +213,18 @@ deletes the underlying consumption subdirectory:
 
 4. Confirm with `files_external:verify <mount-id>` → status: ok
 
+## Operational Notes
+
+### Resource Requirements for Bulk Imports
+
+Default CT211 resources (2 cores, 2048 MB RAM, 512 MB swap) are sufficient for
+normal single-document ingestion via Nextcloud or direct upload.
+
+Bulk imports (thousands of documents) can exhaust available resources and crash the container.
+Temporary resource scaling via Proxmox may be required.
+
+See: [LXC211 Troubleshooting](../nodes/lxc211.md#troubleshooting) for details and recommended values.
+
 ---
 
 ## Related Documents
