@@ -68,8 +68,8 @@ If the CIFS mount becomes unavailable:
 
 ## External Storage (Paperless Integration)
 
-The `files_external` app is enabled to provide Nextcloud users with direct
-upload paths into Paperless-ngx consumption directories.
+The `files_external` app provides Nextcloud users with direct upload paths
+into Paperless-ngx consumption directories.
 
 Each mount points to a dedicated SMB share on VM102, scoped to a single
 user's consumption subdirectory.
@@ -83,7 +83,19 @@ user's consumption subdirectory.
 - Auth method: global credentials stored in Nextcloud config (not session-based)
 - Files uploaded here are consumed and deleted by Paperless within ~30 seconds
 
-See: [Paperless-ngx Service](./paperless.md)
+### Cache Synchronization Cronjob
+
+Paperless deletes consumed files from the SMB share. Nextcloud's file cache does not
+detect these deletions automatically (External Storage mounts are not monitored in real time).
+
+A scheduled `files:scan` on LXC210 keeps the cache consistent:
+
+- Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
+- Schedule: `0 * * * *` (hourly, root crontab)
+- Log: `/var/log/nextcloud-paperless-scan.log`
+- Scope: scans `<user>/files/Paperless Inbox` per Nextcloud user; silently skips users without the folder
+
+See: [Paperless-ngx Service Documentation](./paperless.md) — Nextcloud Integration section
 
 ## Notes / Known Issues
 

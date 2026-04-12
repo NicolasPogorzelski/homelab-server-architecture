@@ -164,6 +164,55 @@ Wildcard filters are required for Paperless v2.20 path matching.
 - Mount ID 5: Laura → `Paperless-ingest-Laura` share
 - Auth: global SMB credentials (not per-session)
 
+### Post-Import Behavior
+
+Paperless deletes consumed files after successful import.
+If all files in a subdirectory are consumed, Paperless also removes the empty subdirectory.
+
+This means `consumption/Nico/` and `consumption/Laura/` may not exist after a full import cycle.
+
+Recovery (on VM102 or via Proxmox host):
+
+    mkdir -p /mnt/mergerfs/Paperless/consumption/{Nico,Laura}
+    chmod 770 /mnt/mergerfs/Paperless/consumption/Nico
+    chmod 770 /mnt/mergerfs/Paperless/consumption/Laura
+
+Ownership must match the `paperless-ingest` SMB user context (`force user`/`force group` in smb.conf).
+
+### Nextcloud Cache Synchronization (Cronjob on LXC210)
+
+After Paperless consumes files, the Nextcloud file cache still shows the deleted documents.
+A scheduled `files:scan` resolves this.
+
+- Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
+- Schedule: `0 * * * *` (hourly, root crontab)
+- Log: `/var/log/nextcloud-paperless-scan.log`
+
+The script iterates all Nextcloud users via `occ user:list --output=json`,
+attempts `occ files:scan <user> --path="/<user>/files/Paperless Inbox"` per user,
+and silently skips users without a "Paperless Inbox" folder (`>/dev/null 2>&1 || true`).
+
+This approach scales automatically when new Nextcloud users receive a Paperless Inbox mount.
+
+See: [Nextcloud Service Documentation](./nextcloud.md)
+
+### Troubleshooting: Stale Nextcloud External Storage
+
+If a Nextcloud External Storage mount shows as unavailable (red icon) after Paperless
+deletes the underlying consumption subdirectory:
+
+1. Recreate the subdirectory on VM102 (see "Post-Import Behavior" above)
+2. Re-verify the mount:
+
+        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:verify <mount-id>" www-data
+
+3. If still stale, remove and re-add the user assignment:
+
+        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --remove-user <user> <mount-id>" www-data
+        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --add-user <user> <mount-id>" www-data
+
+4. Confirm with `files_external:verify <mount-id>` → status: ok
+
 ---
 
 ## Related Documents
