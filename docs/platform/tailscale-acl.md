@@ -330,3 +330,5 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
 | 2026-04-02 | Extended Rule 5 (ai-stack dst): added tag:admin:11434 and tag:tier2:11434 for Ollama inference backends | OpenWebUI requires direct Ollama access (Gaming PC + VM100) |
 | 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |
+| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@CT260, E2E verified | Paperless-ngx operational and documented |
+
