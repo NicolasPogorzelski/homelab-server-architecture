@@ -89,7 +89,7 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 - `docker/monitoring/prometheus/prometheus.yml`
 - `docker/monitoring/grafana.env`
 
-**Prevention:** The planned repo validation script (backlog item #11) should verify that all expected config files exist and are regular files before container startup.
+**Prevention:** The repo validation script (`scripts/validate-repo.sh`, implemented 2026-04-10) verifies that all expected config files exist and are regular files before container startup.
 
 **Status:** Systematic (Docker design behavior)
 

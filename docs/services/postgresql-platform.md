@@ -3,7 +3,7 @@
 ## Purpose
 
 Provide a centralized PostgreSQL platform service for multiple applications
-(OpenWebUI, Immich, Paperless, Nextcloud components, future services).
+(OpenWebUI, Paperless, Nextcloud components, future services).
 
 Goals:
 
@@ -51,7 +51,7 @@ Only explicitly tagged services may establish TCP connections.
 
 Example policy concept:
 
-    tag:ai-stack  →  tag:postgres
+    tag:ai-stack  →  tag:database
 
 See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 
@@ -170,7 +170,9 @@ For each new service:
 
 | Service | Database | User | ACL Rule | pg_hba Entry | Status |
 |---|---|---|---|---|---|
-| OpenWebUI (CT230) | openwebui_db | openwebui_user | tag:ai-stack → tag:database:5432 | pending (CT230 not provisioned) | partial |
+| OpenWebUI (CT230) | openwebui_db | openwebui_user | tag:ai-stack → tag:database:5432 | hostssl entry, CT230 /32 | active |
+| Paperless-ngx (CT211) | paperless_db | paperless_user | tag:tier1 → tag:database:5432 | hostssl entry, CT211 /32 | active |
+
 ## Monitoring
 
 PostgreSQL is monitored via:
