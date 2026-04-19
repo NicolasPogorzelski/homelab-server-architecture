@@ -190,7 +190,7 @@ while read -r file; do
     case "${rel}" in
         docs|docker|snippets|runbooks|scripts) continue ;;
         docs/*|docker/*|snippets/*|runbooks/*|scripts/*) continue ;;
-        README.md|.gitignore) continue ;;
+        README.md|CLAUDE.md|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
         *) echo "  Unexpected: ${rel}"
            ERRORS=$((ERRORS + 1))
