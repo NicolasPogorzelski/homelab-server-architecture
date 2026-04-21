@@ -157,13 +157,32 @@ No shared credentials exist.
 
 ### Service Onboarding Pattern
 
-For each new service:
+Run on CT260 as the `postgres` user unless noted.
 
-1. create database
-2. create service user
-3. restrict privileges
-4. add pg_hba allow entry
-5. update Tailscale ACL policy
+**1. Create database and user**
+```sql
+CREATE DATABASE <service>_db;
+CREATE USER <service>_user WITH PASSWORD '<strong-password>';
+GRANT ALL PRIVILEGES ON DATABASE <service>_db TO <service>_user;
+\c <service>_db
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO <service>_user;
+```
+
+**2. Add pg_hba.conf entry** (`/etc/postgresql/<version>/main/pg_hba.conf`):
+```
+hostssl <service>_db    <service>_user    <tailscale-ip-lxc###>/32    scram-sha-256
+```
+
+**3. Reload PostgreSQL**
+```bash
+systemctl reload postgresql
+```
+
+**4. Update Tailscale ACL policy** — verify the service's tag has `tag:database:5432` in the
+relevant ACL rule, or add one. See [tailscale-acl.md](../platform/tailscale-acl.md).
+
+**5. Register the tenant** — add a row to the Tenant Registry table below.
 
 
 ### Tenant Registry
@@ -172,6 +191,7 @@ For each new service:
 |---|---|---|---|---|---|
 | OpenWebUI (CT230) | openwebui_db | openwebui_user | tag:ai-stack → tag:database:5432 | hostssl entry, CT230 /32 | active |
 | Paperless-ngx (CT211) | paperless_db | paperless_user | tag:tier1 → tag:database:5432 | hostssl entry, CT211 /32 | active |
+| Vaultwarden (LXC240) | vaultwarden_db | vaultwarden_user | TBD | TBD | planned (migration from SQLite/CIFS; see KE-5) |
 
 ## Monitoring
 

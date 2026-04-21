@@ -1,6 +1,6 @@
 services:
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest  # TODO: pin to specific version tag
     container_name: paperless
     restart: unless-stopped
     depends_on:
@@ -39,7 +39,7 @@ services:
       - "--chromium-allow-list=file:///tmp/.*"
 
   tika:
-    image: apache/tika:latest
+    image: apache/tika:latest  # TODO: pin to specific version tag
     container_name: paperless-tika
     restart: unless-stopped
 
