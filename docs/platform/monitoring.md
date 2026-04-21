@@ -9,6 +9,7 @@ See: [Runbook index](../../runbooks/README.md)
 - Prometheus (`prom/prometheus`)
 - Grafana (`grafana/grafana`)
 - Node Exporter (`prom/node-exporter`)
+- Alertmanager (`prom/alertmanager`)
 
 ## Security / Exposure
 
@@ -31,10 +32,10 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 
 ## Alerting
 
-- Alertmanager deployment in progress (`feature/alertmanager` branch)
-- Alert rules committed: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`
+- Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
+- Notification receiver: Discord webhook
+- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on CT260 (see pg-backup runbook)
-- Current usage is dashboard-based (Grafana) pending Alertmanager wiring
 
 ## Failure / Dependency Notes
 
