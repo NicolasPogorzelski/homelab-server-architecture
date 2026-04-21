@@ -23,5 +23,8 @@ Related operational model:
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)
 - PostgreSQL restore: [database/pg-restore.md](database/pg-restore.md)
 
+## Integration
+- Nextcloud → Paperless ingestion: [integration/nextcloud-paperless.md](integration/nextcloud-paperless.md)
+
 ## AI Stack (planned)
 - OpenWebUI health check (planned; mounts + container + DB connectivity)
