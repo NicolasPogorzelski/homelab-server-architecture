@@ -29,13 +29,13 @@ groups:
           description: "Memory usage on {{ $labels.instance }} is above 90% ({{ $value | printf \"%.1f\" }}% used)."
 
       - alert: PostgreSQLBackupStale
-        expr: (time() - node_filesystem_files_free{mountpoint="/mnt/backups"}) > 90000
+        expr: (time() - pg_backup_last_success_timestamp) > 90000
         for: 0m
         labels:
           severity: warning
         annotations:
-          summary: "PostgreSQL backup may be stale"
-          description: "No recent changes detected on /mnt/backups for more than 25 hours."
+          summary: "PostgreSQL backup is stale"
+          description: "Last successful pg_dumpall on CT260 was more than 25 hours ago."
 
   - name: smart
     rules: []

@@ -34,6 +34,23 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  alertmanager:
+    image: prom/alertmanager:latest  # TODO: pin to specific version tag
+    container_name: alertmanager
+    network_mode: host
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=${AM_BIND_ADDRESS}:${AM_PORT}
+      - --config.expand-env=true
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   node-exporter:
     image: prom/node-exporter:latest  # TODO: pin to specific version tag
     container_name: node-exporter

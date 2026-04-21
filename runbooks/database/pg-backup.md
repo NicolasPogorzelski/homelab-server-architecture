@@ -16,6 +16,9 @@ Runtime data and backups reside on separate failure domains.
 - `/mnt/backups/` is mounted (SMB via mp1 on MergerFS)
 - `postgres` user can write to `/mnt/backups/`
 - Script deployed at `/usr/local/sbin/pg-backup.sh` (owner `root:postgres`, mode 750)
+- For backup staleness alerting: Node Exporter on CT260 must have the textfile collector enabled
+  (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`) and the directory
+  must exist and be writable by the `postgres` user
 
 ## Implementation
 
