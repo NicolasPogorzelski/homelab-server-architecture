@@ -10,9 +10,10 @@ Vaultwarden is deployed via Docker Compose inside an unprivileged Debian LXC con
 - Healthcheck: HTTP probe against `http://localhost:80/`
 
 Important:
-- Vaultwarden uses SQLite for its database.
-- The database resides on local container storage (`/opt/vaultwarden`).
-- SQLite is not stored on CIFS/SMB mounts.
+- Vaultwarden uses SQLite for its database (`db.sqlite3`).
+- The database resides at `/opt/vaultwarden`, which is a CIFS mount (`mp0` on LXC240 → `/mnt/smb/vaultwarden`).
+- This violates the KE-1 architectural rule (no database files on CIFS/SMB). Migration to PostgreSQL (CT260) is planned.
+- See: [KE-5](../platform/known-errors.md#ke-5-vaultwarden-sqlite-on-cifs--acknowledged-technical-debt)
 
 ## Security / Exposure
 
@@ -42,10 +43,17 @@ Important:
 
 ## Failure Impact
 
-If the persistent storage (`/opt/vaultwarden`) becomes unavailable:
+If the CIFS mount (`/opt/vaultwarden` → `/mnt/smb/vaultwarden`) becomes unavailable:
 
 - Vaultwarden cannot access its SQLite database.
 - Encryption keys may become inaccessible.
 - Service startup may fail or data integrity may be compromised.
 
 Backups of the database and key material are critical.
+
+## Related Documents
+
+- [LXC240 Node](../nodes/lxc240.md)
+- [Known Errors (KE-5)](../platform/known-errors.md)
+- [PostgreSQL Platform Service](./postgresql-platform.md)
+- [Tailscale ACL](../platform/tailscale-acl.md)
