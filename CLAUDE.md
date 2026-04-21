@@ -74,6 +74,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-04-21 | Alertmanager deployed on LXC200: Discord webhook receiver, `tailscale serve --https=9093`, 4 active alert rules; `PostgreSQLBackupStale` fixed via textfile collector pattern |
 | 2026-04-21 | `chore/repo-review`: SnapRAID runbooks added; Jellyfin + ABS service docs created; KE-4/KE-5 documented; onboarding examples, cross-links, and naming inconsistencies resolved |
 | 2026-04-10 | LXC211 Paperless-ngx fully onboarded: `tag:tier1`, Tailscale Serve HTTPS, PostgreSQL on CT260, E2E verified |
 | 2026-03-25 | LXC230 OpenWebUI fully onboarded: `tag:ai-stack`, Tailscale Serve HTTPS, PostgreSQL on CT260, Ollama backends (VM100 + Gaming PC), E2E verified |
