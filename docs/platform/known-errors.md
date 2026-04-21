@@ -89,10 +89,38 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 - `docker/monitoring/prometheus/prometheus.yml`
 - `docker/monitoring/grafana.env`
 
-**Prevention:** The repo validation script (`scripts/validate-repo.sh`, implemented 2026-04-10) verifies that all expected config files exist and are regular files before container startup.
+**Prevention:** No automated prevention. The repo validation script (`scripts/validate-repo.sh`) is a repo structural validator — it checks for `.env.example` files, doc section requirements, sanitization, and committed secrets. It does not check whether runtime config files derived from `.example` templates have been created. After cloning, manually copy each `.example` file to the required config path before starting containers.
 
 **Status:** Systematic (Docker design behavior)
 
 **References:**
 - [Monitoring platform](./monitoring.md)
 - [Design Decision #10](../decisions/design-decisions.md)
+
+---
+
+## KE-5: Vaultwarden SQLite on CIFS — acknowledged technical debt
+
+**Affected service:** Vaultwarden (LXC240)
+
+**Symptom:**
+Vaultwarden's SQLite database (`db.sqlite3`) resides on the CIFS mount at `/opt/vaultwarden`
+(mp0 on LXC240). This violates the architectural rule established by KE-1: no database files
+on CIFS/SMB-backed mounts.
+
+**Root cause:**
+Vaultwarden was deployed with its default SQLite backend before the KE-1 resolution codified
+the "no database files on CIFS" rule. The `/opt/vaultwarden` bind-mount was configured as the
+service data directory without isolating the database to local storage.
+
+**Fix:**
+Not yet applied. Migration to PostgreSQL (CT260) is planned. Until migration, the risk is
+accepted: Vaultwarden is a single-user deployment with low write frequency, reducing the
+probability of POSIX locking failures relative to the multi-user OpenWebUI case (KE-1).
+
+**Status:** Known, unresolved (planned migration to CT260)
+
+**References:**
+- [KE-1: SQLite on CIFS — "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)
+- [Vaultwarden service documentation](../services/vaultwarden.md)
+- [PostgreSQL platform service](../services/postgresql-platform.md)
