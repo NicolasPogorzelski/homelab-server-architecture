@@ -25,6 +25,12 @@ fi
 # === Retention cleanup ===
 find "$BACKUP_DIR" -name "pg_dumpall_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
 
+# === Textfile collector metric (Prometheus backup staleness alert) ===
+TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
+if [ -d "$TEXTFILE_DIR" ]; then
+  echo "pg_backup_last_success_timestamp $(date +%s)" > "${TEXTFILE_DIR}/pg_backup.prom"
+fi
+
 # === Summary ===
 SIZE="$(du -h "$DUMP_FILE" | cut -f1)"
 echo "OK: ${DUMP_FILE} (${SIZE})"

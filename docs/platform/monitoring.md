@@ -31,9 +31,10 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 
 ## Alerting
 
-- No Alertmanager deployed yet
-- No alert rules committed yet
-- Current usage is dashboard-based (Grafana) and manual inspection
+- Alertmanager deployment in progress (`feature/alertmanager` branch)
+- Alert rules committed: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`
+- `PostgreSQLBackupStale` requires Node Exporter textfile collector on CT260 (see pg-backup runbook)
+- Current usage is dashboard-based (Grafana) pending Alertmanager wiring
 
 ## Failure / Dependency Notes
 
