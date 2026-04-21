@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commit Policy
+
+- Never add `Co-Authored-By` or any AI attribution trailer to commit messages.
+- Never reference AI tools, Claude, or Anthropic in commit messages or documentation.
+
 ## Validation
 
 Run the repo validation script before committing or opening a PR:
