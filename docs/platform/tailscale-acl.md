@@ -95,6 +95,10 @@ Admin does NOT have implicit access to client or untrusted devices.
 Note: `tag:admin:*` was added to allow admin-to-admin communication
 (required when multiple admin-tagged nodes exist, e.g. desktop + devops LXC).
 
+Note: The Gaming PC carries `tag:admin` as an operator client device, not solely as an Ollama
+inference backend. Ollama access from LXC230 (ai-stack → admin:11434) runs through this
+existing tag rather than a dedicated inference tag.
+
 ### Rule 1b — Monitoring: outbound scrape access
 
 Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers.
@@ -284,6 +288,9 @@ Administrative access is separated from service-to-service communication.
 - Administrative privileges are not granted implicitly to service tags
 - Break-glass access is documented and intentionally minimal
 
+Note: Client devices (Gaming PC, Notebook) are intentionally absent from `docs/nodes/`.
+They are documented only via their Tailscale tag assignment. Node docs for client devices are planned.
+
 ---
 
 ## Service Onboarding Checklist (Network)
@@ -321,6 +328,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
 | 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
