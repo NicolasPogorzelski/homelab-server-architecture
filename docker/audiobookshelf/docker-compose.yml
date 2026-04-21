@@ -1,6 +1,6 @@
 services:
   audiobookshelf:
-    image: ghcr.io/advplyr/audiobookshelf:latest
+    image: ghcr.io/advplyr/audiobookshelf:latest  # TODO: pin to specific version tag
     container_name: audiobookshelf
     restart: unless-stopped
     ports:
