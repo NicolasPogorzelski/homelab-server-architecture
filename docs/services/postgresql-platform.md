@@ -302,3 +302,10 @@ Access requires passing ALL layers:
     PostgreSQL role permissions
 
 Zero Trust = multiple independent enforcement layers.
+
+## Related Documents
+
+- [LXC260 Node](../nodes/lxc260.md)
+- [PostgreSQL Backup Runbook](../../runbooks/database/pg-backup.md)
+- [PostgreSQL Restore Runbook](../../runbooks/database/pg-restore.md)
+- [Tailscale ACL](../platform/tailscale-acl.md)

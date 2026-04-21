@@ -104,3 +104,11 @@ See: [Paperless-ngx Service Documentation](./paperless.md) — Nextcloud Integra
 ## Notes / Known Issues
 
 - The container shows a failed `run-rpc_pipefs.mount` unit. This is non-blocking for Nextcloud operation and will be reviewed if NFS/RPC features are required.
+
+## Related Documents
+
+- [LXC210 Node](../nodes/lxc210.md)
+- [Paperless-ngx Service](./paperless.md)
+- [Storage Design](../platform/storage-design.md)
+- [Tailscale ACL](../platform/tailscale-acl.md)
+- [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
