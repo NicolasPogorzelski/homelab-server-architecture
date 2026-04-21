@@ -1,6 +1,6 @@
 services:
   vaultwarden:
-    image: vaultwarden/server:latest
+    image: vaultwarden/server:latest  # TODO: pin to specific version tag
     container_name: vaultwarden
     restart: unless-stopped
     # Run as a non-root service user (UID/GID aligned across storage boundaries).

@@ -16,6 +16,8 @@ Related operational model:
 
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
+- SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)
+- SnapRAID scrub: [storage/snapraid-scrub.md](storage/snapraid-scrub.md)
 
 ## Database
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)

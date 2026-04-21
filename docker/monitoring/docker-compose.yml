@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:latest  # TODO: pin to specific version tag
     container_name: prometheus
     network_mode: host
     command:
@@ -20,7 +20,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:latest  # TODO: pin to specific version tag
     container_name: grafana
     network_mode: host
     env_file:
@@ -35,7 +35,7 @@ services:
         max-file: "3"
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:latest  # TODO: pin to specific version tag
     container_name: node-exporter
     network_mode: host
     pid: host
