@@ -1,0 +1,47 @@
+groups:
+  - name: node
+    rules:
+      - alert: NodeDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has less than 15% free ({{ $value | printf \"%.1f\" }}% remaining)."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} is above 90% ({{ $value | printf \"%.1f\" }}% used)."
+
+      - alert: PostgreSQLBackupStale
+        expr: (time() - node_filesystem_files_free{mountpoint="/mnt/backups"}) > 90000
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL backup may be stale"
+          description: "No recent changes detected on /mnt/backups for more than 25 hours."
+
+  - name: smart
+    rules: []
+    # SMART disk health alerts are planned but not yet implemented.
+    # Requires smartctl_exporter on VM102 (TODO #6).
+    # Metrics to alert on (once available):
+    #   - smartctl_device_smart_status (overall SMART pass/fail)
+    #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
+    #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
