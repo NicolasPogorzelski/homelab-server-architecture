@@ -48,3 +48,9 @@ If the CIFS mount (`/books`) becomes unavailable:
 - Calibre-Web may start but show an empty or inaccessible library.
 - No data loss occurs due to read-only mount configuration.
 - Monitoring should detect mount degradation.
+
+## Related Documents
+
+- [LXC220 Node](../nodes/lxc220.md)
+- [Storage Design](../platform/storage-design.md)
+- [Tailscale ACL](../platform/tailscale-acl.md)

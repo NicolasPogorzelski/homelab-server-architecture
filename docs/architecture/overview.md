@@ -55,10 +55,13 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ## Services
 
+- [Jellyfin](../services/jellyfin.md)
+- [Audiobookshelf](../services/audiobookshelf.md)
 - [Nextcloud](../services/nextcloud.md)
 - [Paperless-ngx](../services/paperless.md)
 - [Calibre-Web](../services/calibre-web.md)
 - [OpenWebUI](../services/openwebui.md)
+- [Ollama](../services/ollama.md)
 - [Vaultwarden](../services/vaultwarden.md)
 - [PostgreSQL Platform](../services/postgresql-platform.md)
 
