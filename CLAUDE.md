@@ -2,10 +2,43 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working Context (Learning Mode)
+
+This repo is a learning vehicle and portfolio piece for a DevOps career transition.
+When working on tasks here:
+
+- Explain every CLI flag and every config value — no copy-paste answers.
+- For new tools or configs: link to official documentation first, identify
+  relevant sections, then implement.
+- Root cause before fix: symptom → verification command → diagnosis → fix.
+- Small steps, verify before next step.
+- When unsure, say so. Don't hallucinate flags, paths, or behavior.
+
+OS context: Proxmox host + Debian 12 LXCs. Daily driver is CachyOS (Arch-based).
+Commands must be OS-specific — no generic "Linux commands" when behavior differs.
+
 ## Commit Policy
 
 - Never add `Co-Authored-By` or any AI attribution trailer to commit messages.
 - Never reference AI tools, Claude, or Anthropic in commit messages or documentation.
+
+## Commit Message Format
+
+Conventional Commits with scope required.
+
+**Format:** `<type>(<scope>): <description>`
+
+**Types:** `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`
+
+**Scopes:**
+- Per node: `vm100`, `vm102`, `lxc200`, `lxc210`, `lxc211`, `lxc220`, `lxc230`, `lxc240`, `lxc250`, `lxc260`
+- Thematic: `monitoring`, `network`, `docs`, `adr`, `runbook`, `ci`, `repo`, `platform`
+
+**Examples:**
+- `feat(lxc260): add PostgreSQL 15 with hardened pg_hba`
+- `docs(platform): add tailscale ACL tier0 rules`
+- `fix(monitoring): correct grafana datasource url`
+- `chore(repo): update validate-repo.sh check 12`
 
 ## Validation
 
@@ -68,6 +101,20 @@ Single-host Proxmox platform. No HA — recovery-oriented design.
 
 **Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces.
 
+## Known Technical Debt & Gotchas
+
+Do not flag these as new issues — they are documented tradeoffs or known quirks:
+
+- **LXC220 (Calibre-Web):** UID mapping requires `chown 100000:100000` on mounted storage.
+- **LXC240 (Vaultwarden):** SQLite on CIFS is a known limitation, documented as tech debt.
+- **Grafana admin password:** only read on first container start. Reset via
+  `grafana-cli admin reset-admin-password`.
+- **Tailscale Serve HTTPS/HTTP mismatch:** fix with `tailscale serve off` + reconfigure.
+- **`network_mode: host` + Docker:** no Docker DNS resolution, use `127.0.0.1`
+  instead of container names.
+- **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
+  NVIDIA Container Toolkit access.
+
 ## Platform Changelog
 
 Significant platform changes, in reverse chronological order. Detailed ACL changes are in `docs/platform/tailscale-acl.md#changelog`.
@@ -84,8 +131,9 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 ## Adding a New Service
 
-1. Create `docs/services/<service>.md` with an `## Access Model` section referencing `docs/platform/tailscale-acl.md`
-2. Create `docs/nodes/<node>.md` with a `## Failure Impact` section
-3. Add the node's Tailscale tag to `docs/platform/tailscale-acl.md` (tier model, tag ownership, ACL rules, access matrix, changelog)
-4. If Docker-based: add `docker/<service>/docker-compose.yml` and `docker/<service>/.env.example`; use pinned version tags (not `:latest`)
-5. Run `./scripts/validate-repo.sh` and fix all errors
+1. Before implementation: link official upstream docs, identify relevant sections, wait for confirmation
+2. Create `docs/services/<service>.md` with an `## Access Model` section referencing `docs/platform/tailscale-acl.md`
+3. Create `docs/nodes/<node>.md` with a `## Failure Impact` section
+4. Add the node's Tailscale tag to `docs/platform/tailscale-acl.md` (tier model, tag ownership, ACL rules, access matrix, changelog)
+5. If Docker-based: add `docker/<service>/docker-compose.yml` and `docker/<service>/.env.example`; use pinned version tags (not `:latest`)
+6. Run `./scripts/validate-repo.sh` and fix all errors
