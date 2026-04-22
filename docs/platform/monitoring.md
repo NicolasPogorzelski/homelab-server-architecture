@@ -10,6 +10,7 @@ See: [Runbook index](../../runbooks/README.md)
 - Grafana (`grafana/grafana`)
 - Node Exporter (`prom/node-exporter`)
 - Alertmanager (`prom/alertmanager`)
+- postgres_exporter (`prom/postgres-exporter`, CT260)
 
 ## Security / Exposure
 
@@ -25,10 +26,25 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- Separate scrape jobs for:
-  - Prometheus self-scrape
-  - Node Exporter on the monitoring node (loopback)
-  - Node Exporter on the Proxmox host (anonymized in repo)
+- 13 active scrape jobs — all UP, E2E verified 2026-04-22
+
+| Job name | Target | Notes |
+|---|---|---|
+| `prometheus` | `127.0.0.1:9090` | Prometheus self-scrape |
+| `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback) |
+| `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | textfile collector enabled (`smart.prom` active) |
+| `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc210-nextcloud` | LXC210 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc211-paperless` | LXC211 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc220-calibreweb` | LXC220 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc230-openwebui` | LXC230 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc240-vaultwarden` | LXC240 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-ct260-postgres` | CT260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `postgres` | CT260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
+
+Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../docker/monitoring/prometheus/prometheus.yml.example)
 
 ## Alerting
 
