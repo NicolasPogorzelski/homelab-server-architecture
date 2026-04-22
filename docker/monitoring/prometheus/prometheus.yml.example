@@ -10,17 +10,67 @@ alerting:
         - targets: ["127.0.0.1:9093"]
 
 scrape_configs:
+  # Prometheus self-scrape
   - job_name: "prometheus"
     static_configs:
       - targets: ["127.0.0.1:9090"]
 
-  # Node Exporter on the monitoring node (loopback-only).
-  - job_name: "node"
+  # Node Exporter — LXC200 monitoring (loopback, Docker container)
+  - job_name: "node-lxc200-monitoring"
     static_configs:
-      - targets:
-          - "127.0.0.1:9100"
+      - targets: ["127.0.0.1:9100"]
 
-  # Proxmox host Node Exporter (anonymized).
-  - job_name: "proxmox-host-node"
+  # Node Exporter — Proxmox host
+  - job_name: "node-proxmox-host"
     static_configs:
-      - targets: ["PROXMOX_HOST_NODE_EXPORTER:9100"]
+      - targets: ["PROXMOX_HOST_TAILSCALE_IP:9100"]
+
+  # Node Exporter — VM102 storage
+  - job_name: "node-vm102-storage"
+    static_configs:
+      - targets: ["VM102_TAILSCALE_IP:9100"]
+
+  # Node Exporter — VM100 GPU/compute
+  - job_name: "node-vm100-gpu"
+    static_configs:
+      - targets: ["VM100_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC210 Nextcloud
+  - job_name: "node-lxc210-nextcloud"
+    static_configs:
+      - targets: ["LXC210_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC211 Paperless-ngx
+  - job_name: "node-lxc211-paperless"
+    static_configs:
+      - targets: ["LXC211_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC220 Calibre-Web
+  - job_name: "node-lxc220-calibreweb"
+    static_configs:
+      - targets: ["LXC220_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC230 OpenWebUI
+  - job_name: "node-lxc230-openwebui"
+    static_configs:
+      - targets: ["LXC230_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC240 Vaultwarden
+  - job_name: "node-lxc240-vaultwarden"
+    static_configs:
+      - targets: ["LXC240_TAILSCALE_IP:9100"]
+
+  # Node Exporter — LXC250 DevOps
+  - job_name: "node-lxc250-devops"
+    static_configs:
+      - targets: ["LXC250_TAILSCALE_IP:9100"]
+
+  # Node Exporter — CT260 PostgreSQL platform
+  - job_name: "node-ct260-postgres"
+    static_configs:
+      - targets: ["CT260_TAILSCALE_IP:9100"]
+
+  # PostgreSQL Exporter — CT260 (pg_stat_* metrics via Tailscale)
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["CT260_TAILSCALE_IP:9187"]

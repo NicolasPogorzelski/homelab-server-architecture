@@ -197,10 +197,19 @@ relevant ACL rule, or add one. See [tailscale-acl.md](../platform/tailscale-acl.
 
 PostgreSQL is monitored via:
 
-- Node-level metrics (CPU, RAM, disk)
-- Planned PostgreSQL exporter integration
-- Connection count monitoring
-- Replication status (future, if HA introduced)
+- Node-level metrics (CPU, RAM, disk) — node_exporter on CT260, scraped by Prometheus on CT200
+- `postgres_exporter` (prometheus-community) — runs on CT260 as a systemd service, binds to `<tailscale-ip-lxc260>:9187`, scraped by Prometheus on CT200
+
+**Monitoring user:** `postgres_exporter` with `pg_monitor` role (read-only access to all `pg_stat_*` views).
+
+**Active alert rules** (`docker/monitoring/prometheus/rules/alert.rules.yml`):
+
+| Alert | Condition | Severity |
+|---|---|---|
+| `PostgreSQLDown` | `pg_up == 0` for >2m | critical |
+| `PostgreSQLConnectionsHigh` | active connections >80% of `max_connections` for >5m | warning |
+
+- Replication status: future, if HA introduced
 
 ---
 
