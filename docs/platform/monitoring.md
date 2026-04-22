@@ -50,7 +50,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`
+- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on CT260 (see pg-backup runbook)
 
 ## Failure / Dependency Notes
