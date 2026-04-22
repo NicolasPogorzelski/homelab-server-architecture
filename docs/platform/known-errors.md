@@ -124,3 +124,27 @@ probability of POSIX locking failures relative to the multi-user OpenWebUI case 
 - [KE-1: SQLite on CIFS — "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)
 - [Vaultwarden service documentation](../services/vaultwarden.md)
 - [PostgreSQL platform service](../services/postgresql-platform.md)
+
+---
+
+## KE-6: Tailscale userspace-networking prevents node_exporter from binding to Tailscale IP
+
+**Affected service:** node_exporter (LXC240 Vaultwarden)
+
+**Symptom:**
+`listen tcp <tailscale-ip-lxc240>:9100: bind: cannot assign requested address`
+node_exporter fails to start. `tailscale status` shows the node as reachable,
+but `ip addr show tailscale0` reports the device does not exist.
+
+**Root cause:**
+`/etc/default/tailscaled` contained `FLAGS="--tun=userspace-networking"`.
+In userspace-networking mode, Tailscale does not create a kernel `tailscale0`
+interface. The Tailscale IP is not assigned to any OS-level interface,
+so `bind()` calls targeting that IP fail with EADDRNOTAVAIL.
+This was a legacy workaround predating the CT210-pattern TUN configuration.
+
+**Fix:**
+Remove the flag from `/etc/default/tailscaled`. Restart tailscaled. Verify `tailscale0` appears
+with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
+
+**Status:** Resolved (LXC240)
