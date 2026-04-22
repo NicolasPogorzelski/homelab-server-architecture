@@ -24,3 +24,9 @@ scrape_configs:
   - job_name: "proxmox-host-node"
     static_configs:
       - targets: ["PROXMOX_HOST_NODE_EXPORTER:9100"]
+
+  # PostgreSQL Exporter on CT260 — scrapes pg_stat_* metrics via loopback on CT260,
+  # exposed to Prometheus on CT200 via Tailscale.
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["<tailscale-ip-lxc260>:9187"]
