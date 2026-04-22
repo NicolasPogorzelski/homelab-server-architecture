@@ -37,6 +37,26 @@ groups:
           summary: "PostgreSQL backup is stale"
           description: "Last successful pg_dumpall on CT260 was more than 25 hours ago."
 
+  - name: postgres
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter cannot reach the database"
+          description: "postgres_exporter on {{ $labels.instance }} reports pg_up=0 for more than 2 minutes. The database may be down or unreachable."
+
+      - alert: PostgreSQLConnectionsHigh
+        expr: sum by (instance) (pg_stat_activity_count{datname!~"template.*|postgres"}) / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection usage high on {{ $labels.instance }}"
+          description: "Active connections exceed 80% of max_connections on {{ $labels.instance }} ({{ $value | printf \"%.1f\" }}% used)."
+
   - name: smart
     rules: []
     # SMART disk health alerts are planned but not yet implemented.
