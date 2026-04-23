@@ -9,6 +9,7 @@ UNIT_PATH="/etc/systemd/system/node_exporter.service"
 
 write_unit() {
   local ip="$1"
+  local extra_flags="${2:-}"
   cat << UNIT
 [Unit]
 Description=Prometheus Node Exporter
@@ -17,7 +18,7 @@ Wants=tailscaled.service
 
 [Service]
 User=node_exporter
-ExecStart=/usr/local/bin/node_exporter --web.listen-address=${ip}:9100
+ExecStart=/usr/local/bin/node_exporter --web.listen-address=${ip}:9100${extra_flags:+ ${extra_flags}}
 Restart=on-failure
 RestartSec=15s
 
@@ -41,8 +42,9 @@ apply_lxc() {
 apply_ssh() {
   local host="$1"
   local ip="$2"
+  local extra_flags="${3:-}"
   echo "==> ${host} (${ip})"
-  write_unit "$ip" | ssh "$host" "cat > ${UNIT_PATH}"
+  write_unit "$ip" "$extra_flags" | ssh "$host" "cat > ${UNIT_PATH}"
   ssh "$host" "systemctl daemon-reload && systemctl restart node_exporter"
   sleep 3
   ssh "$host" "systemctl is-active node_exporter"
@@ -82,7 +84,7 @@ apply_lxc 250 "TAILSCALE_IP_LXC250" "devops"
 apply_lxc 260 "TAILSCALE_IP_CT260"  "postgres"
 
 # VMs (via SSH, requires key-based auth from Proxmox host)
-apply_ssh "storage" "TAILSCALE_IP_VM102"
+apply_ssh "storage" "TAILSCALE_IP_VM102" "--collector.textfile.directory=/var/lib/node_exporter/textfile_collector"
 apply_ssh "gpu"     "TAILSCALE_IP_VM100"
 
 # Proxmox host (run locally)
