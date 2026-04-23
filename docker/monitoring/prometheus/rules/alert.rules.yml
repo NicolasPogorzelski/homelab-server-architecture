@@ -57,6 +57,26 @@ groups:
           summary: "PostgreSQL connection usage high on {{ $labels.instance }}"
           description: "Active connections exceed 80% of max_connections on {{ $labels.instance }} ({{ $value | printf \"%.1f\" }}% used)."
 
+  - name: snapraid
+    rules:
+      - alert: SnapRAIDSyncStale
+        expr: (time() - snapraid_sync_last_success_timestamp) > 93600
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID sync is stale"
+          description: "Last successful snapraid sync on VM102 was more than 26 hours ago."
+
+      - alert: SnapRAIDScrubStale
+        expr: (time() - snapraid_scrub_last_success_timestamp) > 2764800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID scrub is stale"
+          description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
+
   - name: smart
     rules: []
     # SMART disk health alerts are planned but not yet implemented.

@@ -50,8 +50,9 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`
+- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`, `SnapRAIDSyncStale`, `SnapRAIDScrubStale`
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on CT260 (see pg-backup runbook)
+- `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
 ## Failure / Dependency Notes
 
