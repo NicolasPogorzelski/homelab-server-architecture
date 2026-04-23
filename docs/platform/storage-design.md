@@ -17,9 +17,9 @@ The storage layer is implemented as a dedicated VM to enforce separation of conc
 ## Data Protection (Current State)
 
 - Single parity disk via SnapRAID
-- Manual synchronization during active data migration phase
+- Automated daily sync (02:00) and monthly scrub (1st, 03:00) via `snapraid-maintenance.sh`
+- Prometheus alerts on sync staleness (>26h) and scrub staleness (>32d)
 - Regular status verification
-- Scrubbing enabled and tracked
 
 ## Implementation Details
 
