@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Current Work in Progress
+
+- **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250)
+- **Next session:** create `ansible/` directory structure, `ansible.cfg`, `inventory/hosts.yml`,
+  and first playbook to automate node_exporter deployment on VM102 (replicating
+  what was done manually on 2026-04-23)
+
 ## Working Context (Learning Mode)
 
 This repo is a learning vehicle and portfolio piece for a DevOps career transition.
