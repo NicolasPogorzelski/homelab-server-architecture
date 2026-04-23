@@ -65,7 +65,7 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - **Storage:** disk usage, inode usage, filesystem saturation, IO wait
 - **Containers:** uptime, restart count, healthchecks
 - **Network:** interface errors, bandwidth (where relevant)
-- **SnapRAID:** last sync age, scrub age, detected errors (manual now; automation planned)
+- **SnapRAID:** last sync age (`SnapRAIDSyncStale` alert, >26h), scrub age (`SnapRAIDScrubStale` alert, >32d); automated via `snapraid-maintenance.sh` on VM102
 
 ### Planned Enhancements
 
@@ -88,8 +88,8 @@ SnapRAID provides **parity-based** protection for the MergerFS-backed data disks
 Operational expectations:
 
 - Run `snapraid status` regularly
-- Run `snapraid sync` after large write operations (or via schedule once implemented)
-- Run `snapraid scrub` on a defined cadence
+- `snapraid sync` runs daily at 02:00 via cron (`/etc/cron.d/snapraid`); run manually after large write operations if needed
+- `snapraid scrub` runs monthly on the 1st at 03:00 via cron
 
 Risk profile:
 
@@ -364,7 +364,7 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 
 ## 7. Future Improvements (Roadmap)
 
-- Automated SnapRAID sync + scrub schedule (with logging + notifications)
+- ~~Automated SnapRAID sync + scrub schedule~~ (done: `snapraid-maintenance.sh`, Prometheus alerts)
 - SMART monitoring integration + alerting
 - Off-site backups for critical datasets (Nextcloud DB/config, Vault exports)
 - IaC-style documentation:
