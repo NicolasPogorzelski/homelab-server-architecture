@@ -26,5 +26,5 @@ Related operational model:
 ## Integration
 - Nextcloud → Paperless ingestion: [integration/nextcloud-paperless.md](integration/nextcloud-paperless.md)
 
-## AI Stack (planned)
-- OpenWebUI health check (planned; mounts + container + DB connectivity)
+## AI Stack
+- OpenWebUI health check: [ai-stack/openwebui-health.md](ai-stack/openwebui-health.md)
