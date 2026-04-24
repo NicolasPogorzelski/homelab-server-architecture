@@ -1,0 +1,45 @@
+all:
+  children:
+    media:
+      hosts:
+        vm100:  # Jellyfin, Audiobookshelf
+          ansible_host: <tailscale-ip-gpu-vm>
+          ansible_user: gpu
+        lxc220:  # Calibre-Web
+          ansible_host: <tailscale-ip-calibreweb>
+
+    ai_stack:
+      hosts:
+        vm100:  # Ollama backend
+          ansible_host: <tailscale-ip-gpu-vm>
+          ansible_user: gpu
+        lxc230:  # OpenWebUI
+          ansible_host: <tailscale-ip-ai-openwebui>
+
+    services:
+      hosts:
+        lxc210:  # Nextcloud
+          ansible_host: <tailscale-ip-nextcloud>
+        lxc211:  # Paperless-ngx
+          ansible_host: <tailscale-ip-paperless>
+
+    monitoring:
+      hosts:
+        lxc200:  # Prometheus + Grafana
+          ansible_host: <tailscale-ip-monitoring>
+
+    storage:
+      hosts:
+        vm102:  # SnapRAID + MergerFS
+          ansible_host: <tailscale-ip-storage>
+          ansible_user: storage
+
+    database:
+      hosts:
+        lxc260:  # PostgreSQL platform
+          ansible_host: <tailscale-ip-postgres>
+
+    security:
+      hosts:
+        lxc240:  # Vaultwarden
+          ansible_host: <tailscale-ip-vaultwarden>
