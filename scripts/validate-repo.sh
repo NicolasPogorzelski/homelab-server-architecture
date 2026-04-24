@@ -188,8 +188,8 @@ echo "Check 12: files outside directory structure"
 while read -r file; do
     rel="${file#${REPO_ROOT}/}"
     case "${rel}" in
-        docs|docker|snippets|runbooks|scripts) continue ;;
-        docs/*|docker/*|snippets/*|runbooks/*|scripts/*) continue ;;
+        docs|docker|snippets|runbooks|scripts|ansible) continue ;;
+        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*) continue ;;
         README.md|CLAUDE.md|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
         *) echo "  Unexpected: ${rel}"
