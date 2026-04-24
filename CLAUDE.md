@@ -16,20 +16,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - LXC250 (control node) intentionally excluded from inventory
 
 - **Next session:** write first playbook — OS updates (`apt upgrade`) on all nodes
-  - Doku-Einstieg: https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html
+  - Docs: https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html
   - Start by reading "Playbook syntax" section and identifying minimum required components
 
 - **Ansible Learning Roadmap (in order):**
-  1. OS-Updates Playbook — apt upgrade auf allen Nodes
-  2. SSH-Key-Verteilung automatisieren
-  3. Erste Role — node_exporter
-  4. Templates mit Jinja2 — Prometheus-Config aus Inventory
+  1. OS updates playbook — apt upgrade on all nodes
+  2. SSH key distribution — automate what was done manually today
+  3. First role — node_exporter
+  4. Jinja2 templates — generate Prometheus scrape config from inventory
   5. Handlers
   6. Ansible Vault
-  7. Security Hardening
-  8. Neuen Node onboarden
-  9. Backup-Verifikation
-  10. Docker-Update-Workflow
+  7. Security hardening
+  8. New node onboarding
+  9. Backup verification
+  10. Docker update workflow
 
 ## Working Context (Learning Mode)
 
