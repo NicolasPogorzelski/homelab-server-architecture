@@ -4,10 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250)
-- **Next session:** create `ansible/` directory structure, `ansible.cfg`, `inventory/hosts.yml`,
-  and first playbook to automate node_exporter deployment on VM102 (replicating
-  what was done manually on 2026-04-23)
+- **Branch:** `feat/ansible-setup`
+- **Ansible setup complete:**
+  - `ansible/ansible.cfg` — inventory path, remote_user=root, host_key_checking=False
+  - `ansible/inventory/hosts.yml` — 9 nodes, grouped by function (media, ai_stack, services, monitoring, storage, database, security)
+  - `ansible/inventory/hosts.yml.example` — sanitized version for repo (Tailscale IP placeholders)
+  - `hosts.yml` is gitignored (contains real Tailscale IPs)
+  - SSH key from LXC250 (`/home/devops/.ssh/id_ed25519.pub`) distributed to all nodes
+  - `ansible all -m ping` returns SUCCESS on all 9 nodes
+  - VM100 uses `ansible_user: gpu`, VM102 uses `ansible_user: storage` (no root SSH)
+  - LXC250 (control node) intentionally excluded from inventory
+
+- **Next session:** write first playbook — OS updates (`apt upgrade`) on all nodes
+  - Doku-Einstieg: https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html
+  - Start by reading "Playbook syntax" section and identifying minimum required components
+
+- **Ansible Learning Roadmap (in order):**
+  1. OS-Updates Playbook — apt upgrade auf allen Nodes
+  2. SSH-Key-Verteilung automatisieren
+  3. Erste Role — node_exporter
+  4. Templates mit Jinja2 — Prometheus-Config aus Inventory
+  5. Handlers
+  6. Ansible Vault
+  7. Security Hardening
+  8. Neuen Node onboarden
+  9. Backup-Verifikation
+  10. Docker-Update-Workflow
 
 ## Working Context (Learning Mode)
 
@@ -66,6 +88,7 @@ This is a **documentation and configuration repository** — no application code
 - `runbooks/` — Operational procedures (must follow the runbook contract)
 - `snippets/` — Reference configs and helper scripts (sanitized)
 - `scripts/` — Repo tooling (`validate-repo.sh`)
+- `ansible/` — Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12).
 
