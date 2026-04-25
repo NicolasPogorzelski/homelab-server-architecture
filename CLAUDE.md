@@ -7,21 +7,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Branch:** `feat/ansible-setup`
 - **Ansible setup complete:**
   - `ansible/ansible.cfg` — inventory path, remote_user=root, host_key_checking=False
-  - `ansible/inventory/hosts.yml` — 9 nodes, grouped by function (media, ai_stack, services, monitoring, storage, database, security)
+  - `ansible/inventory/hosts.yml` — 9 nodes, grouped by function + type (`lxcs`, `vms`)
   - `ansible/inventory/hosts.yml.example` — sanitized version for repo (Tailscale IP placeholders)
   - `hosts.yml` is gitignored (contains real Tailscale IPs)
   - SSH key from LXC250 (`/home/devops/.ssh/id_ed25519.pub`) distributed to all nodes
   - `ansible all -m ping` returns SUCCESS on all 9 nodes
-  - VM100 uses `ansible_user: gpu`, VM102 uses `ansible_user: storage` (no root SSH)
+  - VM100: `ansible_user: gpu`, `NOPASSWD: ALL` sudo via `/etc/sudoers.d/ansible-apt`
+  - VM102: `ansible_user: storage`, `NOPASSWD: ALL` sudo via `/etc/sudoers.d/ansible-apt`
   - LXC250 (control node) intentionally excluded from inventory
 
-- **Next session:** write first playbook — OS updates (`apt upgrade`) on all nodes
-  - Docs: https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html
-  - Start by reading "Playbook syntax" section and identifying minimum required components
+- **Playbooks complete:**
+  - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true` for VMs, `apt clean` after upgrade
+  - Run after every upgrade: `snippets/scripts/lxc-fstrim.sh` on Proxmox host to reclaim thin-pool blocks
+
+- **Next session:**
+  2. Bootstrap playbook — create dedicated `ansible` user on all nodes (replace per-service users gpu/storage)
+  3. First role — node_exporter
 
 - **Ansible Learning Roadmap (in order):**
-  1. OS updates playbook — apt upgrade on all nodes
-  2. SSH key distribution — automate what was done manually today
+  1. ~~OS updates playbook~~ ✅ done
+  2. Bootstrap playbook — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
   3. First role — node_exporter
   4. Jinja2 templates — generate Prometheus scrape config from inventory
   5. Handlers
@@ -151,6 +156,9 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-04-25 | LVM thin-pool overflow (100%): platform-wide incident; VM102 io-error, corrupt packages on LXC230/LXC260 (tailscaled, bash); recovered via apt clean + nsenter fstrim; pool freed to 82.7%; `apt-upgrade.yml` playbook deployed (serial: 1); KE-7 documented |
+| 2026-04-25 | Ansible: `lxcs` + `vms` inventory groups added; `NOPASSWD` sudo for `gpu`/`storage` users on VM100/VM102 |
+| 2026-04-24 | Ansible initial setup: `ansible.cfg`, `hosts.yml` (9 nodes), SSH key distributed, `ansible all -m ping` verified |
 | 2026-04-23 | SnapRAID automation: `snapraid-maintenance.sh` deployed on VM102 (daily sync 02:00, monthly scrub 1st/03:00); `SnapRAIDSyncStale` + `SnapRAIDScrubStale` alert rules added; textfile collector required on VM102 |
 | 2026-04-22 | `postgres_exporter` v0.19.1 deployed on CT260 (port 9187, systemd); `PostgreSQLDown` + `PostgreSQLConnectionsHigh` alert rules added; node_exporter fleet (v1.11.1, systemd) deployed across all 10 nodes; all 13 Prometheus scrape targets UP; ACL Rule 1b extended to include port 9187; KE-6 documented |
 | 2026-04-21 | Alertmanager deployed on LXC200: Discord webhook receiver, `tailscale serve --https=9093`, 4 active alert rules; `PostgreSQLBackupStale` fixed via textfile collector pattern |
