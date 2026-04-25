@@ -43,3 +43,29 @@ all:
       hosts:
         lxc240:  # Vaultwarden
           ansible_host: <tailscale-ip-vaultwarden>
+
+    lxcs:
+      hosts:
+        lxc200:
+          ansible_host: <tailscale-ip-monitoring>
+        lxc210:
+          ansible_host: <tailscale-ip-nextcloud>
+        lxc211:
+          ansible_host: <tailscale-ip-paperless>
+        lxc220:
+          ansible_host: <tailscale-ip-calibreweb>
+        lxc230:
+          ansible_host: <tailscale-ip-ai-openwebui>
+        lxc240:
+          ansible_host: <tailscale-ip-vaultwarden>
+        lxc260:
+          ansible_host: <tailscale-ip-postgres>
+
+    vms:
+      hosts:
+        vm100:
+          ansible_host: <tailscale-ip-gpu-vm>
+          ansible_user: gpu
+        vm102:
+          ansible_host: <tailscale-ip-storage>
+          ansible_user: storage
