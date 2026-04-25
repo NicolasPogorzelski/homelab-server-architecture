@@ -148,3 +148,40 @@ Remove the flag from `/etc/default/tailscaled`. Restart tailscaled. Verify `tail
 with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 
 **Status:** Resolved (LXC240)
+
+---
+
+## KE-7: Package corruption when LVM thin-pool overflows during apt upgrade
+
+**Affected:** All nodes (platform-wide)
+
+**Symptom:**
+- `No space left on device` during `apt dist-upgrade` despite `df -h /` reporting free space
+- `dpkg-deb: error: not a Debian format archive` on cached `.deb` files
+- `file /usr/sbin/tailscaled` returns `data` instead of `ELF 64-bit executable`
+- `file /bin/bash` returns `data` — bash non-functional, SSH sessions return `Exec format error`
+- Ansible: `Failed to create temporary directory` on affected nodes
+- VM enters `status: io-error` state (QEMU suspends on write failure)
+
+**Root cause:**
+The `local-lvm` thin-pool on the Proxmox host reached 100% utilization during a parallel
+`apt dist-upgrade` across all nodes. When the pool is full, disk writes fail silently at the
+block level — packages are partially downloaded, dpkg writes are truncated mid-binary,
+and the filesystem still reports virtual free space because thin-pool utilization is not
+visible from inside the container.
+
+No periodic `fstrim` was running, so deleted blocks were never returned to the pool.
+
+**Fix:**
+1. Clear apt cache on all nodes: `apt-get clean`
+2. Run fstrim via `nsenter` from Proxmox host for all LXCs (fstrim blocked inside containers)
+3. Resume frozen VMs: `qm resume <vmid>`
+4. Repair dpkg state: `dpkg --configure -a`, `apt --fix-broken install -y`
+5. Reinstall corrupt binaries: `apt-get install --reinstall <package>`
+6. Re-run upgrade with `serial: 1` to prevent pool spike
+
+**Status:** Resolved (2026-04-25)
+
+**References:**
+- [Runbook: LVM thin-pool full](../../runbooks/platform/lvm-thin-pool-full.md)
+- [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh)
