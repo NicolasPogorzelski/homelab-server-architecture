@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - LXC250 (control node) intentionally excluded from inventory
 
 - **Playbooks complete:**
-  - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true` for VMs, `apt clean` after upgrade
+  - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true` for VMs, `apt clean` after upgrade, `dpkg --verify` post-task (fails on binary corruption, KE-7 guard)
   - Run after every upgrade: `snippets/scripts/lxc-fstrim.sh` on Proxmox host to reclaim thin-pool blocks
 
 - **Next session:**
