@@ -17,6 +17,21 @@
     ansible.builtin.apt:
       clean: yes
 
+  - name: collect dpkg integrity results
+    ansible.builtin.shell: dpkg --verify 2>&1 | grep -v ' c /' || true
+    register: dpkg_verify
+    changed_when: false
+
+  - name: fail on corrupt non-conffile packages
+    ansible.builtin.fail:
+      msg: |
+        Binary corruption detected on {{ inventory_hostname }} after upgrade (KE-7).
+        Corrupt files:
+        {{ dpkg_verify.stdout }}
+        Identify packages: dpkg -S <path>
+        Fix: apt-get install --reinstall <package>
+    when: dpkg_verify.stdout | trim | length > 0
+
 - name: upgrade apt VMs
   hosts: vms
   serial: 1
@@ -35,3 +50,18 @@
   - name: clean apt cache
     ansible.builtin.apt:
       clean: yes
+
+  - name: collect dpkg integrity results
+    ansible.builtin.shell: dpkg --verify 2>&1 | grep -v ' c /' || true
+    register: dpkg_verify
+    changed_when: false
+
+  - name: fail on corrupt non-conffile packages
+    ansible.builtin.fail:
+      msg: |
+        Binary corruption detected on {{ inventory_hostname }} after upgrade (KE-7).
+        Corrupt files:
+        {{ dpkg_verify.stdout }}
+        Identify packages: dpkg -S <path>
+        Fix: apt-get install --reinstall <package>
+    when: dpkg_verify.stdout | trim | length > 0
