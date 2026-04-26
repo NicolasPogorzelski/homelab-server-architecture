@@ -155,13 +155,20 @@ with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 
 **Affected:** All nodes (platform-wide)
 
+**Observed instances:**
+- 2026-04-25: LXC230 (`tailscaled`), LXC260 (`bash`, `tailscaled`) — discovered during incident
+- 2026-04-26: LXC220 (`dockerd`, `runc`, `ctr`) — discovered post-incident via service outage
+
 **Symptom:**
 - `No space left on device` during `apt dist-upgrade` despite `df -h /` reporting free space
 - `dpkg-deb: error: not a Debian format archive` on cached `.deb` files
 - `file /usr/sbin/tailscaled` returns `data` instead of `ELF 64-bit executable`
 - `file /bin/bash` returns `data` — bash non-functional, SSH sessions return `Exec format error`
+- `file /usr/bin/dockerd` returns `data` — Docker daemon fails with `status=203/EXEC` (systemd cannot exec binary)
+- `file /usr/bin/runc` returns `data` — containers fail to start: `exec format error`
 - Ansible: `Failed to create temporary directory` on affected nodes
 - VM enters `status: io-error` state (QEMU suspends on write failure)
+- After reinstalling corrupt Docker packages: `docker start` fails with `container with given ID already exists` — stale containerd task state left over from ungraceful daemon shutdown
 
 **Root cause:**
 The `local-lvm` thin-pool on the Proxmox host reached 100% utilization during a parallel
@@ -172,15 +179,37 @@ visible from inside the container.
 
 No periodic `fstrim` was running, so deleted blocks were never returned to the pool.
 
+Corruption may not surface immediately — binaries already loaded into memory continue running
+until the next restart. Services that were upgraded but not restarted during the incident
+(e.g. `dockerd` on LXC220) only fail when systemd attempts to exec the corrupt binary on
+the next start.
+
 **Fix:**
 1. Clear apt cache on all nodes: `apt-get clean`
 2. Run fstrim via `nsenter` from Proxmox host for all LXCs (fstrim blocked inside containers)
 3. Resume frozen VMs: `qm resume <vmid>`
 4. Repair dpkg state: `dpkg --configure -a`, `apt --fix-broken install -y`
-5. Reinstall corrupt binaries: `apt-get install --reinstall <package>`
-6. Re-run upgrade with `serial: 1` to prevent pool spike
+5. Find all corrupt non-conffile packages: `dpkg --verify 2>&1 | grep -v ' c /'`
+6. Reinstall all corrupt packages in one pass: `apt-get install --reinstall <pkg1> <pkg2> ...`
+7. Restart affected services: `systemctl restart <service>`
+8. If Docker containers fail to start after Docker reinstall — clear stale containerd state:
+   ```
+   docker rm -f <container>
+   cd <compose-dir> && docker compose up -d
+   ```
+9. Re-run upgrade with `serial: 1` to prevent pool spike
 
-**Status:** Resolved (2026-04-25)
+**Detection after the fact:**
+`dpkg --verify` compares every installed file against its dpkg-recorded checksum.
+Output lines without a `c` flag are non-conffile mismatches — these are corrupt binaries.
+Lines with `c` are admin-modified conffiles and are expected.
+
+```bash
+# Show only corrupt non-conffiles (ignore expected conffile modifications):
+dpkg --verify 2>&1 | grep -v ' c /'
+```
+
+**Status:** Resolved (2026-04-25 initial incident; LXC220 recovered 2026-04-26)
 
 **References:**
 - [Runbook: LVM thin-pool full](../../runbooks/platform/lvm-thin-pool-full.md)
