@@ -6,27 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Branch:** `feat/ansible-setup`
 - **Ansible setup complete:**
-  - `ansible/ansible.cfg` — inventory path, remote_user=root, host_key_checking=False
+  - `ansible/ansible.cfg` — inventory path, remote_user=ansible, host_key_checking=False
   - `ansible/inventory/hosts.yml` — 9 nodes, grouped by function + type (`lxcs`, `vms`)
   - `ansible/inventory/hosts.yml.example` — sanitized version for repo (Tailscale IP placeholders)
   - `hosts.yml` is gitignored (contains real Tailscale IPs)
   - SSH key from LXC250 (`/home/devops/.ssh/id_ed25519.pub`) distributed to all nodes
   - `ansible all -m ping` returns SUCCESS on all 9 nodes
-  - VM100: `ansible_user: gpu`, `NOPASSWD: ALL` sudo via `/etc/sudoers.d/ansible-apt`
-  - VM102: `ansible_user: storage`, `NOPASSWD: ALL` sudo via `/etc/sudoers.d/ansible-apt`
+  - Dedicated `ansible` user on all nodes: SSH key + NOPASSWD sudo via `/etc/sudoers.d/ansible`
   - LXC250 (control node) intentionally excluded from inventory
 
 - **Playbooks complete:**
-  - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true` for VMs, `apt clean` after upgrade, `dpkg --verify` post-task (fails on binary corruption, KE-7 guard)
+  - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true`, `apt clean` after upgrade, `dpkg --verify` post-task (fails on binary corruption, KE-7 guard)
+  - `ansible/playbooks/bootstrap-ansible-user.yml` — one-time bootstrap: creates `ansible` user, deploys SSH key, installs sudo, sets NOPASSWD sudoers rule across all 9 nodes
   - Run after every upgrade: `snippets/scripts/lxc-fstrim.sh` on Proxmox host to reclaim thin-pool blocks
 
 - **Next session:**
-  2. Bootstrap playbook — create dedicated `ansible` user on all nodes (replace per-service users gpu/storage)
-  3. First role — node_exporter
+  3. First role — node_exporter (binary at `/usr/local/bin/node_exporter` on 8 nodes; lxc200 runs it as Docker container in the Prometheus stack — exclude from role)
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅ done
-  2. Bootstrap playbook — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
+  2. ~~Bootstrap playbook~~ ✅ done — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
   3. First role — node_exporter
   4. Jinja2 templates — generate Prometheus scrape config from inventory
   5. Handlers
@@ -156,6 +155,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-04-27 | Bootstrap playbook: `ansible` user created on all 9 nodes (SSH key + NOPASSWD sudo); `remote_user` switched from `root`/`gpu`/`storage` to `ansible` fleet-wide; `apt-upgrade.yml` updated accordingly |
 | 2026-04-26 | LXC220 post-KE-7 recovery: `docker-ce` + `containerd.io` binaries corrupt (`dockerd`, `runc`, `ctr`); reinstalled via `apt-get install --reinstall`; stale containerd task state cleared via `docker rm -f` + `docker compose up -d`; Calibre-Web restored; KE-7 updated; `apt-upgrade.yml` extended with `dpkg --verify` post-task |
 | 2026-04-25 | LVM thin-pool overflow (100%): platform-wide incident; VM102 io-error, corrupt packages on LXC230/LXC260 (tailscaled, bash); recovered via apt clean + nsenter fstrim; pool freed to 82.7%; `apt-upgrade.yml` playbook deployed (serial: 1); KE-7 documented |
 | 2026-04-25 | Ansible: `lxcs` + `vms` inventory groups added; `NOPASSWD` sudo for `gpu`/`storage` users on VM100/VM102 |
