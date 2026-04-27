@@ -9,6 +9,11 @@
     ansible.builtin.apt:
       update_cache: yes
 
+  - name: collect packages pending upgrade
+    ansible.builtin.shell: apt-get -s dist-upgrade 2>/dev/null | awk '/^Inst /{print $2}'
+    register: packages_pending
+    changed_when: false
+
   - name: upgrade apt
     ansible.builtin.apt:
       upgrade: dist
@@ -16,6 +21,12 @@
   - name: clean apt cache
     ansible.builtin.apt:
       clean: yes
+
+  - name: restart tailscaled if tailscale was upgraded
+    ansible.builtin.systemd:
+      name: tailscaled
+      state: restarted
+    when: "'tailscale' in packages_pending.stdout"
 
   - name: collect dpkg integrity results
     ansible.builtin.shell: dpkg --verify 2>&1 | grep -v ' c /' || true
@@ -43,6 +54,11 @@
     ansible.builtin.apt:
       update_cache: yes
 
+  - name: collect packages pending upgrade
+    ansible.builtin.shell: apt-get -s dist-upgrade 2>/dev/null | awk '/^Inst /{print $2}'
+    register: packages_pending
+    changed_when: false
+
   - name: upgrade apt
     ansible.builtin.apt:
       upgrade: dist
@@ -50,6 +66,12 @@
   - name: clean apt cache
     ansible.builtin.apt:
       clean: yes
+
+  - name: restart tailscaled if tailscale was upgraded
+    ansible.builtin.systemd:
+      name: tailscaled
+      state: restarted
+    when: "'tailscale' in packages_pending.stdout"
 
   - name: collect dpkg integrity results
     ansible.builtin.shell: dpkg --verify 2>&1 | grep -v ' c /' || true
