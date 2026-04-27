@@ -4,7 +4,6 @@ all:
       hosts:
         vm100:  # Jellyfin, Audiobookshelf
           ansible_host: <tailscale-ip-gpu-vm>
-          ansible_user: gpu
         lxc220:  # Calibre-Web
           ansible_host: <tailscale-ip-calibreweb>
 
@@ -12,7 +11,6 @@ all:
       hosts:
         vm100:  # Ollama backend
           ansible_host: <tailscale-ip-gpu-vm>
-          ansible_user: gpu
         lxc230:  # OpenWebUI
           ansible_host: <tailscale-ip-ai-openwebui>
 
@@ -32,7 +30,6 @@ all:
       hosts:
         vm102:  # SnapRAID + MergerFS
           ansible_host: <tailscale-ip-storage>
-          ansible_user: storage
 
     database:
       hosts:
@@ -65,7 +62,5 @@ all:
       hosts:
         vm100:
           ansible_host: <tailscale-ip-gpu-vm>
-          ansible_user: gpu
         vm102:
           ansible_host: <tailscale-ip-storage>
-          ansible_user: storage
