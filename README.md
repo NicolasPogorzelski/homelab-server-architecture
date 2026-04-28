@@ -96,9 +96,3 @@ This platform is not designed for high availability. It prioritizes deterministi
 
 - [Runbook Index](runbooks/README.md)
 - [PostgreSQL Backup & Restore](runbooks/database/pg-backup.md)
-
-### Automation
-
-- [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized — real IPs gitignored)
-- [Playbooks](ansible/playbooks/) (apt-upgrade, bootstrap, node-exporter)
-- [Roles](ansible/roles/) (node_exporter)
