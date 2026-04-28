@@ -2,11 +2,30 @@
 
 [![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![MergerFS](https://img.shields.io/badge/MergerFS-Union--Filesystem-5C2D91)](https://github.com/trapexit/mergerfs) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 
+## About
+
+Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps engineering. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
+
 > A self-designed, security-focused platform architecture built on Proxmox.
 
 This project models real-world platform engineering principles and serves as a structured environment to deliberately practice architectural decision-making, operational discipline, and recovery-oriented design.
 
 It is not built as a collection of services, but as a layered infrastructure platform with explicit trade-offs, documented design decisions, and clearly defined trust boundaries.
+
+---
+
+## Learning Roadmap
+
+| Phase | Topic | Status |
+|---|---|---|
+| 1 | Linux, Bash, Git, Networking | ✅ Done |
+| 2 | Docker + Compose | ✅ Done |
+| 3 | Monitoring — Prometheus, Grafana, Alertmanager | ✅ Done |
+| 4 | Zero Trust Networking — Tailscale, ACL design | ✅ Done |
+| 5 | Ansible — playbooks, roles, vault, hardening | In Progress |
+| 6 | Terraform / OpenTofu — IaC for node provisioning | Planned |
+| 7 | CI/CD — GitHub Actions | Planned |
+| 8 | Disaster Recovery — tested restore procedures | Planned |
 
 ---
 
