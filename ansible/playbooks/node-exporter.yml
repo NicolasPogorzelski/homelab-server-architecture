@@ -1,0 +1,8 @@
+---
+- name: deploy  node_exporter
+  hosts: all:!lxc200
+  become: true
+  serial: 1
+  roles:
+    - node_exporter
+

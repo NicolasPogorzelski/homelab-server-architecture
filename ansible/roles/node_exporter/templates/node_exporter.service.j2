@@ -1,0 +1,13 @@
+[Unit]                                                                                                                                                                       
+Description=Prometheus Node Exporter                                                                                                                                         
+After=network.target tailscaled.service                                                                                                                                      
+Wants=tailscaled.service                                                                                                                                                     
+                                                                                                                                                                               
+[Service]                                                                                                                                                                    
+User=node_exporter
+ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ ansible_host }}:{{ node_exporter_port }}
+Restart=on-failure                                                                                                                                                           
+RestartSec=15s
+                                                                                                                                                                              
+[Install]                                                                                                                                                                  
+WantedBy=multi-user.target
