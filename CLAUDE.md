@@ -20,13 +20,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/bootstrap-ansible-user.yml` — one-time bootstrap: creates `ansible` user, deploys SSH key, installs sudo, sets NOPASSWD sudoers rule across all 9 nodes
   - Run after every upgrade: `snippets/scripts/lxc-fstrim.sh` on Proxmox host to reclaim thin-pool blocks
 
+- **Roles complete:**
+  - `ansible/roles/node_exporter/` — deploys binary via get_url, unarchive, copy; systemd unit via Jinja2 template (`{{ ansible_host }}:{{ node_exporter_port }}`); handler restarts service on unit change; excludes lxc200 (runs node_exporter as Docker container)
+  - `ansible/playbooks/node-exporter.yml` — calls role on `all:!lxc200`, `serial: 1`
+  - Idempotency verified: `changed=0` on second run across all 8 nodes
+
 - **Next session:**
-  3. First role — node_exporter (binary at `/usr/local/bin/node_exporter` on 8 nodes; lxc200 runs it as Docker container in the Prometheus stack — exclude from role)
+  4. Jinja2 templates — generate Prometheus scrape config from inventory
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅ done
   2. ~~Bootstrap playbook~~ ✅ done — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
-  3. First role — node_exporter
+  3. ~~First role — node_exporter~~ ✅ done
   4. Jinja2 templates — generate Prometheus scrape config from inventory
   5. Handlers
   6. Ansible Vault
