@@ -33,6 +33,7 @@ classification, tagging, and full-text search.
 | Export | MergerFS/SMB | `/data/paperless/export` |
 | App data | Docker volume | `paperless-data` |
 | Logs | Aux1TB | `mp1: /var/lib/paperless/logs` |
+| Docker engine (containerd, volumes) | Aux1TB | `mp1: /var/lib/paperless/containerd` + `docker-data` |
 
 ### Proxmox Host Paths
 
