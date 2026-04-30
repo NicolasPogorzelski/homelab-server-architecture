@@ -25,14 +25,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/node-exporter.yml` — calls role on `all:!lxc200`, `serial: 1`
   - Idempotency verified: `changed=0` on second run across all 8 nodes
 
-- **Next session:**
-  4. Jinja2 templates — generate Prometheus scrape config from inventory
+- **Role in progress: `prometheus-config`**
+  - `ansible/roles/prometheus-config/templates/prometheus.yml.j2` — Jinja2 template with static entries (self-scrape, lxc200 loopback, postgres exporter) + dynamic loops over `lxcs` and `vms` inventory groups
+  - `prometheus_label` host variable added to all nodes in `lxcs` and `vms` groups
+  - **Next:** write `tasks/main.yml` using `ansible.builtin.template` module + playbook to deploy to LXC200
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅ done
   2. ~~Bootstrap playbook~~ ✅ done — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
   3. ~~First role — node_exporter~~ ✅ done
-  4. Jinja2 templates — generate Prometheus scrape config from inventory
+  4. Jinja2 templates — generate Prometheus scrape config from inventory ⏳ in progress
   5. Handlers
   6. Ansible Vault
   7. Security hardening

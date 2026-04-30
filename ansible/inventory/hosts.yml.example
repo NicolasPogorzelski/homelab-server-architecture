@@ -45,22 +45,31 @@ all:
       hosts:
         lxc200:
           ansible_host: <tailscale-ip-monitoring>
+          prometheus_label: monitoring
         lxc210:
           ansible_host: <tailscale-ip-nextcloud>
+          prometheus_label: nextcloud
         lxc211:
           ansible_host: <tailscale-ip-paperless>
+          prometheus_label: paperless
         lxc220:
           ansible_host: <tailscale-ip-calibreweb>
+          prometheus_label: calibreweb
         lxc230:
           ansible_host: <tailscale-ip-ai-openwebui>
+          prometheus_label: openwebui
         lxc240:
           ansible_host: <tailscale-ip-vaultwarden>
+          prometheus_label: vaultwarden
         lxc260:
           ansible_host: <tailscale-ip-postgres>
+          prometheus_label: postgres
 
     vms:
       hosts:
         vm100:
           ansible_host: <tailscale-ip-gpu-vm>
+          prometheus_label: gpu
         vm102:
           ansible_host: <tailscale-ip-storage>
+          prometheus_label: storage
