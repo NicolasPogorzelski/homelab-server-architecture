@@ -46,7 +46,8 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 | Data type | Location | Mount |
 |---|---|---|
 | DB (PostgreSQL) | CT260 (local block FS) | Tailnet TCP |
-| App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui → /var/lib/openwebui` |
+| App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui → /var/lib/openwebui/data` |
+| Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/openwebui/containerd` + `docker-data` |
 | Uploads | MergerFS/SMB | `mp0: /mnt/smb/openwebui → /data/openwebui` |
 | Vector store | MergerFS/SMB | `/data/openwebui/vector` (file-based only) |
 | DB backups | MergerFS/SMB | `/data/openwebui/backups` |
