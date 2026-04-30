@@ -10,6 +10,11 @@ Calibre-Web is deployed via Docker Compose inside an unprivileged Debian LXC con
 
 ## Data / Storage Integration
 
+| Data type | Location | Mount |
+|---|---|---|
+| Book library | MergerFS/SMB | `mp0: /mnt/smb/books → /books` (read-only) |
+| Docker engine (containerd, volumes) | Aux1TB | `mp1: /mnt/aux1TB/calibreweb → /var/lib/calibreweb` |
+
 - Library mount: `/books` (CIFS-mounted storage from the dedicated storage VM)
 - Mount mode: read-only (`/books:/books:ro`) to enforce least-privilege for a consumer service
 

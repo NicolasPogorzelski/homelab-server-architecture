@@ -128,6 +128,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-04-30 | Docker engine data root migrated to Aux1TB on LXC211, LXC230, LXC200, LXC220: containerd + Docker data moved from local-lvm root disks to existing Aux1TB mounts; LXC220 received new `mp1` (`/mnt/aux1TB/calibreweb`); SSD thin-pool reduced from 88% → 62% (24.9 GB freed after fstrim) |
 | 2026-04-23 | SnapRAID automation: `snapraid-maintenance.sh` deployed on VM102 (daily sync 02:00, monthly scrub 1st/03:00); `SnapRAIDSyncStale` + `SnapRAIDScrubStale` alert rules added; textfile collector required on VM102 |
 | 2026-04-22 | `postgres_exporter` v0.19.1 deployed on CT260 (port 9187, systemd); `PostgreSQLDown` + `PostgreSQLConnectionsHigh` alert rules added; node_exporter fleet (v1.11.1, systemd) deployed across all 10 nodes; all 13 Prometheus scrape targets UP; ACL Rule 1b extended to include port 9187; KE-6 documented |
 | 2026-04-21 | Alertmanager deployed on LXC200: Discord webhook receiver, `tailscale serve --https=9093`, 4 active alert rules; `PostgreSQLBackupStale` fixed via textfile collector pattern |
@@ -145,4 +146,5 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 3. Create `docs/nodes/<node>.md` with a `## Failure Impact` section
 4. Add the node's Tailscale tag to `docs/platform/tailscale-acl.md` (tier model, tag ownership, ACL rules, access matrix, changelog)
 5. If Docker-based: add `docker/<service>/docker-compose.yml` and `docker/<service>/.env.example`; use pinned version tags (not `:latest`)
-6. Run `./scripts/validate-repo.sh` and fix all errors
+6. If Docker-based: configure Docker engine data root on Aux1TB from the start — set `data-root` in `/etc/docker/daemon.json` and `root` in `/etc/containerd/config.toml` to point to a subdirectory of the node's Aux1TB mount (e.g. `/var/lib/<service>/containerd` and `/var/lib/<service>/docker-data`); prevents SSD thin-pool pressure from image accumulation
+7. Run `./scripts/validate-repo.sh` and fix all errors
