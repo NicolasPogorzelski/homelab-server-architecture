@@ -199,10 +199,12 @@ docker restart jellyfin
 
 Restores hardware transcoding immediately.
 
-**Permanent fix:** Pending. A health-check script polling `nvidia-smi` inside the container
-and triggering an automatic restart on failure is planned.
+**Automated workaround:** A watchdog script polls `nvidia-smi` inside the container every
+30 minutes and restarts Jellyfin automatically on CUDA loss. See deployment instructions
+in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
+[`snippets/scripts/jellyfin-cuda-watchdog.sh`](../../snippets/scripts/jellyfin-cuda-watchdog.sh).
 
-**Status:** Known, unresolved (manual restart workaround)
+**Status:** Known, unresolved — automated restart workaround deployed
 
 **References:**
 - [VM100 node doc](../nodes/vm100.md)
