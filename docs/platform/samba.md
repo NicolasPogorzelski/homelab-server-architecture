@@ -126,3 +126,7 @@ If Samba becomes unavailable:
 - Monitoring should detect mount and service degradation
 
 This reinforces that VM102 represents a single storage failure domain.
+
+## Reference Configuration
+
+Sanitized `smb.conf` for VM102: [snippets/storage/smb.conf.storage-vm102.sanitized.conf](../../snippets/storage/smb.conf.storage-vm102.sanitized.conf)
