@@ -80,6 +80,17 @@ findmnt -t cifs | grep -E '^/mnt/smb/' || true
 
 ---
 
+## Failure Modes
+
+| Symptom | Likely Cause | Action |
+|---|---|---|
+| Unit stays `failed` after boot | Script not executable or path wrong | Check `ls -l /usr/local/sbin/trigger-smb-automounts.sh`; verify `ExecStart` path matches |
+| `/mnt/smb/*` dirs still empty after trigger | VM102 or Samba not yet ready at trigger time | Check `systemctl status smb` on VM102; verify `network-online.target` dependency is active |
+| `findmnt` shows no CIFS mounts | Automount units not configured or wrong mount paths | Inspect `/etc/systemd/system/mnt-smb-*.mount` units; verify `pct config` mp entries |
+| Script exits immediately, no mounts triggered | No directories found under `/mnt/smb/` | Confirm `shopt -s nullglob` is set; check that automount dirs exist on Proxmox host |
+
+---
+
 ## Notes
 - Databases must not run on CIFS/SMB.
 - This boot trigger reduces race conditions for automount-backed shares.
