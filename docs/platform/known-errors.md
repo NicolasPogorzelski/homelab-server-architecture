@@ -148,3 +148,63 @@ Remove the flag from `/etc/default/tailscaled`. Restart tailscaled. Verify `tail
 with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 
 **Status:** Resolved (LXC240)
+
+---
+
+## KE-7: Grafana admin password not updated by environment variable after first start
+
+**Affected service:** Grafana (LXC200)
+
+**Symptom:**
+After changing `GF_SECURITY_ADMIN_PASSWORD` in the `.env` file and restarting the container,
+login with the new password fails. The old password remains active.
+
+**Root cause:**
+Grafana writes the admin password to its internal database (`grafana.db`) on first container
+start. On subsequent starts, the environment variable is ignored — the persisted value in the
+database takes precedence. This is documented Grafana behavior, not a bug.
+
+**Fix:**
+```bash
+docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
+```
+
+**Status:** Known, non-blocking
+
+**References:**
+- [LXC200 node doc](../nodes/lxc200.md)
+- [Monitoring platform](./monitoring.md)
+
+---
+
+## KE-8: Jellyfin loses CUDA access intermittently — container restart required
+
+**Affected service:** Jellyfin (VM100)
+
+**Symptom:**
+Hardware transcoding stops working intermittently. Jellyfin becomes effectively unusable —
+video playback stalls or fails for all clients. The service appears running but cannot serve
+media. A container restart restores GPU access and full functionality.
+
+**Root cause:**
+Not fully determined. `pid: "host"` is required for initial NVIDIA Container Toolkit access
+and is set in the Compose config (`docker/jellyfin/docker-compose.yml`). The intermittent
+loss of CUDA access at runtime suggests the NVML connection to the host driver becomes stale —
+exact trigger unknown.
+
+**Workaround:**
+```bash
+docker restart jellyfin
+```
+
+Restores hardware transcoding immediately.
+
+**Permanent fix:** Pending. A health-check script polling `nvidia-smi` inside the container
+and triggering an automatic restart on failure is planned.
+
+**Status:** Known, unresolved (manual restart workaround)
+
+**References:**
+- [VM100 node doc](../nodes/vm100.md)
+- [Jellyfin service doc](../services/jellyfin.md)
+- [`docker/jellyfin/docker-compose.yml`](../../docker/jellyfin/docker-compose.yml)

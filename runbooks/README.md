@@ -28,3 +28,6 @@ Related operational model:
 
 ## AI Stack
 - OpenWebUI health check: [ai-stack/openwebui-health.md](ai-stack/openwebui-health.md)
+
+## Platform
+- Docker data root migration to Aux1TB: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
