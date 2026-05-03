@@ -34,6 +34,36 @@ Config, cache, and metadata use local persistent volumes on VM100.
 | `tag:untrusted` | 8096 | Allowed |
 | `tag:admin`, `tag:tier0` | all | Allowed |
 
+## CUDA Watchdog
+
+Jellyfin intermittently loses CUDA access at runtime (see [KE-8](../platform/known-errors.md#ke-8-jellyfin-loses-cuda-access-intermittently--container-restart-required)).
+A watchdog script checks GPU availability every 30 minutes and restarts the container if access is lost.
+
+### Deploy on VM100
+
+```bash
+install -m 0755 -o root -g root /dev/null /usr/local/sbin/jellyfin-cuda-watchdog.sh
+# copy content from snippets/scripts/jellyfin-cuda-watchdog.sh
+```
+
+### Cron entry (root crontab on VM100)
+
+```
+*/30 * * * * /usr/local/sbin/jellyfin-cuda-watchdog.sh
+```
+
+Add via `crontab -e` as root. Logs land in syslog — verify with:
+
+```bash
+grep jellyfin-cuda-watchdog /var/log/syslog
+```
+
+### Script reference
+
+[snippets/scripts/jellyfin-cuda-watchdog.sh](../../snippets/scripts/jellyfin-cuda-watchdog.sh)
+
+---
+
 ## Failure Impact
 
 If VM100 becomes unavailable:
