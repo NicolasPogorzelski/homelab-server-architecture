@@ -80,7 +80,7 @@ if [[ -d "${REPO_ROOT}/runbooks" ]]; then
         # skip README.md (index file, not a runbook)
         [[ "$(basename "${file}")" == "README.md" ]] && continue
         for section in "${RUNBOOK_SECTIONS[@]}"; do
-            if ! grep -qi "${section}" "${file}"; then
+            if ! grep -qiE "^##[[:space:]].*${section}" "${file}"; then
                 echo "  Missing '${section}' section: ${file}"
                 ERRORS=$((ERRORS + 1))
             fi
