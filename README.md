@@ -64,6 +64,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [VM102 – Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
 - [LXC200 – Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
 - [LXC210 – Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
+- [LXC211 – Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
 - [LXC220 – Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
 - [LXC230 – OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
 - [LXC240 – Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
