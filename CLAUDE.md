@@ -57,6 +57,20 @@ Run the repo validation script before committing or opening a PR:
 
 This script enforces 12 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs or tailnet IDs, private keys, missing `.env.example` files, and files outside the allowed directory structure.
 
+## Claude Code Hooks
+
+Project-local hooks are configured in `.claude/settings.local.json` (gitignored, environment-specific paths).
+Sanitized reference config: `snippets/claude/hooks-reference.json`.
+Reproduction on a new machine: see the `dotfiles` repo.
+
+| Hook | Event | Purpose |
+|---|---|---|
+| SessionStart | Session opens | Injects current branch + last 5 commits into context |
+| PreToolUse (`git commit *`) | Before every commit | Runs `validate-repo.sh`, blocks commit on failure |
+| Stop | Session ends | Mandatory `devops-til` update reminder |
+
+Global hooks (e.g. 15-minute learning rule) live in `~/.claude/settings.json` — versioned in the `dotfiles` repo.
+
 ## Repository Structure
 
 This is a **documentation and configuration repository** — no application code, no build system, no tests. The content is:
