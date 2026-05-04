@@ -1,5 +1,4 @@
 {
-  "_readme": "Claude Code project-local settings. Copy to .claude/settings.local.json and replace <repo-path> with the absolute path to this repo on your machine. This file is a sanitized reference — the real settings.local.json is gitignored.",
   "permissions": {
     "allow": [
       "Bash(./scripts/validate-repo.sh *)"
@@ -8,7 +7,6 @@
   "hooks": {
     "SessionStart": [
       {
-        "_why": "Injects current branch and last 5 commits into Claude context at session start — no manual briefing needed.",
         "hooks": [
           {
             "type": "command",
@@ -20,7 +18,6 @@
     ],
     "PreToolUse": [
       {
-        "_why": "Runs validate-repo.sh before every git commit. Blocks the commit if validation fails. Enforces the same checks CI runs on push.",
         "matcher": "Bash",
         "hooks": [
           {
@@ -34,7 +31,6 @@
     ],
     "Stop": [
       {
-        "_why": "Mandatory devops-til update reminder at session end. Per CLAUDE.md: new concepts learned in a session must be documented in ~/git/devops-til/.",
         "hooks": [
           {
             "type": "command",
