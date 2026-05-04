@@ -4,10 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250)
-- **Next session:** create `ansible/` directory structure, `ansible.cfg`, `inventory/hosts.yml`,
-  and first playbook to automate node_exporter deployment on VM102 (replicating
-  what was done manually on 2026-04-23)
+- **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250); `ansible/` directory exists but empty
+- **Next session:** create `ansible.cfg`, `inventory/hosts.yml`, and first playbook to automate node_exporter deployment on VM102 (replicating what was done manually on 2026-04-23)
+- **Platform:** LXC250 disaster recovery fully documented — dotfiles repo and rebuild runbook complete (2026-05-04)
 
 ## Working Context (Learning Mode)
 
@@ -142,6 +141,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-04 | LXC250 disaster recovery: `dotfiles` repo created (bootstrap.sh, install.sh, validate.sh, templates); LXC250 rebuild runbook added (`runbooks/platform/lxc250-rebuild.md`); Claude Code hooks configured (SessionStart context injection, PreToolUse branch guard + validate-repo.sh, Stop TIL reminder, global 15-Minuten-Regel); GitHub Branch Protection enabled on homelab-server-architecture main (enforce_admins, no force-push, require PR) |
 | 2026-04-30 | Docker engine data root migrated to Aux1TB on LXC211, LXC230, LXC200, LXC220: containerd + Docker data moved from local-lvm root disks to existing Aux1TB mounts; LXC220 received new `mp1` (`/mnt/aux1TB/calibreweb`); SSD thin-pool reduced from 88% → 62% (24.9 GB freed after fstrim) |
 | 2026-04-23 | SnapRAID automation: `snapraid-maintenance.sh` deployed on VM102 (daily sync 02:00, monthly scrub 1st/03:00); `SnapRAIDSyncStale` + `SnapRAIDScrubStale` alert rules added; textfile collector required on VM102 |
 | 2026-04-22 | `postgres_exporter` v0.19.1 deployed on CT260 (port 9187, systemd); `PostgreSQLDown` + `PostgreSQLConnectionsHigh` alert rules added; node_exporter fleet (v1.11.1, systemd) deployed across all 10 nodes; all 13 Prometheus scrape targets UP; ACL Rule 1b extended to include port 9187; KE-6 documented |
