@@ -75,3 +75,9 @@ docker-compose.override.yml
 docker/monitoring/prometheus/prometheus.yml
 docker/monitoring/grafana/provisioning/datasources/prometheus.yml
 docker/monitoring/alertmanager/alertmanager.yml
+
+# =====================================================
+# Claude Code local settings (environment-specific paths)
+# =====================================================
+
+.claude/settings.local.json
