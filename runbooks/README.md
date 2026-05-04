@@ -31,3 +31,4 @@ Related operational model:
 
 ## Platform
 - Docker data root migration to Aux1TB: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
+- LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
