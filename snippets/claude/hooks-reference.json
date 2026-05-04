@@ -26,8 +26,8 @@
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "cd <repo-path> && ./scripts/validate-repo.sh 2>&1 && echo '{}' || printf '{\"continue\": false, \"stopReason\": \"validate-repo.sh fehlgeschlagen — alle Fehler beheben vor dem Commit\"}'",
-            "statusMessage": "Repo-Validierung läuft..."
+            "command": "cd <repo-path> && branch=$(git branch --show-current) && if [ $branch = main ]; then printf '{\"continue\": false, \"stopReason\": \"Direkter Commit auf main nicht erlaubt — Branch erstellen.\"}'; else ./scripts/validate-repo.sh 2>&1 && echo '{}' || printf '{\"continue\": false, \"stopReason\": \"validate-repo.sh fehlgeschlagen — alle Fehler beheben vor dem Commit\"}'; fi",
+            "statusMessage": "Branch & Validierung wird geprueft..."
           }
         ]
       }
