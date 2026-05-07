@@ -57,6 +57,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
 - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
+- [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty — deferred to Phase 6)
 
 ### Nodes
 
