@@ -96,6 +96,7 @@ Only these top-level directories are allowed (enforced by Check 12).
 
 - Tailscale IPs must use placeholder `<tailscale-ip-nodename>`, never bare `100.x.y.z`
 - Tailnet IDs must use placeholder `<tailnet-id>`, never bare `*.ts.net`
+- Disk labels and device names must use generic identifiers (e.g. `disk01`–`diskN`, `aux-disk`) — never real labels that reveal size or purpose
 - Never commit `.env` files; only `.env.example` files belong in the repo
 - Each `docker/` subdirectory with a `docker-compose.yml` must have a `.env.example`
 
@@ -141,6 +142,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-07 | VM102 storage expansion: aux-disk added to SnapRAID data pool and MergerFS as temporary capacity bridge; live-extended via mergerfs xattr (no remount); snapraid sync completed; to be removed when disk06 is installed |
 | 2026-05-04 | LXC250 disaster recovery: `dotfiles` repo created (bootstrap.sh, install.sh, validate.sh, templates); LXC250 rebuild runbook added (`runbooks/platform/lxc250-rebuild.md`); Claude Code hooks configured (SessionStart context injection, PreToolUse branch guard + validate-repo.sh, Stop TIL reminder, global 15-Minuten-Regel); GitHub Branch Protection enabled on homelab-server-architecture main (enforce_admins, no force-push, require PR) |
 | 2026-04-30 | Docker engine data root migrated to Aux1TB on LXC211, LXC230, LXC200, LXC220: containerd + Docker data moved from local-lvm root disks to existing Aux1TB mounts; LXC220 received new `mp1` (`/mnt/aux1TB/calibreweb`); SSD thin-pool reduced from 88% → 62% (24.9 GB freed after fstrim) |
 | 2026-04-23 | SnapRAID automation: `snapraid-maintenance.sh` deployed on VM102 (daily sync 02:00, monthly scrub 1st/03:00); `SnapRAIDSyncStale` + `SnapRAIDScrubStale` alert rules added; textfile collector required on VM102 |
