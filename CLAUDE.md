@@ -162,6 +162,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-19 | Proxmox host scheduled shutdown: daily 01:00 CEST (`homelab-shutdown.sh`), RTC wake via `homelab-setwake.sh` (07:30 Mon/Thu–Sun, 16:00 Tue/Wed); SnapRAID sync moved 02:00→23:00, scrub 03:00→20:00 on VM102 |
 | 2026-04-28 | Ansible `node_exporter` role: binary deployment via `get_url` + `unarchive`, systemd unit via Jinja2 template, handler on unit change; deployed to 8 nodes (`all:!lxc200`); idempotency verified; `roles_path` added to `ansible.cfg` |
 | 2026-04-27 | Bootstrap playbook: `ansible` user created on all 9 nodes (SSH key + NOPASSWD sudo); `remote_user` switched from `root`/`gpu`/`storage` to `ansible` fleet-wide; `apt-upgrade.yml` updated accordingly |
 | 2026-04-26 | LXC220 post-KE-7 recovery: `docker-ce` + `containerd.io` binaries corrupt (`dockerd`, `runc`, `ctr`); reinstalled via `apt-get install --reinstall`; stale containerd task state cleared via `docker rm -f` + `docker compose up -d`; Calibre-Web restored; KE-7 updated; `apt-upgrade.yml` extended with `dpkg --verify` post-task |
