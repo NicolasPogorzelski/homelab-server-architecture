@@ -4,7 +4,7 @@
 
 ## About
 
-Built by Operator Pogorzelski as a deliberate learning environment for a career transition into DevOps engineering. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
+Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps engineering. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
 
 A self-designed, security-focused platform architecture built on Proxmox.
 
