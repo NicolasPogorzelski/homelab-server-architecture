@@ -27,14 +27,13 @@ scrape_configs:
   # Node Exporter from inventory
   {% for host in groups['lxcs'] %}
   {% if host != 'lxc200' %}
-    - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
-      static_configs:                                                               
-        - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
+  - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
+    static_configs:
+      - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
   {% endif %}
-  {% endfor %}  
-
+  {% endfor %}
   {% for host in groups['vms'] %}
-    - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
-      static_configs:
-        - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
+  - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
+    static_configs:
+      - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
   {% endfor %}
