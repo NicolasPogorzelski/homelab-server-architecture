@@ -25,18 +25,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/node-exporter.yml` — calls role on `all:!lxc200`, `serial: 1`
   - Idempotency verified: `changed=0` on second run across all 8 nodes
 
-- **Role in progress: `prometheus-config`**
-  - `ansible/roles/prometheus-config/templates/prometheus.yml.j2` — Jinja2 template with static entries (self-scrape, lxc200 loopback, postgres exporter) + dynamic loops over `lxcs` and `vms` inventory groups
-  - `prometheus_label` host variable added to all nodes in `lxcs` and `vms` groups
-  - **Next:** write `tasks/main.yml` using `ansible.builtin.template` module + playbook to deploy to LXC200
+- **`prometheus-config` role complete (2026-05-21):**
+  - `ansible/roles/prometheus-config/tasks/main.yml` — `ansible.builtin.template` with `lstrip_blocks: yes`
+  - `ansible/roles/prometheus-config/handlers/main.yml` — `docker kill --signal=SIGHUP prometheus` (no systemd unit)
+  - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200
+  - All 13 Prometheus targets verified UP after deploy
+
+- **Next session:** Ansible Vault
 
 - **Ansible Learning Roadmap (in order):**
-  1. ~~OS updates playbook~~ ✅ done
-  2. ~~Bootstrap playbook~~ ✅ done — dedicated `ansible` user with SSH key + NOPASSWD sudo on all nodes
-  3. ~~First role — node_exporter~~ ✅ done
-  4. Jinja2 templates — generate Prometheus scrape config from inventory ⏳ in progress
-  5. Handlers
-  6. Ansible Vault
+  1. ~~OS updates playbook~~ ✅
+  2. ~~Bootstrap playbook~~ ✅
+  3. ~~First role — node_exporter~~ ✅
+  4. ~~Jinja2 templates — prometheus-config role~~ ✅
+  5. ~~Handlers~~ ✅
+  6. Ansible Vault ⏳ next
   7. Security hardening
   8. New node onboarding
   9. Backup verification
