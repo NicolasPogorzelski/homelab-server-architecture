@@ -1,0 +1,4 @@
+---
+- name: reload prometheus-config
+  ansible.builtin.command:
+    cmd: docker kill --signal=SIGHUP prometheus
