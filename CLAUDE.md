@@ -142,6 +142,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-21 | Proxmox host cron jobs activated: `homelab-setwake.sh` at 00:45 + `homelab-shutdown.sh` at 01:00 added to root crontab; scripts deployed at `/usr/local/sbin/`; first confirmed RTC wake at 07:31 CEST |
 | 2026-05-19 | Proxmox host scheduled shutdown: daily 01:00 CEST (`homelab-shutdown.sh`), RTC wake via `homelab-setwake.sh` (07:30 Mon/Thu–Sun, 16:00 Tue/Wed); SnapRAID sync moved 02:00→23:00, scrub 03:00→20:00 on VM102 |
 | 2026-05-07 | VM102 storage expansion: aux-disk added to SnapRAID data pool and MergerFS as temporary capacity bridge; live-extended via mergerfs xattr (no remount); snapraid sync completed; to be removed when disk06 is installed |
 | 2026-05-04 | LXC250 disaster recovery: `dotfiles` repo created (bootstrap.sh, install.sh, validate.sh, templates); LXC250 rebuild runbook added (`runbooks/platform/lxc250-rebuild.md`); Claude Code hooks configured (SessionStart context injection, PreToolUse branch guard + validate-repo.sh, Stop TIL reminder, global 15-Minuten-Regel); GitHub Branch Protection enabled on homelab-server-architecture main (enforce_admins, no force-push, require PR) |
