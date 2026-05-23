@@ -59,10 +59,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   4. ~~Jinja2 templates — prometheus-config role~~ ✅
   5. ~~Handlers~~ ✅
   6. ~~Ansible Vault~~ ✅
-  7. Security hardening
-  8. New node onboarding
-  9. Backup verification
-  10. Docker update workflow
+  7. SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on
+  8. New node onboarding — playbook that bootstraps a fresh LXC end-to-end
+  9. Docker update workflow — pull new images, restart compose stacks via Ansible
+  10. PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)
+  11. LXC provisioning — `community.general.proxmox` module; create LXCs from Ansible instead of Proxmox UI
+  12. CI/CD + ansible-lint — GitHub Actions pipeline: lint on push, `--check` against inventory on PR
 
 ## Working Context (Learning Mode)
 
