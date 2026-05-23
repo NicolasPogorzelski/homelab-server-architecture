@@ -18,4 +18,4 @@ case $TOMORROW in
         ;;
 esac
 
-rtcwake -m no -t "$WAKE_TIME"
+/usr/sbin/rtcwake -m no -t "$WAKE_TIME"
