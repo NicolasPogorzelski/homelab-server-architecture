@@ -15,6 +15,7 @@
 # allow env templates
 !.env.example
 !**/env.example
+!**/*.env.j2
 
 # =====================================================
 # Databases / Runtime Data

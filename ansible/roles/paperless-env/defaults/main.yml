@@ -1,0 +1,43 @@
+---
+# === paperless-ngx ===
+
+paperless_dbengine: postgresql
+paperless_dbport: 5432
+paperless_dbname: paperless_db
+paperless_dbuser: paperless_user
+paperless_dbsslmode: require
+
+# === paths ===
+
+paperless_compose_dir: /opt/paperless
+paperless_data_dir: /usr/src/paperless/data
+paperless_media_root: /usr/src/paperless/media
+paperless_consumption_dir: /usr/src/paperless/consume
+
+# === redis ===
+
+paperless_redis: redis://localhost:6379
+
+# === general ===
+
+paperless_ocr_language: deu+eng
+paperless_time_zone: Europe/Berlin
+
+# === network ===
+
+paperless_url: https://paperless.<tailnet-id>.ts.net
+paperless_csrf_trusted_origins: https://paperless.<tailnet-id>.ts.net
+
+# === consumer ===
+
+paperless_consumer_recursive: true
+paperless_consumer_polling: 30
+
+# === logging ===
+
+paperless_logging_dir: /usr/src/paperless/logs
+
+# === user ===
+
+paperless_uid: 1000
+paperless_gid: 1000
