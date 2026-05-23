@@ -31,7 +31,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200
   - All 13 Prometheus targets verified UP after deploy
 
-- **Next session:** Ansible Vault
+- **Ansible Vault setup complete (2026-05-22):**
+  - `inventory/group_vars/all/vault.yml` — 3 encrypted Paperless secrets (`vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key`)
+  - `~/.vault_pass` on LXC250 (chmod 600, gitignored) — auto-loaded via `ansible.cfg` `vault_password_file`
+  - `group_vars/` lives under `inventory/` so playbooks in `playbooks/` resolve it correctly
+
+- **`paperless-env` role complete (2026-05-23):**
+  - `ansible/roles/paperless-env/defaults/main.yml` — all non-secret vars (DB config, paths, redis, network, consumer)
+  - `ansible/roles/paperless-env/templates/paperless.env.j2` — Jinja2 template referencing Vault vars
+  - `ansible/roles/paperless-env/tasks/main.yml` — deploys `.env` via `ansible.builtin.template`, mode `0600`
+  - `ansible/roles/paperless-env/handlers/main.yml` — `docker compose up -d` in compose dir
+  - `ansible/playbooks/paperless-env.yml` — deploys role to lxc211; idempotency verified (`changed=0` on second run)
+  - Note: `docker-compose-plugin` was corrupt on lxc211 (same KE-7 root cause); reinstalled before deploy
+
+- **Next session:** Security hardening
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
@@ -39,7 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   3. ~~First role — node_exporter~~ ✅
   4. ~~Jinja2 templates — prometheus-config role~~ ✅
   5. ~~Handlers~~ ✅
-  6. Ansible Vault ⏳ next
+  6. ~~Ansible Vault~~ ✅
   7. Security hardening
   8. New node onboarding
   9. Backup verification
@@ -165,6 +178,8 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-23 | Ansible `paperless-env` role: Jinja2 template deploys `.env` with Vault-managed secrets to lxc211; `group_vars/` moved to `inventory/group_vars/` (correct resolution path for playbooks in subdirectory); `docker-compose-plugin` corrupt on lxc211 (KE-7 root cause), reinstalled; idempotency verified |
+| 2026-05-22 | Ansible Vault: `vault_password_file` added to `ansible.cfg`; `inventory/group_vars/all/vault.yml` with 3 encrypted Paperless secrets |
 | 2026-04-28 | Ansible `node_exporter` role: binary deployment via `get_url` + `unarchive`, systemd unit via Jinja2 template, handler on unit change; deployed to 8 nodes (`all:!lxc200`); idempotency verified; `roles_path` added to `ansible.cfg` |
 | 2026-04-27 | Bootstrap playbook: `ansible` user created on all 9 nodes (SSH key + NOPASSWD sudo); `remote_user` switched from `root`/`gpu`/`storage` to `ansible` fleet-wide; `apt-upgrade.yml` updated accordingly |
 | 2026-04-26 | LXC220 post-KE-7 recovery: `docker-ce` + `containerd.io` binaries corrupt (`dockerd`, `runc`, `ctr`); reinstalled via `apt-get install --reinstall`; stale containerd task state cleared via `docker rm -f` + `docker compose up -d`; Calibre-Web restored; KE-7 updated; `apt-upgrade.yml` extended with `dpkg --verify` post-task |
