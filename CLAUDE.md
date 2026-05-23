@@ -44,6 +44,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/paperless-env.yml` — deploys role to lxc211; idempotency verified (`changed=0` on second run)
   - Note: `docker-compose-plugin` was corrupt on lxc211 (same KE-7 root cause); reinstalled before deploy
 
+- **Vault password changed (2026-05-23):**
+  - Inline vault format (`!vault |`) cannot be rekeyed with `ansible-vault rekey` — each value must be re-encrypted individually
+  - Process: `ansible lxc211 -m debug -a "var=vault_xxx"` to read plaintext → update `~/.vault_pass` first → `ansible-vault encrypt_string` without `--ask-vault-pass` → rebuild `vault.yml`
+  - Reason: using both `vault_password_file` (ansible.cfg) and `--ask-vault-pass` creates two vault IDs both named `default` → conflict
+  - Playbook verified idempotent after rekey (`changed=0`)
+
 - **Next session:** Security hardening
 
 - **Ansible Learning Roadmap (in order):**
