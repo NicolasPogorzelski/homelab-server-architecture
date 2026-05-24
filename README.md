@@ -89,6 +89,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Monitoring](docs/platform/monitoring.md) (Prometheus + Grafana stack)
 - [Networking](docs/platform/networking.md) (Zero-Trust model)
 - [Tailscale ACL](docs/platform/tailscale-acl.md) (policy-as-code, tier model)
+- [Ansible](docs/platform/ansible.md) (control node, inventory, vault, roles)
 - [Operations](docs/platform/operations.md) (runbooks, recovery, maintenance)
 - [Known Errors](docs/platform/known-errors.md) (observed issues and workarounds)
 
@@ -100,5 +101,6 @@ This platform is not designed for high availability. It prioritizes deterministi
 ### Automation
 
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized — real IPs gitignored)
-- [Playbooks](ansible/playbooks/) (apt-upgrade, bootstrap, node-exporter)
-- [Roles](ansible/roles/) (node_exporter)
+- [Playbooks](ansible/playbooks/) (apt-upgrade, bootstrap-ansible-user, node-exporter, prometheus-config, paperless-env)
+- [Roles](ansible/roles/) (node_exporter, prometheus-config, paperless-env)
+- [Ansible Platform Doc](docs/platform/ansible.md) (control node, vault setup, conventions)
