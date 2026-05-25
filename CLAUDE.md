@@ -50,6 +50,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Reason: using both `vault_password_file` (ansible.cfg) and `--ask-vault-pass` creates two vault IDs both named `default` → conflict
   - Playbook verified idempotent after rekey (`changed=0`)
 
+- **Repo docs updated (2026-05-24):**
+  - `docs/platform/ansible.md` — new platform doc: control node, inventory, vault, playbooks, roles, `--check --diff` dry-run convention
+  - `docs/nodes/lxc250.md` — Ansible marked active, Ansible Setup section added
+  - `docs/nodes/lxc200.md`, `lxc211.md` — Configuration Management sections added
+  - `README.md` — Automation section updated, ansible.md linked in Platform docs
+
 - **Next session:** Security hardening
 
 - **Ansible Learning Roadmap (in order):**
