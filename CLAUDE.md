@@ -25,10 +25,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/node-exporter.yml` — calls role on `all:!lxc200`, `serial: 1`
   - Idempotency verified: `changed=0` on second run across all 8 nodes
 
-- **`prometheus-config` role complete (2026-05-21):**
+- **`prometheus-config` role complete (2026-05-21, corrected 2026-05-28):**
   - `ansible/roles/prometheus-config/tasks/main.yml` — `ansible.builtin.template` with `lstrip_blocks: yes`
-  - `ansible/roles/prometheus-config/handlers/main.yml` — `docker kill --signal=SIGHUP prometheus` (no systemd unit)
-  - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200
+  - `ansible/roles/prometheus-config/handlers/main.yml` — `docker compose restart prometheus` (restart re-binds mount after atomic write; SIGHUP insufficient due to inode change)
+  - `ansible/roles/prometheus-config/templates/prometheus.yml.j2` — adds `node-proxmox-host` job via `proxmox_host_tailscale_ip` inventory var
+  - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200; dest path corrected to `/opt/monitoring/prometheus/prometheus.yml`
   - All 13 Prometheus targets verified UP after deploy
 
 - **Ansible Vault setup complete (2026-05-22):**
@@ -56,7 +57,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `docs/nodes/lxc200.md`, `lxc211.md` — Configuration Management sections added
   - `README.md` — Automation section updated, ansible.md linked in Platform docs
 
-- **Next session:** New node onboarding
+- **Session 2026-05-28 (incident + prep):**
+  - Hard shutdown incident: high I/O → forced power-off; full recovery; runbook added to `main` via PR #29
+  - `fix(prometheus-config)`: dest path corrected to `/opt/monitoring/`, handler SIGHUP → `docker compose restart`, Proxmox host target added; deployed and verified
+  - All Docker stack paths discovered and documented in node docs (`docs/nodes/`)
+  - Jellyfin on vm100 migrated from git-clone path to `/opt/docker/jellyfin/` — functional test passed
+  - Item #9 prep complete: stack path single source of truth established
+
+- **Next session:** Item #9 — Docker update workflow playbook
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
