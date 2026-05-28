@@ -56,7 +56,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `docs/nodes/lxc200.md`, `lxc211.md` — Configuration Management sections added
   - `README.md` — Automation section updated, ansible.md linked in Platform docs
 
-- **Next session:** Security hardening
+- **Next session:** New node onboarding
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
@@ -65,7 +65,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   4. ~~Jinja2 templates — prometheus-config role~~ ✅
   5. ~~Handlers~~ ✅
   6. ~~Ansible Vault~~ ✅
-  7. SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on
+  7. ~~SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on~~ ✅
   8. New node onboarding — playbook that bootstraps a fresh LXC end-to-end
   9. Docker update workflow — pull new images, restart compose stacks via Ansible
   10. PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)
