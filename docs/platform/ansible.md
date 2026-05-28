@@ -76,6 +76,7 @@ See: [CLAUDE.md — Vault password changed](../../CLAUDE.md)
 | `node-exporter.yml` | `all:!lxc200` | Deploy `node_exporter` binary + systemd unit |
 | `prometheus-config.yml` | `lxc200` | Deploy Prometheus config via Jinja2 template |
 | `paperless-env.yml` | `lxc211` | Deploy Paperless `.env` with Vault-managed secrets |
+| `ssh-hardening.yml` | `all` | Set `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`, reload sshd |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
 
@@ -86,6 +87,7 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `node_exporter` | all nodes except LXC200 | Downloads binary, creates systemd unit via Jinja2 template, handler restarts on unit change |
 | `prometheus-config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, reloads via `SIGHUP` (no systemd unit) |
 | `paperless-env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
+| `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
 
 ## Dry-Run Convention
 
