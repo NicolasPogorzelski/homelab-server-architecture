@@ -1,0 +1,15 @@
+---
+- name: password authentication = no
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PasswordAuthentication
+    line: PasswordAuthentication no
+  notify: reload ssh_config
+
+- name: permit root login = no
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PermitRootLogin
+    line: PermitRootLogin no
+  notify: reload ssh_config
+
