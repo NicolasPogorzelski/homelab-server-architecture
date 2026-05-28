@@ -24,6 +24,11 @@ scrape_configs:
     static_configs:
       - targets: ["{{ hostvars['lxc260']['ansible_host'] }}:9187"]
 
+  # Node Exporter — Proxmox hypervisor host (not in Ansible inventory — bare-metal host)
+  - job_name: "node-proxmox-host"
+    static_configs:
+      - targets: ["{{ proxmox_host_tailscale_ip }}:9100"]
+
   # Node Exporter from inventory
   {% for host in groups['lxcs'] %}
   {% if host != 'lxc200' %}

@@ -1,4 +1,4 @@
 ---
 - name: reload prometheus-config
-  ansible.builtin.command:
-    cmd: docker kill --signal=SIGHUP prometheus
+  ansible.builtin.shell:
+    cmd: cd /opt/monitoring && docker compose restart prometheus
