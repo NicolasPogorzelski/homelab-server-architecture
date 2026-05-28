@@ -103,6 +103,22 @@ if [[ -d "${REPO_ROOT}/docs/nodes" ]]; then
 fi
 
 # =============================================================================
+# Check 13: Configuration Management section in node docs
+# =============================================================================
+echo "Check 13: Configuration Management in node docs"
+
+if [[ -d "${REPO_ROOT}/docs/nodes" ]]; then
+    while read -r file; do
+        # lxc250 is the Ansible control node — excluded from inventory, has ## Ansible Setup instead
+        [[ "$(basename "${file}")" == "lxc250.md" ]] && continue
+        if ! grep -q "## Configuration Management" "${file}"; then
+            echo "  Missing 'Configuration Management' section: ${file}"
+            ERRORS=$((ERRORS + 1))
+        fi
+    done < <(find "${REPO_ROOT}/docs/nodes" -name "*.md" -type f)
+fi
+
+# =============================================================================
 # Check 7: no plain Tailscale IPs (100.x.y.z) in docs
 # =============================================================================
 # Legitimate placeholder: <tailscale-ip-...>
@@ -203,7 +219,7 @@ done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 12"
+echo "Checks run: 13"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
