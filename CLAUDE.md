@@ -135,6 +135,14 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
+- **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
+  (`ListenAddress` in sshd_config). SSH is unreachable for ~30–60 s after boot until
+  Tailscale connects. Use `pct exec 250 -- bash` from the Proxmox host as immediate
+  fallback, or wait. This is intentional hardening, not a bug.
+- **LXC260 boot dependency on SMB mount:** `mp1` binds `/mnt/smb/postgres-backups` into
+  the container. After a hard shutdown, LXC260 may fail to start with pre-start hook
+  exit 19 (`ENODEV`) if VM102/storage is still booting. Fix: wait for VM102, verify
+  `ls /mnt/smb/postgres-backups` on the Proxmox host, then `pct start 260` manually.
 
 ## Platform Changelog
 
@@ -142,6 +150,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-28 | Hard shutdown incident: high I/O → forced power-off; LXC260 pre-start hook exit 19 (`ENODEV`, SMB mount not ready); LXC250 SSH unreachable post-boot until Tailscale connected (`ListenAddress`); recovery via Proxmox WebUI (Tailscale) + `ssh root@<proxmox-lan-ip>`; clean reboot verified all LXCs up; `runbooks/platform/hard-shutdown-recovery.md` added |
 | 2026-05-21 | Proxmox host cron jobs activated: `homelab-setwake.sh` at 00:45 + `homelab-shutdown.sh` at 01:00 added to root crontab; scripts deployed at `/usr/local/sbin/`; first confirmed RTC wake at 07:31 CEST |
 | 2026-05-19 | Proxmox host scheduled shutdown: daily 01:00 CEST (`homelab-shutdown.sh`), RTC wake via `homelab-setwake.sh` (07:30 Mon/Thu–Sun, 16:00 Tue/Wed); SnapRAID sync moved 02:00→23:00, scrub 03:00→20:00 on VM102 |
 | 2026-05-07 | VM102 storage expansion: aux-disk added to SnapRAID data pool and MergerFS as temporary capacity bridge; live-extended via mergerfs xattr (no remount); snapraid sync completed; to be removed when disk06 is installed |
