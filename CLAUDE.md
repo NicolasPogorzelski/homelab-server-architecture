@@ -66,11 +66,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   5. ~~Handlers~~ ✅
   6. ~~Ansible Vault~~ ✅
   7. ~~SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on~~ ✅
-  8. New node onboarding — playbook that bootstraps a fresh LXC end-to-end
+  8. New node onboarding — playbook that bootstraps a fresh LXC end-to-end (Ansible-User, SSH-Hardening, node_exporter); tested against a manually created temp LXC
   9. Docker update workflow — pull new images, restart compose stacks via Ansible
   10. PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)
-  11. LXC provisioning — `community.general.proxmox` module; create LXCs from Ansible instead of Proxmox UI
-  12. CI/CD + ansible-lint — GitHub Actions pipeline: lint on push, `--check` against inventory on PR
+  11. PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally
+  12. Fleet health check playbook — query all nodes, output status overview
+  13. CI/CD + ansible-lint — GitHub Actions pipeline: lint on push, `--check` against inventory on PR
+  14. Molecule — unit testing for Ansible roles; integrate with CI
+
+  **Note:** LXC provisioning (creating containers) is intentionally excluded — that belongs to Terraform, which follows as the next learning track after Ansible.
+
+**Next learning track (after Ansible):** Terraform — provision LXCs on Proxmox; combined workflow: `terraform apply` → LXC exists → onboarding playbook configures it.
 
 **PR Cadence:** After each completed roadmap item, evaluate whether to open a PR to `main`. Open a PR when 2+ items are complete since the last merge, or the branch contains a self-contained platform change.
 
