@@ -85,7 +85,7 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | Role | Target | What it does |
 |---|---|---|
 | `node_exporter` | all nodes except LXC200 | Downloads binary, creates systemd unit via Jinja2 template, handler restarts on unit change |
-| `prometheus-config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, reloads via `SIGHUP` (no systemd unit) |
+| `prometheus-config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, handler restarts Prometheus container (`docker compose restart`) to avoid bind-mount inode staleness on atomic writes |
 | `paperless-env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
 | `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
 
