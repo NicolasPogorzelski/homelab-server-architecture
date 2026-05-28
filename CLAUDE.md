@@ -72,6 +72,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   11. LXC provisioning — `community.general.proxmox` module; create LXCs from Ansible instead of Proxmox UI
   12. CI/CD + ansible-lint — GitHub Actions pipeline: lint on push, `--check` against inventory on PR
 
+**PR Cadence:** After each completed roadmap item, evaluate whether to open a PR to `main`. Open a PR when 2+ items are complete since the last merge, or the branch contains a self-contained platform change.
+
 ## Working Context (Learning Mode)
 
 This repo is a learning vehicle and portfolio piece for a DevOps career transition.
