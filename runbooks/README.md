@@ -14,6 +14,10 @@ Related operational model:
 
 ---
 
+## Platform
+- Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
+- LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
+
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
 - SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)
