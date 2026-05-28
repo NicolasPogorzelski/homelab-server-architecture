@@ -95,6 +95,22 @@ Context window note: Context is configured per model via Modelfiles.
   OpenWebUI dropdown. Currently offline backends still appear in model selection
   — errors only surface on first message send.
 
+## Failure Impact
+
+If the Gaming PC (primary) becomes unavailable:
+- VM100 serves as fallback backend
+- Available models reduced to `qwen3-8b-16k` (8GB VRAM constraint)
+- No data loss
+
+If VM100 (backup) becomes unavailable:
+- Gaming PC continues as primary; no user-visible impact
+- No data loss
+
+If both backends become unavailable:
+- All inference requests from OpenWebUI fail
+- No data loss (models stored on disk)
+- Recovery: restart the failed node, verify `OLLAMA_HOST` binding
+
 ## Related Documents
 
 - [VM100 Node](../nodes/vm100.md)

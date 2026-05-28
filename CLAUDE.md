@@ -192,6 +192,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-28 | Ansible `ssh-hardening` role: `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile` on all 9 nodes; `vm102` had `PermitRootLogin yes` explicitly set — remediated; idempotency verified; `--check --diff` dry-run convention adopted |
 | 2026-05-23 | Ansible `paperless-env` role: Jinja2 template deploys `.env` with Vault-managed secrets to lxc211; `group_vars/` moved to `inventory/group_vars/` (correct resolution path for playbooks in subdirectory); `docker-compose-plugin` corrupt on lxc211 (KE-7 root cause), reinstalled; idempotency verified |
 | 2026-05-22 | Ansible Vault: `vault_password_file` added to `ansible.cfg`; `inventory/group_vars/all/vault.yml` with 3 encrypted Paperless secrets |
 | 2026-04-28 | Ansible `node_exporter` role: binary deployment via `get_url` + `unarchive`, systemd unit via Jinja2 template, handler on unit change; deployed to 8 nodes (`all:!lxc200`); idempotency verified; `roles_path` added to `ansible.cfg` |

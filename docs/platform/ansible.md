@@ -89,6 +89,19 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `paperless-env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
 | `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
 
+## SSH Hardening
+
+All 9 managed nodes are hardened via the `ssh-hardening` role:
+
+| Directive | Value | Reason |
+|---|---|---|
+| `PasswordAuthentication` | `no` | Eliminates brute-force attack vector; SSH keys are already deployed fleet-wide |
+| `PermitRootLogin` | `no` | Root SSH access is unnecessary — `ansible` user has NOPASSWD sudo |
+
+**Implementation:** `ansible.builtin.lineinfile` sets each directive directly in `/etc/ssh/sshd_config`. The handler reloads sshd (`state: reloaded`) without dropping active sessions.
+
+**Pre-existing finding:** `vm102` had `PermitRootLogin yes` explicitly set (not default). Remediated by this role (2026-05-28).
+
 ## Dry-Run Convention
 
 From roadmap item 7 (SSH hardening) onwards, all playbooks are tested with `--check --diff` before production runs:
