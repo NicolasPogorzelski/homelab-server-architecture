@@ -120,6 +120,19 @@ Run the repo validation script before committing or opening a PR:
 
 This script enforces 12 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs or tailnet IDs, private keys, missing `.env.example` files, and files outside the allowed directory structure.
 
+## Documentation Audit Rule
+
+Before every commit that touches `docs/` or `ansible/`:
+
+1. Run `./scripts/validate-repo.sh` and fix all errors before staging.
+2. Audit all docs touched in this session for content completeness:
+   - Required sections present? (`## Access Model`, `## Failure Impact`, `## Configuration Management`)
+   - Cross-links to related docs present and correct?
+   - Platform Changelog in `CLAUDE.md` updated with today's change?
+3. Show audit results to the user before committing — one line per file checked.
+
+This rule applies even if `validate-repo.sh` passes. Structural checks (script) and content checks (this rule) are complementary, not redundant.
+
 ## Repository Structure
 
 This is a **documentation and configuration repository** — no application code, no build system, no tests. The content is:
