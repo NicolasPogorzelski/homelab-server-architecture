@@ -66,7 +66,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   5. ~~Handlers~~ ✅
   6. ~~Ansible Vault~~ ✅
   7. ~~SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on~~ ✅
-  8. New node onboarding — playbook that bootstraps a fresh LXC end-to-end (Ansible-User, SSH-Hardening, node_exporter); tested against a manually created temp LXC
+  8. ~~New node onboarding — `ansible/playbooks/onboarding.yml`: 3 plays (bootstrap as root → ssh-hardening → node_exporter); structure complete, real-node test skipped (no available fresh LXC)~~ ✅
   9. Docker update workflow — pull new images, restart compose stacks via Ansible
   10. PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)
   11. PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally
