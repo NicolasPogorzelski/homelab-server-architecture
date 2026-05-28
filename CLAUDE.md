@@ -78,7 +78,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Next learning track (after Ansible):** Terraform — provision LXCs on Proxmox; combined workflow: `terraform apply` → LXC exists → onboarding playbook configures it.
 
-**PR Cadence:** After each completed roadmap item, evaluate whether to open a PR to `main`. Open a PR when 2+ items are complete since the last merge, or the branch contains a self-contained platform change.
+**PR Cadence:** Learning-path branches (`feat/ansible-setup`, `feat/terraform-setup`, etc.) are merged to `main` as a whole when the topic is complete — not after individual items. The items within a topic build on each other and form a single coherent arc. Exception: self-contained platform changes unrelated to the learning topic (e.g. runbooks, hotfixes) are split off to their own branch and PRed independently.
 
 ## Working Context (Learning Mode)
 
