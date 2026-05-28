@@ -1,0 +1,42 @@
+---
+- name: bootstrap ansible user on LXCs
+  hosts: lxc-test
+  remote_user: root
+
+  tasks:
+  - name: create ansible user
+    ansible.builtin.user:
+      name: ansible
+      shell: /bin/bash
+
+  - name: deploy SSH public key
+    ansible.posix.authorized_key:
+      user: ansible
+      state: present
+      key: "{{ lookup('file', '/home/devops/.ssh/id_ed25519.pub') }}"
+
+  - name: install sudo
+    ansible.builtin.apt:
+      name: sudo
+      state: present
+
+  - name: set NOPASSWD sudo rule
+    ansible.builtin.copy:
+      content: "ansible ALL=(ALL) NOPASSWD: ALL\n"
+      dest: /etc/sudoers.d/ansible
+      mode: '0440'
+      validate: /usr/sbin/visudo -csf %s
+
+- name: deploy ssh-hardening
+  hosts: lxc-test
+  remote_user: ansible
+  become: true
+  roles:
+    - ssh-hardening
+
+- name: deploy  node_exporter
+  hosts: lxc-test
+  remote_user: ansible
+  become: true
+  roles:
+    - node_exporter
