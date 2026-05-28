@@ -1,4 +1,6 @@
 all:
+  vars:
+    proxmox_host_tailscale_ip: <tailscale-ip-proxmox-host>
   children:
     media:
       hosts:

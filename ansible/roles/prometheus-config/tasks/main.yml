@@ -2,7 +2,7 @@
 - name: deploy prometheus from template
   ansible.builtin.template:
     src: prometheus.yml.j2
-    dest: /opt/homelab-server-architecture/docker/monitoring/prometheus/prometheus.yml
+    dest: /opt/monitoring/prometheus/prometheus.yml
     owner: root
     group: root
     mode: '0644'
