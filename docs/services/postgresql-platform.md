@@ -312,6 +312,15 @@ Access requires passing ALL layers:
 
 Zero Trust = multiple independent enforcement layers.
 
+## Failure Impact
+
+If CT260 (PostgreSQL) becomes unavailable:
+- All dependent services lose database connectivity: OpenWebUI (CT230), Paperless-ngx (CT211)
+- Application startup fails for DB-dependent services
+- Existing connections are terminated immediately
+- No data loss if WAL and fsync guarantees were intact before failure
+- Recovery priority: restore CT260 before restarting application containers
+
 ## Related Documents
 
 - [LXC260 Node](../nodes/lxc260.md)
