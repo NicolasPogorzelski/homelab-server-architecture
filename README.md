@@ -83,6 +83,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Ollama](docs/services/ollama.md)
 - [Vaultwarden](docs/services/vaultwarden.md)
 - [PostgreSQL Platform](docs/services/postgresql-platform.md)
+- [Retro Gaming Stack](docs/services/retro-gaming.md)
 
 ### Platform
 
