@@ -51,7 +51,7 @@ Two Samba identities for the `[roms]` share:
 |---|---|---|
 | Frontend | ES-DE | Runs per client; reads gamelists from share |
 | Emulator | RetroArch | Runs per client |
-| Scraper | ScreenScraper via ES-DE | Run once from mother client only |
+| Scraper | TheGamesDB or ScreenScraper via ES-DE | Run once from mother client only; TheGamesDB requires no account |
 
 ### RetroArch Cores
 
@@ -104,6 +104,76 @@ Three security layers:
 
 External friends can be invited as Tailscale users; `tag:gaming` is assigned by the admin.
 Friends cannot self-assign the tag (tagOwners: autogroup:admin).
+
+## Client Setup
+
+### Per-client vs shared
+
+| Component | Location | Notes |
+|---|---|---|
+| RetroArch cores | Local (per client) | Not on share — install via package manager |
+| Controller config | Local (per client) | Configure in RetroArch settings |
+| ROMs | Share | Managed centrally on VM102 |
+| BIOS files | Share (`bios/`) | Linux: point RetroArch system dir to share mount |
+| Artwork + gamelists | Share (`media/`, `gamelists/`) | Scraped once from mother client; consumed by all |
+
+### Linux: mounting the ROM share
+
+Install CIFS support if not present:
+- Arch/CachyOS: `paru -S cifs-utils`
+- Fedora: `dnf install cifs-utils`
+
+Create credentials file at `/etc/samba/credentials/roms` (permissions: `chmod 600`, owner `root:root`):
+
+```
+username=<samba-user>
+password=<password>
+```
+
+Create mountpoint: `sudo mkdir -p /mnt/roms`
+
+Add to `/etc/fstab`:
+
+```
+//<vm102-address>/roms  /mnt/roms  cifs  credentials=/etc/samba/credentials/roms,uid=1000,gid=1000,iocharset=utf8,_netdev,nofail  0  0
+```
+
+- Mother client (Gaming PC): use `roms-admin` (read-write) + VM102 LAN IP
+- Read-only clients (Notebook, etc.): use `roms` (read-only) + VM102 Tailscale IP
+
+### Arch / CachyOS specifics
+
+```bash
+paru -S emulationstation-de retroarch
+```
+
+Cores are not available via RetroArch's built-in core downloader on Arch. Install individually:
+
+```bash
+paru -S libretro-mgba     # GBA / GBC
+```
+
+Search available cores: `paru -Ss libretro-`
+
+### Scraper
+
+Run once from the mother client only. Results land on the share and are consumed by all clients.
+
+| Scraper | Account required | Coverage |
+|---|---|---|
+| TheGamesDB | No | Good for mainstream consoles |
+| ScreenScraper | Yes (free, screenscraper.fr) | Comprehensive |
+
+Configure in ES-DE: Main Menu → Scraper → Scraper Source.
+
+### Client status
+
+| Client | OS | Status |
+|---|---|---|
+| Gaming PC (mother client) | CachyOS | Complete |
+| Notebook | Fedora | Planned |
+| Shield | Android TV | Planned |
+| Phone | Android | Planned |
 
 ## Related Documents
 
