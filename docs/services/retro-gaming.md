@@ -41,7 +41,8 @@ Two Samba identities for the `[roms]` share:
 
 | User | Access | Used by |
 |---|---|---|
-| `roms-admin` | read-write | Gaming PC (mother client, `tag:admin`) |
+| `storage` | read-write | Gaming PC (mother client) — primary workflow user for ROM and BIOS management |
+| `roms-admin` | read-write | Gaming PC — used by ES-DE scraper for writing `media/` and `gamelists/` |
 | `roms` | read-only | All other gaming clients (`tag:gaming`) |
 
 ## Client Software
@@ -90,7 +91,7 @@ No relay server required.
 |---|---|---|---|
 | `tag:gaming` | `tag:storage` (VM102) | 445 | Allowed (ROM share, read-only) |
 | `tag:gaming` | `tag:gaming` | 55435 | Allowed (Netplay) |
-| `tag:admin` | `tag:storage` (VM102) | 445 | Allowed (ROM share, read-write) |
+| `tag:admin` (`storage` user) | `tag:storage` (VM102) | 445 | Allowed (ROM share, read-write) |
 | Any | Gaming clients | any other | Denied |
 
 Three security layers:
