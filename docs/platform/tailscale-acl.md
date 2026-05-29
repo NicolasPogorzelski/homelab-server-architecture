@@ -32,6 +32,7 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Database | `tag:database` | Central PostgreSQL platform service | example-device |
 | AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
+| Media | `tag:storage-client` | media clients (media access + peer-play) | example-device |
 
 ---
 
@@ -51,7 +52,8 @@ Tags are assigned to nodes via the Tailscale admin console.
     "tag:client":     ["autogroup:admin"],
     "tag:database":   ["autogroup:admin"],
     "tag:ai-stack":   ["autogroup:admin"],
-    "tag:untrusted":  ["autogroup:admin"]
+    "tag:untrusted":  ["autogroup:admin"],
+    "tag:storage-client":    ["autogroup:admin"]
 }
 ```
 
@@ -247,6 +249,19 @@ Allowed services:
 - Audiobookshelf (port 13378 on gpu-vm)
 - Tier 2 HTTPS (port 443): Calibre-Web
 
+### Rule 8 — Media: media access and peer-play only
+
+media clients can access the media share on VM102 (port 445) and reach other media-client
+clients for peer-play (port 55435). No access to any other infrastructure.
+```json
+{ "action": "accept", "src": ["tag:storage-client"], "dst": ["tag:storage:445"] },
+{ "action": "accept", "src": ["tag:storage-client"], "dst": ["tag:storage-client:55435"] }
+```
+
+The admin workstation (mother client) carries `tag:admin` and is not in `tag:storage-client`.
+It has read-write Samba access via `data-admin` through the existing admin rule.
+media clients (`tag:storage-client`) receive read-only access via the `media` Samba user.
+
 ---
 
 ## Node Attributes
@@ -265,17 +280,18 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | all | all | all | all | — | — |
-| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — |
-| **tier2** | — | — | — | all | — | — | — | 445 | — | — |
-| **monitoring** | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | — | — |
-| **database** | — | — | — | — | — | — | — | — | — | — |
-| **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — |
+| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted | media-client |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **admin** | all | all | all | all | all | all | all | all | — | — | — |
+| **tier0** | — | all | all | all | all | all | all | all | — | — | — |
+| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — | — |
+| **tier2** | — | — | — | all | — | — | — | 445 | — | — | — |
+| **monitoring** | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | — | — | — |
+| **database** | — | — | — | — | — | — | — | — | — | — | — |
+| **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — | — |
+| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — | — |
+| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — | — |
+| **media-client** | — | — | — | — | — | — | — | 445 | — | — | 55435 |
 
 ---
 
@@ -340,4 +356,5 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |
 | 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@CT260, E2E verified | Paperless-ngx operational and documented |
 | 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on CT260 |
+| 2026-05-29 | Added `tag:storage-client` to tier model, tag ownership, access matrix; added Rule 8 (media-client → storage:445, media-client → media-client:55435) | media stack: centralized media share on VM102 + Tailscale peer-play |
 

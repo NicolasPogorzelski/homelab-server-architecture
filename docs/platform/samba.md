@@ -91,6 +91,34 @@ This reduces risk of accidental modification or deletion.
 
 ---
 
+### Media Share (media files)
+
+The `[media]` share exposes the media media library with a two-user access model:
+
+- `data-admin` — read-write; used by the admin workstation (mother client) for media management and metadata scraping
+- `media` — read-only; used by all other media clients (`tag:storage-client`)
+
+Path: `/mnt/mergerfs/media/`
+
+Directory layout:
+
+```
+media/
+├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
+├── firmware/       — shared firmware files (mounted as the emulator system path on Windows/Linux)
+├── media/      — scraped artwork, screenshots, videos (written by data-admin)
+└── catalogs/  — catalog.xml per console (written by data-admin)
+```
+
+Access is enforced at three levels:
+1. **Tailscale ACL** — `tag:storage-client` can only reach `tag:storage:445`; no other infrastructure is reachable
+2. **Samba `valid users`** — share only accepts `media` and `data-admin` credentials
+3. **Samba permissions** — `media` is read-only; `data-admin` has write access
+
+See: [Storage Stack](../services/storage-stack.md)
+
+---
+
 ## Security Posture
 
 - SMB3 only
