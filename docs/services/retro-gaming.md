@@ -135,11 +135,13 @@ Create mountpoint: `sudo mkdir -p /mnt/roms`
 Add to `/etc/fstab`:
 
 ```
-//<vm102-address>/roms  /mnt/roms  cifs  credentials=/etc/samba/credentials/roms,uid=1000,gid=1000,iocharset=utf8,_netdev,nofail  0  0
+//<vm102-address>/roms  /mnt/roms  cifs  credentials=/etc/samba/credentials/roms,uid=1000,gid=1000,iocharset=utf8,vers=3.1.1,_netdev,nofail,x-systemd.automount  0  0
 ```
 
 - Mother client (Gaming PC): use `roms-admin` (read-write) + VM102 LAN IP
 - Read-only clients (Notebook, etc.): use `roms` (read-only) + VM102 Tailscale IP
+- `vers=3.1.1`: explicitly negotiates SMB 3.1.1 — required; `vers=3.0` returns EOPNOTSUPP against this Samba server configuration
+- `x-systemd.automount`: lazy mount triggered on first access instead of at boot — avoids failures when Tailscale is slower to start than `_netdev` mount processing
 
 ### Arch / CachyOS specifics
 
@@ -154,6 +156,59 @@ paru -S libretro-mgba     # GBA / GBC
 ```
 
 Search available cores: `paru -Ss libretro-`
+
+
+### Fedora specifics
+
+**ES-DE:** no native package, not on Flathub — distributed as AppImage only. Download the latest
+Linux x64 AppImage from [es-de.org](https://es-de.org) and make it executable:
+
+```bash
+mkdir -p ~/Applications
+curl -L "<download-url-from-es-de.org>" -o ~/Applications/ES-DE.AppImage
+chmod +x ~/Applications/ES-DE.AppImage
+```
+
+Desktop integration for GNOME (extract embedded `.desktop` file and icon):
+
+```bash
+~/Applications/ES-DE.AppImage --appimage-extract
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
+sed "s|Exec=es-de|Exec=$HOME/Applications/ES-DE.AppImage|" \
+  ~/squashfs-root/org.es_de.frontend.desktop \
+  > ~/.local/share/applications/es-de.desktop
+cp ~/squashfs-root/org.es_de.frontend.svg ~/.local/share/icons/hicolor/scalable/apps/
+update-desktop-database ~/.local/share/applications/
+rm -rf ~/squashfs-root
+```
+
+**RetroArch:** install via Flatpak, then grant access to the ROM mount:
+
+```bash
+flatpak install -y flathub org.libretro.RetroArch
+flatpak override --user --filesystem=/mnt/roms org.libretro.RetroArch
+```
+
+**RetroArch configuration** (no GUI required — edit config directly):
+
+```bash
+CONFIG=~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg
+CORES_DIR=~/.var/app/org.libretro.RetroArch/config/retroarch/cores
+mkdir -p "$CORES_DIR"
+printf 'system_directory = "/mnt/roms/bios"\nlibretro_directory = "%s"\n' "$CORES_DIR" >> "$CONFIG"
+```
+
+**Cores** — download all six directly from the libretro buildbot (no RetroArch GUI required):
+
+```bash
+CORES_DIR=~/.var/app/org.libretro.RetroArch/config/retroarch/cores
+BASE=https://buildbot.libretro.com/nightly/linux/x86_64/latest
+for CORE in mednafen_psx_hw_libretro mupen64plus_next_libretro dolphin_libretro mgba_libretro melonds_libretro pcsx2_libretro; do
+  curl -sL "$BASE/${CORE}.so.zip" -o /tmp/${CORE}.zip
+  unzip -oq /tmp/${CORE}.zip -d "$CORES_DIR"
+  rm /tmp/${CORE}.zip
+done
+```
 
 ### Scraper
 
@@ -171,7 +226,7 @@ Configure in ES-DE: Main Menu → Scraper → Scraper Source.
 | Client | OS | Status |
 |---|---|---|
 | Gaming PC (mother client) | CachyOS | Complete |
-| Notebook | Fedora | Planned |
+| Notebook | Fedora | In progress |
 | Shield | Android TV | Planned |
 | Phone | Android | Planned |
 

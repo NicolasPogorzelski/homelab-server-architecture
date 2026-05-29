@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250); `ansible/` directory exists but empty
 - **Next Ansible session:** create `ansible.cfg`, `inventory/hosts.yml`, and first playbook to automate node_exporter deployment on VM102 (replicating what was done manually on 2026-04-23)
 - **Retro gaming — Gaming PC (CachyOS):** complete. fstab CIFS mount at `/mnt/roms`, ES-DE + RetroArch via paru, TheGamesDB scraper, controller working.
-- **Retro gaming — next clients:** Notebook (Fedora) → Shield (Android TV) → Phone (Android)
+- **Retro gaming — Notebook (Fedora):** in progress — CIFS mount working (`vers=3.1.1`), RetroArch (Flatpak) + ES-DE (AppImage) installed, 6 cores deployed, `retroarch.cfg` configured. **Next session:** ES-DE first-run setup (ROMs path `/mnt/roms`), test game launch.
+- **Retro gaming — next clients:** Shield (Android TV) → Phone (Android)
 
 ## Working Context (Learning Mode)
 
@@ -152,6 +153,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 | Date | Change |
 |---|---|
 | 2026-05-29 | VM102 Samba: `access based share enum = yes` added to global (replaces `browseable = no`); `[roms]` share updated — `storage` added to `valid users` + `write list` (primary ROM management user); `browseable = no` removed from `[roms]` |
+| 2026-05-29 | Retro gaming — Notebook (Fedora): CIFS mount (`vers=3.1.1`), RetroArch Flatpak + ES-DE AppImage installed, 6 cores deployed via buildbot, `retroarch.cfg` configured; ES-DE first-run pending |
 | 2026-05-29 | Retro gaming stack documented: `tag:gaming` added to Tailscale ACL (Rule 8: storage:445 + gaming:55435); `[roms]` share on VM102 with two-user Samba model (`roms-admin` RW, `roms` RO); `docs/services/retro-gaming.md` created; `samba.md`, `vm102.md`, `tailscale-acl.md` updated |
 | 2026-05-28 | Hard shutdown incident: high I/O → forced power-off; LXC260 pre-start hook exit 19 (`ENODEV`, SMB mount not ready); LXC250 SSH unreachable post-boot until Tailscale connected (`ListenAddress`); recovery via Proxmox WebUI (Tailscale) + `ssh root@<proxmox-lan-ip>`; clean reboot verified all LXCs up; `runbooks/platform/hard-shutdown-recovery.md` added |
 | 2026-05-21 | Proxmox host cron jobs activated: `homelab-setwake.sh` at 00:45 + `homelab-shutdown.sh` at 01:00 added to root crontab; scripts deployed at `/usr/local/sbin/`; first confirmed RTC wake at 07:31 CEST |
