@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current Work in Progress
 
 - **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250); `ansible/` directory exists but empty
-- **Next session:** create `ansible.cfg`, `inventory/hosts.yml`, and first playbook to automate node_exporter deployment on VM102 (replicating what was done manually on 2026-04-23)
-- **Platform:** LXC250 disaster recovery fully documented — dotfiles repo and rebuild runbook complete (2026-05-04)
+- **Next Ansible session:** create `ansible.cfg`, `inventory/hosts.yml`, and first playbook to automate node_exporter deployment on VM102 (replicating what was done manually on 2026-04-23)
+- **media — admin workstation (admin workstation):** complete. fstab CIFS mount at `/mnt/media`, the frontend + the emulator via paru, TheGamesDB scraper, controller working.
+- **media — next clients:** Notebook (Fedora) → media client (Android TV) → Phone (Android)
 
 ## Working Context (Learning Mode)
 
