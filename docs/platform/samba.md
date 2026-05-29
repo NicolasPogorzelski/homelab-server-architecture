@@ -91,6 +91,34 @@ This reduces risk of accidental modification or deletion.
 
 ---
 
+### Gaming Share (Retro ROMs)
+
+The `[roms]` share exposes the retro gaming ROM library with a two-user access model:
+
+- `roms-admin` — read-write; used by the Gaming PC (mother client) for ROM management and metadata scraping
+- `roms` — read-only; used by all other gaming clients (`tag:gaming`)
+
+Path: `/mnt/mergerfs/roms/`
+
+Directory layout:
+
+```
+roms/
+├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
+├── bios/       — shared BIOS files (mounted as RetroArch system path on Windows/Linux)
+├── media/      — scraped artwork, screenshots, videos (written by roms-admin)
+└── gamelists/  — gamelist.xml per console (written by roms-admin)
+```
+
+Access is enforced at three levels:
+1. **Tailscale ACL** — `tag:gaming` can only reach `tag:storage:445`; no other infrastructure is reachable
+2. **Samba `valid users`** — share only accepts `roms` and `roms-admin` credentials
+3. **Samba permissions** — `roms` is read-only; `roms-admin` has write access
+
+See: [Retro Gaming Stack](../services/retro-gaming.md)
+
+---
+
 ## Security Posture
 
 - SMB3 only

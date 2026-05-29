@@ -150,6 +150,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-05-29 | Retro gaming stack documented: `tag:gaming` added to Tailscale ACL (Rule 8: storage:445 + gaming:55435); `[roms]` share on VM102 with two-user Samba model (`roms-admin` RW, `roms` RO); `docs/services/retro-gaming.md` created; `samba.md`, `vm102.md`, `tailscale-acl.md` updated |
 | 2026-05-28 | Hard shutdown incident: high I/O → forced power-off; LXC260 pre-start hook exit 19 (`ENODEV`, SMB mount not ready); LXC250 SSH unreachable post-boot until Tailscale connected (`ListenAddress`); recovery via Proxmox WebUI (Tailscale) + `ssh root@<proxmox-lan-ip>`; clean reboot verified all LXCs up; `runbooks/platform/hard-shutdown-recovery.md` added |
 | 2026-05-21 | Proxmox host cron jobs activated: `homelab-setwake.sh` at 00:45 + `homelab-shutdown.sh` at 01:00 added to root crontab; scripts deployed at `/usr/local/sbin/`; first confirmed RTC wake at 07:31 CEST |
 | 2026-05-19 | Proxmox host scheduled shutdown: daily 01:00 CEST (`homelab-shutdown.sh`), RTC wake via `homelab-setwake.sh` (07:30 Mon/Thu–Sun, 16:00 Tue/Wed); SnapRAID sync moved 02:00→23:00, scrub 03:00→20:00 on VM102 |
