@@ -93,9 +93,10 @@ This reduces risk of accidental modification or deletion.
 
 ### Media Share (media files)
 
-The `[media]` share exposes the media media library with a two-user access model:
+The `[media]` share exposes the media media library with a three-user access model:
 
-- `data-admin` — read-write; used by the admin workstation (mother client) for media management and metadata scraping
+- `storage` — read-write; primary workflow user on the admin workstation for media and firmware file management (consistent with all other write operations on VM102)
+- `data-admin` — read-write; used by the frontend scraper on the admin workstation for writing `media/` and `catalogs/`
 - `media` — read-only; used by all other media clients (`tag:storage-client`)
 
 Path: `/mnt/mergerfs/media/`
