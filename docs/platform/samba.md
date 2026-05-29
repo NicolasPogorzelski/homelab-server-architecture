@@ -93,9 +93,10 @@ This reduces risk of accidental modification or deletion.
 
 ### Gaming Share (Retro ROMs)
 
-The `[roms]` share exposes the retro gaming ROM library with a two-user access model:
+The `[roms]` share exposes the retro gaming ROM library with a three-user access model:
 
-- `roms-admin` — read-write; used by the Gaming PC (mother client) for ROM management and metadata scraping
+- `storage` — read-write; primary workflow user on the Gaming PC for ROM and BIOS file management (consistent with all other write operations on VM102)
+- `roms-admin` — read-write; used by ES-DE scraper on the Gaming PC for writing `media/` and `gamelists/`
 - `roms` — read-only; used by all other gaming clients (`tag:gaming`)
 
 Path: `/mnt/mergerfs/roms/`
