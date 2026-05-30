@@ -115,7 +115,7 @@ Friends cannot self-assign the tag (tagOwners: autogroup:admin).
 | Controller config | Local (per client) | Configure in RetroArch settings |
 | ROMs | Share | Managed centrally on VM102 |
 | BIOS files | Share (`bios/`) | Linux: point RetroArch system dir to share mount |
-| Artwork + gamelists | Share (`media/`, `gamelists/`) | Scraped once from mother client; consumed by all |
+| Artwork + gamelists | Share (`media/`, `gamelists/`) | Media via ES-DE `MediaDirectory` setting; gamelists via symlink (mother RW, clients read-only) |
 
 ### Linux: mounting the ROM share
 
@@ -209,6 +209,42 @@ for CORE in mednafen_psx_hw_libretro mupen64plus_next_libretro dolphin_libretro 
   rm /tmp/${CORE}.zip
 done
 ```
+
+### Shared metadata: media + gamelists
+
+ES-DE (3.x) keeps metadata in two places, and they relocate to the share by different mechanisms:
+
+| Part | Default location | Relocatable via setting? | Mechanism |
+|---|---|---|---|
+| Game media (images/videos) | `~/ES-DE/downloaded_media/` | Yes | Main Menu → Other Settings → **Game Media Directory** = `/mnt/roms/media` (key `MediaDirectory` in `es_settings.xml`) |
+| Gamelists (`gamelist.xml` text) | `~/ES-DE/gamelists/` | No | Symlink `~/ES-DE/gamelists` → `/mnt/roms/gamelists` (ES-DE follows symlinks) |
+
+**Mother client (read-write)** — migrate existing local gamelists once, then symlink (ES-DE closed):
+
+```bash
+cp -r ~/ES-DE/gamelists/. /mnt/roms/gamelists/   # one-time migration of existing scrapes
+mv ~/ES-DE/gamelists ~/ES-DE/gamelists.bak       # back up local dir before replacing
+ln -s /mnt/roms/gamelists ~/ES-DE/gamelists      # local path now points at the share
+```
+
+The mother client keeps `SaveGamelistsMode = always` — it is the only writer. Every future scrape and metadata edit lands directly on the share through the symlink (no further copying).
+
+**Read-only clients** — symlink to the same share, then stop ES-DE from writing (ES-DE closed):
+
+```bash
+mv ~/ES-DE/gamelists ~/ES-DE/gamelists.bak       # skip if it does not exist
+ln -s /mnt/roms/gamelists ~/ES-DE/gamelists
+```
+
+Set `SaveGamelistsMode = never` so ES-DE never tries to write `lastplayed`/`timesplayed` back to the read-only share (Main Menu → Other Settings → "Save metadata on exit", or directly in `es_settings.xml`):
+
+```bash
+sed -i '/SaveGamelistsMode/ s/value="always"/value="never"/' ~/ES-DE/settings/es_settings.xml
+```
+
+> **Performance caveat:** ES-DE upstream warns that media/gamelists on a network share can be slow and recommends NFS over SMB (10–30× faster in their testing). In practice `gamelist.xml` files are small and read once at startup, so SMB is fine for them; large media collections browsed continuously are where NFS matters.
+
+> **ES-DE data dir:** ES-DE 3.x uses `~/ES-DE/`; legacy versions use `~/.emulationstation/` — adjust paths accordingly.
 
 ### Scraper
 
