@@ -110,7 +110,7 @@ Single-host Proxmox platform. No HA — recovery-oriented design.
 
 **Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and inference backends (Ollama).
 
-**Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Services access storage over SMB via Tailscale, not LAN.
+**Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Services access storage over SMB — intra-host service traffic and VM100 use the host-internal `vmbr0` bridge, remote/gaming clients use Tailscale. Access is scoped by a Samba host allow-list (default-deny); see `docs/platform/samba.md`.
 
 **Service LXCs** (all Docker-in-LXC unless noted):
 - LXC200 – Monitoring (Prometheus + Grafana)
@@ -124,7 +124,7 @@ Single-host Proxmox platform. No HA — recovery-oriented design.
 
 **Access model:** Zero Trust via Tailscale. No public ingress, no port-forwarding, LAN is untrusted. Nodes are grouped into tags (`tag:tier0`, `tag:tier1`, `tag:tier2`, `tag:monitoring`, `tag:database`, `tag:ai-stack`, etc.) with explicit ACL rules. The ACL policy lives in the Tailscale admin console; `docs/platform/tailscale-acl.md` mirrors the intended model.
 
-**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces.
+**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces. Exception: VM102 Samba listens on all interfaces and scopes access with a host allow-list instead (host-internal bridge + Tailscale + enumerated LAN hosts; physical LAN default-deny) — see `docs/platform/samba.md`.
 
 ## Known Technical Debt & Gotchas
 
@@ -154,6 +154,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-06-01 | VM102 Samba host-level access scoping: `smbd` listens on all interfaces (`0.0.0.0`/`[::]`); access to port 445 is scoped by a global default-deny `hosts allow`/`hosts deny` allow-list. Allowed sources: localhost, the Tailscale CGNAT range (gaming/remote — Tailscale ACL governs reachability), VM100 (media reads, host-internal `vmbr0`), the Proxmox host (service-share mounts bind-mounted into LXCs), and the Gaming PC workstation (physical LAN, static DHCP reservation — bulk media ingest + ROM/BIOS management). Verified an unlisted LAN host receives `Denied connection`. `SMB3` (3.1.1) + mandatory signing retained (whole client fleet already negotiates `SMB3_11`/`AES-128-CMAC`); Proxmox datacenter firewall left disabled (cluster-wide enable for one port judged disproportionate). Storage access model documented in `samba.md`: intra-host service traffic + VM100 + Gaming PC use host-internal/physical LAN for throughput, gaming/remote use Tailscale, physical LAN otherwise denied. Retro gaming — Shield (Android TV) native SMB mount ruled out: the built-in mounter cannot negotiate `server min protocol = SMB3` (3.1.1) + `server signing = mandatory` (TCP connection accepted, session drops before auth); CX File Explorer connects via its own SMB3 client but only exposes files over SAF (`content://`), which RetroArch cannot load from (a real path needs a kernel mount = root, declined to preserve Widevine/streaming). Shield ROMs to be copied to local storage (lowest priority). |
 | 2026-05-31 | Retro gaming — mother client (Gaming PC/CachyOS) fully documented: cores switched from pacman `libretro-*` to libretro **buildbot via RetroArch GUI** (cross-client save-state parity); PSX setup (Beetle PSX HW, BIOS+MD5, CHD via `chdman`, `.m3u` multi-disc + `noload.txt` to suppress ES-DE folder scan, core options incl. `cd_fastload=8x` for network mounts) and NDS (melonDS DS `melondsds`, HLE BIOS) documented; central saves/states via RetroArch `savefile_directory`/`savestate_directory` → `/mnt/roms/saves`\|`/states` (RW mother client only — separate writable `[saves]` share still needed for read-only clients); `retroarch.cfg` key reference + GUI-save caveat; console dirs normalized to ES-DE convention (`psx`/`nds`); `es_systems.xml` first-`<command>` core-name trap noted. `samba.md` layout updated (`psx`, `saves/`, `states/`) |
 | 2026-05-30 | Retro gaming — shared metadata model implemented (Notebook/Fedora): media via ES-DE `MediaDirectory` setting → `/mnt/roms/media`; gamelists via symlink `~/ES-DE/gamelists` → `/mnt/roms/gamelists` (mother client RW = only writer, read-only clients set `SaveGamelistsMode=never`). Confirmed ES-DE 3.x cannot relocate gamelists via a setting (symlink is the supported workaround); SMB media perf caveat noted (NFS recommended upstream). Notebook now shows shared box art + descriptions. Next: cross-device save/state sync via a separate writable `[saves]` share |
 | 2026-05-29 | VM102 Samba: `access based share enum = yes` added to global (replaces `browseable = no`); `[roms]` share updated — `storage` added to `valid users` + `write list` (primary ROM management user); `browseable = no` removed from `[roms]` |

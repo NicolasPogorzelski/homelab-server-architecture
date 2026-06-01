@@ -452,6 +452,14 @@ gamelists, DualSense controller. Still to do:
   ARM Android).
 - **RetroArch paths** differ per client (Flatpak vs native; the SMB mountpoint may not be `/mnt/roms`).
 - **Nvidia Shield Pro (Tegra X1+):** enable rewind only for 2D systems — 3D cores are too heavy.
+- **Nvidia Shield Pro — storage access:** the built-in network-storage mounter cannot mount the
+  VM102 share — it cannot negotiate the required SMB 3.1.1 + mandatory signing (the TCP connection
+  is accepted, but the session drops before authentication). CX File Explorer connects via its own
+  SMB3 client, but only for *copying*: it exposes files through Android's Storage Access Framework
+  (`content://`), not a real filesystem path, so RetroArch cannot load ROMs from it. A live network
+  mount RetroArch could use would need a kernel `mount.cifs` (root), declined to preserve
+  Widevine/streaming. Approach: copy ROMs/BIOS to local Shield storage (USB or internal) via CX over
+  Tailscale.
 
 ## Related Documents
 

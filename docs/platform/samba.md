@@ -129,15 +129,50 @@ See: [Retro Gaming Stack](../services/retro-gaming.md)
 
 ## Security Posture
 
-- SMB3 only
-- Mandatory signing
+- SMB3 only (`server min protocol = SMB3` → SMB 3.1.1)
+- Mandatory signing (`server signing = mandatory`)
 - User-based authentication
 - No anonymous access
 - No public exposure
-- Access restricted to LAN and Tailscale overlay
+- Host-level access allow-list (`hosts allow` / `hosts deny`, default-deny)
 - No implicit subnet-wide trust beyond defined ACL model
 
 SMB is not used for internet-facing services.
+
+### Host-Level Access Restriction (`hosts allow`)
+
+`smbd` listens on all interfaces (`0.0.0.0` / `[::]`), so network reachability alone does
+**not** grant access. Access to port 445 is scoped by a global default-deny allow-list:
+
+```ini
+hosts allow = 127.0.0.1 <tailscale-cgnat-range> <vm100-lan-ip> <proxmox-host-lan-ip> <gaming-pc-lan-ip>
+hosts deny  = 0.0.0.0/0
+```
+
+Allowed sources — everything else on the physical LAN is denied:
+
+| Source | Path | Why |
+|---|---|---|
+| localhost | — | Samba-internal / IPC |
+| Tailscale CGNAT range | Tailscale | gaming + remote clients (the Tailscale ACL governs which tagged nodes may reach `storage:445`) |
+| VM100 | host-internal `vmbr0` | Jellyfin / Audiobookshelf media reads — host-internal bridge, kept on LAN for throughput |
+| Proxmox host | host-internal `vmbr0` | mounts service shares, bind-mounted into the service LXCs |
+| Gaming PC workstation | physical LAN (static DHCP reservation) | bulk media ingest to the pool + ROM/BIOS management — LAN for throughput |
+
+This is the deliberate model: performance-sensitive, intra-host service traffic uses the
+host-internal bridge; remote and gaming clients use Tailscale; the physical LAN is denied by
+default and opened only for the few enumerated, trusted hosts that need throughput.
+
+Notes:
+
+- Enforcement is at the **application layer** (`hosts allow`). The Proxmox datacenter firewall
+  is currently disabled; enabling it cluster-wide solely to close one port was judged
+  disproportionate. Interface binding / firewall scoping remains an optional future hardening step.
+- `hosts deny = 0.0.0.0/0` covers IPv4. `smbd` also listens on IPv6 (`[::]`); all current
+  clients are IPv4, so an IPv6 deny is deferred until an IPv6 SMB client is introduced.
+- Reachability is not visibility: NetBIOS discovery (`nmbd`) may still announce the server on
+  the LAN, but the file service (445) refuses unlisted hosts — an unlisted LAN host receives
+  `Denied connection`.
 
 ---
 
