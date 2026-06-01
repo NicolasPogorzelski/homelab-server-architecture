@@ -105,11 +105,18 @@ Directory layout:
 
 ```
 roms/
-├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
+├── psx/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
 ├── bios/       — shared BIOS files (mounted as RetroArch system path on Windows/Linux)
+├── saves/      — in-game saves (.srm), central (currently written by the RW mother client only)
+├── states/     — save states (.state), central (currently written by the RW mother client only)
 ├── media/      — scraped artwork, screenshots, videos (written by roms-admin)
 └── gamelists/  — gamelist.xml per console (written by roms-admin)
 ```
+
+> `saves/` and `states/` are an interim arrangement: only read-write clients (the Gaming PC
+> via `storage`/`roms-admin`) can write here. Cross-device save sync for read-only clients
+> still requires a separate writable `[saves]` share — see
+> [Retro Gaming Stack](../services/retro-gaming.md). Do not loosen `[roms]` permissions for this.
 
 Access is enforced at three levels:
 1. **Tailscale ACL** — `tag:gaming` can only reach `tag:storage:445`; no other infrastructure is reachable

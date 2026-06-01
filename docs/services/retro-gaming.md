@@ -19,19 +19,23 @@ All other clients consume the pre-scraped metadata read-only.
 ## ROM Share Layout
 
 ```
-/mnt/mergerfs/roms/
-├── ps1/
+/mnt/mergerfs/roms/            (mounted as /mnt/roms on clients)
+├── psx/          — PlayStation 1 (multi-disc games use .m3u + subfolder, see below)
 ├── ps2/
 ├── n64/
 ├── gamecube/
 ├── wii/
 ├── gbc/
 ├── gba/
-├── nds/
+├── nds/          — Nintendo DS (.nds files directly, no subfolder structure)
 ├── bios/         — shared BIOS files (Windows/Linux clients mount directly)
+├── saves/        — in-game saves (.srm), central across clients (see "Cross-device saves")
+├── states/       — save states (.state), central across clients (see "Cross-device saves")
 ├── media/        — artwork, screenshots, videos (written by scraper)
 └── gamelists/    — gamelist.xml per console (written by scraper)
 ```
+
+Console subdirectory names follow the ES-DE convention (`psx`, `nds`, …), not vendor labels like `ps1`.
 
 PS3 and Switch are intentionally excluded. Switch can be added later (new subdirectory + core per client).
 
@@ -55,20 +59,101 @@ Two Samba identities for the `[roms]` share:
 
 ### RetroArch Cores
 
-| Console | Core |
-|---|---|
-| PS1 | Beetle PSX HW |
-| PS2 | PCSX2 |
-| N64 | Mupen64Plus-Next |
-| GameCube / Wii | Dolphin |
-| GBC / GBA | mGBA |
-| NDS | melonDS |
+| Console | Core | libretro identifier |
+|---|---|---|
+| PSX | Beetle PSX HW | `mednafen_psx_hw_libretro` |
+| PS2 | PCSX2 | `pcsx2_libretro` |
+| N64 | Mupen64Plus-Next | `mupen64plus_next_libretro` |
+| GameCube / Wii | Dolphin | `dolphin_libretro` |
+| GBC / GBA | mGBA | `mgba_libretro` |
+| NDS | melonDS DS | `melondsds_libretro` |
+
+Cores are **not portable between clients** — each architecture (x86_64 Linux, Windows DLL, ARM
+Android) needs its own build. Install per client.
+
+**Core source — buildbot, not the distro package manager.** On the mother client (CachyOS) the
+pacman cores (`libretro-beetle-psx`, `libretro-melonds`, …) were removed; all cores now come from
+the official [libretro buildbot](https://buildbot.libretro.com) via the RetroArch GUI core
+downloader. This keeps every client on the same upstream build (important for save-state
+compatibility) and avoids distro-lag. The GUI downloader requires three keys in `retroarch.cfg`
+(see "RetroArch base configuration") — `menu_show_core_updater`,
+`core_updater_show_experimental_cores`, and the buildbot URLs. Fedora clients pull the same
+`.so` files headless with `curl` (see "Fedora specifics").
+
+> **NDS core-name gotcha:** the correct core is **melonDS DS** (`melondsds_libretro`), not the
+> older standalone **melonDS**. ES-DE picks the first `<command>` listed for the system in
+> `es_systems.xml`; if that entry references a core you have not installed, the launch fails
+> silently. Verify the system's command maps to `melondsds`.
 
 ## BIOS Files
 
-- **Windows / Linux clients**: RetroArch System Directory points to the mounted `bios/` folder on the share.
-- **Android / Android-TV**: copy locally once (PS1 ~500 KB, PS2 ~4 MB, GBA ~16 KB, NDS ~16 KB).
+- **Windows / Linux clients**: RetroArch System Directory (`system_directory`) points to the
+  mounted `bios/` folder on the share (`/mnt/roms/bios`).
+- **Android / Android-TV**: copy locally once (PSX ~500 KB, PS2 ~4 MB, GBA ~16 KB, NDS ~16 KB).
   Android does not support reliable SMB mounting as a RetroArch system path.
+
+### PSX BIOS
+
+Beetle PSX HW requires a region BIOS (HLE is not supported for this core). Place in `bios/`:
+
+| File | Region | MD5 |
+|---|---|---|
+| `scph5501.bin` | NTSC-U (USA) | `490f666e1afb15b7362b406ed1cea246` |
+| `scph5502.bin` | PAL (Europe) | `32736f17079d0b2b7024407c39bd3050` |
+| `PSXONPSP660.BIN` | PSP-derived (region-free fallback) | — |
+
+Match the BIOS region to the game's region (PAL game → `scph5502.bin`).
+
+### NDS BIOS
+
+Optional — melonDS DS runs without real BIOS using HLE. For higher accuracy, add `bios7.bin`,
+`bios9.bin`, and `firmware.bin` to `bios/`.
+
+## ROM Formats & Per-Console Layout
+
+### PSX — CHD and multi-disc
+
+- **Format:** CHD (compressed, single-file, reliable) is preferred over raw `.bin`/`.cue`.
+  Convert with `chdman createcd -i Game.cue -o Game.chd` (`chdman` ships with MAME tools).
+- **Source rip caveat:** the source `.bin`/`.cue` must contain the *full* track list (data +
+  audio). Single-track rips stripped of audio tracks will not convert/play correctly.
+- **Single-disc games:** drop the `.chd` directly in `psx/`.
+- **Multi-disc games:** use an `.m3u` playlist so RetroArch treats the discs as one title and
+  carries the memory card across discs:
+
+```
+psx/
+├── Game.m3u                 — playlist: one relative path per line
+└── Game/
+    ├── noload.txt           — empty file; stops ES-DE scanning the subfolder
+    ├── Game (Disc 1).chd
+    └── Game (Disc 2).chd
+```
+
+`.m3u` content (paths relative to the `psx/` directory):
+
+```
+Game/Game (Disc 1).chd
+Game/Game (Disc 2).chd
+```
+
+`noload.txt` prevents ES-DE from creating a stray `<folder>` entry for the disc subfolder — ES-DE
+auto-generates folder entries whenever a subdirectory is present, and the empty marker suppresses
+that scan so only the `.m3u` shows up as a single game.
+
+#### Beetle PSX HW core options
+
+Stored per-core at `~/.config/retroarch/config/Beetle PSX HW/Beetle PSX HW.opt`:
+
+| Option | Value | Why |
+|---|---|---|
+| `beetle_psx_hw_renderer` | `hardware` | Hardware (Vulkan/OpenGL) rendering instead of software |
+| `beetle_psx_hw_cpu_dynarec` | `execute` | Enables the dynarec (dynamic recompiler) for full speed |
+| `beetle_psx_hw_cd_fastload` | `8x` | Faster CD seeks — important when ROMs sit on a network mount |
+
+### NDS
+
+No special structure — place `.nds` files directly in `nds/`.
 
 ## Netplay
 
@@ -111,7 +196,8 @@ Friends cannot self-assign the tag (tagOwners: autogroup:admin).
 
 | Component | Location | Notes |
 |---|---|---|
-| RetroArch cores | Local (per client) | Not on share — install via package manager |
+| RetroArch cores | Local (per client) | Not on share — install from the libretro buildbot (GUI core downloader or `curl`) |
+| Saves + states | Share (`saves/`, `states/`) | Central via `savefile_directory` / `savestate_directory` — currently RW mother client only |
 | Controller config | Local (per client) | Configure in RetroArch settings |
 | ROMs | Share | Managed centrally on VM102 |
 | BIOS files | Share (`bios/`) | Linux: point RetroArch system dir to share mount |
@@ -143,19 +229,40 @@ Add to `/etc/fstab`:
 - `vers=3.1.1`: explicitly negotiates SMB 3.1.1 — required; `vers=3.0` returns EOPNOTSUPP against this Samba server configuration
 - `x-systemd.automount`: lazy mount triggered on first access instead of at boot — avoids failures when Tailscale is slower to start than `_netdev` mount processing
 
-### Arch / CachyOS specifics
+### Arch / CachyOS specifics (mother client)
 
 ```bash
 paru -S emulationstation-de retroarch
 ```
 
-Cores are not available via RetroArch's built-in core downloader on Arch. Install individually:
+**Cores: use the RetroArch GUI core downloader (buildbot), not pacman.** Earlier this client used
+the `libretro-*` pacman packages; they were removed in favour of the buildbot so every client runs
+the same upstream build. Online Updater → Core Downloader inside RetroArch installs into
+`libretro_directory`. To expose the downloader (and experimental cores like `pcsx2`), the config
+needs:
 
-```bash
-paru -S libretro-mgba     # GBA / GBC
+```
+menu_show_core_updater = "true"
+core_updater_show_experimental_cores = "true"
+core_updater_buildbot_cores_url  = "https://buildbot.libretro.com/nightly/linux/x86_64/latest/"
+core_updater_buildbot_assets_url = "https://buildbot.libretro.com/assets/"
 ```
 
-Search available cores: `paru -Ss libretro-`
+#### RetroArch base configuration (`~/.config/retroarch/retroarch.cfg`)
+
+| Key | Value | Why |
+|---|---|---|
+| `libretro_directory` | `~/.config/retroarch/cores` | Where GUI-downloaded cores land |
+| `libretro_info_path` | `/usr/share/libretro/info` | Core `.info` metadata (from the `retroarch` package) |
+| `system_directory` | `/mnt/roms/bios` | Shared BIOS on the NAS mount |
+| `savefile_directory` | `/mnt/roms/saves` | Central in-game saves (`.srm`) |
+| `savestate_directory` | `/mnt/roms/states` | Central save states (`.state`) |
+| `video_driver` | `vulkan` | Native Vulkan path on the RX 7900 XT (Wayland) |
+
+> **Save the config from inside RetroArch.** RetroArch rewrites `retroarch.cfg` on exit and will
+> overwrite hand-edited values. After changing settings in the GUI, run
+> Settings → Configuration → **Save Current Configuration**, then quit — otherwise the on-exit
+> write clobbers your edits.
 
 
 ### Fedora specifics
@@ -203,7 +310,7 @@ printf 'system_directory = "/mnt/roms/bios"\nlibretro_directory = "%s"\n' "$CORE
 ```bash
 CORES_DIR=~/.var/app/org.libretro.RetroArch/config/retroarch/cores
 BASE=https://buildbot.libretro.com/nightly/linux/x86_64/latest
-for CORE in mednafen_psx_hw_libretro mupen64plus_next_libretro dolphin_libretro mgba_libretro melonds_libretro pcsx2_libretro; do
+for CORE in mednafen_psx_hw_libretro mupen64plus_next_libretro dolphin_libretro mgba_libretro melondsds_libretro pcsx2_libretro; do
   curl -sL "$BASE/${CORE}.so.zip" -o /tmp/${CORE}.zip
   unzip -oq /tmp/${CORE}.zip -d "$CORES_DIR"
   rm /tmp/${CORE}.zip
@@ -265,6 +372,86 @@ Configure in ES-DE: Main Menu → Scraper → Scraper Source.
 | Notebook | Fedora | In progress |
 | Shield | Android TV | Planned |
 | Phone | Android | Planned |
+
+### Adding a new game
+
+1. **Single-disc:** copy the ROM into `/mnt/roms/<system>/`.
+2. **Multi-disc (PSX):** put the `.m3u` in `/mnt/roms/psx/`, the disc files in a subfolder, and an
+   empty `noload.txt` in that subfolder (see "ROM Formats").
+3. Restart ES-DE — the game appears automatically.
+4. Scrape it: select the game → right-click / menu → Scrape (mother client only).
+
+> **ES-DE gotchas:**
+> - ES-DE rewrites `gamelist.xml` on start; hand-edited entries can be lost. Let the scraper write
+>   metadata, or set `SaveGamelistsMode = never` on read-only clients.
+> - A subfolder under a system dir auto-creates a `<folder>` entry — suppress with `noload.txt`.
+> - Wrong core launch: ES-DE uses the first `<command>` in `es_systems.xml`; make sure it maps to
+>   an installed core (the melonDS DS vs melonDS trap).
+
+## Cross-device saves
+
+In-game saves (`.srm`) and save states (`.state`) are pointed at the share via RetroArch's
+`savefile_directory` (`/mnt/roms/saves`) and `savestate_directory` (`/mnt/roms/states`), so a save
+made on one client is visible to the others.
+
+**Current state:** only read-write clients (the Gaming PC) can write there — the `roms` user is
+read-only and `[roms]` must stay that way. So central saves/states are mother-client-only today.
+
+### Decided target design (not yet implemented)
+
+Scope: **own devices only** (Gaming PC, Notebook, Shield, Phone) — friends/netplay guests are
+excluded from save sync by design.
+
+Two enforcement layers, deliberately separated:
+
+| Layer | Mechanism | Job |
+|---|---|---|
+| Data (the real gatekeeper) | Samba: a **separate writable `[saves]` share** with a dedicated `saves` user in `valid users` | Only devices holding the `saves` credential can write. `[roms]` stays read-only. |
+| Network (documentation/future-proofing) | Tailscale tag `tag:gaming-trusted` for own devices | Marks own devices. Today grants no *extra* network access — guests keep `[roms]` (445), so both tags reach VM102:445; the `saves` credential is what actually distinguishes them. |
+
+Design choices:
+- **Separate `[saves]` share**, not a writable `[roms]` — preserves ROM/metadata hardening.
+- **Dedicated `saves` user** (RW on `[saves]` only), not reuse of `storage`/`roms-admin` — least
+  privilege; read-only clients get a save credential without gaining ROM write access.
+- **One flat shared folder** (`saves/` + `states/`), not per-client subfolders — a shared save dir
+  is the whole point; RetroArch keys files by content name so the same game maps to the same file.
+- Per client: RetroArch `savefile_directory`/`savestate_directory` → the `[saves]` mount
+  (e.g. `/mnt/saves/saves`, `/mnt/saves/states`), replacing the interim `/mnt/roms/...` paths.
+
+Access matrix (target):
+
+| Source (tag) | Destination | Port | Credential / access |
+|---|---|---|---|
+| `tag:gaming-trusted` | VM102 | 445 | `[roms]` (RO `roms` / RW `storage` on mother) + `[saves]` RW (`saves`) |
+| `tag:gaming` (guests) | VM102 | 445 | `[roms]` RO only |
+| both | each other | 55435 | Netplay |
+
+Caveats:
+- Save states are sensitive to the exact core build — keep all clients on the same buildbot core.
+- No simultaneous play: last write wins (no locking). Acceptable for single-player, single-user.
+- **Shield (Android TV): unverified** whether RetroArch can write `savefile_directory` directly to
+  an SMB path. Verify on-device first; if it cannot, the fallback is file sync (e.g. Syncthing)
+  with the same `[saves]` target — the tag/share model is unchanged, only the transport differs.
+
+## Open items (mother client)
+
+Configured and working: mounts, cores, PSX + NDS, central saves/states (RW), shared media +
+gamelists, DualSense controller. Still to do:
+
+- Hotkeys (DualSense: `Select` as hotkey-enabler)
+- Run-ahead (latency reduction)
+- Per-system shaders
+- ES-DE scraper credentials (ScreenScraper) + theme
+- Audio-latency tuning
+- Cross-device saves (design decided, see above): create `[saves]` share + `saves` user, add
+  `tag:gaming-trusted`, repoint client save dirs; verify SMB-write on Shield
+
+## Per-client notes
+
+- **Cores are not portable** — reinstall per client/architecture (x86_64 Linux `.so`, Windows DLL,
+  ARM Android).
+- **RetroArch paths** differ per client (Flatpak vs native; the SMB mountpoint may not be `/mnt/roms`).
+- **Nvidia Shield Pro (Tegra X1+):** enable rewind only for 2D systems — 3D cores are too heavy.
 
 ## Related Documents
 
