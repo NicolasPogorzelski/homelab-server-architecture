@@ -4,7 +4,7 @@
 
 ## About
 
-Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps engineering. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
+Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps and platform engineering. The emphasis is on cost-aware, risk-conscious engineering — explicit trade-offs over cargo-culted complexity. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
 
 A self-designed, security-focused platform architecture built on Proxmox.
 
@@ -23,9 +23,12 @@ It is not built as a collection of services, but as a layered infrastructure pla
 | 3 | Monitoring — Prometheus, Grafana, Alertmanager | ✅ Done |
 | 4 | Zero Trust Networking — Tailscale, ACL design | ✅ Done |
 | 5 | Ansible — playbooks, roles, vault, hardening | In Progress |
-| 6 | Terraform / OpenTofu — IaC for node provisioning | Planned |
-| 7 | CI/CD — GitHub Actions | Planned |
-| 8 | Disaster Recovery — tested restore procedures | Planned |
+| 6 | Terraform — IaC on AWS (free tier) + Proxmox provisioning | Planned |
+| 7 | CI/CD — GitHub Actions (lint, dry-run gates) | Planned |
+| 8 | Kubernetes — k3s in the homelab | Planned |
+| 9 | Cloud depth (AWS) + Python | Planned |
+
+Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
 
 ---
 
