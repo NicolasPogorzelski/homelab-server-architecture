@@ -79,12 +79,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   10. PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)
   11. PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally
   12. Fleet health check playbook — query all nodes, output status overview
-  13. CI/CD + ansible-lint — GitHub Actions pipeline: lint on push, `--check` against inventory on PR
-  14. Molecule — unit testing for Ansible roles; integrate with CI
+  13. CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.
+  14. ~~Molecule — unit testing for Ansible roles~~ **Deferred** — out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
 
   **Note:** LXC provisioning (creating containers) is intentionally excluded — that belongs to Terraform, which follows as the next learning track after Ansible.
 
-**Next learning track (after Ansible):** Terraform — provision LXCs on Proxmox; combined workflow: `terraform apply` → LXC exists → onboarding playbook configures it.
+**Next learning track (after Ansible):** Terraform — primarily on **AWS (free tier)** to learn HCL/state/modules on a widely-used provider, plus a thin **Proxmox slice** for the homelab payoff: `terraform apply` → LXC exists → `onboarding.yml` configures it.
+
+**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications, and career milestones live in the private global instructions, not in this repo.
 
 **PR Cadence:** Learning-path branches (`feat/ansible-setup`, `feat/terraform-setup`, etc.) are merged to `main` as a whole when the topic is complete — not after individual items. The items within a topic build on each other and form a single coherent arc. Exception: self-contained platform changes unrelated to the learning topic (e.g. runbooks, hotfixes) are split off to their own branch and PRed independently.
 
@@ -99,6 +101,9 @@ When working on tasks here:
 - Root cause before fix: symptom → verification command → diagnosis → fix.
 - Small steps, verify before next step.
 - When unsure, say so. Don't hallucinate flags, paths, or behavior.
+- Code learning (Bash/Python/YAML): blank-file-first. The first draft is written
+  from an empty file without AI or copied snippets — AI is used only to review
+  afterwards. The goal is active recall, not recognition; the struggle is the point.
 
 OS context: Proxmox host + Debian 12 LXCs. Daily driver is CachyOS (Arch-based).
 Commands must be OS-specific — no generic "Linux commands" when behavior differs.
