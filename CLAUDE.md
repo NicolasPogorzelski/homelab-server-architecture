@@ -226,6 +226,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-06-07 | vm102 hygiene (ad-hoc via Ansible; role codification pending): installed `chrony` — node had no time daemon (`NTP service: n/a`, clock unsynchronized, drifting on RTC/hypervisor only; risk for SnapRAID timestamp-based change detection, `SnapRAIDSyncStale` alert math, and cross-node log correlation), now `synchronized: yes`. Break-glass SSH: `desktop-cachyos` admin pubkey added to `storage` `authorized_keys` as fallback alongside the `ansible` user (`PasswordAuthentication no` → key presence is the only access lever) |
 | 2026-05-28 | Ansible `ssh-hardening` role: `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile` on all 9 nodes; `vm102` had `PermitRootLogin yes` explicitly set — remediated; idempotency verified; `--check --diff` dry-run convention adopted |
 | 2026-05-23 | Ansible `paperless-env` role: Jinja2 template deploys `.env` with Vault-managed secrets to lxc211; `group_vars/` moved to `inventory/group_vars/` (correct resolution path for playbooks in subdirectory); `docker-compose-plugin` corrupt on lxc211 (KE-7 root cause), reinstalled; idempotency verified |
 | 2026-05-22 | Ansible Vault: `vault_password_file` added to `ansible.cfg`; `inventory/group_vars/all/vault.yml` with 3 encrypted Paperless secrets |
