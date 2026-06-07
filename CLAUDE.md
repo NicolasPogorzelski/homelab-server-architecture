@@ -64,7 +64,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Jellyfin on vm100 migrated from git-clone path to `/opt/docker/jellyfin/` — functional test passed
   - Item #9 prep complete: stack path single source of truth established
 
-- **Next session:** Item #9 — Docker update workflow playbook
+- **Next session:** First close out the 2026-06-07 session — (a) codify the ad-hoc changes into Ansible (a `chrony` role + the break-glass SSH key as a playbook/var), (b) work the incident-remediation backlog (see "Known Technical Debt & Gotchas": service-level monitoring via blackbox_exporter, journald persistence on vm100/vm102, unattended-upgrades decision on vm100, alert tiering by role, stale-key cleanup on `storage`). Then resume the Ansible Learning Roadmap at **Item #9 — Docker update workflow playbook**.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
