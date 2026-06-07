@@ -214,3 +214,38 @@ dpkg --verify 2>&1 | grep -v ' c /'
 **References:**
 - [Runbook: LVM thin-pool full](../../runbooks/platform/lvm-thin-pool-full.md)
 - [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh)
+
+---
+
+## KE-8: Media services hang while the node stays healthy (observability blind spot)
+
+**Affected services:** Jellyfin + Audiobookshelf (VM100)
+
+**Observed instance:**
+- 2026-06-06 (~12:00–14:36 UTC): both services unreachable; recovered only after a VM100 restart. Nextcloud (LXC210) and other nodes stayed reachable.
+
+**Symptom:**
+- From the client side, no connection to Jellyfin or Audiobookshelf could be established — both web UIs were simply unreachable.
+- Server-side the picture was a hang, not a crash: Jellyfin logged only sporadic `WS request → closed` with no error; Audiobookshelf went silent after `Listening on port :80`. The processes were alive but not serving.
+- A VM100 restart restored both immediately.
+
+**What was proven and excluded:**
+- **Not** the storage pool being full: VM102 ran continuously through the window (`wtmp`); MergerFS was ~96% but never 0 bytes (no `ENOSPC`).
+- **Not** VM102 down, **not** network/Tailscale loss: Prometheus `up{job="node-vm100-gpu"}` was `1` for 300/300 samples in the window (one 60s gap = the restart only).
+- **Not** a hard CIFS hang: no `CIFS VFS: server not responding` / hung-task messages in `/var/log/kern.log`.
+- **Not** GPU/kernel break: GPU transcoding worked immediately after the restart (the morning's `unattended-upgrade` kernel bump to `5.15.0-181` was unrelated).
+- **Not** resource exhaustion: `node_procs_blocked` max = 1, `node_load5` max = 0.27, ≥14 GiB RAM free throughout.
+
+**Root cause:** Not definitively determined. Leading (unproven) hypothesis: an application-level degradation of the shared media backend (slow/stalled SMB to VM102 — an interruptible wait, therefore invisible in `procs_blocked`/load) or an internal container deadlock. Unprovable after the fact because the application/kernel logs for the window were lost (see gaps below).
+
+**Recovery:** Restart VM100, or less invasively restart the affected containers (`docker restart jellyfin audiobookshelf` on VM100). This re-establishes the automount/SMB sessions and clears any wedged container state.
+
+**Contributing observability gaps (the real lesson):**
+1. **No service-level monitoring.** Alerts cover `NodeDown` (node_exporter:9100) and disk only. node_exporter answered the whole time while ports 8096/13378 were dead — no alert fired. A healthy node can have dead services.
+2. **journald not persisting logs.** Despite `/var/log/journal`, the June logs were gone (`journalctl --list-boots` jumped from May 28 to the current boot); forensics relied on `wtmp`, `apt`/`dpkg` text logs, Docker JSON logs, and Prometheus instead.
+
+**Status:** Recovery known; root cause unconfirmed; remediation tracked (service-level probes, journald persistence) — see CLAUDE.md "Known Technical Debt & Gotchas".
+
+**References:**
+- [VM100 node documentation](../nodes/vm100.md)
+- [Monitoring platform](./monitoring.md)

@@ -219,6 +219,23 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
+- **No service-level monitoring (gap, fix planned):** alerting covers `NodeDown`
+  (node_exporter) + disk only, not service ports — a node can be "up" while
+  Jellyfin (8096) / Audiobookshelf (13378) are dead (see KE-8). Remediation:
+  blackbox_exporter HTTP probes + `ServiceDown` rule.
+- **journald not persisting logs on vm100/vm102 (gap, fix planned):** despite
+  `/var/log/journal`, recent boots' logs were lost (see KE-8); forensics fell
+  back to wtmp / apt-dpkg text logs / Docker JSON / Prometheus. Remediation:
+  investigate `Storage=` / `SystemMaxUse`.
+- **unattended-upgrades active on vm100 (uncontrolled change):** installs
+  packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
+  workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
+  reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
+- **MergerFS pool ~96% full on vm102 (by design):** the media archive is meant
+  to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
+  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
+  hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
+  disk alert on archive disks is largely non-actionable (alert tiering by role pending).
 
 ## Platform Changelog
 
@@ -226,6 +243,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-06-07 | Investigated the 2026-06-06 VM100 media-services hang (Jellyfin + Audiobookshelf unreachable, recovered by restart). Root cause unconfirmed; proven NOT storage-full / VM102-down / network / hard-CIFS-hang / GPU / resource-exhaustion — node stayed healthy and reachable throughout (Prometheus `up` = 1, 300/300 samples). Exposed two observability gaps now tracked as tech debt (no service-level monitoring; journald not persisting logs). Documented as KE-8 |
 | 2026-06-07 | vm102 hygiene (ad-hoc via Ansible; role codification pending): installed `chrony` — node had no time daemon (`NTP service: n/a`, clock unsynchronized, drifting on RTC/hypervisor only; risk for SnapRAID timestamp-based change detection, `SnapRAIDSyncStale` alert math, and cross-node log correlation), now `synchronized: yes`. Break-glass SSH: `desktop-cachyos` admin pubkey added to `storage` `authorized_keys` as fallback alongside the `ansible` user (`PasswordAuthentication no` → key presence is the only access lever) |
 | 2026-05-28 | Ansible `ssh-hardening` role: `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile` on all 9 nodes; `vm102` had `PermitRootLogin yes` explicitly set — remediated; idempotency verified; `--check --diff` dry-run convention adopted |
 | 2026-05-23 | Ansible `paperless-env` role: Jinja2 template deploys `.env` with Vault-managed secrets to lxc211; `group_vars/` moved to `inventory/group_vars/` (correct resolution path for playbooks in subdirectory); `docker-compose-plugin` corrupt on lxc211 (KE-7 root cause), reinstalled; idempotency verified |
