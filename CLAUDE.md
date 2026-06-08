@@ -78,7 +78,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Jellyfin on vm100 migrated from git-clone path to `/opt/docker/jellyfin/` — functional test passed
   - Item #9 prep complete: stack path single source of truth established
 
-- **Next session:** 2026-06-07 session closed out — (a) ~~`chrony` role + break-glass SSH key codified~~ ✅ (2026-06-08). Next: (b) work the incident-remediation backlog (see "Known Technical Debt & Gotchas": service-level monitoring via blackbox_exporter, journald persistence on vm100/vm102, unattended-upgrades decision on vm100, alert tiering by role, stale-key cleanup on `storage`). Then resume the Ansible Learning Roadmap at **Item #9 — Docker update workflow playbook**.
+- **Next session:** 2026-06-07 session closed out — (a) ~~`chrony` role + break-glass SSH key codified~~ ✅ (2026-06-08). Next: (b) work the incident-remediation backlog (see "Known Technical Debt & Gotchas"): ~~service-level monitoring via blackbox_exporter~~ ✅ (2026-06-08); remaining: journald persistence on vm100/vm102, unattended-upgrades decision on vm100, alert tiering by role, stale-key cleanup on `storage` + lxc250. Open service incident: paperless + openwebui return 502 (dead backends, caught by blackbox). Then resume the Ansible Learning Roadmap at **Item #9 — Docker update workflow playbook**.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
@@ -233,10 +233,11 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
-- **No service-level monitoring (gap, fix planned):** alerting covers `NodeDown`
-  (node_exporter) + disk only, not service ports — a node can be "up" while
-  Jellyfin (8096) / Audiobookshelf (13378) are dead (see KE-8). Remediation:
-  blackbox_exporter HTTP probes + `ServiceDown` rule.
+- **Service-level monitoring (KE-8 gap — REMEDIATED 2026-06-08):** previously
+  alerting covered only `NodeDown` (node_exporter) + disk, not service ports.
+  Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a
+  `ServiceDown` rule; Tailscale ACL Rule 1c grants monitoring the service ports.
+  First run already caught paperless + openwebui returning 502 (dead backends).
 - **journald not persisting logs on vm100/vm102 (gap, fix planned):** despite
   `/var/log/journal`, recent boots' logs were lost (see KE-8); forensics fell
   back to wtmp / apt-dpkg text logs / Docker JSON / Prometheus. Remediation:
@@ -257,6 +258,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-06-08 | blackbox_exporter deployed on lxc200 (service-level monitoring, KE-8 remediation): container in monitoring stack, `blackbox.yml` (http_2xx + http_service_up modules), two relabel-based scrape jobs in `prometheus.yml.j2` probing 7 services (Jellyfin/ABS over HTTP on vm100; Paperless/OpenWebUI/Nextcloud/Calibre/Vaultwarden over Serve-HTTPS), `ServiceDown` alert rule. Required Tailscale ACL Rule 1c (monitoring → service ports). Verified: 5/7 UP; paperless + openwebui correctly detected DOWN (502 from `tailscale serve` = dead backend — a real outage to fix separately, exactly the KE-8 gap) |
 | 2026-06-08 | Ansible `breakglass` role: codifies the admin break-glass SSH key (`desktop-cachyos`) onto each VM's native user (`gpu`/`storage`) via `authorized_key` loop; `breakglass_pubkeys` (group var, public key — no Vault) + `breakglass_user` (host var). Scope VMs only (LXCs reachable via `pct exec`). Additive/non-exclusive; dry-run found the key already present on both VMs (`changed=0`), role makes it declarative. Closes the 2026-06-07 ad-hoc break-glass item |
 | 2026-06-08 | Ansible `chrony` role: installs `chrony` + ensures started/enabled on `vms` (`serial: 1`); codifies the 2026-06-07 ad-hoc install. Applied fleet-wide — replaced `systemd-timesyncd` on vm100 (vm100 was already synced via timesyncd; standardized on one time daemon for maintenance). No template/handler (Debian default config). `--check` revealed the install→service check-mode limitation; real run idempotent (`changed=0` both VMs), `chronyc tracking` confirms sync |
 | 2026-06-07 | Investigated the 2026-06-06 VM100 media-services hang (Jellyfin + Audiobookshelf unreachable, recovered by restart). Root cause unconfirmed; proven NOT storage-full / VM102-down / network / hard-CIFS-hang / GPU / resource-exhaustion — node stayed healthy and reachable throughout (Prometheus `up` = 1, 300/300 samples). Exposed two observability gaps now tracked as tech debt (no service-level monitoring; journald not persisting logs). Documented as KE-8 |

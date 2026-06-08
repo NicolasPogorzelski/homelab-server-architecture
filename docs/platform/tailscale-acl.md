@@ -128,6 +128,27 @@ imply outbound access (monitoring → targets). Pre-existing WireGuard tunnels c
 missing rules until the next connection reset (e.g. container restart). See DD#11 for
 the incident that exposed this.
 
+### Rule 1c — Monitoring: outbound service-probe access (blackbox)
+
+The monitoring node runs `blackbox_exporter` and probes service endpoints
+(KE-8 remediation: a node can be up while its service is dead). Beyond
+node_exporter (Rule 1b), it needs the service ports: media HTTP on `tier2`
+(Jellyfin 8096, Audiobookshelf 13378) and Tailscale-Serve HTTPS (443) on
+`tier1` (Paperless, Vaultwarden, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI).
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:monitoring"],
+    "dst": [
+        "tag:tier2:8096",
+        "tag:tier2:13378",
+        "tag:tier1:443",
+        "tag:ai-stack:443"
+    ]
+}
+```
+
 ### Rule 2 — Tier 0 (Proxmox): workload access only
 
 The hypervisor can reach all workload tiers and storage.
@@ -271,7 +292,7 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 | **tier0** | — | all | all | all | all | all | all | all | — | — |
 | **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — |
 | **tier2** | — | — | — | all | — | — | — | 445 | — | — |
-| **monitoring** | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | 9100 | — | — |
+| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100 | 9100 | — | — |
 | **database** | — | — | — | — | — | — | — | — | — | — |
 | **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — |
 | **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — |
@@ -340,4 +361,5 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |
 | 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@CT260, E2E verified | Paperless-ngx operational and documented |
 | 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on CT260 |
+| 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
 
