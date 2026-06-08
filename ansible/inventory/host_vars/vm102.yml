@@ -1,0 +1,3 @@
+---
+# Native admin user that receives the break-glass key on this host.
+breakglass_user: storage

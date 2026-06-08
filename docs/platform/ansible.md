@@ -78,6 +78,7 @@ See: [CLAUDE.md — Vault password changed](../../CLAUDE.md)
 | `paperless-env.yml` | `lxc211` | Deploy Paperless `.env` with Vault-managed secrets |
 | `ssh-hardening.yml` | `all` | Set `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`, reload sshd |
 | `chrony.yml` | `vms` | Install `chrony`, ensure started + enabled (time sync on VMs) |
+| `breakglass.yml` | `vms` | Deploy break-glass admin SSH key(s) to each VM's native user (`gpu`/`storage`) |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
 
@@ -90,6 +91,7 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `paperless-env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
 | `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
 | `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
+| `breakglass` | VMs (vm100, vm102) | Adds admin break-glass pubkey(s) (`breakglass_pubkeys`, group var) to each host's native user (`breakglass_user`, host var) via `authorized_key` loop; additive (non-exclusive), safe empty default |
 
 ## SSH Hardening
 
