@@ -32,6 +32,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200; dest path corrected to `/opt/monitoring/prometheus/prometheus.yml`
   - All 13 Prometheus targets verified UP after deploy
 
+- **`chrony` role complete (2026-06-08):**
+  - `ansible/roles/chrony/tasks/main.yml` — two tasks: `apt` install (`state: present`, `update_cache`) + `service` (`state: started`, `enabled: true`); no template/handler (Debian default config)
+  - `ansible/playbooks/chrony.yml` — calls role on `vms`, `serial: 1`, `become: true`
+  - Codifies the 2026-06-07 ad-hoc chrony install; applied fleet-wide on VMs (decision: one consistent time daemon, easier maintenance) — replaced `systemd-timesyncd` on vm100 (chrony `Conflicts:` with it)
+  - `--check` dry-run failed on the service task (check mode only simulates the install, so the service does not yet exist) — expected check-mode limitation for install→service dependencies; real run + idempotency (`changed=0` on both VMs) verified; `chronyc tracking` confirms sync on vm100 + vm102
+
 - **Ansible Vault setup complete (2026-05-22):**
   - `inventory/group_vars/all/vault.yml` — 3 encrypted Paperless secrets (`vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key`)
   - `~/.vault_pass` on LXC250 (chmod 600, gitignored) — auto-loaded via `ansible.cfg` `vault_password_file`
@@ -64,7 +70,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Jellyfin on vm100 migrated from git-clone path to `/opt/docker/jellyfin/` — functional test passed
   - Item #9 prep complete: stack path single source of truth established
 
-- **Next session:** First close out the 2026-06-07 session — (a) codify the ad-hoc changes into Ansible (a `chrony` role + the break-glass SSH key as a playbook/var), (b) work the incident-remediation backlog (see "Known Technical Debt & Gotchas": service-level monitoring via blackbox_exporter, journald persistence on vm100/vm102, unattended-upgrades decision on vm100, alert tiering by role, stale-key cleanup on `storage`). Then resume the Ansible Learning Roadmap at **Item #9 — Docker update workflow playbook**.
+- **Next session:** Finish closing out the 2026-06-07 session — (a) ~~`chrony` role~~ ✅ (2026-06-08); still to do: codify the break-glass SSH key as a playbook/var, (b) work the incident-remediation backlog (see "Known Technical Debt & Gotchas": service-level monitoring via blackbox_exporter, journald persistence on vm100/vm102, unattended-upgrades decision on vm100, alert tiering by role, stale-key cleanup on `storage`). Then resume the Ansible Learning Roadmap at **Item #9 — Docker update workflow playbook**.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
@@ -243,6 +249,7 @@ Significant platform changes, in reverse chronological order. Detailed ACL chang
 
 | Date | Change |
 |---|---|
+| 2026-06-08 | Ansible `chrony` role: installs `chrony` + ensures started/enabled on `vms` (`serial: 1`); codifies the 2026-06-07 ad-hoc install. Applied fleet-wide — replaced `systemd-timesyncd` on vm100 (vm100 was already synced via timesyncd; standardized on one time daemon for maintenance). No template/handler (Debian default config). `--check` revealed the install→service check-mode limitation; real run idempotent (`changed=0` both VMs), `chronyc tracking` confirms sync |
 | 2026-06-07 | Investigated the 2026-06-06 VM100 media-services hang (Jellyfin + Audiobookshelf unreachable, recovered by restart). Root cause unconfirmed; proven NOT storage-full / VM102-down / network / hard-CIFS-hang / GPU / resource-exhaustion — node stayed healthy and reachable throughout (Prometheus `up` = 1, 300/300 samples). Exposed two observability gaps now tracked as tech debt (no service-level monitoring; journald not persisting logs). Documented as KE-8 |
 | 2026-06-07 | vm102 hygiene (ad-hoc via Ansible; role codification pending): installed `chrony` — node had no time daemon (`NTP service: n/a`, clock unsynchronized, drifting on RTC/hypervisor only; risk for SnapRAID timestamp-based change detection, `SnapRAIDSyncStale` alert math, and cross-node log correlation), now `synchronized: yes`. Break-glass SSH: `desktop-cachyos` admin pubkey added to `storage` `authorized_keys` as fallback alongside the `ansible` user (`PasswordAuthentication no` → key presence is the only access lever) |
 | 2026-05-28 | Ansible `ssh-hardening` role: `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile` on all 9 nodes; `vm102` had `PermitRootLogin yes` explicitly set — remediated; idempotency verified; `--check --diff` dry-run convention adopted |

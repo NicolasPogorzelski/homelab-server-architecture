@@ -1,0 +1,12 @@
+---
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+
+- name: Ensure chrony is started and enabled
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true

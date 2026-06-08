@@ -77,6 +77,7 @@ See: [CLAUDE.md — Vault password changed](../../CLAUDE.md)
 | `prometheus-config.yml` | `lxc200` | Deploy Prometheus config via Jinja2 template |
 | `paperless-env.yml` | `lxc211` | Deploy Paperless `.env` with Vault-managed secrets |
 | `ssh-hardening.yml` | `all` | Set `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`, reload sshd |
+| `chrony.yml` | `vms` | Install `chrony`, ensure started + enabled (time sync on VMs) |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
 
@@ -88,6 +89,7 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `prometheus-config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, handler restarts Prometheus container (`docker compose restart`) to avoid bind-mount inode staleness on atomic writes |
 | `paperless-env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
 | `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
+| `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
 
 ## SSH Hardening
 
