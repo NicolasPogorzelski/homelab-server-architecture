@@ -244,8 +244,46 @@ dpkg --verify 2>&1 | grep -v ' c /'
 1. **No service-level monitoring.** Alerts cover `NodeDown` (node_exporter:9100) and disk only. node_exporter answered the whole time while ports 8096/13378 were dead — no alert fired. A healthy node can have dead services.
 2. **journald not persisting logs.** Despite `/var/log/journal`, the June logs were gone (`journalctl --list-boots` jumped from May 28 to the current boot); forensics relied on `wtmp`, `apt`/`dpkg` text logs, Docker JSON logs, and Prometheus instead.
 
-**Status:** Recovery known; root cause unconfirmed; remediation tracked (service-level probes, journald persistence) — see CLAUDE.md "Known Technical Debt & Gotchas".
+**Status:** Recovery known; root cause unconfirmed; remediation tracked (service-level probes, journald persistence) — see CLAUDE.md "Known Technical Debt & Gotchas". Service-level probing was implemented 2026-06-08 (blackbox_exporter); journald persistence still open.
 
 **References:**
 - [VM100 node documentation](../nodes/vm100.md)
+- [Monitoring platform](./monitoring.md)
+
+---
+
+## KE-9: PostgreSQL binds only loopback after boot (Tailscale-IP startup race)
+
+**Affected services:** OpenWebUI (LXC230), Paperless-ngx (LXC211) — i.e. all consumers of the central PostgreSQL on LXC260. Services not using LXC260 (Jellyfin, Audiobookshelf, Calibre-Web, Nextcloud=local MariaDB, Vaultwarden=SQLite) were unaffected.
+
+**Observed instance:**
+- 2026-06-08: discovered by the newly deployed `blackbox_exporter` on its very first run — `probe_success=0` for paperless + openwebui (both 502 from `tailscale serve`).
+
+**Symptom:**
+- `tailscale serve` on :443 answered but returned **HTTP 502** (dead backend).
+- OpenWebUI crash-looped with `UnboundLocalError: cannot access local variable 'db'` in `handle_peewee_migration` (its own buggy handling of a failed DB connect).
+- Paperless app did not answer on `127.0.0.1:8000` (later found to have a *separate* Redis fault — see note).
+
+**Root cause:** The native PostgreSQL on LXC260 (re)started at boot (~07:08) **before the Tailscale interface had its IP** (`100.x`). `listen_addresses` is correctly set to `127.0.0.1, <tailscale-ip>`, but PostgreSQL can only bind addresses that exist at startup → it bound loopback only and never re-bound the Tailscale IP. Remote DB clients over Tailscale → connection refused/timeout → services fail.
+
+**Why monitoring missed it (until blackbox):** `pg_up=1` was green because `postgres_exporter` runs locally on LXC260 and connects via loopback — it cannot see that the *remote* (Tailscale) bind is missing. Node-level `up` was also green. Only the service-level blackbox probe exposed it. This is the KE-8 lesson, validated.
+
+**Verification commands:**
+```bash
+ss -ltn | grep ':5432'                                # which addresses is postgres actually bound to?
+sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # what it is *supposed* to bind
+```
+A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the signature.
+
+**Recovery:** Restart PostgreSQL once the Tailscale IP is up — `systemctl restart postgresql` on LXC260 → it then binds `<tailscale-ip>:5432`. OpenWebUI recovered automatically via its restart policy.
+
+**Durable fix (pending):** Order PostgreSQL to start only after the Tailscale IP is available (systemd drop-in: `After=tailscaled.service` + an `ExecStartPre` that waits for the `tailscale0` IPv4). Do **not** use `listen_addresses='*'` — that binds `0.0.0.0` incl. the LAN interface, violating the platform binding rule (bind to Tailscale, never LAN).
+
+**Note (separate fault):** Paperless did not fully recover after the DB fix — it crash-loops on `Error 111 connecting to localhost:6379` (Redis); its `init-wait-for-redis` step fails and the container exits. Independent container-network/config issue (`PAPERLESS_REDIS` vs. `network_mode`), tracked separately.
+
+**Status:** Remote DB access restored (2026-06-08 restart); durable boot-ordering fix pending; paperless Redis issue open.
+
+**References:**
+- [LXC260 PostgreSQL node](../nodes/lxc260.md)
+- [Tailscale ACL — Rule 1c](./tailscale-acl.md)
 - [Monitoring platform](./monitoring.md)
