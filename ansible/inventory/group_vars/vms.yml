@@ -1,0 +1,4 @@
+---
+# Break-glass admin public key(s) for VMs (public key, not secret).
+breakglass_pubkeys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDoxgXiYKnBIYHJ+QVFAkTuj/keQ79xaIuSV5Vy2J2sF desktop-cachyos"
