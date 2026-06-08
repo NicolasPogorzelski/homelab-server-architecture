@@ -1,6 +1,13 @@
 all:
   vars:
     proxmox_host_tailscale_ip: <tailscale-ip-proxmox-host>
+    # Blackbox HTTPS probe targets (services behind `tailscale serve`).
+    blackbox_https_targets:
+      - { name: paperless,   url: "https://paperless.<tailnet-id>" }
+      - { name: openwebui,   url: "https://ai-openwebui.<tailnet-id>" }
+      - { name: nextcloud,   url: "https://nextcloud.<tailnet-id>" }
+      - { name: calibreweb,  url: "https://calibreweb.<tailnet-id>" }
+      - { name: vaultwarden, url: "https://vaultwarden.<tailnet-id>" }
   children:
     media:
       hosts:

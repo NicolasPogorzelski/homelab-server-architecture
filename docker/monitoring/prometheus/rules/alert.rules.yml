@@ -85,3 +85,14 @@ groups:
     #   - smartctl_device_smart_status (overall SMART pass/fail)
     #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
     #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
+
+  - name: blackbox
+    rules:
+      - alert: ServiceDown
+        expr: probe_success == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: "blackbox probe for {{ $labels.service }} ({{ $labels.instance }}) reports probe_success=0 for more than 3 minutes. A node can be up while its service is not answering (see KE-8)."
