@@ -1,0 +1,16 @@
+---
+# === calibre-importer (LXC220) ===
+
+# Where the import script is installed on the node.
+calibre_importer_script_dest: /usr/local/bin/calibre-import.sh
+
+# Single source of truth for the script lives in snippets/scripts/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+calibre_importer_script_src: "{{ playbook_dir }}/../../snippets/scripts/calibre-import.sh"
+
+# How often the timer polls the drop folder.
+calibre_importer_interval: 2min
+
+# rw library mount provided by the Proxmox host bind (mp2 -> /books-rw).
+calibre_importer_library: /books-rw
+calibre_importer_import_dir: /books-rw/_import

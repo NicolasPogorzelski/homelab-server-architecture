@@ -1,0 +1,49 @@
+---
+- name: Install calibre (provides calibredb)
+  ansible.builtin.apt:
+    name: calibre
+    state: present
+    update_cache: true
+
+- name: Verify the rw library mount is present
+  ansible.builtin.command:
+    cmd: mountpoint -q {{ calibre_importer_library }}
+  changed_when: false
+
+- name: Create import + quarantine directories
+  ansible.builtin.command:
+    cmd: mkdir -p {{ calibre_importer_import_dir }}/.failed
+    creates: "{{ calibre_importer_import_dir }}/.failed"
+
+- name: Deploy import script
+  ansible.builtin.copy:
+    src: "{{ calibre_importer_script_src }}"
+    dest: "{{ calibre_importer_script_dest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy systemd service unit
+  ansible.builtin.template:
+    src: calibre-import.service.j2
+    dest: /etc/systemd/system/calibre-import.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Deploy systemd timer unit
+  ansible.builtin.template:
+    src: calibre-import.timer.j2
+    dest: /etc/systemd/system/calibre-import.timer
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable and start the import timer
+  ansible.builtin.systemd_service:
+    name: calibre-import.timer
+    enabled: true
+    state: started
+    daemon_reload: true
