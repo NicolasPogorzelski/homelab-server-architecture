@@ -1,0 +1,10 @@
+[Unit]
+Description=Poll the Calibre drop folder every {{ calibre_importer_interval }}
+
+[Timer]
+OnBootSec={{ calibre_importer_interval }}
+OnUnitActiveSec={{ calibre_importer_interval }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
