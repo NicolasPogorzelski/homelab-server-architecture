@@ -1,0 +1,15 @@
+---
+# === postgresql-boot-order (LXC260) ===
+
+# Single source of truth for the wait script lives in snippets/scripts/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+pg_boot_order_wait_script_src: "{{ playbook_dir }}/../../snippets/scripts/wait-for-tailscale-ip.sh"
+
+# Where the wait script is installed on the node.
+pg_boot_order_wait_script: /usr/local/bin/wait-for-tailscale-ip.sh
+
+# Max seconds ExecStartPre waits for the Tailscale IP before starting anyway.
+pg_boot_order_wait_timeout: 90
+
+# The PostgreSQL instance unit to gate (Debian: postgresql@<version>-<cluster>).
+pg_boot_order_unit: postgresql@15-main.service
