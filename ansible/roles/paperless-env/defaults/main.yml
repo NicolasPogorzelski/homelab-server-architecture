@@ -16,7 +16,9 @@ paperless_consumption_dir: /usr/src/paperless/consume
 
 # === redis ===
 
-paperless_redis: redis://localhost:6379
+# Compose service name on the paperless bridge network (NOT localhost: that
+# resolves to paperless' own container, where no Redis listens -> Error 111).
+paperless_redis: redis://redis:6379
 
 # === general ===
 
