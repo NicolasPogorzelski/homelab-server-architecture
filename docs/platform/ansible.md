@@ -92,6 +92,8 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `ssh-hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
 | `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
 | `breakglass` | VMs (vm100, vm102) | Adds admin break-glass pubkey(s) (`breakglass_pubkeys`, group var) to each host's native user (`breakglass_user`, host var) via `authorized_key` loop; additive (non-exclusive), safe empty default |
+| `calibre-importer` | LXC220 | Installs `calibre`, deploys `calibre-import.sh` + a systemd oneshot service & 2-min timer that auto-imports ebooks dropped into `/books-rw/_import` |
+| `postgresql-boot-order` | LXC260 | systemd drop-in (`After=`/`Wants=tailscaled.service`) + `wait-for-tailscale-ip.sh` as `ExecStartPre` so PostgreSQL binds its Tailscale IP on boot (KE-9 fix); handler runs `daemon-reload` |
 
 ## SSH Hardening
 
