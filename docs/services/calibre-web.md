@@ -62,5 +62,6 @@ If the CIFS mount (`/books`) becomes unavailable:
 ## Related Documents
 
 - [LXC220 Node](../nodes/lxc220.md)
+- [ADR: Calibre Auto-Import / SQLite-on-CIFS](../decisions/calibre-cifs-sqlite-import.md)
 - [Storage Design](../platform/storage-design.md)
 - [Tailscale ACL](../platform/tailscale-acl.md)
