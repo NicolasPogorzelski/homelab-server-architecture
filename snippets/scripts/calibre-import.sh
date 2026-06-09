@@ -18,11 +18,16 @@
 #     3. `calibredb add` into the LOCAL library (book files + DB rows land there)
 #     4. push the new book directories back onto the CIFS library (plain tar,
 #        no byte-range locks) and atomically swap the updated metadata.db in
-#     5. restart calibre-web (guaranteed via an EXIT trap)
+#     5. delete each source file ONLY now — after it is durably on the share
+#     6. restart calibre-web (guaranteed via an EXIT trap)
 #
-# Flow: find *settled* ebooks in $IMPORT_DIR; on success the source is deleted
-# (the MergerFS pool is near full, so we keep no second copy); on failure it is
-# quarantined under $FAILED_DIR.
+# Flow: find *settled* ebooks in $IMPORT_DIR; a file that fails `calibredb add`
+# is quarantined under $FAILED_DIR; a file that imports successfully is deleted
+# only AFTER the new books are written back to the share (the MergerFS pool is
+# near full, so we keep no second copy). If the run is interrupted before that
+# write-back, the sources stay in $IMPORT_DIR and are retried on the next run
+# (`calibredb --automerge ignore` makes a retry idempotent) — so a crash mid-run
+# never loses a book.
 #
 # Paths fixed by homelab convention: the Proxmox host binds the rw CIFS mount
 # (//VM102/Books) into the container as mp2 -> /books-rw.
@@ -71,13 +76,15 @@ docker stop "${CONTAINER}" >/dev/null
 # Snapshot the live DB into the local working library.
 cp "${LIBRARY}/metadata.db" "${WORK}/metadata.db"
 
-imported=0
+# Successfully-added source paths, deleted only after the durable write-back.
+imported_srcs=()
 for f in "${FILES[@]}"; do
     echo "importing: ${f}"
     if calibredb add --with-library "${WORK}" --automerge ignore "${f}"; then
-        rm -f "${f}"
-        imported=$((imported + 1))
-        echo "done (imported, source removed): ${f}"
+        # Do NOT delete the source yet — it only lives in the volatile local WORK
+        # copy at this point. Track it; delete after it is written back (below).
+        imported_srcs+=("${f}")
+        echo "added to working library (source kept until written back): ${f}"
     else
         echo "FAILED — quarantining: ${f}"
         mv -f "${f}" "${FAILED_DIR}/"
@@ -85,20 +92,29 @@ for f in "${FILES[@]}"; do
 done
 
 # Push results back to the CIFS library only if something was actually added.
-if [ "${imported}" -gt 0 ]; then
+if [ "${#imported_srcs[@]}" -gt 0 ]; then
     # New book directories (everything in WORK except the DB and its journals).
     # tar uses no byte-range locks, so CIFS is happy; extracting merges into any
     # existing author directories. Book files must land BEFORE the DB references them.
-    echo "writing ${imported} new book file(s) back to ${LIBRARY}"
+    echo "writing ${#imported_srcs[@]} new book file(s) back to ${LIBRARY}"
     tar -C "${WORK}" --exclude='metadata.db*' -cf - . | tar -C "${LIBRARY}" -xf -
 
     # Atomically swap the updated metadata.db in (write-then-rename on the share).
     cp "${WORK}/metadata.db" "${LIBRARY}/.metadata.db.new"
     mv -f "${LIBRARY}/.metadata.db.new" "${LIBRARY}/metadata.db"
+
+    # Durable now: the books are on the share AND referenced by the swapped-in DB.
+    # Only here is it safe to delete the sources (no second copy is kept). Had the
+    # script died before this point, `set -e` would have aborted with the sources
+    # still in $IMPORT_DIR — they would simply be retried on the next run.
+    for f in "${imported_srcs[@]}"; do
+        rm -f "${f}"
+        echo "source removed (durably imported): ${f}"
+    done
 fi
 
 # Tidy up drop subfolders that are now empty (never the quarantine dir).
 find "${IMPORT_DIR}" -mindepth 1 -type d -empty -not -path "${FAILED_DIR}" -delete 2>/dev/null || true
 
-echo "import run complete (${imported} imported)"
+echo "import run complete (${#imported_srcs[@]} imported)"
 # calibre-web is restarted and WORK removed by the EXIT trap

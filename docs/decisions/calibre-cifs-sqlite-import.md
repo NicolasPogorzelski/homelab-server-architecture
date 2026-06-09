@@ -118,6 +118,22 @@ DB's storage *location*, not multi-consumer access.
 - Slightly more moving parts than a direct `calibredb add` (local copy, tar-back,
   atomic swap), all contained in one script with an EXIT-trap cleanup.
 
+### Durability ordering (delete-after-persist)
+
+Because the MergerFS pool is near full, the import keeps **no second copy**: the
+source file in `_import` is deleted after a successful import. The ordering of
+that deletion matters. `calibredb add` writes into the *local* `/tmp` working
+copy, which is discarded on exit — so a source must **not** be deleted just
+because it landed there. The source is deleted **only after** the new book
+directories are written back to the share **and** the updated `metadata.db` has
+been swapped in (i.e. after the book is durable on CIFS).
+
+If the run is interrupted between `calibredb add` and the write-back, `set -e`
+aborts with the sources still in `_import`; the next timer run retries them, and
+`calibredb --automerge ignore` keeps the retry idempotent. The invariant —
+*delete only after durable write-back* — is what prevents an interrupted run from
+silently losing a book on a node that intentionally keeps no backup copy.
+
 ### Verification caveat
 
 `calibredb list --with-library /books-rw` **also** fails the CIFS lock and prints
