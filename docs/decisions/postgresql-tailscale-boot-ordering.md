@@ -113,4 +113,4 @@ First post-fix boot: gate reported `tailscale IP present after 2s`, log showed
 - [KE-9 — PostgreSQL loopback-only after boot](../platform/known-errors.md#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race)
 - [LXC260 PostgreSQL node](../nodes/lxc260.md)
 - [Ansible Platform](../platform/ansible.md)
-- devops-til: `systemd/service-ordering-and-runtime-gates.md` (the transferable concept)
+- devops-til: `linux/systemd-service-hardening.md` (reactive vs proactive readiness gates — the transferable concept)
