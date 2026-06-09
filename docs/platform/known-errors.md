@@ -277,11 +277,11 @@ A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the s
 
 **Recovery:** Restart PostgreSQL once the Tailscale IP is up — `systemctl restart postgresql` on LXC260 → it then binds `<tailscale-ip>:5432`. OpenWebUI recovered automatically via its restart policy.
 
-**Durable fix (pending):** Order PostgreSQL to start only after the Tailscale IP is available (systemd drop-in: `After=tailscaled.service` + an `ExecStartPre` that waits for the `tailscale0` IPv4). Do **not** use `listen_addresses='*'` — that binds `0.0.0.0` incl. the LAN interface, violating the platform binding rule (bind to Tailscale, never LAN).
+**Durable fix (applied 2026-06-09):** Ansible role `postgresql-boot-order` deploys a systemd drop-in on `postgresql@15-main.service` (`After=`/`Wants=tailscaled.service`) plus an `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh` that blocks until this node's Tailscale IPv4 is actually present in `ip addr` before PostgreSQL starts. `listen_addresses='*'` was **rejected** — it binds `0.0.0.0` incl. the LAN interface, violating the platform binding rule. Rationale and rejected alternatives: [ADR — PostgreSQL Boot Ordering](../decisions/postgresql-tailscale-boot-ordering.md). Verified by a fresh reboot of LXC260: the gate reported `tailscale IP present after 2s` and PostgreSQL bound `<tailscale-ip>:5432` with no bind error (vs. `Cannot assign requested address` on the prior two boots).
 
 **Note (separate fault):** Paperless did not fully recover after the DB fix — it crash-loops on `Error 111 connecting to localhost:6379` (Redis); its `init-wait-for-redis` step fails and the container exits. Independent container-network/config issue (`PAPERLESS_REDIS` vs. `network_mode`), tracked separately.
 
-**Status:** Remote DB access restored (2026-06-08 restart); durable boot-ordering fix pending; paperless Redis issue open.
+**Status:** Resolved for the boot-ordering race (durable fix applied + reboot-verified 2026-06-09). Paperless Redis issue still open (separate fault).
 
 **References:**
 - [LXC260 PostgreSQL node](../nodes/lxc260.md)
