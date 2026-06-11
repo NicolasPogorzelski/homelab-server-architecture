@@ -1,0 +1,79 @@
+---
+- name: Ensure psycopg2 and acl are present for the community.postgresql modules
+  ansible.builtin.apt:
+    name:
+      - python3-psycopg2   # community.postgresql modules import psycopg2
+      - acl                # setfacl: lets become_user=postgres receive temp files
+    state: present
+    update_cache: true
+
+- name: Provision tenants (peer auth as the postgres OS user)
+  become_user: postgres
+  block:
+    - name: Create tenant databases
+      community.postgresql.postgresql_db:
+        name: "{{ item.name }}"
+        state: present
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Create tenant users with their Vault-managed password
+      community.postgresql.postgresql_user:
+        name: "{{ item.user }}"
+        password: "{{ postgres_tenant_passwords[item.user] }}"
+        state: present
+      no_log: true
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.user }}"
+
+    - name: Grant all privileges on the tenant database to its user
+      community.postgresql.postgresql_privs:
+        database: "{{ item.name }}"
+        type: database
+        objs: "{{ item.name }}"
+        privs: ALL
+        roles: "{{ item.user }}"
+        state: present
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Lock down the public schema (revoke from PUBLIC)
+      community.postgresql.postgresql_privs:
+        database: "{{ item.name }}"
+        type: schema
+        objs: public
+        privs: ALL
+        roles: PUBLIC
+        state: absent
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Grant the public schema to the tenant user
+      community.postgresql.postgresql_privs:
+        database: "{{ item.name }}"
+        type: schema
+        objs: public
+        privs: ALL
+        roles: "{{ item.user }}"
+        state: present
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Add per-tenant hostssl entry to pg_hba.conf
+      community.postgresql.postgresql_pg_hba:
+        dest: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        contype: hostssl
+        databases: "{{ item.name }}"
+        users: "{{ item.user }}"
+        source: "{{ item.consumer_cidr }}"
+        method: scram-sha-256
+        state: present
+      loop: "{{ postgres_tenants }}"
+      loop_control:
+        label: "{{ item.name }} <- {{ item.consumer_cidr }}"
+      notify: Reload postgresql

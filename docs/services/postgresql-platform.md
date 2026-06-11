@@ -157,6 +157,13 @@ No shared credentials exist.
 
 ### Service Onboarding Pattern
 
+Steps 1–3 are **codified** in the `postgresql-provisioning` Ansible role
+(`ansible/playbooks/postgresql-provisioning.yml`): add the tenant to
+`postgres_tenants` in `host_vars/lxc260.yml` (non-secret fields) and its password
+to `postgres_tenant_passwords` (Vault-referenced), then run the playbook. The role
+is idempotent and connects via peer auth as the `postgres` user. The manual SQL
+below is the reference the role implements; steps 4–5 remain manual.
+
 Run on CT260 as the `postgres` user unless noted.
 
 **1. Create database and user**
