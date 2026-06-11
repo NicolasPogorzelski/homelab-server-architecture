@@ -1,3 +1,8 @@
 ---
 # Native admin user that receives the break-glass key on this host.
 breakglass_user: gpu
+
+# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+compose_projects:
+  - /opt/docker/audiobookshelf
+  - /opt/docker/jellyfin

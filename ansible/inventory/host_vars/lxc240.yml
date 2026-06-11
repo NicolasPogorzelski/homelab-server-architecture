@@ -1,0 +1,6 @@
+---
+# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+# Dir basename is "compose"; the compose file pins `name: vaultwarden` to keep
+# the project name stable (see 2026-06-10 path-cleanup changelog).
+compose_projects:
+  - /opt/vaultwarden/compose

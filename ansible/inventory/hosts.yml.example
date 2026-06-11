@@ -50,6 +50,21 @@ all:
         lxc240:  # Vaultwarden
           ansible_host: <tailscale-ip-vaultwarden>
 
+    docker:  # Nodes running Docker Compose stacks (Item #9 update workflow)
+      hosts:
+        lxc200:  # monitoring stack
+          ansible_host: <tailscale-ip-monitoring>
+        lxc211:  # paperless
+          ansible_host: <tailscale-ip-paperless>
+        lxc220:  # calibreweb
+          ansible_host: <tailscale-ip-calibreweb>
+        lxc230:  # openwebui
+          ansible_host: <tailscale-ip-ai-openwebui>
+        lxc240:  # vaultwarden
+          ansible_host: <tailscale-ip-vaultwarden>
+        vm100:  # jellyfin + audiobookshelf
+          ansible_host: <tailscale-ip-gpu-vm>
+
     lxcs:
       hosts:
         lxc200:
