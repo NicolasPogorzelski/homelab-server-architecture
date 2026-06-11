@@ -1,0 +1,4 @@
+---
+# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+compose_projects:
+  - /opt/openwebui
