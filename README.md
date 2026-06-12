@@ -22,11 +22,10 @@ It is not built as a collection of services, but as a layered infrastructure pla
 | 2 | Docker + Compose | ✅ Done |
 | 3 | Monitoring — Prometheus, Grafana, Alertmanager | ✅ Done |
 | 4 | Zero Trust Networking — Tailscale, ACL design | ✅ Done |
-| 5 | Ansible — playbooks, roles, vault, hardening | In Progress |
+| 5 | Ansible — playbooks, roles, vault, hardening | ✅ Done |
 | 6 | Terraform — IaC on AWS (free tier) + Proxmox provisioning | Planned |
-| 7 | CI/CD — GitHub Actions (lint, dry-run gates) | Planned |
-| 8 | Kubernetes — k3s in the homelab | Planned |
-| 9 | Cloud depth (AWS) + Python | Planned |
+| 7 | Kubernetes — k3s in the homelab | Planned |
+| 8 | Cloud depth (AWS) + Python | Planned |
 
 Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
 
@@ -60,6 +59,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
 - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
+- [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty — deferred to Phase 6)
 
 ### Nodes
 
@@ -67,6 +67,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [VM102 – Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
 - [LXC200 – Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
 - [LXC210 – Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
+- [LXC211 – Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
 - [LXC220 – Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
 - [LXC230 – OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
 - [LXC240 – Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
@@ -84,6 +85,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Ollama](docs/services/ollama.md)
 - [Vaultwarden](docs/services/vaultwarden.md)
 - [PostgreSQL Platform](docs/services/postgresql-platform.md)
+- [Retro Gaming Stack](docs/services/retro-gaming.md)
 
 ### Platform
 

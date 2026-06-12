@@ -96,6 +96,20 @@ Before every commit that touches `docs/` or `ansible/`:
 
 This rule applies even if `validate-repo.sh` passes. Structural checks (script) and content checks (this rule) are complementary, not redundant.
 
+## Claude Code Hooks
+
+Project-local hooks are configured in `.claude/settings.local.json` (gitignored, environment-specific paths).
+Sanitized reference config: `snippets/claude/hooks-reference.json`.
+Reproduction on a new machine: see the `dotfiles` repo.
+
+| Hook | Event | Purpose |
+|---|---|---|
+| SessionStart | Session opens | Injects current branch + last 5 commits into context |
+| PreToolUse (`git commit *`) | Before every commit | Runs `validate-repo.sh`, blocks commit on failure |
+| Stop | Session ends | Mandatory `devops-til` update reminder |
+
+Global hooks (e.g. 15-minute learning rule) live in `~/.claude/settings.json` — versioned in the `dotfiles` repo.
+
 ## Repository Structure
 
 This is a **documentation and configuration repository** — no application code, no build system, no tests. The content is:
@@ -123,6 +137,7 @@ Only these top-level directories are allowed (enforced by Check 12).
 
 - Tailscale IPs must use placeholder `<tailscale-ip-nodename>`, never bare `100.x.y.z`
 - Tailnet IDs must use placeholder `<tailnet-id>`, never bare `*.ts.net`
+- Disk labels and device names must use generic identifiers (e.g. `disk01`–`diskN`, `aux-disk`) — never real labels that reveal size or purpose
 - Never commit `.env` files; only `.env.example` files belong in the repo
 - Each `docker/` subdirectory with a `docker-compose.yml` must have a `.env.example`
 
@@ -161,6 +176,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
+<<<<<<< HEAD
 - **Service-level monitoring (KE-8 gap — REMEDIATED 2026-06-08):** previously
   alerting covered only `NodeDown` (node_exporter) + disk, not service ports.
   Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a
@@ -180,6 +196,15 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
   disk alert on archive disks is largely non-actionable (alert tiering by role pending).
 
+- **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
+  (`ListenAddress` in sshd_config). SSH is unreachable for ~30–60 s after boot until
+  Tailscale connects. Use `pct exec 250 -- bash` from the Proxmox host as immediate
+  fallback, or wait. This is intentional hardening, not a bug.
+- **LXC260 boot dependency on SMB mount:** `mp1` binds `/mnt/smb/postgres-backups` into
+  the container. After a hard shutdown, LXC260 may fail to start with pre-start hook
+  exit 19 (`ENODEV`) if VM102/storage is still booting. Fix: wait for VM102, verify
+  `ls /mnt/smb/postgres-backups` on the Proxmox host, then `pct start 260` manually.
+
 ## Platform Changelog
 
 The full platform changelog lives in [`docs/platform/changelog.md`](docs/platform/changelog.md) (reverse chronological), kept out of this file so the always-loaded instruction context stays small. Detailed ACL changes are in `docs/platform/tailscale-acl.md#changelog`. **When recording a new platform change, append it there, not here.**
@@ -191,4 +216,5 @@ The full platform changelog lives in [`docs/platform/changelog.md`](docs/platfor
 3. Create `docs/nodes/<node>.md` with a `## Failure Impact` section
 4. Add the node's Tailscale tag to `docs/platform/tailscale-acl.md` (tier model, tag ownership, ACL rules, access matrix, changelog)
 5. If Docker-based: add `docker/<service>/docker-compose.yml` and `docker/<service>/.env.example`; use pinned version tags (not `:latest`)
-6. Run `./scripts/validate-repo.sh` and fix all errors
+6. If Docker-based: configure Docker engine data root on Aux1TB from the start — set `data-root` in `/etc/docker/daemon.json` and `root` in `/etc/containerd/config.toml` to point to a subdirectory of the node's Aux1TB mount (e.g. `/var/lib/<service>/containerd` and `/var/lib/<service>/docker-data`); prevents SSD thin-pool pressure from image accumulation
+7. Run `./scripts/validate-repo.sh` and fix all errors

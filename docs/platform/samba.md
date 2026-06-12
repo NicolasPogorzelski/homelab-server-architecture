@@ -91,6 +91,35 @@ This reduces risk of accidental modification or deletion.
 
 ---
 
+### Gaming Share (Retro ROMs)
+
+The `[roms]` share exposes the retro gaming ROM library with a three-user access model:
+
+- `storage` — read-write; primary workflow user on the Gaming PC for ROM and BIOS file management (consistent with all other write operations on VM102)
+- `roms-admin` — read-write; used by ES-DE scraper on the Gaming PC for writing `media/` and `gamelists/`
+- `roms` — read-only; used by all other gaming clients (`tag:gaming`)
+
+Path: `/mnt/mergerfs/roms/`
+
+Directory layout:
+
+```
+roms/
+├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
+├── bios/       — shared BIOS files (mounted as RetroArch system path on Windows/Linux)
+├── media/      — scraped artwork, screenshots, videos (written by roms-admin)
+└── gamelists/  — gamelist.xml per console (written by roms-admin)
+```
+
+Access is enforced at three levels:
+1. **Tailscale ACL** — `tag:gaming` can only reach `tag:storage:445`; no other infrastructure is reachable
+2. **Samba `valid users`** — share only accepts `roms` and `roms-admin` credentials
+3. **Samba permissions** — `roms` is read-only; `roms-admin` has write access
+
+See: [Retro Gaming Stack](../services/retro-gaming.md)
+
+---
+
 ## Security Posture
 
 - SMB3 only
@@ -126,3 +155,7 @@ If Samba becomes unavailable:
 - Monitoring should detect mount and service degradation
 
 This reinforces that VM102 represents a single storage failure domain.
+
+## Reference Configuration
+
+Sanitized `smb.conf` for VM102: [snippets/storage/smb.conf.storage-vm102.sanitized.conf](../../snippets/storage/smb.conf.storage-vm102.sanitized.conf)

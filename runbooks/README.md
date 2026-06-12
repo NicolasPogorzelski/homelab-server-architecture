@@ -14,6 +14,12 @@ Related operational model:
 
 ---
 
+## Platform
+- Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
+- LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
+- Docker data root migration to Aux1TB: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
+- LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
+
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
 - SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)

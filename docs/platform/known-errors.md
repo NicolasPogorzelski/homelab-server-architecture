@@ -287,3 +287,65 @@ A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the s
 - [LXC260 PostgreSQL node](../nodes/lxc260.md)
 - [Tailscale ACL — Rule 1c](./tailscale-acl.md)
 - [Monitoring platform](./monitoring.md)
+
+---
+
+## KE-10: Jellyfin loses CUDA access intermittently — container restart required
+
+**Affected service:** Jellyfin (VM100)
+
+**Symptom:**
+Hardware transcoding stops working intermittently. Jellyfin becomes effectively unusable —
+video playback stalls or fails for all clients. The service appears running but cannot serve
+media. A container restart restores GPU access and full functionality.
+
+**Root cause:**
+Not fully determined. `pid: "host"` is required for initial NVIDIA Container Toolkit access
+and is set in the Compose config (`docker/jellyfin/docker-compose.yml`). The intermittent
+loss of CUDA access at runtime suggests the NVML connection to the host driver becomes stale —
+exact trigger unknown.
+
+**Workaround:**
+```bash
+docker restart jellyfin
+```
+
+Restores hardware transcoding immediately.
+
+**Automated workaround:** A watchdog script polls `nvidia-smi` inside the container every
+30 minutes and restarts Jellyfin automatically on CUDA loss. See deployment instructions
+in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
+[`snippets/scripts/jellyfin-cuda-watchdog.sh`](../../snippets/scripts/jellyfin-cuda-watchdog.sh).
+
+**Status:** Known, unresolved — automated restart workaround deployed
+
+**References:**
+- [VM100 node doc](../nodes/vm100.md)
+- [Jellyfin service doc](../services/jellyfin.md)
+- [`docker/jellyfin/docker-compose.yml`](../../docker/jellyfin/docker-compose.yml)
+
+---
+
+## KE-11: Grafana admin password not updated by environment variable after first start
+
+**Affected service:** Grafana (LXC200)
+
+**Symptom:**
+After changing `GF_SECURITY_ADMIN_PASSWORD` in the `.env` file and restarting the container,
+login with the new password fails. The old password remains active.
+
+**Root cause:**
+Grafana writes the admin password to its internal database (`grafana.db`) on first container
+start. On subsequent starts, the environment variable is ignored — the persisted value in the
+database takes precedence. This is documented Grafana behavior, not a bug.
+
+**Fix:**
+```bash
+docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
+```
+
+**Status:** Known, non-blocking
+
+**References:**
+- [LXC200 node doc](../nodes/lxc200.md)
+- [Monitoring platform](./monitoring.md)

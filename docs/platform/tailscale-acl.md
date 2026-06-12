@@ -32,6 +32,7 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Database | `tag:database` | Central PostgreSQL platform service | example-device |
 | AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
+| Gaming | `tag:gaming` | Retro gaming clients (ROM access + Netplay) | example-device |
 
 ---
 
@@ -51,7 +52,8 @@ Tags are assigned to nodes via the Tailscale admin console.
     "tag:client":     ["autogroup:admin"],
     "tag:database":   ["autogroup:admin"],
     "tag:ai-stack":   ["autogroup:admin"],
-    "tag:untrusted":  ["autogroup:admin"]
+    "tag:untrusted":  ["autogroup:admin"],
+    "tag:gaming":    ["autogroup:admin"]
 }
 ```
 
@@ -268,6 +270,19 @@ Allowed services:
 - Audiobookshelf (port 13378 on gpu-vm)
 - Tier 2 HTTPS (port 443): Calibre-Web
 
+### Rule 8 — Gaming: ROM access and Netplay only
+
+Gaming clients can access the ROM share on VM102 (port 445) and reach other gaming
+clients for Netplay (port 55435). No access to any other infrastructure.
+```json
+{ "action": "accept", "src": ["tag:gaming"], "dst": ["tag:storage:445"] },
+{ "action": "accept", "src": ["tag:gaming"], "dst": ["tag:gaming:55435"] }
+```
+
+The Gaming PC (mother client) carries `tag:admin` and is not in `tag:gaming`.
+It has read-write Samba access via `roms-admin` through the existing admin rule.
+Gaming clients (`tag:gaming`) receive read-only access via the `roms` Samba user.
+
 ---
 
 ## Node Attributes
@@ -286,17 +301,18 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | all | all | all | all | — | — |
-| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — |
-| **tier2** | — | — | — | all | — | — | — | 445 | — | — |
-| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100 | 9100 | — | — |
-| **database** | — | — | — | — | — | — | — | — | — | — |
-| **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — |
+| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted | gaming |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **admin** | all | all | all | all | all | all | all | all | — | — | — |
+| **tier0** | — | all | all | all | all | all | all | all | — | — | — |
+| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — | — |
+| **tier2** | — | — | — | all | — | — | — | 445 | — | — | — |
+| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100 | 9100 | — | — | — |
+| **database** | — | — | — | — | — | — | — | — | — | — | — |
+| **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — | — |
+| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — | — |
+| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — | — |
+| **gaming** | — | — | — | — | — | — | — | 445 | — | — | 55435 |
 
 ---
 
@@ -361,5 +377,6 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |
 | 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@CT260, E2E verified | Paperless-ngx operational and documented |
 | 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on CT260 |
+| 2026-05-29 | Added `tag:gaming` to tier model, tag ownership, access matrix; added Rule 8 (gaming → storage:445, gaming → gaming:55435) | Retro gaming stack: centralized ROM share on VM102 + Tailscale Netplay |
 | 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
 
