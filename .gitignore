@@ -84,9 +84,13 @@ docker/monitoring/alertmanager/alertmanager.yml
 ansible/inventory/hosts.yml
 
 # =====================================================
-# aider – AI coding assistant artifacts
+# AI coding assistant artifacts
 # =====================================================
 
+# aider
 .aider.chat.history.md
 .aider.input.history
 .aider.tags.cache.v4/
+
+# Mistral Vibe
+VIBE.md

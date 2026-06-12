@@ -137,6 +137,24 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 14: no plain RFC-1918 LAN IPs in docs
+# =============================================================================
+# Legitimate placeholder: <lan-ip-...>
+# Covers: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+echo "Check 14: no plain LAN IPs"
+
+while read -r mdfile; do
+    { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${mdfile}" || true; } | while read -r match; do
+        echo "  Unsanitized LAN IP: ${mdfile}:${match}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
+
+# reset and recount error log
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Check 8: no plain tailnet IDs in docs
 # =============================================================================
 # Legitimate placeholder: <tailnet-id>
@@ -208,7 +226,11 @@ while read -r file; do
         docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*) continue ;;
         README.md|CLAUDE.md|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
-        *) echo "  Unexpected: ${rel}"
+        *)
+           if git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null; then
+               continue
+           fi
+           echo "  Unexpected: ${rel}"
            ERRORS=$((ERRORS + 1))
            ;;
     esac
@@ -219,7 +241,7 @@ done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 13"
+echo "Checks run: 14"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
