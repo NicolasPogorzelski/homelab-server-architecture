@@ -1,0 +1,87 @@
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:9093"]
+scrape_configs:
+  # Prometheus self-scrape
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["127.0.0.1:9090"]
+
+  # Node Exporter — LXC200 monitoring (loopback, Docker container)
+  - job_name: "node-lxc200-monitoring"
+    static_configs:
+      - targets: ["127.0.0.1:9100"]
+
+  # PostgreSQL Exporter — CT260 (pg_stat_* metrics via Tailscale)
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["{{ hostvars['lxc260']['ansible_host'] }}:9187"]
+
+  # Node Exporter — Proxmox hypervisor host (not in Ansible inventory — bare-metal host)
+  - job_name: "node-proxmox-host"
+    static_configs:
+      - targets: ["{{ proxmox_host_tailscale_ip }}:9100"]
+
+  # Node Exporter from inventory
+  {% for host in groups['lxcs'] %}
+  {% if host != 'lxc200' %}
+  - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
+    static_configs:
+      - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
+  {% endif %}
+  {% endfor %}
+  {% for host in groups['vms'] %}
+  - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"
+    static_configs:
+      - targets: ["{{ hostvars[host]['ansible_host'] }}:9100"]
+  {% endfor %}
+
+  # Blackbox: service-level HTTP probes (KE-8 remediation).
+  # Jellyfin + Audiobookshelf bind directly to a port on vm100.
+  - job_name: "blackbox-http"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://{{ hostvars['vm100']['ansible_host'] }}:8096"]
+        labels:
+          service: jellyfin
+      - targets: ["http://{{ hostvars['vm100']['ansible_host'] }}:13378"]
+        labels:
+          service: audiobookshelf
+    relabel_configs:
+      # The probe target (URL) starts in __address__; move it to the module param.
+      - source_labels: [__address__]
+        target_label: __param_target
+      # Keep the URL as the human-readable instance label.
+      - source_labels: [__param_target]
+        target_label: instance
+      # Actually scrape the blackbox exporter, not the target itself.
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # Blackbox: HTTPS services behind `tailscale serve` (MagicDNS targets from inventory).
+  - job_name: "blackbox-https"
+    metrics_path: /probe
+    params:
+      module: [http_service_up]
+    static_configs:
+    {% for t in blackbox_https_targets %}
+      - targets: ["{{ t.url }}"]
+        labels:
+          service: "{{ t.name }}"
+    {% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

@@ -1,0 +1,7 @@
+---
+- name: deploy break-glass SSH keys
+  hosts: vms
+  serial: 1
+  become: true
+  roles:
+    - breakglass

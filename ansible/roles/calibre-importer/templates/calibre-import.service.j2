@@ -1,0 +1,6 @@
+[Unit]
+Description=Calibre auto-import (drop folder -> calibredb)
+
+[Service]
+Type=oneshot
+ExecStart={{ calibre_importer_script_dest }}

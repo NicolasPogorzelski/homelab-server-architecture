@@ -15,6 +15,7 @@
 # allow env templates
 !.env.example
 !**/env.example
+!**/*.env.j2
 
 # =====================================================
 # Databases / Runtime Data
@@ -75,6 +76,24 @@ docker-compose.override.yml
 docker/monitoring/prometheus/prometheus.yml
 docker/monitoring/grafana/provisioning/datasources/prometheus.yml
 docker/monitoring/alertmanager/alertmanager.yml
+
+# =====================================================
+# Ansible – real inventory (contains Tailscale IPs)
+# =====================================================
+
+ansible/inventory/hosts.yml
+
+# =====================================================
+# AI coding assistant artifacts
+# =====================================================
+
+# aider
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v4/
+
+# Mistral Vibe
+VIBE.md
 
 # =====================================================
 # Claude Code local settings (environment-specific paths)

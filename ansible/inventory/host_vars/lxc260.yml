@@ -1,0 +1,26 @@
+---
+# PostgreSQL tenants provisioned by the postgresql-provisioning role.
+#
+# Currently empty: the role is built and proven (against a throwaway test tenant,
+# since torn down), but the live tenants (openwebui, paperless) are not yet
+# adopted — a deliberate, separate step, because postgresql_user re-asserts the
+# password and a mismatch would break a running service's login.
+#
+# To onboard a tenant, add a (non-secret) entry here and its password to the
+# companion dict, then run playbooks/postgresql-provisioning.yml:
+#
+#   postgres_tenants:
+#     - name: <svc>_db
+#       user: <svc>_user
+#       consumer_cidr: "{{ hostvars['lxc2xx'].ansible_host }}/32"
+#   postgres_tenant_passwords:
+#     <svc>_user: "{{ vault_<svc>_dbpass }}"
+#
+# Passwords are kept OUT of the tenants list on purpose: the list is the loop
+# variable, and Ansible prints the whole item on a task failure — co-locating a
+# secret would leak it. Passwords live in the separate dict, read only by the
+# (no_log) user-creation task.
+postgres_tenants: []
+
+# node_exporter: enable textfile collector so pg_backup.prom is scraped.
+node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector

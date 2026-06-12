@@ -1,0 +1,5 @@
+---
+- name: Reload prometheus-config
+  ansible.builtin.shell:
+    cmd: cd /opt/monitoring && docker compose restart prometheus
+  changed_when: true

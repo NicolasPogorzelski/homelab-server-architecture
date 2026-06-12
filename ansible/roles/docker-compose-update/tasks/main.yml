@@ -1,0 +1,9 @@
+---
+- name: Pull latest images and recreate changed Compose stacks
+  community.docker.docker_compose_v2:
+    project_src: "{{ item }}"
+    state: present
+    pull: always
+  loop: "{{ compose_projects }}"
+  loop_control:
+    label: "{{ item }}"

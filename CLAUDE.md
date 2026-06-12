@@ -4,10 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Ansible:** installation complete (`ansible-core 2.19.9` via `pipx` on LXC250); `ansible/` directory exists but empty
-- **Next Ansible session:** create `ansible.cfg`, `inventory/hosts.yml`, and first playbook to automate node_exporter deployment on VM102 (replicating what was done manually on 2026-04-23)
-- **Retro gaming — Gaming PC (CachyOS):** complete. fstab CIFS mount at `/mnt/roms`, ES-DE + RetroArch via paru, TheGamesDB scraper, controller working.
-- **Retro gaming — next clients:** Notebook (Fedora) → Shield (Android TV) → Phone (Android)
+- **Branch:** `feat/ansible-setup`
+- **Status:** Ansible Learning Roadmap items #1–#13 done. **Ansible track complete. Next: Terraform track.**
+- **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Append new session notes there; keep this section short.
+
+- **Ansible Learning Roadmap (in order):**
+  1. ~~OS updates playbook~~ ✅
+  2. ~~Bootstrap playbook~~ ✅
+  3. ~~First role — node_exporter~~ ✅
+  4. ~~Jinja2 templates — prometheus-config role~~ ✅
+  5. ~~Handlers~~ ✅
+  6. ~~Ansible Vault~~ ✅
+  7. ~~SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on~~ ✅
+  8. ~~New node onboarding — `ansible/playbooks/onboarding.yml`: 3 plays (bootstrap as root → ssh-hardening → node_exporter); structure complete, real-node test skipped (no available fresh LXC)~~ ✅
+  9. ~~Docker update workflow — pull new images, restart compose stacks via Ansible~~ ✅ (2026-06-11, `docker-compose-update` role)
+  10. ~~PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)~~ ✅ (2026-06-11, `postgresql-provisioning` role)
+  11. ~~PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally~~ ✅ (2026-06-12, `postgresql-backup` role)
+  12. ~~Fleet health check playbook — query all nodes, output status overview~~ ✅ (2026-06-12, `fleet-health-check.yml`)
+  13. ~~CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.~~ ✅ (2026-06-12, `.github/workflows/ansible-lint.yml`)
+  14. ~~Molecule — unit testing for Ansible roles~~ **Deferred** — out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
+
+  **Note:** LXC provisioning (creating containers) is intentionally excluded — that belongs to Terraform, which follows as the next learning track after Ansible.
+
+**Next learning track (after Ansible):** Terraform — primarily on **AWS (free tier)** to learn HCL/state/modules on a widely-used provider, plus a thin **Proxmox slice** for the homelab payoff: `terraform apply` → LXC exists → `onboarding.yml` configures it.
+
+**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications, and career milestones live in the private global instructions, not in this repo.
+
+**PR Cadence:** Learning-path branches (`feat/ansible-setup`, `feat/terraform-setup`, etc.) are merged to `main` as a whole when the topic is complete — not after individual items. The items within a topic build on each other and form a single coherent arc. Exception: self-contained platform changes unrelated to the learning topic (e.g. runbooks, hotfixes) are split off to their own branch and PRed independently.
 
 ## Working Context (Learning Mode)
 
@@ -20,6 +43,9 @@ When working on tasks here:
 - Root cause before fix: symptom → verification command → diagnosis → fix.
 - Small steps, verify before next step.
 - When unsure, say so. Don't hallucinate flags, paths, or behavior.
+- Code learning (Bash/Python/YAML): blank-file-first. The first draft is written
+  from an empty file without AI or copied snippets — AI is used only to review
+  afterwards. The goal is active recall, not recognition; the struggle is the point.
 
 OS context: Proxmox host + Debian 12 LXCs. Daily driver is CachyOS (Arch-based).
 Commands must be OS-specific — no generic "Linux commands" when behavior differs.
@@ -57,6 +83,19 @@ Run the repo validation script before committing or opening a PR:
 
 This script enforces 12 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs or tailnet IDs, private keys, missing `.env.example` files, and files outside the allowed directory structure.
 
+## Documentation Audit Rule
+
+Before every commit that touches `docs/` or `ansible/`:
+
+1. Run `./scripts/validate-repo.sh` and fix all errors before staging.
+2. Audit all docs touched in this session for content completeness:
+   - Required sections present? (`## Access Model`, `## Failure Impact`, `## Configuration Management`)
+   - Cross-links to related docs present and correct?
+   - Platform Changelog in `docs/platform/changelog.md` updated with today's change?
+3. Show audit results to the user before committing — one line per file checked.
+
+This rule applies even if `validate-repo.sh` passes. Structural checks (script) and content checks (this rule) are complementary, not redundant.
+
 ## Claude Code Hooks
 
 Project-local hooks are configured in `.claude/settings.local.json` (gitignored, environment-specific paths).
@@ -80,6 +119,7 @@ This is a **documentation and configuration repository** — no application code
 - `runbooks/` — Operational procedures (must follow the runbook contract)
 - `snippets/` — Reference configs and helper scripts (sanitized)
 - `scripts/` — Repo tooling (`validate-repo.sh`)
+- `ansible/` — Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12).
 
@@ -136,6 +176,26 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
+<<<<<<< HEAD
+- **Service-level monitoring (KE-8 gap — REMEDIATED 2026-06-08):** previously
+  alerting covered only `NodeDown` (node_exporter) + disk, not service ports.
+  Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a
+  `ServiceDown` rule; Tailscale ACL Rule 1c grants monitoring the service ports.
+  First run already caught paperless + openwebui returning 502 (dead backends).
+- **journald not persisting logs on vm100/vm102 (gap, fix planned):** despite
+  `/var/log/journal`, recent boots' logs were lost (see KE-8); forensics fell
+  back to wtmp / apt-dpkg text logs / Docker JSON / Prometheus. Remediation:
+  investigate `Storage=` / `SystemMaxUse`.
+- **unattended-upgrades active on vm100 (uncontrolled change):** installs
+  packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
+  workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
+  reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
+- **MergerFS pool ~96% full on vm102 (by design):** the media archive is meant
+  to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
+  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
+  hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
+  disk alert on archive disks is largely non-actionable (alert tiering by role pending).
+
 - **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
   (`ListenAddress` in sshd_config). SSH is unreachable for ~30–60 s after boot until
   Tailscale connects. Use `pct exec 250 -- bash` from the Proxmox host as immediate
@@ -147,27 +207,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 
 ## Platform Changelog
 
-Significant platform changes, in reverse chronological order. Detailed ACL changes are in `docs/platform/tailscale-acl.md#changelog`.
-
-| Date | Change |
-|---|---|
-| 2026-05-29 | VM102 Samba: `access based share enum = yes` added to global (replaces `browseable = no`); `[roms]` share updated — `storage` added to `valid users` + `write list` (primary ROM management user); `browseable = no` removed from `[roms]` |
-| 2026-05-29 | Retro gaming stack documented: `tag:gaming` added to Tailscale ACL (Rule 8: storage:445 + gaming:55435); `[roms]` share on VM102 with two-user Samba model (`roms-admin` RW, `roms` RO); `docs/services/retro-gaming.md` created; `samba.md`, `vm102.md`, `tailscale-acl.md` updated |
-| 2026-05-28 | Hard shutdown incident: high I/O → forced power-off; LXC260 pre-start hook exit 19 (`ENODEV`, SMB mount not ready); LXC250 SSH unreachable post-boot until Tailscale connected (`ListenAddress`); recovery via Proxmox WebUI (Tailscale) + `ssh root@<proxmox-lan-ip>`; clean reboot verified all LXCs up; `runbooks/platform/hard-shutdown-recovery.md` added |
-| 2026-05-21 | Proxmox host cron jobs activated: `homelab-setwake.sh` at 00:45 + `homelab-shutdown.sh` at 01:00 added to root crontab; scripts deployed at `/usr/local/sbin/`; first confirmed RTC wake at 07:31 CEST |
-| 2026-05-19 | Proxmox host scheduled shutdown: daily 01:00 CEST (`homelab-shutdown.sh`), RTC wake via `homelab-setwake.sh` (07:30 Mon/Thu–Sun, 16:00 Tue/Wed); SnapRAID sync moved 02:00→23:00, scrub 03:00→20:00 on VM102 |
-| 2026-05-07 | VM102 storage expansion: aux-disk added to SnapRAID data pool and MergerFS as temporary capacity bridge; live-extended via mergerfs xattr (no remount); snapraid sync completed; to be removed when disk06 is installed |
-| 2026-05-04 | LXC250 disaster recovery: `dotfiles` repo created (bootstrap.sh, install.sh, validate.sh, templates); LXC250 rebuild runbook added (`runbooks/platform/lxc250-rebuild.md`); Claude Code hooks configured (SessionStart context injection, PreToolUse branch guard + validate-repo.sh, Stop TIL reminder, global 15-Minuten-Regel); GitHub Branch Protection enabled on homelab-server-architecture main (enforce_admins, no force-push, require PR) |
-| 2026-04-30 | Docker engine data root migrated to Aux1TB on LXC211, LXC230, LXC200, LXC220: containerd + Docker data moved from local-lvm root disks to existing Aux1TB mounts; LXC220 received new `mp1` (`/mnt/aux1TB/calibreweb`); SSD thin-pool reduced from 88% → 62% (24.9 GB freed after fstrim) |
-| 2026-04-23 | SnapRAID automation: `snapraid-maintenance.sh` deployed on VM102 (daily sync 02:00, monthly scrub 1st/03:00); `SnapRAIDSyncStale` + `SnapRAIDScrubStale` alert rules added; textfile collector required on VM102 |
-| 2026-04-22 | `postgres_exporter` v0.19.1 deployed on CT260 (port 9187, systemd); `PostgreSQLDown` + `PostgreSQLConnectionsHigh` alert rules added; node_exporter fleet (v1.11.1, systemd) deployed across all 10 nodes; all 13 Prometheus scrape targets UP; ACL Rule 1b extended to include port 9187; KE-6 documented |
-| 2026-04-21 | Alertmanager deployed on LXC200: Discord webhook receiver, `tailscale serve --https=9093`, 4 active alert rules; `PostgreSQLBackupStale` fixed via textfile collector pattern |
-| 2026-04-21 | `chore/repo-review`: SnapRAID runbooks added; Jellyfin + ABS service docs created; KE-4/KE-5 documented; onboarding examples, cross-links, and naming inconsistencies resolved |
-| 2026-04-10 | LXC211 Paperless-ngx fully onboarded: `tag:tier1`, Tailscale Serve HTTPS, PostgreSQL on CT260, E2E verified |
-| 2026-03-25 | LXC230 OpenWebUI fully onboarded: `tag:ai-stack`, Tailscale Serve HTTPS, PostgreSQL on CT260, Ollama backends (VM100 + Gaming PC), E2E verified |
-| 2026-03-20 | LXC260 PostgreSQL platform service added: `tag:database`, centralized DB for all future service consumers |
-| 2026-03-09 | `tag:monitoring` formalized in ACL; Rule 1b (monitoring scrape on port 9100) added following container-restart incident (DD#11) |
-| 2026-03-04 | LXC250 DevOps workstation added: `tag:admin`, Git + Ansible + IaC, SSH-only (no user-facing services) |
+The full platform changelog lives in [`docs/platform/changelog.md`](docs/platform/changelog.md) (reverse chronological), kept out of this file so the always-loaded instruction context stays small. Detailed ACL changes are in `docs/platform/tailscale-acl.md#changelog`. **When recording a new platform change, append it there, not here.**
 
 ## Adding a New Service
 

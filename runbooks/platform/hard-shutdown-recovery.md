@@ -31,7 +31,7 @@ Use the first available method:
 | 3 | SSH to Proxmox host (LAN) | `ssh root@<proxmox-lan-ip>` | LAN reachable, sshd up |
 | 4 | LXC console | WebUI → container → Console tab | Proxmox WebUI accessible |
 
-**Finding `<proxmox-lan-ip>`:** Open the Fritz!Box at `http://192.168.0.1` →
+**Finding `<proxmox-lan-ip>`:** Open the Fritz!Box at `http://<router-lan-ip>` →
 Heimnetz → Netzwerk. The host appears as `server` or `pve`. Alternatively:
 `arp -n` from any device on the same LAN.
 

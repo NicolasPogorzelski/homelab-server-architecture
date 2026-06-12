@@ -100,6 +100,15 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 
 ---
 
+## Failure Impact
+
+If CT230 (OpenWebUI) becomes unavailable:
+- AI chat interface unavailable for all users
+- Inference backends (VM100, Gaming PC) are unaffected
+- PostgreSQL platform (CT260) is unaffected
+- No data loss (database on CT260, uploads on SMB storage)
+- Recovery: restart LXC230, verify all dependencies (PostgreSQL reachable, SMB mounted, Aux1TB present)
+
 ## Related Documents
 
 - [Ollama Service](./ollama.md)
