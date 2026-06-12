@@ -1,0 +1,11 @@
+---
+# Single source of truth lives in snippets/postgres/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+pg_backup_script_src: "{{ playbook_dir }}/../../snippets/postgres/pg-backup.sh"
+pg_backup_script_dest: /usr/local/sbin/pg-backup.sh
+
+pg_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+pg_backup_cron_user: postgres
+pg_backup_cron_minute: "0"
+pg_backup_cron_hour: "3"

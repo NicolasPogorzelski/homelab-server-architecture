@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current Work in Progress
 
 - **Branch:** `feat/ansible-setup`
-- **Status:** Ansible Learning Roadmap items #1–#10 done. **Next: Item #11 — PostgreSQL backup playbook** (`pg_dump` on LXC260, verify output, store locally).
+- **Status:** Ansible Learning Roadmap items #1–#11 done. **Next: Item #12 — Fleet health check playbook** (query all nodes, output status overview).
 - **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Append new session notes there; keep this section short.
 
 - **Ansible Learning Roadmap (in order):**
@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   8. ~~New node onboarding — `ansible/playbooks/onboarding.yml`: 3 plays (bootstrap as root → ssh-hardening → node_exporter); structure complete, real-node test skipped (no available fresh LXC)~~ ✅
   9. ~~Docker update workflow — pull new images, restart compose stacks via Ansible~~ ✅ (2026-06-11, `docker-compose-update` role)
   10. ~~PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)~~ ✅ (2026-06-11, `postgresql-provisioning` role)
-  11. PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally
+  11. ~~PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally~~ ✅ (2026-06-12, `postgresql-backup` role)
   12. Fleet health check playbook — query all nodes, output status overview
   13. CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.
   14. ~~Molecule — unit testing for Ansible roles~~ **Deferred** — out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.

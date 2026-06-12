@@ -1,13 +1,14 @@
-[Unit]                                                                                                                                                                       
-Description=Prometheus Node Exporter                                                                                                                                         
-After=network.target tailscaled.service                                                                                                                                      
-Wants=tailscaled.service                                                                                                                                                     
-                                                                                                                                                                               
-[Service]                                                                                                                                                                    
+[Unit]
+Description=Prometheus Node Exporter
+After=network.target tailscaled.service
+Wants=tailscaled.service
+
+[Service]
 User=node_exporter
-ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ ansible_host }}:{{ node_exporter_port }}
-Restart=on-failure                                                                                                                                                           
+{% set textfile_flag = '' %}{% if node_exporter_textfile_dir %}{% set textfile_flag = ' --collector.textfile.directory=' + node_exporter_textfile_dir %}{% endif %}
+ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ ansible_host }}:{{ node_exporter_port }}{{ textfile_flag }}
+Restart=on-failure
 RestartSec=15s
-                                                                                                                                                                              
-[Install]                                                                                                                                                                  
+
+[Install]
 WantedBy=multi-user.target
