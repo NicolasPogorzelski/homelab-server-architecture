@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current Work in Progress
 
 - **Branch:** `feat/ansible-setup`
-- **Status:** Ansible Learning Roadmap items #1–#12 done. **Next: Item #13 — CI/CD + ansible-lint** (GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR).
+- **Status:** Ansible Learning Roadmap items #1–#13 done. **Ansible track complete. Next: Terraform track.**
 - **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Append new session notes there; keep this section short.
 
 - **Ansible Learning Roadmap (in order):**
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   10. ~~PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)~~ ✅ (2026-06-11, `postgresql-provisioning` role)
   11. ~~PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally~~ ✅ (2026-06-12, `postgresql-backup` role)
   12. ~~Fleet health check playbook — query all nodes, output status overview~~ ✅ (2026-06-12, `fleet-health-check.yml`)
-  13. CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.
+  13. ~~CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.~~ ✅ (2026-06-12, `.github/workflows/ansible-lint.yml`)
   14. ~~Molecule — unit testing for Ansible roles~~ **Deferred** — out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
 
   **Note:** LXC provisioning (creating containers) is intentionally excluded — that belongs to Terraform, which follows as the next learning track after Ansible.
