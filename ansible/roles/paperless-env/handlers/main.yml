@@ -1,5 +1,6 @@
 ---
-- name: restart paperless
+- name: Restart paperless
   ansible.builtin.command:
     cmd: docker compose up -d
     chdir: "{{ paperless_compose_dir }}"
+  changed_when: true

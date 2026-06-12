@@ -1,10 +1,10 @@
 ---
-- name: deploy prometheus from template
+- name: Deploy prometheus from template
   ansible.builtin.template:
     src: prometheus.yml.j2
     dest: /opt/monitoring/prometheus/prometheus.yml
     owner: root
     group: root
     mode: '0644'
-    lstrip_blocks: yes
-  notify: reload prometheus-config
+    lstrip_blocks: true
+  notify: Reload prometheus-config

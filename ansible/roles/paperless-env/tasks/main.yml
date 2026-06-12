@@ -1,9 +1,9 @@
 ---
-- name: deploy paperless .env
+- name: Deploy paperless .env
   ansible.builtin.template:
     src: paperless.env.j2
     dest: "{{ paperless_compose_dir }}/.env"
     owner: root
     group: root
     mode: '0600'
-  notify: restart paperless
+  notify: Restart paperless
