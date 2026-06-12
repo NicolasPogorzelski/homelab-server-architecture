@@ -11,5 +11,9 @@ jobs:
     steps:
       - name: Check out repo code
         uses: actions/checkout@v6
-      - run: pip install ansible-lint
-      - run: ansible-lint ansible/
+      - name: Install ansible-lint and collections
+        run: |
+          pip install ansible-lint
+          ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Run ansible-lint
+        run: cd ansible && ansible-lint .
