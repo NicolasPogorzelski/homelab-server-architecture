@@ -94,3 +94,9 @@ ansible/inventory/hosts.yml
 
 # Mistral Vibe
 VIBE.md
+
+# =====================================================
+# Claude Code local settings (environment-specific paths)
+# =====================================================
+
+.claude/settings.local.json

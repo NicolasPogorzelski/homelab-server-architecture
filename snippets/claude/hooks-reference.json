@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/validate-repo.sh *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import subprocess,json; log=subprocess.check_output(['git','log','--oneline','-5'],cwd='<repo-path>').decode().strip(); branch=subprocess.check_output(['git','branch','--show-current'],cwd='<repo-path>').decode().strip(); print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'Branch: '+branch+chr(10)+'Letzte Commits:'+chr(10)+log}}))\"",
+            "statusMessage": "Repo-Stand wird geladen..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "cd <repo-path> && branch=$(git branch --show-current) && if [ $branch = main ]; then printf '{\"continue\": false, \"stopReason\": \"Direkter Commit auf main nicht erlaubt — Branch erstellen.\"}'; else ./scripts/validate-repo.sh 2>&1 && echo '{}' || printf '{\"continue\": false, \"stopReason\": \"validate-repo.sh fehlgeschlagen — alle Fehler beheben vor dem Commit\"}'; fi",
+            "statusMessage": "Branch & Validierung wird geprueft..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '{\"hookSpecificOutput\": {\"hookEventName\": \"Stop\", \"additionalContext\": \"MANDATORY: Per CLAUDE.md, before ending this session check what was learned and update ~/git/devops-til/. New concepts go in new .md files (linux/, ansible/, proxmox/ etc.), update README.md index, then: git -C ~/git/devops-til push origin main\"}}'",
+            "statusMessage": "devops-til reminder active"
+          }
+        ]
+      }
+    ]
+  }
+}

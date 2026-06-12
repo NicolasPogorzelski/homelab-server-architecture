@@ -91,6 +91,35 @@ This reduces risk of accidental modification or deletion.
 
 ---
 
+### Media Share (media files)
+
+The `[media]` share exposes the media media library with a three-user access model:
+
+- `storage` — read-write; primary workflow user on the admin workstation for media and firmware file management (consistent with all other write operations on VM102)
+- `data-admin` — read-write; used by the frontend scraper on the admin workstation for writing `media/` and `catalogs/`
+- `media` — read-only; used by all other media clients (`tag:storage-client`)
+
+Path: `/mnt/mergerfs/media/`
+
+Directory layout:
+
+```
+media/
+├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
+├── firmware/       — shared firmware files (mounted as the emulator system path on Windows/Linux)
+├── media/      — scraped artwork, screenshots, videos (written by data-admin)
+└── catalogs/  — catalog.xml per console (written by data-admin)
+```
+
+Access is enforced at three levels:
+1. **Tailscale ACL** — `tag:storage-client` can only reach `tag:storage:445`; no other infrastructure is reachable
+2. **Samba `valid users`** — share only accepts `media` and `data-admin` credentials
+3. **Samba permissions** — `media` is read-only; `data-admin` has write access
+
+See: [Storage Stack](../services/storage-stack.md)
+
+---
+
 ## Security Posture
 
 - SMB3 only
@@ -126,3 +155,7 @@ If Samba becomes unavailable:
 - Monitoring should detect mount and service degradation
 
 This reinforces that VM102 represents a single storage failure domain.
+
+## Reference Configuration
+
+Sanitized `smb.conf` for VM102: [snippets/storage/smb.conf.storage-vm102.sanitized.conf](../../snippets/storage/smb.conf.storage-vm102.sanitized.conf)

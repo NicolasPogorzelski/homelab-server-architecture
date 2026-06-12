@@ -71,11 +71,11 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
   - `disk05` -> `/mnt/disk05`
 - Parity disk:
   - `parity1` -> `/mnt/parity`
-- Auxiliary disks (non-parity workloads):
-  - `aux-disk1` -> `/mnt/aux-disk1`
-  - `aux-disk2` -> `/mnt/aux-disk2`
+- Auxiliary disks:
+  - `aux-disk1` -> `/mnt/aux-disk1` (non-parity, local app state)
+  - `aux-disk` -> `/mnt/aux-disk` (**temporarily** part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
 
-Auxiliary disks are not part of the SnapRAID parity set.
+`aux-disk1` is not part of the SnapRAID parity set. `aux-disk` is temporarily included as a 6th data disk.
 
 They are used for:
 - Performance-sensitive workloads
@@ -101,6 +101,7 @@ Content files (one per data disk, improves robustness and recoverability):
 - `content /mnt/disk03/snapraid.content`
 - `content /mnt/disk04/snapraid.content`
 - `content /mnt/disk05/snapraid.content`
+- `content /mnt/aux-disk/snapraid.content` (temporary, remove when disk06 added)
 
 Data disks:
 
@@ -109,6 +110,7 @@ Data disks:
 - `data disk03 /mnt/disk03`
 - `data disk04 /mnt/disk04`
 - `data disk05 /mnt/disk05`
+- `data aux-disk /mnt/aux-disk` (temporary capacity bridge, remove when disk06 added)
 
 Excludes (current state):
 
@@ -174,7 +176,7 @@ This model enforces least-privilege:
 MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot, systemd generates the mount unit automatically via `systemd-fstab-generator`:
 
 - Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
-- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05` -> `/mnt/mergerfs`
+- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-disk` -> `/mnt/mergerfs` (aux-disk temporary)
 - Type: `fuse.mergerfs`
 - Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
 
