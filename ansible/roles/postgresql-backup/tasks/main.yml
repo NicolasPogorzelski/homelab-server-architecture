@@ -1,0 +1,24 @@
+---
+- name: Deploy pg-backup script
+  ansible.builtin.copy:
+    src: "{{ pg_backup_script_src }}"
+    dest: "{{ pg_backup_script_dest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ pg_backup_textfile_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+
+- name: Schedule pg_dumpall cron job
+  ansible.builtin.cron:
+    name: pg-backup
+    user: "{{ pg_backup_cron_user }}"
+    minute: "{{ pg_backup_cron_minute }}"
+    hour: "{{ pg_backup_cron_hour }}"
+    job: "{{ pg_backup_script_dest }}"

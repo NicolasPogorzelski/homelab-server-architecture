@@ -21,3 +21,6 @@
 # secret would leak it. Passwords live in the separate dict, read only by the
 # (no_log) user-creation task.
 postgres_tenants: []
+
+# node_exporter: enable textfile collector so pg_backup.prom is scraped.
+node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector

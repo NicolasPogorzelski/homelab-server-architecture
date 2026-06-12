@@ -85,6 +85,7 @@ See: [CLAUDE.md — Vault password changed](../../CLAUDE.md)
 | `breakglass.yml` | `vms` | Deploy break-glass admin SSH key(s) to each VM's native user (`gpu`/`storage`) |
 | `docker-compose-update.yml` | `docker` | `docker compose pull` + `up` per stack via `docker_compose_v2` (`pull: always`), `serial: 1` |
 | `postgresql-provisioning.yml` | `database` | Declarative tenant onboarding: DB + user + grants + `pg_hba` `hostssl` line + reload, looping over `postgres_tenants` |
+| `pg-backup.yml` | `database` | Deploy pg-backup infrastructure to LXC260: `pg-backup.sh` script, textfile collector directory, cron job (`0 3 * * *` as `postgres`) |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
 
@@ -102,6 +103,7 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `postgresql-boot-order` | LXC260 | systemd drop-in (`After=`/`Wants=tailscaled.service`) + `wait-for-tailscale-ip.sh` as `ExecStartPre` so PostgreSQL binds its Tailscale IP on boot (KE-9 fix); handler runs `daemon-reload` |
 | `docker-compose-update` | `docker` group (LXC200/211/220/230/240, VM100) | Loops over per-host `compose_projects` (list var in `host_vars/`), runs `community.docker.docker_compose_v2` with `pull: always` + `recreate: auto` — pulls new images and recreates only changed stacks; safe empty default (`compose_projects: []`) keeps the role a no-op on hosts without stacks |
 | `postgresql-provisioning` | LXC260 (`database`) | Declarative DB tenant onboarding via `community.postgresql` modules (`postgresql_db`/`_user`/`_privs`/`_pg_hba`), looping over `postgres_tenants`. Connects via peer auth (`become_user: postgres`); installs `acl` so the unprivileged-become temp-file handoff works; passwords come from Vault via a separate `postgres_tenant_passwords` dict kept out of the loop item (so a task failure can't leak them), read only by the `no_log` user task. `pg_hba` change notifies a `reload` handler. Safe empty default (`postgres_tenants: []`) |
+| `postgresql-backup` | LXC260 (`database`) | Deploys `pg-backup.sh` from `snippets/postgres/` (`copy` module), creates `/var/lib/node_exporter/textfile_collector/` (owned `postgres`, mode `0755` so `node_exporter` user can read), and sets the `postgres`-user cron job (`cron` module, `name:` as idempotency key). Also enables the textfile collector on `node_exporter` for LXC260 via `node_exporter_textfile_dir` host var — the `node_exporter` role template conditionally adds `--collector.textfile.directory` via a `{% set %}` trick to avoid Jinja2 `trim_blocks` eating the newline |
 
 ## SSH Hardening
 

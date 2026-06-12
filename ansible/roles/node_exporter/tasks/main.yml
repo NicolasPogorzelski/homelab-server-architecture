@@ -17,6 +17,7 @@
     owner: root
     group: root
     mode: '0755'
+    remote_src: yes
 
 - name: Generate UNIT
   ansible.builtin.template:
