@@ -1,0 +1,7 @@
+---
+- name: Deploy PostgreSQL backup infrastructure
+  hosts: database
+  become: true
+  serial: 1
+  roles:
+    - postgresql-backup

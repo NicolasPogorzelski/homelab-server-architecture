@@ -1,0 +1,7 @@
+---
+- name: Deploy break-glass SSH public keys for the native admin user
+  ansible.posix.authorized_key:
+    user: "{{ breakglass_user }}"
+    state: present
+    key: "{{ item }}"
+  loop: "{{ breakglass_pubkeys }}"

@@ -1,0 +1,4 @@
+---
+# Safe no-op default: a host with no compose_projects set loops over nothing
+# instead of failing on an undefined variable. Real values live in host_vars/.
+compose_projects: []

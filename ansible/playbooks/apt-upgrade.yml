@@ -1,0 +1,106 @@
+---
+- name: Upgrade apt LXCs
+  hosts: lxcs
+  serial: 1
+  become: true
+
+  tasks:
+    - name: Update apt
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Collect packages pending upgrade
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          apt-get -s dist-upgrade 2>/dev/null | awk '/^Inst /{print $2}'
+        executable: /bin/bash
+      register: packages_pending
+      changed_when: false
+      # noqa: command-instead-of-module
+
+    - name: Upgrade apt
+      ansible.builtin.apt:
+        upgrade: dist
+
+    - name: Clean apt cache
+      ansible.builtin.apt:
+        clean: true
+
+    - name: Restart tailscaled if tailscale was upgraded
+      ansible.builtin.systemd:
+        name: tailscaled
+        state: restarted
+      when: "'tailscale' in packages_pending.stdout"
+
+    - name: Collect dpkg integrity results
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          dpkg --verify 2>&1 | grep -v ' c /' || true
+        executable: /bin/bash
+      register: dpkg_verify
+      changed_when: false
+
+    - name: Fail on corrupt non-conffile packages
+      ansible.builtin.fail:
+        msg: |
+          Binary corruption detected on {{ inventory_hostname }} after upgrade (KE-7).
+          Corrupt files:
+          {{ dpkg_verify.stdout }}
+          Identify packages: dpkg -S <path>
+          Fix: apt-get install --reinstall <package>
+      when: dpkg_verify.stdout | trim | length > 0
+
+- name: Upgrade apt VMs
+  hosts: vms
+  serial: 1
+  become: true
+
+  tasks:
+    - name: Update apt
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Collect packages pending upgrade
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          apt-get -s dist-upgrade 2>/dev/null | awk '/^Inst /{print $2}'
+        executable: /bin/bash
+      register: packages_pending
+      changed_when: false
+      # noqa: command-instead-of-module
+
+    - name: Upgrade apt
+      ansible.builtin.apt:
+        upgrade: dist
+
+    - name: Clean apt cache
+      ansible.builtin.apt:
+        clean: true
+
+    - name: Restart tailscaled if tailscale was upgraded
+      ansible.builtin.systemd:
+        name: tailscaled
+        state: restarted
+      when: "'tailscale' in packages_pending.stdout"
+
+    - name: Collect dpkg integrity results
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          dpkg --verify 2>&1 | grep -v ' c /' || true
+        executable: /bin/bash
+      register: dpkg_verify
+      changed_when: false
+
+    - name: Fail on corrupt non-conffile packages
+      ansible.builtin.fail:
+        msg: |
+          Binary corruption detected on {{ inventory_hostname }} after upgrade (KE-7).
+          Corrupt files:
+          {{ dpkg_verify.stdout }}
+          Identify packages: dpkg -S <path>
+          Fix: apt-get install --reinstall <package>
+      when: dpkg_verify.stdout | trim | length > 0

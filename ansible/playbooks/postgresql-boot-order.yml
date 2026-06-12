@@ -1,0 +1,6 @@
+---
+- name: PostgreSQL boot ordering (wait for Tailscale IP) on LXC260
+  hosts: lxc260
+  become: true
+  roles:
+    - postgresql-boot-order

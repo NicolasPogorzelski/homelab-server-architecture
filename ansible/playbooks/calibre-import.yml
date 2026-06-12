@@ -1,0 +1,6 @@
+---
+- name: Calibre auto-import on LXC220
+  hosts: lxc220
+  become: true
+  roles:
+    - calibre-importer

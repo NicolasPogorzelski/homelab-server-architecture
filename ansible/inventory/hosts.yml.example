@@ -1,0 +1,99 @@
+all:
+  vars:
+    proxmox_host_tailscale_ip: <tailscale-ip-proxmox-host>
+    # Blackbox HTTPS probe targets (services behind `tailscale serve`).
+    blackbox_https_targets:
+      - { name: paperless,   url: "https://paperless.<tailnet-id>" }
+      - { name: openwebui,   url: "https://ai-openwebui.<tailnet-id>" }
+      - { name: nextcloud,   url: "https://nextcloud.<tailnet-id>" }
+      - { name: calibreweb,  url: "https://calibreweb.<tailnet-id>" }
+      - { name: vaultwarden, url: "https://vaultwarden.<tailnet-id>" }
+  children:
+    media:
+      hosts:
+        vm100:  # Jellyfin, Audiobookshelf
+          ansible_host: <tailscale-ip-gpu-vm>
+        lxc220:  # Calibre-Web
+          ansible_host: <tailscale-ip-calibreweb>
+
+    ai_stack:
+      hosts:
+        vm100:  # Ollama backend
+          ansible_host: <tailscale-ip-gpu-vm>
+        lxc230:  # OpenWebUI
+          ansible_host: <tailscale-ip-ai-openwebui>
+
+    services:
+      hosts:
+        lxc210:  # Nextcloud
+          ansible_host: <tailscale-ip-nextcloud>
+        lxc211:  # Paperless-ngx
+          ansible_host: <tailscale-ip-paperless>
+
+    monitoring:
+      hosts:
+        lxc200:  # Prometheus + Grafana
+          ansible_host: <tailscale-ip-monitoring>
+
+    storage:
+      hosts:
+        vm102:  # SnapRAID + MergerFS
+          ansible_host: <tailscale-ip-storage>
+
+    database:
+      hosts:
+        lxc260:  # PostgreSQL platform
+          ansible_host: <tailscale-ip-postgres>
+
+    security:
+      hosts:
+        lxc240:  # Vaultwarden
+          ansible_host: <tailscale-ip-vaultwarden>
+
+    docker:  # Nodes running Docker Compose stacks (Item #9 update workflow)
+      hosts:
+        lxc200:  # monitoring stack
+          ansible_host: <tailscale-ip-monitoring>
+        lxc211:  # paperless
+          ansible_host: <tailscale-ip-paperless>
+        lxc220:  # calibreweb
+          ansible_host: <tailscale-ip-calibreweb>
+        lxc230:  # openwebui
+          ansible_host: <tailscale-ip-ai-openwebui>
+        lxc240:  # vaultwarden
+          ansible_host: <tailscale-ip-vaultwarden>
+        vm100:  # jellyfin + audiobookshelf
+          ansible_host: <tailscale-ip-gpu-vm>
+
+    lxcs:
+      hosts:
+        lxc200:
+          ansible_host: <tailscale-ip-monitoring>
+          prometheus_label: monitoring
+        lxc210:
+          ansible_host: <tailscale-ip-nextcloud>
+          prometheus_label: nextcloud
+        lxc211:
+          ansible_host: <tailscale-ip-paperless>
+          prometheus_label: paperless
+        lxc220:
+          ansible_host: <tailscale-ip-calibreweb>
+          prometheus_label: calibreweb
+        lxc230:
+          ansible_host: <tailscale-ip-ai-openwebui>
+          prometheus_label: openwebui
+        lxc240:
+          ansible_host: <tailscale-ip-vaultwarden>
+          prometheus_label: vaultwarden
+        lxc260:
+          ansible_host: <tailscale-ip-postgres>
+          prometheus_label: postgres
+
+    vms:
+      hosts:
+        vm100:
+          ansible_host: <tailscale-ip-gpu-vm>
+          prometheus_label: gpu
+        vm102:
+          ansible_host: <tailscale-ip-storage>
+          prometheus_label: storage

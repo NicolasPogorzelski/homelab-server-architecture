@@ -157,6 +157,13 @@ No shared credentials exist.
 
 ### Service Onboarding Pattern
 
+Steps 1–3 are **codified** in the `postgresql-provisioning` Ansible role
+(`ansible/playbooks/postgresql-provisioning.yml`): add the tenant to
+`postgres_tenants` in `host_vars/lxc260.yml` (non-secret fields) and its password
+to `postgres_tenant_passwords` (Vault-referenced), then run the playbook. The role
+is idempotent and connects via peer auth as the `postgres` user. The manual SQL
+below is the reference the role implements; steps 4–5 remain manual.
+
 Run on CT260 as the `postgres` user unless noted.
 
 **1. Create database and user**
@@ -311,6 +318,15 @@ Access requires passing ALL layers:
     PostgreSQL role permissions
 
 Zero Trust = multiple independent enforcement layers.
+
+## Failure Impact
+
+If CT260 (PostgreSQL) becomes unavailable:
+- All dependent services lose database connectivity: OpenWebUI (CT230), Paperless-ngx (CT211)
+- Application startup fails for DB-dependent services
+- Existing connections are terminated immediately
+- No data loss if WAL and fsync guarantees were intact before failure
+- Recovery priority: restore CT260 before restarting application containers
 
 ## Related Documents
 

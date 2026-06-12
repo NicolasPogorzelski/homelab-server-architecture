@@ -1,0 +1,4 @@
+---
+# Break-glass SSH public keys to install for the host's native admin user.
+# Empty by default so the role is a no-op unless a group/host var supplies keys.
+breakglass_pubkeys: []
