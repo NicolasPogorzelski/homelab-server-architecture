@@ -1,0 +1,84 @@
+---
+- name: Gather fleet facts
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: node_uptime
+      ansible.builtin.debug:
+        var: ansible_uptime_seconds
+
+    - name: node_RAM
+      ansible.builtin.debug:
+        var: ansible_memory_mb
+
+    - name: node_mounts
+      ansible.builtin.debug:
+        var: ansible_mounts
+
+    - name: Populate service facts
+      ansible.builtin.service_facts:
+
+    - name: Print service facts
+      ansible.builtin.debug:
+        var: ansible_facts.services
+
+- name: Docker health checks
+  hosts: docker
+  gather_facts: false
+  tasks:
+    - name: Populate service facts
+      ansible.builtin.service_facts:
+
+    - name: Docker daemon status
+      ansible.builtin.debug:
+        var: ansible_facts.services['docker.service']
+
+    - name: Get Docker host info
+      community.docker.docker_host_info:
+        containers: true
+      register: docker_info
+
+    - name: Docker container summary
+      ansible.builtin.debug:
+        var: docker_info.containers
+
+- name: Write fleet health report
+  hosts: lxc250
+  gather_facts: true
+  tasks:
+    - name: Ensure report directory exists
+      ansible.builtin.file:
+        path: /var/log/fleet-health
+        state: directory
+        mode: '0755'
+
+    - name: Find reports older than 7 days
+      ansible.builtin.find:
+        paths: /var/log/fleet-health
+        age: 7d
+        recurse: false
+      register: old_reports
+
+    - name: Delete old reports
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_reports.files }}"
+
+    - name: Write fleet health report
+      ansible.builtin.copy:
+        dest: "/var/log/fleet-health/report-{{ ansible_date_time.date }}.txt"
+        content: |
+          Fleet Health Report — {{ ansible_date_time.iso8601 }}
+          =========================================================
+          {% for host in groups['all'] %}
+          --- {{ host }} ---
+          Uptime (s):    {{ hostvars[host]['ansible_uptime_seconds'] | default('N/A') }}
+          RAM free (MB): {{ hostvars[host]['ansible_memory_mb']['real']['free'] | default('N/A') }}
+          RAM total (MB):{{ hostvars[host]['ansible_memory_mb']['real']['total'] | default('N/A') }}
+          Mounts:
+          {% for mount in hostvars[host]['ansible_mounts'] | default([]) %}
+            {{ mount.mount }} ({{ mount.fstype }}) — free: {{ (mount.size_available / 1024 / 1024) | int }} MB
+          {% endfor %}
+          {% endfor %}
+        mode: '0644'
