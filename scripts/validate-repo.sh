@@ -141,14 +141,15 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # =============================================================================
 # Legitimate placeholder: <lan-ip-...>
 # Covers: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+# File types: .md, .yml, .yaml, .sh
 echo "Check 14: no plain LAN IPs"
 
-while read -r mdfile; do
-    { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${mdfile}" || true; } | while read -r match; do
-        echo "  Unsanitized LAN IP: ${mdfile}:${match}"
+while read -r file; do
+    { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${file}" || true; } | while read -r match; do
+        echo "  Unsanitized LAN IP: ${file}:${match}"
         echo "x" >> "${ERROR_LOG}"
     done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \) -type f)
 
 # reset and recount error log
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
