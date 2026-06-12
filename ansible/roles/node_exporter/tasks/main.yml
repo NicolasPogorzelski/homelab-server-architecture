@@ -19,6 +19,14 @@
     mode: '0755'
     remote_src: yes
 
+- name: Remove tarball and extracted directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+    - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64
+
 - name: Generate UNIT
   ansible.builtin.template:
     src: node_exporter.service.j2
