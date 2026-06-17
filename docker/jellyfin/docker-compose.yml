@@ -1,6 +1,6 @@
 services:
   jellyfin:
-    image: jellyfin/jellyfin:latest  # TODO: pin to specific version tag
+    image: jellyfin/jellyfin:10.11.11  # pinned to running version (2026-06-17)
     container_name: jellyfin
     pid: "host"
     restart: unless-stopped
