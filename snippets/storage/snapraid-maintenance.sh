@@ -7,8 +7,8 @@ set -euo pipefail
 # Install on VM102:
 #   install -m 0750 -o root -g root /dev/null /usr/local/sbin/snapraid-maintenance.sh
 #   # copy script content, then add crontab entries as root:
-#   echo "0 2 * * *   /usr/local/sbin/snapraid-maintenance.sh sync"    >> /etc/cron.d/snapraid
-#   echo "0 3 1 * *   /usr/local/sbin/snapraid-maintenance.sh scrub"  >> /etc/cron.d/snapraid
+#   echo "0 23 * * *  /usr/local/sbin/snapraid-maintenance.sh sync"    >> /etc/cron.d/snapraid
+#   echo "0 20 1 * *  /usr/local/sbin/snapraid-maintenance.sh scrub"  >> /etc/cron.d/snapraid
 #
 # Prerequisite: node_exporter on VM102 must have the textfile collector enabled.
 #   Add --collector.textfile.directory=/var/lib/node_exporter/textfile_collector

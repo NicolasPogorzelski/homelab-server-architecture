@@ -88,8 +88,8 @@ SnapRAID provides **parity-based** protection for the MergerFS-backed data disks
 Operational expectations:
 
 - Run `snapraid status` regularly
-- `snapraid sync` runs daily at 02:00 via cron (`/etc/cron.d/snapraid`); run manually after large write operations if needed
-- `snapraid scrub` runs monthly on the 1st at 03:00 via cron
+- `snapraid sync` runs daily at 23:00 via cron (`/etc/cron.d/snapraid`); run manually after large write operations if needed
+- `snapraid scrub` runs monthly on the 1st at 20:00 via cron
 
 Risk profile:
 
