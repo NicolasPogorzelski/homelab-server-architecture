@@ -40,7 +40,7 @@ Managed via `/etc/cron.d/homelab-schedule`. Managed by the `homelab-schedule` An
 | Schedule | User | Script | Purpose |
 |---|---|---|---|
 | `45 0 * * *` | root | `/usr/local/sbin/homelab-setwake.sh` | Program RTC wakeup alarm for tomorrow before shutdown |
-| `0 1 * * *` | root | `/usr/local/sbin/homelab-shutdown.sh` | Scheduled nightly shutdown (after SnapRAID sync at 02:00 on VM102) |
+| `0 1 * * *` | root | `/usr/local/sbin/homelab-shutdown.sh` | Scheduled nightly shutdown (2h buffer after SnapRAID sync at 23:00 on VM102) |
 
 ### Wake Times (homelab-setwake.sh)
 
@@ -53,9 +53,9 @@ Source: `scripts/homelab-setwake.sh` — deployed to `/usr/local/sbin/homelab-se
 
 ### Shutdown (homelab-shutdown.sh)
 
-Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapRAID sync on VM102 (02:00 daily) — the order is: sync completes → host shuts down → RTC wakes host at configured time.
+Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapRAID sync on VM102 (23:00 daily) — the order is: sync completes → host shuts down → RTC wakes host at configured time.
 
-Wait — the sync runs at 02:00 and shutdown at 01:00: shutdown fires **before** sync. The buffer is between shutdown (01:00) and the previous night's sync window; SnapRAID sync is not a prerequisite for shutdown. The comment in the script refers to the original schedule design intent.
+Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-shutdown.sh`.
 
 Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-shutdown.sh`.
 
