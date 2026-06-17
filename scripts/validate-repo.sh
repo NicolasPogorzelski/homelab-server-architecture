@@ -217,14 +217,14 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # =============================================================================
 # Check 12: no files outside defined directory structure
 # =============================================================================
-# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ README.md .gitignore
+# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ ansible/ terraform/ README.md .gitignore
 echo "Check 12: files outside directory structure"
 
 while read -r file; do
     rel="${file#${REPO_ROOT}/}"
     case "${rel}" in
-        docs|docker|snippets|runbooks|scripts|ansible) continue ;;
-        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*) continue ;;
+        docs|docker|snippets|runbooks|scripts|ansible|terraform) continue ;;
+        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*|terraform/*) continue ;;
         README.md|CLAUDE.md|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
         *)
