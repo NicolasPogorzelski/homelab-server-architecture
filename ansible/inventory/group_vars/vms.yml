@@ -1,4 +1,5 @@
 ---
 # Break-glass admin public key(s) for VMs (public key, not secret).
 breakglass_pubkeys:
-  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDoxgXiYKnBIYHJ+QVFAkTuj/keQ79xaIuSV5Vy2J2sF desktop-cachyos"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJm20IWwM60DwGrqfYnvvozMGL1Jl7elUUm1iGEw02N6 bazzite"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMFCoJ/egMG2QTijY+1YdMWkZundShlfWJJtzc2Dn3cy fedora-notebook"
