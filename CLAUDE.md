@@ -210,6 +210,35 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **`scan-paperless-inbox.sh` on LXC210 not Ansible-managed:** script deployed manually to
   `/usr/local/sbin/`, scheduled via root crontab. Source: `snippets/scripts/scan-paperless-inbox.sh`.
   No role exists — will be lost on LXC210 rebuild without manual re-deploy.
+- **`jellyfin-cuda-watchdog.sh` on VM100 not Ansible-managed:** watchdog polls `nvidia-smi` every
+  30 min and auto-restarts Jellyfin on CUDA loss. Deployed manually to `/usr/local/sbin/` via root
+  crontab. Source: `snippets/scripts/jellyfin-cuda-watchdog.sh`. Will be lost on VM100 rebuild.
+- **Jellyfin CUDA access loss intermittent (KE-10):** hardware transcoding stops randomly; root
+  cause unconfirmed (NVML connection goes stale). Workaround: `docker restart jellyfin`. Watchdog
+  automates this but does not fix the root cause. See `docs/platform/known-errors.md#ke-10`.
+- **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
+  on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
+  requires manual re-deploy after VM102 rebuild.
+- **Legacy SSH keys on VM102 (`storage` user):** `root@server` and `fedora-notebook` keys remain
+  in `/home/storage/.ssh/authorized_keys`. Flagged for cleanup; no Ansible task to remove stale
+  keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.
+- **Calibre library on CIFS — SQLite workaround in place, no durable fix:** `metadata.db` cannot
+  safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
+  (see `calibre-importer` role). Moving library to local block storage is the durable fix but
+  deferred (no extra volume available). See `docs/decisions/calibre-cifs-sqlite-import.md`.
+- **CIFS automount boot-race on LXC220 (mp2 rw mount):** `/books-rw` sometimes fails at boot if
+  VM102 is still starting; systemd `nofail` lets boot proceed without retry, leaving an empty
+  bind. Fix: `mount /mnt/smb/books-rw` on Proxmox host + `pct reboot 220`. Durable fix
+  (automount + `x-systemd.mount-timeout`) not yet applied.
+- **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql-backup`
+  role and stored on SMB. No runbook or periodic validation that restores succeed. Backup
+  infrastructure exists; recovery procedure does not.
+- **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
+  protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
+  Nextcloud DB, Paperless documents) have no off-site copy.
+- **SMART monitoring not deployed:** no `smartctl_exporter` or node-exporter textfile collector
+  for disk health data on VM102. Disk failure detection relies on SnapRAID alerts, not SMART.
+  Listed as planned enhancement in `docs/platform/operations.md`.
 
 ## Platform Changelog
 
