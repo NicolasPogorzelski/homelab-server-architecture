@@ -244,7 +244,10 @@ dpkg --verify 2>&1 | grep -v ' c /'
 1. **No service-level monitoring.** Alerts cover `NodeDown` (node_exporter:9100) and disk only. node_exporter answered the whole time while ports 8096/13378 were dead — no alert fired. A healthy node can have dead services.
 2. **journald not persisting logs.** Despite `/var/log/journal`, the June logs were gone (`journalctl --list-boots` jumped from May 28 to the current boot); forensics relied on `wtmp`, `apt`/`dpkg` text logs, Docker JSON logs, and Prometheus instead.
 
-**Status:** Recovery known; root cause unconfirmed; remediation tracked (service-level probes, journald persistence) — see CLAUDE.md "Known Technical Debt & Gotchas". Service-level probing was implemented 2026-06-08 (blackbox_exporter); journald persistence still open.
+**Status:**
+- **Monitoring gap (RESOLVED 2026-06-08):** `blackbox_exporter` deployed on LXC200 probes 7 service endpoints (HTTP + Tailscale Serve HTTPS) with a `ServiceDown` alert rule. Tailscale ACL Rule 1c grants monitoring access to service ports. See [changelog 2026-06-08](./changelog.md) and [Monitoring platform](./monitoring.md).
+- **Root cause (OPEN):** Media hang root cause not definitively determined.
+- **journald persistence (OPEN):** Logs for the incident window were lost. `Storage=` / `SystemMaxUse=` fix not yet applied on VM100.
 
 **References:**
 - [VM100 node documentation](../nodes/vm100.md)

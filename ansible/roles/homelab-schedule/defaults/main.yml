@@ -1,0 +1,4 @@
+---
+homelab_setwake_dest: /usr/local/sbin/homelab-setwake.sh
+homelab_shutdown_dest: /usr/local/sbin/homelab-shutdown.sh
+homelab_cron_file: /etc/cron.d/homelab-schedule
