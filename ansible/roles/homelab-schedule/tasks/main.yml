@@ -1,0 +1,24 @@
+---
+- name: Deploy homelab-setwake.sh
+  ansible.builtin.copy:
+    src: homelab-setwake.sh
+    dest: "{{ homelab_setwake_dest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy homelab-shutdown.sh
+  ansible.builtin.copy:
+    src: homelab-shutdown.sh
+    dest: "{{ homelab_shutdown_dest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy cron schedule
+  ansible.builtin.template:
+    src: homelab-schedule.j2
+    dest: "{{ homelab_cron_file }}"
+    owner: root
+    group: root
+    mode: '0644'

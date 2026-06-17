@@ -89,6 +89,12 @@ all:
           ansible_host: <tailscale-ip-postgres>
           prometheus_label: postgres
 
+    proxmox:
+      hosts:
+        proxmox-host:
+          ansible_host: <tailscale-ip-proxmox-host>
+          ansible_user: root  # No ansible user bootstrapped on hypervisor; use root directly
+
     vms:
       hosts:
         vm100:

@@ -1,0 +1,6 @@
+---
+- name: Deploy homelab power schedule to Proxmox host
+  hosts: proxmox
+  become: true
+  roles:
+    - homelab-schedule
