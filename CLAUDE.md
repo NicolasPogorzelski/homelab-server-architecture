@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Branch:** `feat/ansible-setup`
-- **Status:** Ansible Learning Roadmap items #1–#13 done. **Ansible track complete. Next: Terraform track.**
+- **Branch:** `main` (`feat/ansible-setup` merged 2026-06-17)
+- **Status:** Ansible track complete (items #1–#13). **Next learning track: Terraform.**
+- **Next session to-do (before starting Terraform):** run `ansible-playbook playbooks/homelab-schedule.yml --check --diff` against the live Proxmox host, then apply. Role was written 2026-06-17 but never executed against the host.
 - **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Append new session notes there; keep this section short.
 
 - **Ansible Learning Roadmap (in order):**
@@ -203,6 +204,12 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   the container. After a hard shutdown, LXC260 may fail to start with pre-start hook
   exit 19 (`ENODEV`) if VM102/storage is still booting. Fix: wait for VM102, verify
   `ls /mnt/smb/postgres-backups` on the Proxmox host, then `pct start 260` manually.
+- **`homelab-schedule` role not yet applied to live host (2026-06-17):** role deploys
+  `homelab-setwake.sh` + `homelab-shutdown.sh` + `/etc/cron.d/homelab-schedule` via Ansible.
+  Scripts and cron file currently managed manually. Run `--check --diff` first, then apply.
+- **`scan-paperless-inbox.sh` on LXC210 not Ansible-managed:** script deployed manually to
+  `/usr/local/sbin/`, scheduled via root crontab. Source: `snippets/scripts/scan-paperless-inbox.sh`.
+  No role exists — will be lost on LXC210 rebuild without manual re-deploy.
 
 ## Platform Changelog
 
