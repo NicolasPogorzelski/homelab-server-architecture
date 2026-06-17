@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:latest  # TODO: pin to specific version tag
+    image: prom/prometheus:v3.12.0  # pinned to running version (2026-06-17)
     container_name: prometheus
     network_mode: host
     command:
@@ -20,7 +20,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: grafana/grafana:latest  # TODO: pin to specific version tag
+    image: grafana/grafana:13.0.2  # pinned to running version (2026-06-17)
     container_name: grafana
     network_mode: host
     env_file:
@@ -35,7 +35,7 @@ services:
         max-file: "3"
 
   alertmanager:
-    image: prom/alertmanager:latest  # TODO: pin to specific version tag
+    image: prom/alertmanager:v0.32.2  # pinned to running version (2026-06-17)
     container_name: alertmanager
     network_mode: host
     command:
@@ -51,7 +51,7 @@ services:
         max-file: "3"
 
   node-exporter:
-    image: prom/node-exporter:latest  # TODO: pin to specific version tag
+    image: prom/node-exporter:v1.11.1  # pinned to running version (2026-06-17)
     container_name: node-exporter
     network_mode: host
     pid: host
@@ -71,7 +71,7 @@ services:
         max-file: "3"
 
   blackbox-exporter:
-    image: prom/blackbox-exporter:latest  # TODO: pin to specific version tag
+    image: prom/blackbox-exporter:v0.28.0  # pinned to running version (2026-06-17)
     container_name: blackbox-exporter
     network_mode: host
     command:
