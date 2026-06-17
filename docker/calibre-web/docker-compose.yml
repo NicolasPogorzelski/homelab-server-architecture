@@ -1,6 +1,6 @@
 services:
   calibreweb:
-    image: lscr.io/linuxserver/calibre-web:latest  # TODO: pin to specific version tag
+    image: lscr.io/linuxserver/calibre-web:0.6.26-ls386  # pinned to running version (2026-06-17)
     container_name: calibre-web
     environment:
       - PUID=${PUID}

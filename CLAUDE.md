@@ -81,7 +81,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 12 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs or tailnet IDs, private keys, missing `.env.example` files, and files outside the allowed directory structure.
+This script enforces 15 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, and leftover git merge conflict markers.
 
 ## Documentation Audit Rule
 
@@ -176,7 +176,6 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   instead of container names.
 - **VM100 Jellyfin CUDA:** requires `pid: "host"` in docker-compose for
   NVIDIA Container Toolkit access.
-<<<<<<< HEAD
 - **Service-level monitoring (KE-8 gap — REMEDIATED 2026-06-08):** previously
   alerting covered only `NodeDown` (node_exporter) + disk, not service ports.
   Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a

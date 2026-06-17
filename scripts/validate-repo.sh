@@ -217,14 +217,14 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # =============================================================================
 # Check 12: no files outside defined directory structure
 # =============================================================================
-# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ README.md .gitignore
+# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ ansible/ terraform/ README.md .gitignore
 echo "Check 12: files outside directory structure"
 
 while read -r file; do
     rel="${file#${REPO_ROOT}/}"
     case "${rel}" in
-        docs|docker|snippets|runbooks|scripts|ansible) continue ;;
-        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*) continue ;;
+        docs|docker|snippets|runbooks|scripts|ansible|terraform) continue ;;
+        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*|terraform/*) continue ;;
         README.md|CLAUDE.md|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
         *)
@@ -238,11 +238,28 @@ while read -r file; do
 done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".git" \( -type f -o -type d \))
 
 # =============================================================================
+# Check 15: no leftover git merge conflict markers
+# =============================================================================
+# A botched merge can leave `<<<<<<<`, `=======`, or `>>>>>>>` lines committed.
+# These are never legitimate content in this repo's tracked files.
+echo "Check 15: no merge conflict markers"
+
+while read -r file; do
+    { grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "${file}" || true; } | while read -r match; do
+        echo "  Merge conflict marker: ${file}:${match}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" -o -name "*.conf" -o -name "*.j2" \) -type f)
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 14"
+echo "Checks run: 15"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
