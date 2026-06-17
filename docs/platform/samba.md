@@ -44,6 +44,8 @@ The decision prioritizes operational predictability over theoretical performance
 - Nextcloud → /mnt/mergerfs/Nextcloud
 - Vaultwarden → /mnt/mergerfs/Vaultwarden
 - Paperless → /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
+- openwebui → /mnt/mergerfs/openwebui
+- Postgres-backups → /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
 
 Ownership enforcement:
 
@@ -73,13 +75,31 @@ and assign ownership to the corresponding Paperless user.
 
 ---
 
+### Desktop Shares
+
+The `storage` OS user doubles as the desktop identity for direct media library access.
+Four shares expose the media library paths read-write to the admin workstation:
+
+- Filme → /mnt/mergerfs/Filme
+- Serien → /mnt/mergerfs/Serien
+- Audiobooks → /mnt/mergerfs/Audiobooks
+- Books → /mnt/mergerfs/Books
+
+These shares have no `create mask` / `directory mask` set (inherits filesystem defaults)
+because no other service identity writes to these paths alongside the desktop user.
+
+On the desktop, all five shares are mounted via `/etc/fstab` (CIFS, `vers=3`, `_netdev`, `nofail`)
+using a credentials file at `/etc/samba/credentials-storage`.
+
+---
+
 ### Read-Only Consumer Shares
 
 Media services receive read-only access:
 
-- Jellyfin
-- Audiobookshelf
-- Calibre-Web
+- Jellyfin (`media-jf`) → /mnt/mergerfs (full pool, RO)
+- Audiobookshelf (`media-abs`) → /mnt/mergerfs (full pool, RO)
+- Calibre-Web (`books-svc`) → /mnt/mergerfs/Books (scoped to Books, RO)
 
 These shares are:
 
