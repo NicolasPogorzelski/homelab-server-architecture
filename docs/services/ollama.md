@@ -27,12 +27,16 @@ Two inference nodes are operational:
 
 ### Gaming PC (Primary)
 
-- Installation: `ollama-rocm` via pacman (CachyOS repository)
-- Override: `/etc/systemd/system/ollama.service.d/override.conf`
+- **Status: Setup pending** — distro changed from CachyOS to Bazzite (2026-06-17); previous
+  Ollama installation (`ollama-rocm` via pacman) is no longer available. Setup must be redone.
+- Installation (previous): `ollama-rocm` via pacman (CachyOS repository)
+- Installation (pending): Ollama install script (`curl -fsSL https://ollama.com/install.sh | sh`);
+  detects ROCm automatically on Bazzite
+- Override: `/etc/systemd/system/ollama.service.d/override.conf` (to be re-applied)
 - Bind address: Tailscale IP only (`<tailscale-ip-gaming-pc>:11434`)
 - GPU: AMD RX 7900 XT (20GB VRAM), ROCm 7.2.0, gfx1100
-- Models: `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` (context via Modelfiles)
-- Model storage: `/var/lib/ollama` (default, sufficient disk space available)
+- Models: `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` — Modelfiles in `snippets/ollama/`
+- Model storage: `/var/lib/ollama` (default)
 - Known: rocBLAS probe-runner crashes on startup (non-blocking, GPU recovered automatically)
 - Known: ROCm inference is ~30-50% slower than CUDA on comparable hardware
 
