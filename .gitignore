@@ -92,9 +92,6 @@ ansible/inventory/hosts.yml
 .aider.input.history
 .aider.tags.cache.v4/
 
-# Mistral Vibe
-VIBE.md
-
 # =====================================================
 # Claude Code local settings (environment-specific paths)
 # =====================================================
