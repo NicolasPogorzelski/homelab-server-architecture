@@ -352,3 +352,79 @@ docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
 **References:**
 - [LXC200 node doc](../nodes/lxc200.md)
 - [Monitoring platform](./monitoring.md)
+
+---
+
+## KE-12: pveproxy fails to start after boot (Tailscale-IP bind race)
+
+**Affected component:** Proxmox host — `pveproxy` (web UI / API proxy on `:8006`)
+
+**Symptom:**
+After a host reboot, SSH works but the Proxmox web UI on `:8006` is unreachable.
+`systemctl is-active pveproxy` is `failed` and nothing listens on `:8006`. The
+journal shows, five times within a few seconds of boot:
+
+```
+start failed - unable to create socket - Cannot assign requested address
+pveproxy.service: Start request repeated too quickly.
+```
+
+**Root cause:**
+`pveproxy` binds only the host Tailscale IP (`/etc/default/pveproxy` →
+`LISTEN_IP=<tailscale-ip-proxmox-host>`, intentional "UI on the tailnet only"
+hardening). On boot it starts before `tailscaled` has assigned that IP, so the
+bind fails with `EADDRNOTAVAIL`. Unlike PostgreSQL (KE-9) it does not fall back to
+a partial bind — it exits non-zero, and after five fast retries systemd stops
+trying. The service stays dead until a manual restart. Same fault class as
+[KE-9](#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race).
+
+**Fix:**
+Immediate — `systemctl reset-failed pveproxy && systemctl restart pveproxy` (the
+`reset-failed` clears the start-limit counter; the restart binds because the IP is
+present now). Durable — systemd drop-in
+`/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf` ordering after
+`tailscaled` plus an `ExecStartPre` that polls until the Tailscale IP is on
+`tailscale0` (≤30 s). Validated by warm restart (HTTP 200); cold-boot test pending.
+
+**Status:** Fixed (drop-in installed); cold-boot verification pending
+
+**References:**
+- [ADR — pveproxy Tailscale boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
+- [Runbook — pveproxy boot-race recovery](../../runbooks/platform/pveproxy-tailscale-boot-race.md)
+- [Proxmox Host](./proxmox-host.md)
+
+---
+
+## KE-13: Aux1TB physical disk failure (medium errors)
+
+**Affected component:** Proxmox host — Aux1TB auxiliary disk (`/mnt/aux1TB`)
+
+**Symptom:**
+Aux1TB will not mount on boot; five LXCs (LXC200/211/220/230/260) fail to start
+because their Docker data-root bind-mount sources under `/mnt/aux1TB` are missing.
+Earlier, the same mount failure dropped the host into emergency mode (the original
+lockout).
+
+**Root cause:**
+Unrecoverable hardware medium errors on the disk (a consumer-grade 1 TB drive,
+~6.5 years power-on) — not a filesystem-only or cabling fault. Verified in the
+kernel log (`critical medium error ... Unrecovered read error`) and SMART
+(`Current_Pending_Sector` = `Offline_Uncorrectable` = 7688, `Reported_Uncorrect`
+= 18). A read-only mount (`mount -o ro,noload`, no journal replay) still succeeded,
+so the live data was recoverable.
+
+**Fix / mitigation:**
+`nofail` on the Aux1TB fstab entry keeps the boot out of emergency mode (already in
+place). All live data was rescued read-only **before** any repair attempt —
+per-directory `tar --numeric-owner --ignore-failed-read` streamed to the admin
+notebook, 12 archives (~77 G), all integrity-verified, 0 real read errors. Disk to
+be decommissioned; affected services not yet restored (pending data relocation
+onto healthy storage). This invalidates the `docker-data-root-migration` runbook
+and CLAUDE.md "Adding a New Service" step 6, which both target `/mnt/aux1TB`.
+
+**Status:** Diagnosed; data rescued; disk pending decommission; services pending relocation
+
+**References:**
+- [Incident write-up — Aux1TB failure and recovery](./incidents/2026-06-25-aux1tb-failure-and-recovery.md)
+- [Runbook — Aux1TB failure rescue](../../runbooks/storage/aux1tb-failure-rescue.md)
+- [VM100 node doc](../nodes/vm100.md)
