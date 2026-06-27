@@ -141,6 +141,18 @@ Add to `/etc/fstab`:
 - Mother client (Gaming PC): use `roms-admin` (read-write) + VM102 LAN IP
 - Read-only clients (Notebook, etc.): use `roms` (read-only) + VM102 Tailscale IP
 
+### Bazzite specifics
+
+EmulationStation DE and RetroArch are available via the built-in Bazzite package manager / Flatpak.
+Verify with `ujust` helpers or install via Discover / command line:
+
+```bash
+flatpak install flathub org.libretro.RetroArch
+flatpak install flathub net.retrodeck.retrodeck   # alternative: RetroDECK
+```
+
+RetroArch cores are available from within the Flatpak via the built-in core downloader.
+
 ### Arch / CachyOS specifics
 
 ```bash
@@ -170,7 +182,7 @@ Configure in ES-DE: Main Menu → Scraper → Scraper Source.
 
 | Client | OS | Status |
 |---|---|---|
-| Gaming PC (mother client) | CachyOS | Complete |
+| Gaming PC (mother client) | Bazzite | Needs re-verification after distro change |
 | Notebook | Fedora | Planned |
 | Shield | Android TV | Planned |
 | Phone | Android | Planned |

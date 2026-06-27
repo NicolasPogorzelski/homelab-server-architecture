@@ -48,7 +48,7 @@ When working on tasks here:
   from an empty file without AI or copied snippets — AI is used only to review
   afterwards. The goal is active recall, not recognition; the struggle is the point.
 
-OS context: Proxmox host + Debian 12 LXCs. Daily driver is CachyOS (Arch-based).
+OS context: Proxmox host + Debian 12 LXCs. Daily driver is Bazzite (Fedora/rpm-ostree-based).
 Commands must be OS-specific — no generic "Linux commands" when behavior differs.
 
 ## Commit Policy
