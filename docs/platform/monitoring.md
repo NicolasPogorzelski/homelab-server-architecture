@@ -10,7 +10,8 @@ See: [Runbook index](../../runbooks/README.md)
 - Grafana (`grafana/grafana`)
 - Node Exporter (`prom/node-exporter`)
 - Alertmanager (`prom/alertmanager`)
-- postgres_exporter (`prom/postgres-exporter`, CT260)
+- postgres_exporter (`prom/postgres-exporter`, lxc260)
+- Blackbox Exporter (`prom/blackbox-exporter`) — service-level HTTP(S) probes (KE-8 remediation)
 
 ## Security / Exposure
 
@@ -26,7 +27,7 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 13 active scrape jobs — all UP, E2E verified 2026-04-22
+- 14 active scrape jobs (19 targets) — all UP, verified 2026-07-08
 
 | Job name | Target | Notes |
 |---|---|---|
@@ -40,9 +41,10 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 | `node-lxc220-calibreweb` | LXC220 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc230-openwebui` | LXC230 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc240-vaultwarden` | LXC240 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-ct260-postgres` | CT260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `postgres` | CT260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
+| `node-lxc260-postgres` | LXC260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `postgres` | LXC260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
+| `blackbox-http` | via `127.0.0.1:9115` | HTTP probes (`http_2xx`): jellyfin, audiobookshelf |
+| `blackbox-https` | via `127.0.0.1:9115` | HTTPS probes (`http_service_up`) behind `tailscale serve`: paperless, openwebui, nextcloud, calibreweb, vaultwarden |
 
 Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../docker/monitoring/prometheus/prometheus.yml.example)
 
@@ -50,8 +52,9 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`, `SnapRAIDSyncStale`, `SnapRAIDScrubStale`
-- `PostgreSQLBackupStale` requires Node Exporter textfile collector on CT260 (see pg-backup runbook)
+- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`, `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `ServiceDown`
+- `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
+- `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook)
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
 ## Failure / Dependency Notes
