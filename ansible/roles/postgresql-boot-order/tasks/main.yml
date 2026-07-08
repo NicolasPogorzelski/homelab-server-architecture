@@ -5,7 +5,7 @@
     dest: "{{ pg_boot_order_wait_script }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Create systemd drop-in directory for the postgres instance unit
   ansible.builtin.file:
@@ -13,7 +13,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy boot-ordering drop-in (wait for Tailscale IP)
   ansible.builtin.template:
@@ -21,5 +21,5 @@
     dest: /etc/systemd/system/{{ pg_boot_order_unit }}.d/10-wait-tailscale.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: reload systemd

@@ -5,7 +5,7 @@
     dest: "{{ homelab_setwake_dest }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy homelab-shutdown.sh
   ansible.builtin.copy:
@@ -13,7 +13,7 @@
     dest: "{{ homelab_shutdown_dest }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy cron schedule
   ansible.builtin.template:
@@ -21,4 +21,4 @@
     dest: "{{ homelab_cron_file }}"
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
