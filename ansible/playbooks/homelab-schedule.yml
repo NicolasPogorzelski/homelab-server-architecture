@@ -3,4 +3,4 @@
   hosts: proxmox
   become: true
   roles:
-    - homelab-schedule
+    - homelab_schedule

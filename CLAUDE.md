@@ -18,9 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   6. ~~Ansible Vault~~ ✅
   7. ~~SSH hardening role — `PasswordAuthentication no`, `PermitRootLogin no`, sshd handler; adopt `--check --diff` as standard dry-run habit from here on~~ ✅
   8. ~~New node onboarding — `ansible/playbooks/onboarding.yml`: 3 plays (bootstrap as root → ssh-hardening → node_exporter); structure complete, real-node test skipped (no available fresh LXC)~~ ✅
-  9. ~~Docker update workflow — pull new images, restart compose stacks via Ansible~~ ✅ (2026-06-11, `docker-compose-update` role)
-  10. ~~PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)~~ ✅ (2026-06-11, `postgresql-provisioning` role)
-  11. ~~PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally~~ ✅ (2026-06-12, `postgresql-backup` role)
+  9. ~~Docker update workflow — pull new images, restart compose stacks via Ansible~~ ✅ (2026-06-11, `docker_compose_update` role)
+  10. ~~PostgreSQL provisioning role — create DB + user for new services on LXC260 (replaces manual `psql`)~~ ✅ (2026-06-11, `postgresql_provisioning` role)
+  11. ~~PostgreSQL backup playbook — `pg_dump` on LXC260, verify output, store locally~~ ✅ (2026-06-12, `postgresql_backup` role)
   12. ~~Fleet health check playbook — query all nodes, output status overview~~ ✅ (2026-06-12, `fleet-health-check.yml`)
   13. ~~CI/CD + ansible-lint (lightweight) — GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal — no elaborate matrix or multi-stage pipeline.~~ ✅ (2026-06-12, `.github/workflows/ansible-lint.yml`)
   14. ~~Molecule — unit testing for Ansible roles~~ **Deferred** — out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
@@ -210,7 +210,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   the container. After a hard shutdown, LXC260 may fail to start with pre-start hook
   exit 19 (`ENODEV`) if VM102/storage is still booting. Fix: wait for VM102, verify
   `ls /mnt/smb/postgres-backups` on the Proxmox host, then `pct start 260` manually.
-- **`homelab-schedule` role not yet applied to live host (2026-06-17):** role deploys
+- **`homelab_schedule` role not yet applied to live host (2026-06-17):** role deploys
   `homelab-setwake.sh` + `homelab-shutdown.sh` + `/etc/cron.d/homelab-schedule` via Ansible.
   Scripts and cron file currently managed manually. Run `--check --diff` first, then apply.
 - **`scan-paperless-inbox.sh` on LXC210 not Ansible-managed:** script deployed manually to
@@ -237,13 +237,13 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.
 - **Calibre library on CIFS — SQLite workaround in place, no durable fix:** `metadata.db` cannot
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
-  (see `calibre-importer` role). Moving library to local block storage is the durable fix but
+  (see `calibre_importer` role). Moving library to local block storage is the durable fix but
   deferred (no extra volume available). See `docs/decisions/calibre-cifs-sqlite-import.md`.
 - **CIFS automount boot-race on LXC220 (mp2 rw mount):** `/books-rw` sometimes fails at boot if
   VM102 is still starting; systemd `nofail` lets boot proceed without retry, leaving an empty
   bind. Fix: `mount /mnt/smb/books-rw` on Proxmox host + `pct reboot 220`. Durable fix
   (automount + `x-systemd.mount-timeout`) not yet applied.
-- **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql-backup`
+- **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql_backup`
   role and stored on SMB. No runbook or periodic validation that restores succeed. Backup
   infrastructure exists; recovery procedure does not.
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No

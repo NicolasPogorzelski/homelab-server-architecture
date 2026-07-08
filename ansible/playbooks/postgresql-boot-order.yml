@@ -3,4 +3,4 @@
   hosts: lxc260
   become: true
   roles:
-    - postgresql-boot-order
+    - postgresql_boot_order
