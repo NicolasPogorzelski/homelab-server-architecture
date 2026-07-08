@@ -5,7 +5,7 @@
     dest: "{{ pg_backup_script_dest }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Create textfile collector directory
   ansible.builtin.file:
@@ -13,7 +13,7 @@
     state: directory
     owner: postgres
     group: postgres
-    mode: '0755'
+    mode: "0755"
 
 - name: Schedule pg_dumpall cron job
   ansible.builtin.cron:

@@ -49,7 +49,7 @@ Two parts, both required:
    this node's `tailscale ip -4` is actually present in `ip -4 addr show`, then
    lets PostgreSQL start. This closes the race the ordering alone leaves open.
 
-Codified as the Ansible role `postgresql-boot-order` (deploys the script +
+Codified as the Ansible role `postgresql_boot_order` (deploys the script +
 drop-in); the script's single source of truth is
 `snippets/scripts/wait-for-tailscale-ip.sh`.
 

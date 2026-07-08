@@ -131,6 +131,10 @@ media/
 └── catalogs/  — catalog.xml per console (written by data-admin)
 ```
 
+A separate `[media-share]` share exists at `/srv/client/` (read-only, `media` user/group) for the
+media client client — a distinct local path from `/mnt/mergerfs/media/`, not a bind-mount of it. See
+`snippets/storage/smb.conf.storage-vm102.sanitized.conf`.
+
 Access is enforced at three levels:
 1. **Tailscale ACL** — `tag:storage-client` can only reach `tag:storage:445`; no other infrastructure is reachable
 2. **Samba `valid users`** — share only accepts `media` and `data-admin` credentials

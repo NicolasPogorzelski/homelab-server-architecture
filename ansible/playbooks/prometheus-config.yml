@@ -1,6 +1,6 @@
 ---
-- name: deploy prometheus-config to lxc200
+- name: Deploy prometheus-config to lxc200
   hosts: lxc200
   become: true
   roles:
-    - prometheus-config
+    - prometheus_config

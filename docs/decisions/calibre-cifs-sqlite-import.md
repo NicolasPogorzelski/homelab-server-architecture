@@ -4,7 +4,7 @@
 
 LXC220 runs Calibre-Web against a library whose `metadata.db` (a SQLite
 database) lives on the SMB/CIFS Books share served by VM102. The auto-import job
-(`calibre-importer` role, see [Calibre-Web service doc](../services/calibre-web.md#auto-import))
+(`calibre_importer` role, see [Calibre-Web service doc](../services/calibre-web.md#auto-import))
 needs to run `calibredb add` to insert dropped ebooks into that library.
 
 `calibredb add` fails on the CIFS-hosted DB:

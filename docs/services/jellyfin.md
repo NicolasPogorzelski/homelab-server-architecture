@@ -4,8 +4,8 @@ Jellyfin is deployed via Docker Compose on VM100 with NVIDIA GPU hardware transc
 
 ## Deployment
 
-- Image: `jellyfin/jellyfin:latest`
-- Compose path (runtime): `/opt/homelab-server-architecture/docker/jellyfin/docker-compose.yml`
+- Image: `jellyfin/jellyfin:10.11.11`
+- Compose path (runtime): `/opt/docker/jellyfin/docker-compose.yml`
 - GPU acceleration: enabled (`gpus: all`, NVIDIA runtime)
 - Runs as non-root user (`user: 1000:1000`)
 
@@ -36,7 +36,7 @@ Config, cache, and metadata use local persistent volumes on VM100.
 
 ## CUDA Watchdog
 
-Jellyfin intermittently loses CUDA access at runtime (see [KE-8](../platform/known-errors.md#ke-8-jellyfin-loses-cuda-access-intermittently--container-restart-required)).
+Jellyfin intermittently loses CUDA access at runtime (see [KE-10](../platform/known-errors.md#ke-10-jellyfin-loses-cuda-access-intermittently--container-restart-required)).
 A watchdog script checks GPU availability every 30 minutes and restarts the container if access is lost.
 
 ### Deploy on VM100

@@ -321,7 +321,7 @@ Root cause: Tailscale evaluates ACLs when establishing new peer connections. The
 
 ### Context
 
-CT260 runs a centralized PostgreSQL instance that serves multiple consumers across different tiers (e.g., OpenWebUI in tier 2, potential future services in tier 1). A tagging decision was required to integrate the database node into the existing Tailscale ACL model.
+lxc260 runs a centralized PostgreSQL instance that serves multiple consumers across different tiers (e.g., OpenWebUI in tier 2, potential future services in tier 1). A tagging decision was required to integrate the database node into the existing Tailscale ACL model.
 
 ### Decision
 
