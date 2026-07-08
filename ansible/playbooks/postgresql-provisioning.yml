@@ -1,6 +1,6 @@
 ---
-- name: provision postgres tenants
+- name: Provision postgres tenants
   hosts: database
   become: true
   roles:
-    - postgresql-provisioning
+    - postgresql_provisioning

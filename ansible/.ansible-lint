@@ -1,8 +1,16 @@
 ---
-# Lightweight lint gate (learning-roadmap item #13: "keep minimal").
-# profile:min enforces only the "does it parse / load / run" tier, which keeps
-# the gate stable across ansible-lint releases instead of tracking the tool's
-# ever-stricter default profile. Raising to profile:basic (task names, role-name
-# convention, yaml formatting) is deferred to a dedicated hardening session —
-# tracked in CLAUDE.md "Known Technical Debt".
-profile: min
+# ansible-lint gate. The CI workflow pins ansible-lint==26.6.0 for reproducibility.
+#
+# Enforced at the strictest built-in profile (production) with a single documented
+# waiver:
+#
+#   var-naming[no-role-prefix] — requires every role variable to carry the role
+#   name as a prefix (e.g. paperless_dbuser -> paperless_env_dbuser). For a private
+#   single-tenant homelab repo this anti-collision guarantee has negligible value:
+#   the roles are never shared to Galaxy, the variables are already semantically
+#   namespaced (paperless_*, pg_backup_*), and the mandated prefixes are verbose and
+#   redundant. This is a commonly-disabled rule; every other production-profile rule
+#   (fqcn, risky-file-permissions, no-changed-when, name, role-name, yaml, ...) stays on.
+profile: production
+skip_list:
+  - var-naming[no-role-prefix]
