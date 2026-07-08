@@ -239,16 +239,6 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **SMART monitoring not deployed:** no `smartctl_exporter` or node-exporter textfile collector
   for disk health data on VM102. Disk failure detection relies on SnapRAID alerts, not SMART.
   Listed as planned enhancement in `docs/platform/operations.md`.
-- **ansible-lint gate runs at `profile:min` only (hardening deferred):** the CI lint profile is
-  pinned low (`ansible/.ansible-lint`) so the gate stays stable across ansible-lint releases.
-  Raising to `profile:basic` surfaces 52 findings — 31 `name` (unnamed/miscased tasks), 9
-  `role-name` (hyphenated role dirs: `ssh_hardening`, `postgresql_backup`, `docker_compose_update`,
-  etc.), 12 `yaml` (indentation/commas/trailing-space in existing playbooks + `hosts.yml`). All
-  pre-existing, none introduced by recent work. Role renames (hyphen→underscore) ripple through
-  playbooks, `host_vars`, and docs — deferred to a dedicated hardening session. Related: the
-  workflow now pins `ansible-lint==26.6.0` (previously unpinned → a version bump silently expanded
-  enforcement and turned CI red) and writes a dummy `~/.vault_pass` (syntax-check parses but never
-  decrypts the committed `!vault` vars, so a placeholder suffices).
 
 ## Platform Changelog
 
