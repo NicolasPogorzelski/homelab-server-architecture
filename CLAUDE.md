@@ -190,7 +190,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
   workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
   reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
-- **MergerFS pool ~96% full on vm102 (by design):** the media archive is meant
+- **MergerFS pool ~99.5% full on vm102 (by design):** the media archive is meant
   to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
   consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
   hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
