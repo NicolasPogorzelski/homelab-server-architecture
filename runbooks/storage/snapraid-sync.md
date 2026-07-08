@@ -46,7 +46,7 @@ Expected: no unsynced differences reported. Exit code 0 indicates success.
 
 ## Notes
 
-- Sync runs automatically via cron on VM102 (daily at 02:00). Script: `snippets/storage/snapraid-maintenance.sh sync`
+- Sync runs automatically via cron on VM102 (daily at 23:00). Script: `snippets/storage/snapraid-maintenance.sh sync`
 - This runbook covers manual execution (ad-hoc sync after large writes, troubleshooting).
 - SnapRAID is parity-based, not snapshot-based — sync must run before a failure to protect recent data.
 - See: [Storage Design](../../docs/platform/storage-design.md)
