@@ -6,7 +6,7 @@ Paperless-ngx is a self-hosted document management system with automatic OCR,
 classification, tagging, and full-text search.
 
 - Access is Tailscale-only (no LAN, no public ingress)
-- PostgreSQL platform service (CT260) as database backend
+- PostgreSQL platform service (lxc260) as database backend
 - Redis as task queue, cache, and locking backend
 - Gotenberg + Apache Tika for document conversion and content extraction
 - Hard rule: no database files on CIFS/SMB
@@ -26,7 +26,7 @@ classification, tagging, and full-text search.
 
 | Data type | Location | Mount |
 |---|---|---|
-| DB (PostgreSQL) | CT260 (local block FS) | Tailnet TCP |
+| DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
 | Documents (originals, archive) | MergerFS/SMB | `mp0: /mnt/smb/paperless → /data/paperless` |
 | Thumbnails | MergerFS/SMB | `/data/paperless/thumbnails` |
 | Consumption inbox | MergerFS/SMB | `/data/paperless/consumption` |
@@ -58,11 +58,11 @@ uses Docker DNS (container names).
 
 ## Database Dependency
 
-Paperless-ngx uses the centralized PostgreSQL platform service (CT260).
+Paperless-ngx uses the centralized PostgreSQL platform service (lxc260).
 
 - Database: `paperless_db`
 - User: `paperless_user`
-- Connection: Tailscale IP of CT260, port 5432 (TLS required)
+- Connection: Tailscale IP of lxc260, port 5432 (TLS required)
 - pg_hba: `hostssl` entry scoped to CT211 Tailscale IP `/32`
 
 See: [PostgreSQL Platform Service](./postgresql-platform.md)
@@ -76,7 +76,7 @@ Paperless-ngx is only healthy if all dependencies are satisfied:
 1. **SMB path mounted** on Proxmox host
    - Runbook: [SMB autofs trigger](../../runbooks/storage/smb-autofs-trigger.md)
 2. **aux-disk path exists** for local runtime state (`mp1`)
-3. **PostgreSQL reachable** on Tailnet (CT260)
+3. **PostgreSQL reachable** on Tailnet (lxc260)
    - See: [PostgreSQL platform service](./postgresql-platform.md)
 
 ---
@@ -114,14 +114,14 @@ If LXC211 becomes unavailable:
 
 - No document ingestion, search, or management
 - Document files on SMB storage remain intact
-- PostgreSQL data (metadata, tags, classifications) remains intact in CT260
+- PostgreSQL data (metadata, tags, classifications) remains intact in lxc260
 - Recovery: recreate LXC, redeploy Docker stack, remount storage, verify DB connectivity
 
-If PostgreSQL (CT260) becomes unavailable:
+If PostgreSQL (lxc260) becomes unavailable:
 
 - Paperless cannot start or process documents
 - Document files on SMB remain intact
-- Recovery: restore CT260 first, then restart Paperless containers
+- Recovery: restore lxc260 first, then restart Paperless containers
 
 ---
 

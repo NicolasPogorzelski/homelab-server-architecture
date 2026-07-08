@@ -190,7 +190,13 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
   workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
   reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
-- **MergerFS pool ~96% full on vm102 (by design):** the media archive is meant
+- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
+  application service tiering exception, confirmed intentional 2026-07-08. The
+  `calibre-importer` role's auto-import mechanism has no verified dependency on
+  tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
+  devices don't need Calibre-Web access, so no functional gap results. See the
+  Tier Model exception note in `docs/platform/tailscale-acl.md`.
+- **MergerFS pool close to full on vm102 (by design):** the media archive is meant
   to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
   consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
   hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
@@ -219,6 +225,13 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
   on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
   requires manual re-deploy after VM102 rebuild.
+- **postgres_exporter on LXC260 not Ansible-managed (binds `*:9187`, LAN-exposed):** unlike
+  `node_exporter`, no role deploys or configures `postgres_exporter` — it was installed manually
+  (2026-04-22) and its systemd unit's `ExecStart` has no `--web.listen-address`, so it binds all
+  interfaces instead of the Tailscale IP only. Fix requires a systemd override (must restate the
+  full `ExecStart=` — overrides can't append args to an existing line) plus deciding whether to
+  adopt the exporter's full lifecycle into Ansible or just this one flag; deferred as its own
+  design task rather than bolted onto an unrelated audit pass.
 - **Legacy SSH keys on VM102 (`storage` user):** `root@server` and `admin-laptop` keys remain
   in `/home/storage/.ssh/authorized_keys`. Flagged for cleanup; no Ansible task to remove stale
   keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.

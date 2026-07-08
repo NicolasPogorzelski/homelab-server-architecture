@@ -1,4 +1,21 @@
 ---
+- name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by the ssh-hardening Ansible role.
+      # sshd applies the *first* match for a given directive it encounters,
+      # and Include expands sshd_config.d/*.conf in filename-sort order — so a
+      # 00-prefixed file here wins over e.g. cloud-init's 50-cloud-init.conf
+      # without editing or removing that distro/cloud-init-owned file (which
+      # cloud-init can regenerate on a future run).
+      PasswordAuthentication no
+      PermitRootLogin no
+  notify: Reload ssh_config
+
 - name: Password authentication = no
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config

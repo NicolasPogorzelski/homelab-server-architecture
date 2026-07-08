@@ -8,9 +8,9 @@ Nextcloud is deployed as a classic web application stack inside an unprivileged 
 - PHP: PHP 8.2 (Debian packages)
 - Database: MariaDB/MySQL (local to the container; `dbhost=localhost`)
 
-Note: MariaDB runs locally rather than on the centralized PostgreSQL platform (CT260).
+Note: MariaDB runs locally rather than on the centralized PostgreSQL platform (lxc260).
 Nextcloud's official documentation recommends MariaDB, and Nextcloud was deployed before
-CT260 existed. Migration is not planned.
+lxc260 existed. Migration is not planned.
 - Cache/Locking: APCu (local cache) + Redis (transaction/file locking)
 
 ## Runtime Configuration (Sanitized)

@@ -1,4 +1,6 @@
 ---
-# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+# Docker Compose stacks on this node. dest = project_src on the node;
+# src = subdir under repo docker/ that docker-compose-update syncs from.
+# Node dir basename ("calibreweb") differs from the repo dir name ("calibre-web").
 compose_projects:
-  - /srv/calibreweb
+  - { dest: /srv/calibreweb, src: calibre-web }

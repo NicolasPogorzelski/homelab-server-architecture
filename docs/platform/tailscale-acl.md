@@ -34,6 +34,14 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
 | Media | `tag:storage-client` | media clients (media access + peer-play) | example-device |
 
+**Exception:** Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2`, despite
+being an application service by the table above. Confirmed intentional (2026-07-08);
+the specific technical rationale is being re-confirmed and is not yet documented here.
+The auto-import mechanism itself (`calibre-importer` role) has no verified dependency
+on tier1 access — it only needs the SMB port (445), which tier1 and tier2 grant
+identically. Untrusted/guest devices do not need Calibre-Web access, so the loss of
+untrusted reachability (Rule 7 only grants `tag:tier2:443`) is not a regression.
+
 ---
 
 ## Tag Ownership
@@ -103,7 +111,8 @@ existing tag rather than a dedicated inference tag.
 
 ### Rule 1b — Monitoring: outbound scrape access
 
-Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers.
+Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers,
+plus postgres_exporter (port 9187) on the database tier.
 No other outbound access is granted.
 
 See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
@@ -120,6 +129,7 @@ See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
         "tag:monitoring:9100",
         "tag:ai-stack:9100",
         "tag:database:9100",
+        "tag:database:9187",
         "tag:storage:9100"
     ]
 }
@@ -245,9 +255,12 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden
-- Tier 2 HTTPS (port 443): Calibre-Web
+- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden, Calibre-Web
 - AI stack HTTPS (port 443): OpenWebUI
+
+Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` — see the
+Tier Model table caveat below. The `tag:tier2:443` grant in this rule is
+currently unused (no tier2 node serves HTTPS).
 
 ### Rule 7 — Untrusted: minimal access
 
@@ -268,7 +281,10 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 2 HTTPS (port 443): Calibre-Web
+
+Note: `tag:tier2:443` is granted but currently unused — Calibre-Web is `tag:tier1`
+(see the Tier Model exception above), not tier2, and untrusted devices do not need
+access to it.
 
 ### Rule 8 — Media: media access and peer-play only
 
@@ -307,7 +323,7 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 | **tier0** | — | all | all | all | all | all | all | all | — | — | — |
 | **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — | — |
 | **tier2** | — | — | — | all | — | — | — | 445 | — | — | — |
-| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100 | 9100 | — | — | — |
+| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100, 9187 | 9100 | — | — | — |
 | **database** | — | — | — | — | — | — | — | — | — | — | — |
 | **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — | — |
 | **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — | — |
@@ -370,13 +386,13 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
 | 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
 | 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
-| 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (CT260) uses dedicated platform tag (DD#12) |
+| 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (lxc260) uses dedicated platform tag (DD#12) |
 | 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack → database:5432) | First database consumer (OpenWebUI CT230) onboarding |
 | 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
 | 2026-04-02 | Extended Rule 5 (ai-stack dst): added tag:admin:11434 and tag:tier2:11434 for Ollama inference backends | OpenWebUI requires direct Ollama access (admin workstation + VM100) |
-| 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to CT260 |
-| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@CT260, E2E verified | Paperless-ngx operational and documented |
-| 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on CT260 |
+| 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to lxc260 |
+| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@lxc260, E2E verified | Paperless-ngx operational and documented |
+| 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on lxc260 |
 | 2026-05-29 | Added `tag:storage-client` to tier model, tag ownership, access matrix; added Rule 8 (media-client → storage:445, media-client → media-client:55435) | media stack: centralized media share on VM102 + Tailscale peer-play |
 | 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
 
