@@ -34,6 +34,14 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
 | Media | `tag:storage-client` | media clients (media access + peer-play) | example-device |
 
+**Exception:** Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2`, despite
+being an application service by the table above. Confirmed intentional (2026-07-08);
+the specific technical rationale is being re-confirmed and is not yet documented here.
+The auto-import mechanism itself (`calibre-importer` role) has no verified dependency
+on tier1 access — it only needs the SMB port (445), which tier1 and tier2 grant
+identically. Untrusted/guest devices do not need Calibre-Web access, so the loss of
+untrusted reachability (Rule 7 only grants `tag:tier2:443`) is not a regression.
+
 ---
 
 ## Tag Ownership
@@ -247,9 +255,12 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden
-- Tier 2 HTTPS (port 443): Calibre-Web
+- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden, Calibre-Web
 - AI stack HTTPS (port 443): OpenWebUI
+
+Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` — see the
+Tier Model table caveat below. The `tag:tier2:443` grant in this rule is
+currently unused (no tier2 node serves HTTPS).
 
 ### Rule 7 — Untrusted: minimal access
 
@@ -270,7 +281,10 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 2 HTTPS (port 443): Calibre-Web
+
+Note: `tag:tier2:443` is granted but currently unused — Calibre-Web is `tag:tier1`
+(see the Tier Model exception above), not tier2, and untrusted devices do not need
+access to it.
 
 ### Rule 8 — Media: media access and peer-play only
 
