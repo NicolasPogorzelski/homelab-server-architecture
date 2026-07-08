@@ -3,15 +3,15 @@
   hosts: all
   gather_facts: true
   tasks:
-    - name: node_uptime
+    - name: Node_uptime
       ansible.builtin.debug:
         var: ansible_uptime_seconds
 
-    - name: node_RAM
+    - name: Node_RAM
       ansible.builtin.debug:
         var: ansible_memory_mb
 
-    - name: node_mounts
+    - name: Node_mounts
       ansible.builtin.debug:
         var: ansible_mounts
 
@@ -53,7 +53,7 @@
       ansible.builtin.file:
         path: /var/log/fleet-health
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Find reports older than 7 days
       ansible.builtin.find:
@@ -84,4 +84,4 @@
             {{ mount.mount }} ({{ mount.fstype }}) — free: {{ (mount.size_available / 1024 / 1024) | int }} MB
           {% endfor %}
           {% endfor %}
-        mode: '0644'
+        mode: "0644"

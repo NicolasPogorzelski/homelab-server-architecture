@@ -13,7 +13,14 @@ jobs:
         uses: actions/checkout@v6
       - name: Install ansible-lint and collections
         run: |
-          pip install ansible-lint
+          pip install 'ansible-lint==26.6.0'
           ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Provide a vault password file for syntax-check
+        # ansible.cfg sets vault_password_file = ~/.vault_pass. ansible-lint runs
+        # `ansible-playbook --syntax-check` per role, which parses (but never
+        # decrypts) the committed !vault vars in group_vars/all/vault.yml. Without
+        # the file present, every syntax-check aborts with an internal-error.
+        # A dummy value suffices because syntax-check does not decrypt.
+        run: echo 'ci-syntax-check-only' > ~/.vault_pass
       - name: Run ansible-lint
         run: cd ansible && ansible-lint .

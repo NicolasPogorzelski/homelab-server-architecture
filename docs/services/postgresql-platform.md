@@ -157,7 +157,7 @@ No shared credentials exist.
 
 ### Service Onboarding Pattern
 
-Steps 1–3 are **codified** in the `postgresql-provisioning` Ansible role
+Steps 1–3 are **codified** in the `postgresql_provisioning` Ansible role
 (`ansible/playbooks/postgresql-provisioning.yml`): add the tenant to
 `postgres_tenants` in `host_vars/lxc260.yml` (non-secret fields) and its password
 to `postgres_tenant_passwords` (Vault-referenced), then run the playbook. The role
