@@ -103,7 +103,8 @@ existing tag rather than a dedicated inference tag.
 
 ### Rule 1b — Monitoring: outbound scrape access
 
-Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers.
+Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers,
+plus postgres_exporter (port 9187) on the database tier.
 No other outbound access is granted.
 
 See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
@@ -120,6 +121,7 @@ See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
         "tag:monitoring:9100",
         "tag:ai-stack:9100",
         "tag:database:9100",
+        "tag:database:9187",
         "tag:storage:9100"
     ]
 }
@@ -307,7 +309,7 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 | **tier0** | — | all | all | all | all | all | all | all | — | — | — |
 | **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — | — |
 | **tier2** | — | — | — | all | — | — | — | 445 | — | — | — |
-| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100 | 9100 | — | — | — |
+| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100, 9187 | 9100 | — | — | — |
 | **database** | — | — | — | — | — | — | — | — | — | — | — |
 | **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — | — |
 | **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — | — |
