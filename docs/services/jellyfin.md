@@ -36,7 +36,7 @@ Config, cache, and metadata use local persistent volumes on VM100.
 
 ## CUDA Watchdog
 
-Jellyfin intermittently loses CUDA access at runtime (see [KE-8](../platform/known-errors.md#ke-8-jellyfin-loses-cuda-access-intermittently--container-restart-required)).
+Jellyfin intermittently loses CUDA access at runtime (see [KE-10](../platform/known-errors.md#ke-10-jellyfin-loses-cuda-access-intermittently--container-restart-required)).
 A watchdog script checks GPU availability every 30 minutes and restarts the container if access is lost.
 
 ### Deploy on VM100
