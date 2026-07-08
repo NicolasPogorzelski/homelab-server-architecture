@@ -190,6 +190,12 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
   workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
   reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
+- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
+  application service tiering exception, confirmed intentional 2026-07-08. The
+  `calibre-importer` role's auto-import mechanism has no verified dependency on
+  tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
+  devices don't need Calibre-Web access, so no functional gap results. See the
+  Tier Model exception note in `docs/platform/tailscale-acl.md`.
 - **MergerFS pool close to full on vm102 (by design):** the media archive is meant
   to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
   consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
