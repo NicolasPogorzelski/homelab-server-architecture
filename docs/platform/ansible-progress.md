@@ -45,7 +45,7 @@ Append new session notes to this file.
 - **`breakglass` role complete (2026-06-08):**
   - `ansible/roles/breakglass/tasks/main.yml` — `authorized_key` in a `loop` over `breakglass_pubkeys`, `user: "{{ breakglass_user }}"`, additive (non-exclusive)
   - `ansible/roles/breakglass/defaults/main.yml` — `breakglass_pubkeys: []` (safe no-op default)
-  - `inventory/group_vars/vms.yml` — `breakglass_pubkeys` (the `legacy-workstation` admin pubkey; public key, not Vault)
+  - `inventory/group_vars/vms.yml` — `breakglass_pubkeys` (the `admin-workstation` + `admin-laptop` admin pubkeys; public keys, not Vault. Originally `legacy-workstation`, replaced by the `admin-workstation` key on 2026-06-17)
   - `inventory/host_vars/vm100.yml` / `vm102.yml` — `breakglass_user: gpu` / `storage` (per-host native user)
   - `ansible/playbooks/breakglass.yml` — role on `vms`, `serial: 1`, `become: true`
   - Scope rationale: VMs only — LXCs are reachable via `pct exec`, VMs need SSH break-glass (no guaranteed qemu-guest-agent). Dry-run found the key already present on both `gpu` and `storage` (`changed=0`); role now makes that state declarative
