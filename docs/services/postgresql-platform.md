@@ -19,7 +19,7 @@ Goals:
 
 ### Runtime Characteristics
 
-- Unprivileged Debian LXC (CT260)
+- Unprivileged Debian LXC (lxc260)
 - Local block storage only (no CIFS/SMB for runtime data)
 - PostgreSQL data directory: `/var/lib/postgresql/<version>/main`
 - No bind-mounts from network storage
@@ -27,7 +27,7 @@ Goals:
 Recommended deployment:
 
 - Dedicated infrastructure LXC
-- Platform range: **CT260**
+- Platform range: **lxc260**
 - No co-location with application services
 
 PostgreSQL is treated as shared platform infrastructure,
@@ -164,7 +164,7 @@ to `postgres_tenant_passwords` (Vault-referenced), then run the playbook. The ro
 is idempotent and connects via peer auth as the `postgres` user. The manual SQL
 below is the reference the role implements; steps 4–5 remain manual.
 
-Run on CT260 as the `postgres` user unless noted.
+Run on lxc260 as the `postgres` user unless noted.
 
 **1. Create database and user**
 ```sql
@@ -204,8 +204,8 @@ relevant ACL rule, or add one. See [tailscale-acl.md](../platform/tailscale-acl.
 
 PostgreSQL is monitored via:
 
-- Node-level metrics (CPU, RAM, disk) — node_exporter on CT260, scraped by Prometheus on CT200
-- `postgres_exporter` (prometheus-community) — runs on CT260 as a systemd service, binds to `<tailscale-ip-lxc260>:9187`, scraped by Prometheus on CT200
+- Node-level metrics (CPU, RAM, disk) — node_exporter on lxc260, scraped by Prometheus on CT200
+- `postgres_exporter` (prometheus-community) — runs on lxc260 as a systemd service, binds to `<tailscale-ip-lxc260>:9187`, scraped by Prometheus on CT200
 
 **Monitoring user:** `postgres_exporter` with `pg_monitor` role (read-only access to all `pg_stat_*` views).
 
@@ -229,7 +229,7 @@ PostgreSQL is monitored via:
 - Compression: gzip
 - Target: `/mnt/backups/` (SMB mount on MergerFS, separate failure domain)
 - Retention: 7 days (automatic cleanup via `find -mtime`)
-- Script: `/usr/local/sbin/pg-backup.sh` on CT260
+- Script: `/usr/local/sbin/pg-backup.sh` on lxc260
 - Source of truth (repo): `snippets/postgres/pg-backup.sh`
 
 ### Operational Notes
@@ -321,12 +321,12 @@ Zero Trust = multiple independent enforcement layers.
 
 ## Failure Impact
 
-If CT260 (PostgreSQL) becomes unavailable:
+If lxc260 (PostgreSQL) becomes unavailable:
 - All dependent services lose database connectivity: OpenWebUI (CT230), Paperless-ngx (CT211)
 - Application startup fails for DB-dependent services
 - Existing connections are terminated immediately
 - No data loss if WAL and fsync guarantees were intact before failure
-- Recovery priority: restore CT260 before restarting application containers
+- Recovery priority: restore lxc260 before restarting application containers
 
 ## Related Documents
 

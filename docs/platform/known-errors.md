@@ -17,7 +17,7 @@ Unlike the incident response playbooks in [operations.md](./operations.md), thes
 SQLite relies on POSIX file locking semantics that are not reliably supported on CIFS/SMB network filesystems. When OpenWebUI's default SQLite database was stored on a CIFS mount, concurrent access caused persistent locking failures.
 
 **Fix:**
-SQLite was replaced with PostgreSQL running on local block storage in a dedicated platform container (CT260). This is now an architectural rule: no database files (SQLite or PostgreSQL data directories) may reside on CIFS/SMB or automount-backed network shares.
+SQLite was replaced with PostgreSQL running on local block storage in a dedicated platform container (lxc260). This is now an architectural rule: no database files (SQLite or PostgreSQL data directories) may reside on CIFS/SMB or automount-backed network shares.
 
 **Status:** Resolved (architectural decision)
 
@@ -114,11 +114,11 @@ the "no database files on CIFS" rule. The `/opt/vaultwarden` bind-mount was conf
 service data directory without isolating the database to local storage.
 
 **Fix:**
-Not yet applied. Migration to PostgreSQL (CT260) is planned. Until migration, the risk is
+Not yet applied. Migration to PostgreSQL (lxc260) is planned. Until migration, the risk is
 accepted: Vaultwarden is a single-user deployment with low write frequency, reducing the
 probability of POSIX locking failures relative to the multi-user OpenWebUI case (KE-1).
 
-**Status:** Known, unresolved (planned migration to CT260)
+**Status:** Known, unresolved (planned migration to lxc260)
 
 **References:**
 - [KE-1: SQLite on CIFS — "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)

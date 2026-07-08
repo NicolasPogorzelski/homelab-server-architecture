@@ -8,7 +8,7 @@ agentic workflows.
 
 - Access is Tailscale-only (no LAN, no public ingress)
 - Two inference backends operational (admin workstation + VM100)
-- PostgreSQL platform service (CT260) as database backend
+- PostgreSQL platform service (lxc260) as database backend
 - Hard rule: no database files on CIFS/SMB
 
 ---
@@ -35,7 +35,7 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 
 **Architectural decision:**
 - SQLite was removed.
-- PostgreSQL (platform service, CT260) is used instead.
+- PostgreSQL (platform service, lxc260) is used instead.
 - No database (SQLite or PostgreSQL data directory) may reside on CIFS/SMB
   or automount-backed network shares.
 
@@ -45,7 +45,7 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 
 | Data type | Location | Mount |
 |---|---|---|
-| DB (PostgreSQL) | CT260 (local block FS) | Tailnet TCP |
+| DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
 | App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui → /var/lib/openwebui/data` |
 | Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/openwebui/containerd` + `docker-data` |
 | Uploads | MergerFS/SMB | `mp0: /mnt/smb/openwebui → /data/openwebui` |
@@ -81,7 +81,7 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 1. **SMB path mounted** on Proxmox host
    - Runbook: [SMB autofs trigger](../../runbooks/storage/smb-autofs-trigger.md)
 2. **aux-disk path exists** for local runtime state (`mp1`)
-3. **PostgreSQL reachable** on Tailnet (CT260)
+3. **PostgreSQL reachable** on Tailnet (lxc260)
    - See: [PostgreSQL platform service](./postgresql-platform.md)
 4. **Ollama reachable** on Tailnet (admin workstation + VM100, port 11434)
    - See: [Ollama Service](./ollama.md)
@@ -105,8 +105,8 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 If CT230 (OpenWebUI) becomes unavailable:
 - AI chat interface unavailable for all users
 - Inference backends (VM100, admin workstation) are unaffected
-- PostgreSQL platform (CT260) is unaffected
-- No data loss (database on CT260, uploads on SMB storage)
+- PostgreSQL platform (lxc260) is unaffected
+- No data loss (database on lxc260, uploads on SMB storage)
 - Recovery: restart LXC230, verify all dependencies (PostgreSQL reachable, SMB mounted, aux-disk present)
 
 ## Related Documents

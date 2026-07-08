@@ -123,7 +123,7 @@ It is an abstraction layer to keep service paths stable while disks are added/re
   - Restore procedure must be periodically validated
 - **Paperless-ngx (LXC211)**:
   - Document files on MergerFS/SMB (originals, archive, thumbnails)
-  - Database in centralized PostgreSQL (CT260)
+  - Database in centralized PostgreSQL (lxc260)
   - Backups via pg_dump (paperless_db) + document export
   - Runtime state on local block storage (aux-disk)
 
