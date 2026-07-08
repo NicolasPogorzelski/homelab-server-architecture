@@ -1,0 +1,8 @@
+---
+# Lightweight lint gate (learning-roadmap item #13: "keep minimal").
+# profile:min enforces only the "does it parse / load / run" tier, which keeps
+# the gate stable across ansible-lint releases instead of tracking the tool's
+# ever-stricter default profile. Raising to profile:basic (task names, role-name
+# convention, yaml formatting) is deferred to a dedicated hardening session —
+# tracked in CLAUDE.md "Known Technical Debt".
+profile: min
