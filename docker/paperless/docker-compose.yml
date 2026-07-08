@@ -23,14 +23,14 @@ services:
       - paperless-data:/usr/src/paperless/data
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.9-alpine  # pinned to running version (2026-07-08)
     container_name: paperless-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.33.0  # pinned to running version (2026-07-08)
     container_name: paperless-gotenberg
     restart: unless-stopped
     command:

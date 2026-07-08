@@ -1,6 +1,6 @@
 ---
-- name: deploy paperless-env  to lxc211
+- name: Deploy paperless-env  to lxc211
   hosts: lxc211
   become: true
   roles:
-    - paperless-env
+    - paperless_env

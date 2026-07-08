@@ -21,7 +21,7 @@
     dest: "{{ calibre_importer_script_dest }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy systemd service unit
   ansible.builtin.template:
@@ -29,7 +29,7 @@
     dest: /etc/systemd/system/calibre-import.service
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: reload systemd
 
 - name: Deploy systemd timer unit
@@ -38,7 +38,7 @@
     dest: /etc/systemd/system/calibre-import.timer
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: reload systemd
 
 - name: Enable and start the import timer

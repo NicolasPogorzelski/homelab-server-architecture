@@ -127,7 +127,7 @@ Traefik's automatic container discovery was considered:
 | Node | Reason |
 |---|---|
 | LXC250 | DevOps workstation, SSH access only |
-| CT260 | PostgreSQL platform service, Tailscale IP binding only (port 5432) |
+| lxc260 | PostgreSQL platform service, Tailscale IP binding only (port 5432) |
 
 #### Notes on Exceptions
 

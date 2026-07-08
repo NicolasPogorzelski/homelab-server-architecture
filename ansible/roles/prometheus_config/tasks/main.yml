@@ -5,6 +5,6 @@
     dest: /opt/monitoring/prometheus/prometheus.yml
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
     lstrip_blocks: true
   notify: Reload prometheus-config

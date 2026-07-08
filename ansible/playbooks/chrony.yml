@@ -1,8 +1,7 @@
 ---
-- name: config chrony 
+- name: Config chrony
   hosts: vms
   serial: 1
   become: true
   roles:
     - chrony
-

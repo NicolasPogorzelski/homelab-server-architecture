@@ -1,4 +1,5 @@
 ---
-# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+# Docker Compose stacks on this node. dest = project_src on the node;
+# src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
-  - /opt/monitoring
+  - { dest: /opt/monitoring, src: monitoring }

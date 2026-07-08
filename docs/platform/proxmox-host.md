@@ -15,13 +15,16 @@ Unlike the node docs in `docs/nodes/`, this covers host-level configuration that
 
 VMs and LXCs start in dependency order after the hypervisor is up:
 
-| Layer | Node | Startup order | Delay |
+| Startup order | Node(s) | Delay | Role |
 |---|---|---|---|
-| 1 — Storage | VM102 | 1 | 30s |
-| 2 — Compute | VM100 | 2 | 20s |
-| 3 — Services | LXC200–LXC260 | 3 | 20s |
+| 1 | VM102 | 30s | Storage (SMB must be reachable before dependents) |
+| 2 | LXC200, LXC260 | 20s | Monitoring, PostgreSQL platform |
+| 3 | LXC210, LXC211 | 20s | Nextcloud, Paperless |
+| 4 | LXC240 | 20s | Vaultwarden |
+| 5 | LXC220, LXC230 | 20s | Calibre-Web, OpenWebUI |
+| 6 | VM100 | 40s | Compute / GPU media |
 
-Startup order and delays are configured per VM/LXC in the Proxmox guest config. VM102 must be fully up (SMB reachable) before service LXCs start to avoid mount failures.
+Startup order and delays are configured per VM/LXC in the Proxmox guest config (`startup: order=N,up=M`). VM102 must be fully up (SMB reachable) before storage-dependent nodes start, to avoid mount failures. VM100 (compute/GPU) starts last — its media services depend on VM102 storage but nothing depends on VM100 at boot.
 
 ## pveproxy Tailscale-IP Boot Ordering
 
@@ -68,7 +71,7 @@ See: [KE-13](./known-errors.md#ke-13-aux-disk-physical-disk-failure-medium-error
 
 ## Host Cron Jobs
 
-Managed via `/etc/cron.d/homelab-schedule`. Managed by the `homelab-schedule` Ansible role (see [Ansible platform](./ansible.md)).
+Deployed as `/etc/cron.d/homelab-schedule`, currently **managed manually** (deployed 2026-05-23). A `homelab_schedule` Ansible role exists to codify these scripts + cron file but has **not yet been applied** to the live host (see [Ansible platform](./ansible.md)).
 
 | Schedule | User | Script | Purpose |
 |---|---|---|---|
@@ -90,11 +93,9 @@ Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapR
 
 Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-shutdown.sh`.
 
-Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-shutdown.sh`.
-
 ## Ansible Management
 
-The Proxmox host is **not yet a fully managed Ansible node**. The `homelab-schedule` role manages the power-schedule scripts and cron file. Full host management (package updates, SSH hardening) is not implemented.
+The Proxmox host is **not yet a fully managed Ansible node**. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied — those are currently deployed manually. Full host management (package updates, SSH hardening) is not implemented.
 
 To run the schedule role against the host:
 
@@ -110,4 +111,4 @@ See: [Ansible platform](./ansible.md)
 
 - [Operations](./operations.md) — boot ordering and maintenance routines
 - [VM102 — Storage](../nodes/vm102.md) — SnapRAID cron schedule on VM102
-- [ansible/roles/homelab-schedule/](../../ansible/roles/homelab-schedule/) — role that deploys scripts + cron file
+- [ansible/roles/homelab_schedule/](../../ansible/roles/homelab_schedule/) — role that deploys scripts + cron file

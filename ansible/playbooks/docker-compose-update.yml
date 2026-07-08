@@ -1,7 +1,7 @@
 ---
-- name: update docker compose stacks
+- name: Update docker compose stacks
   hosts: docker
   serial: 1
   become: true
   roles:
-    - docker-compose-update
+    - docker_compose_update
