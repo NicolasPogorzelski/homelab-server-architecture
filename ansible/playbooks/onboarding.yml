@@ -32,7 +32,7 @@
   remote_user: ansible
   become: true
   roles:
-    - ssh-hardening
+    - ssh_hardening
 
 - name: Deploy  node_exporter
   hosts: lxc-test

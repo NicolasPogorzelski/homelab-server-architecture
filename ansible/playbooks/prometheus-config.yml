@@ -3,4 +3,4 @@
   hosts: lxc200
   become: true
   roles:
-    - prometheus-config
+    - prometheus_config

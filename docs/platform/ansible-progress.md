@@ -30,9 +30,9 @@ Append new session notes to this file.
   - Idempotency verified: `changed=0` on second run across all 8 nodes
 
 - **`prometheus-config` role complete (2026-05-21, corrected 2026-05-28):**
-  - `ansible/roles/prometheus-config/tasks/main.yml` — `ansible.builtin.template` with `lstrip_blocks: yes`
-  - `ansible/roles/prometheus-config/handlers/main.yml` — `docker compose restart prometheus` (restart re-binds mount after atomic write; SIGHUP insufficient due to inode change)
-  - `ansible/roles/prometheus-config/templates/prometheus.yml.j2` — adds `node-proxmox-host` job via `proxmox_host_tailscale_ip` inventory var
+  - `ansible/roles/prometheus_config/tasks/main.yml` — `ansible.builtin.template` with `lstrip_blocks: yes`
+  - `ansible/roles/prometheus_config/handlers/main.yml` — `docker compose restart prometheus` (restart re-binds mount after atomic write; SIGHUP insufficient due to inode change)
+  - `ansible/roles/prometheus_config/templates/prometheus.yml.j2` — adds `node-proxmox-host` job via `proxmox_host_tailscale_ip` inventory var
   - `ansible/playbooks/prometheus-config.yml` — deploys role to lxc200; dest path corrected to `/opt/monitoring/prometheus/prometheus.yml`
   - All 13 Prometheus targets verified UP after deploy
 
@@ -51,7 +51,7 @@ Append new session notes to this file.
   - Scope rationale: VMs only — LXCs are reachable via `pct exec`, VMs need SSH break-glass (no guaranteed qemu-guest-agent). Dry-run found the key already present on both `gpu` and `storage` (`changed=0`); role now makes that state declarative
 
 - **`calibre-importer` role complete (2026-06-08):**
-  - `ansible/roles/calibre-importer/` — installs `calibre`, deploys `snippets/scripts/calibre-import.sh` (single source of truth) to `/usr/local/bin/`, and a `calibre-import.service` (oneshot) + `calibre-import.timer` (2-min poll); `ansible/playbooks/calibre-import.yml` runs it on lxc220
+  - `ansible/roles/calibre_importer/` — installs `calibre`, deploys `snippets/scripts/calibre-import.sh` (single source of truth) to `/usr/local/bin/`, and a `calibre-import.service` (oneshot) + `calibre-import.timer` (2-min poll); `ansible/playbooks/calibre-import.yml` runs it on lxc220
   - Needed a rw library mount: `pct config 220` → `mp2: /mnt/smb/books-rw → /books-rw` (the web UI mount `mp0 /books` is `:ro`)
   - **Bug found + fixed during deploy:** `calibredb add` on the CIFS library fails `apsw.BusyError: database is locked` even with calibre-web stopped — CIFS does not translate SQLite's `BEGIN EXCLUSIVE` byte-range lock. Verified by control test (CIFS fails / local copy succeeds). Script rewritten to import into a local `/tmp` working copy of `metadata.db`, `tar` new book dirs back, atomic DB swap; no host mount change (`nobrl`) required
   - Verification gotcha: `calibredb list --with-library /books-rw` *also* fails the CIFS lock (returns nothing) — verify by copying `metadata.db` locally and querying that
@@ -63,10 +63,10 @@ Append new session notes to this file.
   - `group_vars/` lives under `inventory/` so playbooks in `playbooks/` resolve it correctly
 
 - **`paperless-env` role complete (2026-05-23):**
-  - `ansible/roles/paperless-env/defaults/main.yml` — all non-secret vars (DB config, paths, redis, network, consumer)
-  - `ansible/roles/paperless-env/templates/paperless.env.j2` — Jinja2 template referencing Vault vars
-  - `ansible/roles/paperless-env/tasks/main.yml` — deploys `.env` via `ansible.builtin.template`, mode `0600`
-  - `ansible/roles/paperless-env/handlers/main.yml` — `docker compose up -d` in compose dir
+  - `ansible/roles/paperless_env/defaults/main.yml` — all non-secret vars (DB config, paths, redis, network, consumer)
+  - `ansible/roles/paperless_env/templates/paperless.env.j2` — Jinja2 template referencing Vault vars
+  - `ansible/roles/paperless_env/tasks/main.yml` — deploys `.env` via `ansible.builtin.template`, mode `0600`
+  - `ansible/roles/paperless_env/handlers/main.yml` — `docker compose up -d` in compose dir
   - `ansible/playbooks/paperless-env.yml` — deploys role to lxc211; idempotency verified (`changed=0` on second run)
   - Note: `docker-compose-plugin` was corrupt on lxc211 (same KE-7 root cause); reinstalled before deploy
 

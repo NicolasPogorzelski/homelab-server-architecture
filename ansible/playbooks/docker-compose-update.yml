@@ -4,4 +4,4 @@
   serial: 1
   become: true
   roles:
-    - docker-compose-update
+    - docker_compose_update

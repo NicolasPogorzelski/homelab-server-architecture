@@ -3,4 +3,4 @@
   hosts: lxc211
   become: true
   roles:
-    - paperless-env
+    - paperless_env

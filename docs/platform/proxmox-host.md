@@ -35,7 +35,7 @@ Exact disk models and IDs are documented offline. See [VM102 node doc](../nodes/
 
 ## Host Cron Jobs
 
-Managed via `/etc/cron.d/homelab-schedule`. Managed by the `homelab-schedule` Ansible role (see [Ansible platform](./ansible.md)).
+Managed via `/etc/cron.d/homelab-schedule`. Managed by the `homelab_schedule` Ansible role (see [Ansible platform](./ansible.md)).
 
 | Schedule | User | Script | Purpose |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-s
 
 ## Ansible Management
 
-The Proxmox host is **not yet a fully managed Ansible node**. The `homelab-schedule` role manages the power-schedule scripts and cron file. Full host management (package updates, SSH hardening) is not implemented.
+The Proxmox host is **not yet a fully managed Ansible node**. The `homelab_schedule` role manages the power-schedule scripts and cron file. Full host management (package updates, SSH hardening) is not implemented.
 
 To run the schedule role against the host:
 
@@ -77,4 +77,4 @@ See: [Ansible platform](./ansible.md)
 
 - [Operations](./operations.md) — boot ordering and maintenance routines
 - [VM102 — Storage](../nodes/vm102.md) — SnapRAID cron schedule on VM102
-- [ansible/roles/homelab-schedule/](../../ansible/roles/homelab-schedule/) — role that deploys scripts + cron file
+- [ansible/roles/homelab_schedule/](../../ansible/roles/homelab_schedule/) — role that deploys scripts + cron file
