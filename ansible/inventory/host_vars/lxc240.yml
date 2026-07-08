@@ -1,6 +1,7 @@
 ---
-# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
-# Dir basename is "compose"; the compose file pins `name: vaultwarden` to keep
-# the project name stable (see 2026-06-10 path-cleanup changelog).
+# Docker Compose stacks on this node. dest = project_src on the node;
+# src = subdir under repo docker/ that docker-compose-update syncs from.
+# dest dir basename is "compose"; the compose file pins `name: vaultwarden` to
+# keep the project name stable (see 2026-06-10 path-cleanup changelog).
 compose_projects:
-  - /opt/vaultwarden/compose
+  - { dest: /opt/vaultwarden/compose, src: vaultwarden }

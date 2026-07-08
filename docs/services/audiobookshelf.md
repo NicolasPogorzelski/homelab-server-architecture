@@ -4,8 +4,8 @@ Audiobookshelf is deployed via Docker Compose on VM100.
 
 ## Deployment
 
-- Image: `ghcr.io/advplyr/audiobookshelf:latest`
-- Compose path (runtime): `/opt/homelab-server-architecture/docker/audiobookshelf/docker-compose.yml`
+- Image: `ghcr.io/advplyr/audiobookshelf:2.35.1`
+- Compose path (runtime): `/opt/docker/audiobookshelf/docker-compose.yml`
 - Runs on port 13378/TCP
 
 ## Storage Integration

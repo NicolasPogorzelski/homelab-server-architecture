@@ -25,6 +25,7 @@
 - name: Docker health checks
   hosts: docker
   gather_facts: false
+  become: true
   tasks:
     - name: Populate service facts
       ansible.builtin.service_facts:
@@ -43,8 +44,10 @@
         var: docker_info.containers
 
 - name: Write fleet health report
-  hosts: lxc250
+  hosts: localhost
+  connection: local
   gather_facts: true
+  become: true
   tasks:
     - name: Ensure report directory exists
       ansible.builtin.file:

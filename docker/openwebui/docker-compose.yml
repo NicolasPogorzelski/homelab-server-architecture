@@ -1,6 +1,6 @@
 services:
   openwebui:
-    image: ghcr.io/open-webui/open-webui:main  # TODO: pin to specific version tag (currently tracking :main branch)
+    image: ghcr.io/open-webui/open-webui:0.9.6  # pinned to running app version (2026-07-08, verified via /api/version + tag exists in registry)
     container_name: openwebui
     restart: unless-stopped
     ports:

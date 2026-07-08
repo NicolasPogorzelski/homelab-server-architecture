@@ -2,7 +2,8 @@
 # Native admin user that receives the break-glass key on this host.
 breakglass_user: gpu
 
-# Docker Compose stacks on this node (project_src dirs for docker-compose-update).
+# Docker Compose stacks on this node. dest = project_src on the node;
+# src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
-  - /opt/docker/audiobookshelf
-  - /opt/docker/jellyfin
+  - { dest: /opt/docker/audiobookshelf, src: audiobookshelf }
+  - { dest: /opt/docker/jellyfin, src: jellyfin }

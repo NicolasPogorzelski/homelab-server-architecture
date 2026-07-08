@@ -60,20 +60,15 @@ scrape_configs:
     static_configs:
       - targets: ["LXC240_TAILSCALE_IP:9100"]
 
-  # Node Exporter — LXC250 DevOps
-  - job_name: "node-lxc250-devops"
+  # Node Exporter — LXC260 PostgreSQL platform
+  - job_name: "node-lxc260-postgres"
     static_configs:
-      - targets: ["LXC250_TAILSCALE_IP:9100"]
+      - targets: ["LXC260_TAILSCALE_IP:9100"]
 
-  # Node Exporter — CT260 PostgreSQL platform
-  - job_name: "node-ct260-postgres"
-    static_configs:
-      - targets: ["CT260_TAILSCALE_IP:9100"]
-
-  # PostgreSQL Exporter — CT260 (pg_stat_* metrics via Tailscale)
+  # PostgreSQL Exporter — LXC260 (pg_stat_* metrics via Tailscale)
   - job_name: "postgres"
     static_configs:
-      - targets: ["CT260_TAILSCALE_IP:9187"]
+      - targets: ["LXC260_TAILSCALE_IP:9187"]
 
   # Blackbox: service-level HTTP probes (KE-8 remediation)
   - job_name: "blackbox-http"
