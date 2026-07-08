@@ -219,6 +219,13 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
   on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
   requires manual re-deploy after VM102 rebuild.
+- **postgres_exporter on LXC260 not Ansible-managed (binds `*:9187`, LAN-exposed):** unlike
+  `node_exporter`, no role deploys or configures `postgres_exporter` — it was installed manually
+  (2026-04-22) and its systemd unit's `ExecStart` has no `--web.listen-address`, so it binds all
+  interfaces instead of the Tailscale IP only. Fix requires a systemd override (must restate the
+  full `ExecStart=` — overrides can't append args to an existing line) plus deciding whether to
+  adopt the exporter's full lifecycle into Ansible or just this one flag; deferred as its own
+  design task rather than bolted onto an unrelated audit pass.
 - **Legacy SSH keys on VM102 (`storage` user):** `root@server` and `admin-laptop` keys remain
   in `/home/storage/.ssh/authorized_keys`. Flagged for cleanup; no Ansible task to remove stale
   keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.
