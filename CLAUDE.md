@@ -249,9 +249,21 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.
-- **SMART monitoring not deployed:** no `smartctl_exporter` or node-exporter textfile collector
-  for disk health data on VM102. Disk failure detection relies on SnapRAID alerts, not SMART.
+- **SMART monitoring not deployed (highest-leverage gap):** no `smartctl_exporter` or
+  node-exporter textfile collector for disk health. Disk failure detection relies on SnapRAID
+  alerts, not SMART. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
+  returned to service without anyone seeing it still degrading.** Note: all nine disks are attached
+  to the **Proxmox host**; VM102 reaches six of them via `by-id` passthrough and sees only
+  virtio-SCSI devices, so SMART is readable *only on the host* — the previous wording here named
+  VM102 as the target node and was wrong. Deploying this requires the host to become an
+  Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.
   Listed as planned enhancement in `docs/platform/operations.md`.
+- **KE-14 — boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
+  `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
+  Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
+  Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
+  `sdc` carries every VM and LXC root disk, so an `EIO` into the thin pool during guest start
+  could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
 - **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement ~6 weeks out:**
   it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's a few hundred GB `scsi1` disk**
   (allocated). `Reported_Uncorrect` rose 18 → 21 since the 2026-06-25 incident — it is

@@ -511,3 +511,85 @@ host changes.
 - [VM100 node doc](../nodes/vm100.md)
 - [VM102 node doc](../nodes/vm102.md)
 - [KE-7: Package corruption when LVM thin-pool overflows](#ke-7-package-corruption-when-lvm-thin-pool-overflows-during-apt-upgrade)
+
+---
+
+## KE-14: Intermittent boot-time I/O errors on the boot SSD (SAS HBA transport, not media)
+
+**Affected component:** Proxmox host — boot SSD the boot SSD behind the LSI SAS2008 HBA
+
+**Symptom:**
+On some boots the kernel logs a burst of read failures against `sdc` roughly three minutes
+after start, then falls silent:
+
+```
+sd 9:0:0:0: [sdc] tag#628 FAILED Result: hostbyte=DID_SOFT_ERROR driverbyte=DRIVER_OK cmd_age=19s
+sd 9:0:0:0: [sdc] tag#628 CDB: Read(10) 28 00 07 7c 0e 60 00 00 18 00
+I/O error, dev sdc, sector 125570656 op 0x0:(READ) flags 0x80700 phys_seg 3 prio class 2
+```
+
+`sdc` carries `/boot/efi`, `pve-root`, and the entire `pve-data` thin pool — i.e. the root
+disks of every VM and LXC on the host. No filesystem damage has resulted so far (no
+`EXT4-fs error`, no read-only remount).
+
+Observed frequency (persistent journal, `journalctl -k -b <n>`):
+
+| Boot | Date | `sdc` error lines |
+|---|---|---|
+| 0 | 2026-07-09 07:38 | 11 |
+| −1 | 2026-07-08 10:44 | 0 |
+| −2 | 2026-07-06 16:10 | 20 |
+| −3 | 2026-07-05 07:31 | 0 |
+
+Errors occur only during the boot window and never afterwards; 11 errors hit 11 distinct
+sectors, so no single block is repeatedly unreadable.
+
+**Root cause:** *Not yet confirmed.* What has been ruled out:
+
+- **Not media failure.** `DID_SOFT_ERROR` is the host adapter reporting a transient fault. A
+  genuine bad sector produces `hostbyte=DID_OK driverbyte=DRIVER_SENSE` with
+  `Sense Key: Medium Error` / `Add. Sense: Unrecovered read error`. There is no sense data
+  here. The drive's own SMART error log reads `No Errors Logged`, and every media counter is
+  zero (`Reallocated_Sector_Ct`, `Runtime_Bad_Block`, `Program_Fail_Cnt_Total`,
+  `Erase_Fail_Count_Total`). `cmd_age=19s` is a command timeout, not a read failure — a drive
+  that cannot read a sector reports so in milliseconds.
+- **Not HBA firmware.** `FWVersion(20.00.07.00)` is the known-good P20 phase; the problematic
+  phases are 20.00.00.00 through 20.00.04.00.
+- **Not the SATA controller.** `sdc` is not on AHCI at all. It hangs off the SAS2008
+  (`scsi target9:0:0`, `phy(3)`, driver `mpt2sas`). Only `sda` (`ata5.00`) and `sdb`
+  (`ata6.00`) are AHCI devices.
+
+Leading hypothesis: **12 V rail sag under peak boot load.** Boot is the moment of maximum draw
+— two mechanical drives spin up simultaneously (spindle inrush current is several times the
+running current), the HBA initialises, guests start. `sensors` reports `+12V Voltage: 10.03 V`,
+which is 16% below nominal and outside the ATX ±5% tolerance (11.4–12.6 V). This is consistent
+with the timing, but **unverified**: motherboard voltage sensors — `asus_wmi_sensors` in
+particular — are frequently inaccurate or mislabelled, and `AIO Pump: 0 RPM` in the same output
+suggests some channels are reading unconnected headers. The SAS2008 is also passively cooled
+and known to run hot without forced airflow, which remains a plausible alternative.
+
+**Verification steps (physical, not yet performed):**
+
+1. Multimeter on a spare Molex/SATA power connector, yellow to black, at idle and during boot.
+   A real ~12 V reading falsifies the sensor and closes this lead.
+2. Reseat the SAS cable at both the HBA and `phy(3)`.
+3. Check the SAS2008 heatsink temperature (host powered off, by hand). If hot, fit a 40 mm fan
+   — the standard remedy for this controller in desktop chassis.
+4. Establish PSU model and age. The drives report ~6.6 years power-on; a PSU of the same
+   vintage with aged capacitors would explain a sagging 12 V rail.
+
+**Fix / mitigation:** None applied. The fault is currently self-limiting (boot window only, no
+filesystem damage). The risk is that an `EIO` returned into the thin pool during guest start
+could corrupt a guest filesystem.
+
+**Status:** Diagnosed to transport layer; media and firmware causes excluded; physical root
+cause unconfirmed pending the verification steps above
+
+**Incidental correction:** all nine disks are attached to the **Proxmox host**. VM102 reaches
+six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART
+data is readable *only on the host*. Any SMART monitoring must therefore run there, not on
+VM102 as previously documented.
+
+**References:**
+- [Proxmox Host](./proxmox-host.md)
+- [KE-13 — aux-disk physical disk failure](#ke-13-aux-disk-physical-disk-failure-medium-errors) (a separate, genuine media failure on `sdb`; do not conflate)
