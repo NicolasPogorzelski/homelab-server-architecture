@@ -53,6 +53,24 @@ Data and parity disks for VM102 are passed through by ID from the host:
 
 Exact disk models and IDs are documented offline. See [VM102 node doc](../nodes/vm102.md) for the logical topology.
 
+All nine physical disks are attached to the host. VM102 sees six of them as virtio-SCSI devices,
+so SMART data is readable **only on the host** — any SMART monitoring must run here, not on VM102.
+
+## Boot SSD — Intermittent I/O Errors (KE-14)
+
+The boot SSD (the boot SSD) does not hang off the SATA controller. It is attached to an
+LSI SAS2008 HBA (`mpt2sas`, firmware `20.00.07.00`, `phy(3)`). It carries `/boot/efi`,
+`pve-root` and the whole `pve-data` thin pool — every VM and LXC root disk.
+
+On some boots the kernel logs a burst of `DID_SOFT_ERROR` read failures against it, always
+within the boot window and never afterwards. These are **transport-layer faults, not media
+failures**: the drive's SMART error log is empty and every media counter is zero. Root cause is
+unconfirmed; the leading hypothesis is a sagging 12 V rail under peak boot load. No filesystem
+damage has occurred.
+
+Full analysis and the outstanding physical verification steps:
+[KE-14](./known-errors.md#ke-14-intermittent-boot-time-io-errors-on-the-boot-ssd-sas-hba-transport-not-media).
+
 ## aux-disk Auxiliary Disk (Failed 2026-06-25)
 
 aux-disk is a host auxiliary disk mounted at `/mnt/aux-disk` (fstab entry with
