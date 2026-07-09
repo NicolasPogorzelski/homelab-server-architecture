@@ -252,6 +252,16 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **SMART monitoring not deployed:** no `smartctl_exporter` or node-exporter textfile collector
   for disk health data on VM102. Disk failure detection relies on SnapRAID alerts, not SMART.
   Listed as planned enhancement in `docs/platform/operations.md`.
+- **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement ~6 weeks out:**
+  it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's a few hundred GB `scsi1` disk**
+  (allocated). `Reported_Uncorrect` rose 18 → 21 since the 2026-06-25 incident — it is
+  still degrading in service. Nothing on `/mnt/aux-disk` has an off-site copy.
+- **Standing hold on `docker-compose-update` (until aux-disk is replaced):** the role pulls new
+  images, writing gigabytes of fresh blocks onto that disk. The repo-side image pins and the
+  role's compose-file-sync fix can wait for the replacement.
+- **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
+  mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
+  filling the boot SSD — the KE-7 failure class. `mkdir 0` does not prevent this.
 
 ## Platform Changelog
 
