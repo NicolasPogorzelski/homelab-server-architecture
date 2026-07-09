@@ -258,6 +258,12 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   VM102 as the target node and was wrong. Deploying this requires the host to become an
   Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.
   Listed as planned enhancement in `docs/platform/operations.md`.
+- **LXC250 (control node) tracks `main` only — verify before every live run:** playbooks execute
+  from the working tree, not from a commit, so a node on a feature branch or mid-merge silently runs
+  code matching no commit. Update with `git pull --ff-only`; do feature work on a workstation. Before
+  a run that changes live state: `git status --short --branch` must show a clean `main`, and
+  `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
+  only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
 - **VM100 sshd binds `0.0.0.0:22` (LAN-exposed), violating the platform binding rule:** unlike
   lxc250, which pins `ListenAddress` to its Tailscale IP. Password auth is off since 2026-07-09,
   so the acute risk is closed, but the bind is wrong and contradicts vm100.md's own "LAN exposure
