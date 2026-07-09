@@ -4,10 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Branch:** `main` (`feat/ansible-setup` merged 2026-06-17)
-- **Status:** Ansible track complete (items #1–#13). **Next learning track: Terraform.**
-- **Next session to-do (before starting Terraform):** run `ansible-playbook playbooks/homelab-schedule.yml --check --diff` against the live Proxmox host, then apply. Role was written 2026-06-17 but never executed against the host.
-- **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Append new session notes there; keep this section short.
+- **Branch:** `main`. Ansible track complete (items #1–#13). **Next learning track: Terraform.**
+- **Status (2026-07-09):** the learning track is paused. Two independent hardware faults are open
+  on the platform and the fleet is running on a disk with 7680 unreadable sectors. Starting
+  Terraform on top of this is the wrong order.
+- **Two hardware faults, neither fixed:**
+  - **KE-13** — aux-disk (the aux disk) is a real media failure, back in service under protest until
+    the replacement arrives (~6 weeks from 2026-07-09). Still degrading: `Reported_Uncorrect` 18 → 21
+    since the incident. Carries five LXC data-roots and vm100's a few hundred GB `scsi1` disk. No off-site copy.
+  - **KE-14** — the boot SSD's I/O errors are **transport faults at the SAS2008 HBA, not media**.
+    Media and firmware causes are excluded; the 12 V-rail hypothesis is unverified and needs a
+    multimeter, not a shell. `sdc` carries every VM and LXC root disk.
+- **Standing hold:** do not run `docker-compose-update` against the fleet while aux-disk is in
+  service — it writes gigabytes of new image layers onto the failing disk.
+- **Host changes are deferred by decision.** This blocks SMART monitoring (readable only on the
+  host), the unapplied `homelab_schedule` role, and the `is_mountpoint 1` storage fix.
+- **Next session to-do, in this order:**
+  1. Decide the SMART-monitoring path — it requires making the Proxmox host an Ansible-managed
+     node. Its absence is why KE-13 ran to total failure unnoticed.
+  2. Resolve `origin/docs/storage-stack-client-setup` — five commits stranded, never merged, and
+     the conflicts in `CLAUDE.md` / `samba.md` / `storage-stack.md` need a content decision.
+  3. Off-site backups. Two failing disks, zero external copies.
+- **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in
+  [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Platform changes and
+  their verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Append new
+  session notes there; keep this section short.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
