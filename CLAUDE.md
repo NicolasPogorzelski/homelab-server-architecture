@@ -258,6 +258,12 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   VM102 as the target node and was wrong. Deploying this requires the host to become an
   Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.
   Listed as planned enhancement in `docs/platform/operations.md`.
+- **VM100 sshd binds `0.0.0.0:22` (LAN-exposed), violating the platform binding rule:** unlike
+  lxc250, which pins `ListenAddress` to its Tailscale IP. Password auth is off since 2026-07-09,
+  so the acute risk is closed, but the bind is wrong and contradicts vm100.md's own "LAN exposure
+  limited to 8096/13378 only". Fixing it couples sshd startup to Tailscale being up — the
+  KE-9/KE-12 boot-race class. Needs its own design decision, including whether `ssh_hardening`
+  should own `ListenAddress`. Do not bolt this onto an unrelated pass.
 - **KE-14 — boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
