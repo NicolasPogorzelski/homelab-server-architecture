@@ -422,9 +422,92 @@ be decommissioned; affected services not yet restored (pending data relocation
 onto healthy storage). This invalidates the `docker-data-root-migration` runbook
 and CLAUDE.md "Adding a New Service" step 6, which both target `/mnt/aux-disk`.
 
-**Status:** Diagnosed; data rescued; disk pending decommission; services pending relocation
+**Status:** Diagnosed; data rescued; disk **returned to service under protest** pending a
+replacement (ordered, ~6 weeks lead time as of 2026-07-09). The disk carries the Docker
+data-roots of LXC200/211/220/230/260 again — and VM100's a few hundred GB `scsi1` data disk — because
+no alternative target exists: the MergerFS pool on VM102 has a few hundred GB free of multi-terabyte, and the LVM
+thin pool on the boot SSD has no headroom.
+
+**Degradation is ongoing.** SMART re-read 2026-07-09 (14 days after the incident):
+
+| Attribute | 2026-06-25 | 2026-07-09 |
+|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 |
+| `Offline_Uncorrectable` | 7688 | 7680 |
+| `Reallocated_Sector_Ct` | 0 | 0 |
+| `Reported_Uncorrect` | 18 | **21** |
+
+`Reported_Uncorrect` rose by 3 — the drive has surfaced three further uncorrectable errors to
+the kernel while back in service. The 8 sectors that left `pending` were rewritten and proved
+usable; none were reallocated, so the drive's spare pool is untouched and the remaining 7680
+sectors hold data that cannot be read back.
+
+**What is at stake** (measured 2026-07-09, 181 G used of 916 G):
+
+| Path | Used |
+|---|---|
+| `images/` — VM100's `scsi1` (300 G apparent, sparse) | 106 G |
+| `Archiv/` | 45 G |
+| `openwebui/`, `paperless/`, `monitoring/`, `calibreweb/` | 31 G combined |
+| `postgres/`, `nextcloud/` | 247 M combined |
+
+`vm-disks/vm100-jellyfin.raw` claims 300 G but allocates 8 K and is referenced by no guest
+config — an orphan from January, left in place.
+
+Consequences while the disk remains in service:
+
+- **Do not run `docker-compose-update` against the fleet.** Pulling new images writes
+  gigabytes of new blocks onto this disk. Image pins can wait for the replacement.
+- Treat anything on `/mnt/aux-disk` as unbacked. It has no off-site copy.
+- Disk identity for the physical swap: `<disk-model>`, serial `<disk-serial>`,
+  the aux disk (AHCI `ata6.00`).
+
+### Follow-up finding (2026-07-09): the disk was simultaneously host-mounted and passed through to VM102
+
+Discovered while mapping the disk topology. `sdb1` was mounted `rw` on the Proxmox host at
+`/mnt/aux-disk` **and** attached to the running VM102 as `scsi8`
+(`/dev/disk/by-id/ata-<disk-model>_<disk-serial>-part1`), confirmed against the live `kvm`
+process arguments, not just `qm config`. Both refer to the same filesystem — UUID
+`<fs-uuid>` appears in the host's `EXT4-fs … mounted filesystem`
+line and as VM102's a member disk.
+
+VM102 did **not** mount it: its `/etc/fstab` entry had been commented out when the disk moved
+to the host after the 2026-06-25 incident, but the passthrough was never removed from the VM
+config. No corruption resulted. Had anything in VM102 mounted a member disk — an uncommented
+fstab line, a manual `mount`, a rebuild from an older fstab — two kernels would have written
+to one ext4 with no locking between them. ext4 is not a cluster filesystem; the outcome would
+have been metadata corruption, not a race that can be won.
+
+This is a plausible contributing factor to the original 2026-06-25 mount failure and
+emergency-mode lockout, though not a substitute explanation: the 7680 unreadable sectors are
+drive-reported and independent of any mount topology.
+
+Fix applied 2026-07-09 (live):
+
+1. `qm set 102 --delete scsi8` — hot-unplug of the passthrough. VM102 held no mount, no open
+   file handle, no LVM PV and no md member on the device, all verified before the change. The
+   guest logged the expected `Synchronize Cache(10) failed … DID_BAD_TARGET` (the device was
+   gone before the cache flush; nothing was dirty). Proxmox removed the config line without
+   creating an `unusedN` entry, because a raw device path is not a storage-managed volume —
+   no data was touched.
+   Reversal: `qm set 102 --scsi8 /dev/disk/by-id/ata-<disk-model>_<disk-serial>-part1,size=953868M`
+2. VM102's commented `/etc/fstab` line replaced with an explicit four-line warning naming the
+   host mount and the corruption consequence. A bare `#` documents nothing; the next person to
+   tidy up would have uncommented it. Backup at `/etc/fstab.bak-20260709`; `findmnt --verify`
+   clean; `systemctl daemon-reload` run.
+
+### Related latent fault (not fixed): `appdata_aux-disk` storage lacks `is_mountpoint 1`
+
+The directory storage in `/etc/pve/storage.cfg` declares `path /mnt/aux-disk` and `mkdir 0`, but
+not `is_mountpoint 1`. `mkdir 0` stops Proxmox from *creating* the path; it does not stop it
+from *writing into* an existing empty mountpoint. If aux-disk fails to mount at boot — as it did
+on 2026-06-25 — Proxmox considers the storage active and writes VM100's disk into `pve-root`
+on the boot SSD, filling it. That is the KE-7 failure class. Deferred with all other Proxmox
+host changes.
 
 **References:**
 - [Incident write-up — aux-disk failure and recovery](./incidents/2026-06-25-aux-disk-failure-and-recovery.md)
 - [Runbook — aux-disk failure rescue](../../runbooks/storage/aux-disk-failure-rescue.md)
 - [VM100 node doc](../nodes/vm100.md)
+- [VM102 node doc](../nodes/vm102.md)
+- [KE-7: Package corruption when LVM thin-pool overflows](#ke-7-package-corruption-when-lvm-thin-pool-overflows-during-apt-upgrade)
