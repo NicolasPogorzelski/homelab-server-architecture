@@ -8,6 +8,33 @@ This document describes the Ansible setup used to manage the homelab platform.
 
 All playbooks and roles are run from LXC250 over SSH via Tailscale. No direct LAN access is used.
 
+### The control node's checkout tracks `main`, and only `main`
+
+Playbooks are executed from the **working tree**, not from a commit. A control node parked on a
+feature branch, or left mid-merge, silently runs whatever happens to be on disk. That is how a
+role can be fixed in the repo and still not take effect on the fleet.
+
+Rules:
+
+- The checkout stays on `main` and is `git pull --ff-only`-ed before a run. `--ff-only` refuses to
+  invent a merge commit on a node that should only ever consume history.
+- Feature work happens on a workstation, not here.
+- Before any run that changes live state, confirm the tree is clean and conflict-free:
+
+  ```bash
+  git -C ~/git/homelab-server-architecture status --short --branch
+  grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ~/git/homelab-server-architecture/ansible/
+  ```
+
+  The second command must print nothing. `validate-repo.sh` Check 15 catches conflict markers that
+  reach a commit; nothing catches markers sitting in an uncommitted working tree.
+
+On 2026-07-09 the control node was found on branch `docs/storage-stack-client-setup` with
+`.git/MERGE_HEAD` present and conflict markers in three documentation files — a `git merge origin/main`
+abandoned partway. The `ansible/` subtree happened to be conflict-free and current, so runs from it
+were correct, but that was luck rather than design. Resolved by aborting the merge (the branch's five
+commits were already pushed to `origin`, so nothing was lost) and checking out `main`.
+
 ## Inventory
 
 - **File:** `ansible/inventory/hosts.yml` (gitignored — contains real Tailscale IPs)
