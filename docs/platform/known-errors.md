@@ -4,7 +4,15 @@ This document records errors that have been observed in production, their root c
 
 Unlike the incident response playbooks in [operations.md](./operations.md), these are specific, previously encountered issues — not hypothetical failure scenarios.
 
+Every entry carries an explicit `<a id="ke-N"></a>` anchor above its heading, so other documents
+can link to `known-errors.md#ke-N` without depending on the heading text. Four such links were
+already broken on 2026-07-10 because the auto-generated anchor is the full slugified title, and
+titles get reworded. Keep the anchor when adding an entry; `validate-repo.sh` Check 2 verifies the
+file path, not the fragment.
+
 ---
+
+<a id="ke-1"></a>
 
 ## KE-1: SQLite on CIFS — "database is locked"
 
@@ -27,6 +35,8 @@ SQLite was replaced with PostgreSQL running on local block storage in a dedicate
 
 ---
 
+<a id="ke-2"></a>
+
 ## KE-2: Grafana datasource unreachable after host networking switch
 
 **Affected service:** Grafana (LXC200)
@@ -47,6 +57,8 @@ Changed the datasource URL from `http://prometheus:9090` to `http://127.0.0.1:90
 
 ---
 
+<a id="ke-3"></a>
+
 ## KE-3: Failed run-rpc_pipefs.mount in LXC210
 
 **Affected service:** Nextcloud (LXC210)
@@ -66,6 +78,8 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 - [Nextcloud service documentation](../services/nextcloud.md)
 
 ---
+
+<a id="ke-4"></a>
 
 ## KE-4: Docker creates directories for missing bind-mount files
 
@@ -99,6 +113,8 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 
 ---
 
+<a id="ke-5"></a>
+
 ## KE-5: Vaultwarden SQLite on CIFS — acknowledged technical debt
 
 **Affected service:** Vaultwarden (LXC240)
@@ -127,6 +143,8 @@ probability of POSIX locking failures relative to the multi-user OpenWebUI case 
 
 ---
 
+<a id="ke-6"></a>
+
 ## KE-6: Tailscale userspace-networking prevents node_exporter from binding to Tailscale IP
 
 **Affected service:** node_exporter (LXC240 Vaultwarden)
@@ -150,6 +168,8 @@ with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 **Status:** Resolved (LXC240)
 
 ---
+
+<a id="ke-7"></a>
 
 ## KE-7: Package corruption when LVM thin-pool overflows during apt upgrade
 
@@ -217,6 +237,8 @@ dpkg --verify 2>&1 | grep -v ' c /'
 
 ---
 
+<a id="ke-8"></a>
+
 ## KE-8: Media services hang while the node stays healthy (observability blind spot)
 
 **Affected services:** Jellyfin + Audiobookshelf (VM100)
@@ -254,6 +276,8 @@ dpkg --verify 2>&1 | grep -v ' c /'
 - [Monitoring platform](./monitoring.md)
 
 ---
+
+<a id="ke-9"></a>
 
 ## KE-9: PostgreSQL binds only loopback after boot (Tailscale-IP startup race)
 
@@ -293,6 +317,8 @@ A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the s
 
 ---
 
+<a id="ke-10"></a>
+
 ## KE-10: Jellyfin loses CUDA access intermittently — container restart required
 
 **Affected service:** Jellyfin (VM100)
@@ -329,6 +355,8 @@ in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
 
 ---
 
+<a id="ke-11"></a>
+
 ## KE-11: Grafana admin password not updated by environment variable after first start
 
 **Affected service:** Grafana (LXC200)
@@ -354,6 +382,8 @@ docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
 - [Monitoring platform](./monitoring.md)
 
 ---
+
+<a id="ke-12"></a>
 
 ## KE-12: pveproxy fails to start after boot (Tailscale-IP bind race)
 
@@ -394,6 +424,8 @@ present now). Durable — systemd drop-in
 - [Proxmox Host](./proxmox-host.md)
 
 ---
+
+<a id="ke-13"></a>
 
 ## KE-13: aux-disk physical disk failure (medium errors)
 
@@ -514,6 +546,8 @@ host changes.
 
 ---
 
+<a id="ke-14"></a>
+
 ## KE-14: Intermittent boot-time I/O errors on the boot SSD (SAS HBA transport, not media)
 
 **Affected component:** Proxmox host — boot SSD the boot SSD behind the LSI SAS2008 HBA
@@ -593,3 +627,151 @@ VM102 as previously documented.
 **References:**
 - [Proxmox Host](./proxmox-host.md)
 - [KE-13 — aux-disk physical disk failure](#ke-13-aux-disk-physical-disk-failure-medium-errors) (a separate, genuine media failure on `sdb`; do not conflate)
+
+---
+
+<a id="ke-15"></a>
+
+## KE-15: Guard tests mount existence, not mount identity — calibre-import dead for a month
+
+**Affected component:** LXC220 (Calibre-Web) — `calibre-import.service`, the `calibre_importer`
+role, and `snippets/scripts/calibre-import.sh`
+
+**Symptom:**
+`calibre-import.service` fails every 2 minutes (the timer interval) and has done so since
+2026-06-08. No dropped ebook has been imported in that window. Nothing alerted.
+
+```
+calibre-import.sh[3904]: mkdir: cannot create directory '/books-rw/_import': Permission denied
+systemd[1]: calibre-import.service: Main process exited, code=exited, status=1/FAILURE
+```
+
+**Root cause:** a four-step chain, each step individually unremarkable:
+
+1. On the Proxmox host, the rw CIFS mount `/mnt/smb/books-rw` (`//vm102/Books`) is **not
+   mounted**. This is the documented CIFS boot-race, except it is not transient — it has
+   persisted for a month.
+2. The `mp2` bind still maps the host path into LXC220 as `/books-rw`. With the CIFS mount
+   absent, the bind exposes the empty directory *underneath* it, on `pve-root`.
+3. That directory is owned by host root. LXC220 is an **unprivileged** container, so host UID 0
+   appears inside as `65534` (`nobody`). With mode `0755`, container root cannot write to it.
+4. `mkdir -p "${FAILED_DIR}"` fails with `EACCES`; `set -euo pipefail` aborts the script with
+   exit 1.
+
+**Why both guards failed to catch it:**
+
+The script (line 49) and the Ansible role each guarded with:
+
+```bash
+mountpoint -q /books-rw
+```
+
+This returns success. `/books-rw` **is** a mountpoint — the `mp2` bind itself is one, whether or
+not the CIFS mount underneath the host path succeeded. The guard tested the *existence* of a
+mount and could not, in principle, detect a *substituted* one. It was blind to exactly the
+failure class it was written for.
+
+This is the same structural error as `appdata_aux-disk` lacking `is_mountpoint 1`: a check that
+asserts a path exists, where what matters is what is mounted at it.
+
+Compounding it, the Ansible guard was an `ansible.builtin.command` without `check_mode: false`,
+so `--check` **skipped** it. A dry-run reported the role healthy.
+
+**Fix (applied 2026-07-10, repo side):**
+
+- Both guards now test the mount's *identity*, not its existence: `findmnt -no FSTYPE /books-rw`
+  must return `cifs`. A healthy bind of a CIFS mount reports `cifs` inside the container; the
+  failed one reports `ext4` (pve-root). A second guard requires `metadata.db` to be present,
+  covering the "right fstype, wrong share" case.
+- The script now exits **1**, not 0, when the library is absent. The previous `exit 0` was a
+  deliberate no-op ("VM102/network down") and is precisely why a month of failure stayed
+  invisible. Transient absence during the boot window is absorbed by the alert rule's `for:`
+  window, not by silencing the script.
+- The role's probe carries `check_mode: false` so it also runs during `--check`, and the task
+  order was changed to deploy the script and units *before* asserting the mount — otherwise a
+  broken host mount blocks delivery of the script that handles broken host mounts.
+
+**Not fixed (requires Proxmox host access, deferred with the host block):**
+mounting `/mnt/smb/books-rw` on the host and `pct reboot 220`. Until then the import path is
+down and the role's assert fails by design.
+
+**The gap that let it run for a month (closed 2026-07-10):** a `failed` systemd unit raised no
+alert. Monitoring covered `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP
+probes); a unit that fails 20,000 times fits none of those. This was the KE-8 blind spot one level
+deeper. Remediated the same day: `node_exporter --collector.systemd` (with `.mount` units kept in
+scope — the stock exclude drops them, and this fault *is* a mount fault) plus the
+`SystemdUnitFailed` Prometheus rule. Verified: lxc220 now exports
+`node_systemd_unit_state{name="calibre-import.service",state="failed"} 1` and Prometheus raises
+the alert.
+
+**Status:** Root cause confirmed; guards fixed in repo; unit-failure alerting deployed and
+verified; host mount **not** restored — the import path stays down until `/mnt/smb/books-rw` is
+mounted on the Proxmox host and `pct reboot 220` is run
+
+---
+
+<a id="ke-16"></a>
+
+## KE-16: Apache serves an expired certificate that was already renewed on disk
+
+**Affected component:** LXC210 (Nextcloud) — Apache + the Tailscale-issued TLS certificate
+
+**Symptom:**
+`ServiceDown` fired for `nextcloud` on 2026-07-10. The blackbox probe reported
+`probe_success = 0`; `curl` against the same URL returned `http=000` with
+`ssl_verify_result=10` (`X509_V_ERR_CERT_HAS_EXPIRED`) and exit 60. With `-k` (verification
+disabled) the same URL answered `302`. Apache, MariaDB, Redis and PHP-FPM were all `active`.
+
+**Root cause:**
+The certificate Apache was *serving* had `notAfter=Jul 10 09:53:15 2026 GMT` — it had expired
+about an hour earlier. The certificate *on disk* at `/var/lib/tailscale/certs/` was valid from
+`Jul 10 09:38:32` to `Oct 8 09:38:31`.
+
+`tailscaled` had renewed the file fifteen minutes before the old one expired. **Renewal was never
+the problem.** Apache reads its certificate at start-up and holds it in memory; nothing told it
+to re-read. It went on presenting the April certificate from RAM while a valid one sat on disk
+beside it.
+
+Why only this node: the other five certificate-holding nodes (lxc200, lxc211, lxc220, lxc230,
+lxc240) terminate TLS through `tailscale serve`, which asks `tailscaled` for the certificate per
+connection — renewal is transparent there. LXC210 is the only node whose service reads the file
+directly, via `SSLCertificateFile /var/lib/tailscale/certs/<fqdn>.crt` in
+`sites-available/nextcloud-ssl.conf`.
+
+**Immediate fix (applied 2026-07-10):** `tailscale cert --cert-file … --key-file …
+--min-validity 720h <fqdn>` (reported "unchanged", confirming tailscaled had already renewed),
+then `systemctl reload apache2`. Verified from the wire: the probe now returns `http=302` with
+`ssl_verify=0`, and the served certificate is the October one.
+
+**Durable fix (applied 2026-07-10):** new `tailscale_cert` role — `tailscale-cert-refresh.sh`
+plus a daily systemd timer, targeted at the new inventory group `tailscale_cert_ondisk` (only
+lxc210; serve-backed nodes must not be listed). The script hashes the certificate, runs
+`tailscale cert --min-validity 720h` (a no-op while more than 30 days remain, so a daily run
+costs nothing), and reloads Apache **only if the hash changed**. `reload`, not `restart`: Apache
+re-reads certificates on a graceful reload and live connections survive. The timer carries
+`Persistent=true`, because the host is powered down overnight and a fixed nightly slot would
+simply be missed.
+
+Verified: timer `active`/`enabled`; a manual run of the service logs
+`certificate unchanged (valid for at least 720h) — no reload needed` and exits 0. The reload
+branch was not exercised against a real renewal — forcing one would consume a Let's Encrypt rate
+limit to re-prove a `systemctl reload apache2` that had already succeeded minutes earlier.
+
+**Note:** the detection worked. `ServiceDown` fired within minutes of the expiry and reached
+Discord. The gap was that nothing acted on it, and nothing prevented the recurrence that would
+have happened again on 8 October.
+
+**Related, not fixed:** Apache on lxc210 listens on `*:80` and `*:443`, i.e. on the LAN
+interface, violating the platform binding rule — the same defect class as vm100's sshd. MariaDB
+and Redis on the same node bind single addresses correctly.
+
+**References:**
+- [LXC210 node doc](../nodes/lxc210.md)
+- [Nextcloud service doc](../services/nextcloud.md)
+- [KE-8 — the blind spot this alert closed](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
+
+**References:**
+- [LXC220 node doc](../nodes/lxc220.md)
+- [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
+- [KE-8 — observability blind spot](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
+- [KE-13 — the `appdata_aux-disk` `is_mountpoint` note](#ke-13-aux-disk-physical-disk-failure-medium-errors) (same structural error)

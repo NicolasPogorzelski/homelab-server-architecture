@@ -1,0 +1,20 @@
+---
+# === snapraid_maintenance (VM102) ===
+#
+# Replaces the hand-deployed /etc/cron.d/snapraid. Cron is the wrong scheduler on
+# this platform: homelab_schedule powers the host down overnight, and vm102's boot
+# window ended at 22:14 on 2026-07-05 — the 23:00 sync simply never ran and was
+# never retried. A monthly scrub missed the same way costs a whole month. Both
+# timers therefore carry Persistent=true, which fires an overdue run at next boot.
+#
+# Second reason: a failed timer unit raises SystemdUnitFailed. A failed cron job
+# raised nothing.
+
+snapraid_script_src: "{{ playbook_dir }}/../../snippets/storage/snapraid-maintenance.sh"
+snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
+
+# Nightly sync, monthly scrub — the schedule the cron file used.
+snapraid_sync_oncalendar: "*-*-* 23:00:00"
+snapraid_scrub_oncalendar: "*-*-01 20:00:00"
+
+snapraid_legacy_cron_file: /etc/cron.d/snapraid

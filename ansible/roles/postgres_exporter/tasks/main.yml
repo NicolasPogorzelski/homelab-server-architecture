@@ -1,0 +1,37 @@
+---
+# Fails loudly rather than deploying a unit that cannot start. The binary and the
+# environment file were installed by hand in April and are out of this role's
+# scope; if either is missing, this is not the node the role thinks it is.
+- name: Assert the exporter binary and environment file are present
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ postgres_exporter_bin }}"
+    - "{{ postgres_exporter_env_file }}"
+  register: postgres_exporter_prereqs
+  changed_when: false
+
+- name: Fail if a prerequisite is missing
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "{{ item.item }} is missing; postgres_exporter was installed manually and this role does not install it"
+  loop: "{{ postgres_exporter_prereqs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Deploy the postgres_exporter unit
+  ansible.builtin.template:
+    src: postgres_exporter.service.j2
+    dest: /etc/systemd/system/postgres_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart postgres_exporter
+
+- name: Enable and start postgres_exporter
+  ansible.builtin.systemd_service:
+    name: postgres_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

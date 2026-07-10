@@ -1,0 +1,10 @@
+---
+# Units that can never succeed on this node. Masked by the systemd_hygiene role so
+# that every remaining failed unit on the fleet is a real fault worth alerting on.
+systemd_hygiene_masked_units:
+  - name: run-rpc_pipefs.mount
+    reason: >-
+      NFS client plumbing pulled in by the nfs-common dependency. This node has no
+      NFS mount (storage is CIFS, //vm102/Nextcloud) and rpc-gssd.service is
+      inactive, so the mount has failed at every boot since the container was
+      built. Documented as KE-3, non-blocking.

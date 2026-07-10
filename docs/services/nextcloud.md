@@ -87,7 +87,7 @@ user's consumption subdirectory.
 - Auth method: global credentials stored in Nextcloud config (not session-based)
 - Files uploaded here are consumed and deleted by Paperless within ~30 seconds
 
-### Cache Synchronization Cronjob
+### Cache Synchronization Timer
 
 Paperless deletes consumed files from the SMB share. Nextcloud's file cache does not
 detect these deletions automatically (External Storage mounts are not monitored in real time).
@@ -95,15 +95,27 @@ detect these deletions automatically (External Storage mounts are not monitored 
 A scheduled `files:scan` on LXC210 keeps the cache consistent:
 
 - Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
-- Schedule: `0 * * * *` (hourly, root crontab)
-- Log: `/var/log/nextcloud-paperless-scan.log`
+- Schedule: `paperless-inbox-scan.timer` — `OnCalendar=hourly`, `Persistent=true`
+- Log: `journalctl -u paperless-inbox-scan.service`
 - Scope: scans `<user>/files/Paperless Inbox` per Nextcloud user; silently skips users without the folder
+
+Managed by the `paperless_inbox_scan` Ansible role
+(`ansible-playbook playbooks/paperless-inbox-scan.yml`), which also removed the
+previous hourly root crontab entry.
+
+`Persistent=true` matters here: the Proxmox host powers down overnight, so a plain
+cron entry loses every slot it sleeps through and never retries. The timer runs the
+overdue scan at the next boot instead. A failing run now raises the fleet-wide
+`SystemdUnitFailed` alert — as a cron job it failed silently.
 
 See: [Paperless-ngx Service Documentation](./paperless.md) — Nextcloud Integration section
 
 ## Notes / Known Issues
 
-- The container shows a failed `run-rpc_pipefs.mount` unit. This is non-blocking for Nextcloud operation and will be reviewed if NFS/RPC features are required.
+- `run-rpc_pipefs.mount` used to sit in `failed` state permanently. It is non-blocking
+  for Nextcloud (nothing here uses NFS/RPC), but a permanently failed unit is noise that
+  hides real failures once `SystemdUnitFailed` alerts on unit state. It is now masked via
+  the `systemd_hygiene` role (`host_vars/lxc210.yml`) rather than tolerated.
 
 ## Related Documents
 

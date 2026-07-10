@@ -1,0 +1,6 @@
+---
+- name: Manage the Jellyfin CUDA watchdog schedule
+  hosts: vm100
+  become: true
+  roles:
+    - jellyfin_watchdog

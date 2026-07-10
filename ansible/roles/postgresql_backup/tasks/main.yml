@@ -15,10 +15,37 @@
     group: postgres
     mode: "0755"
 
-- name: Schedule pg_dumpall cron job
+# The cron entry is removed, not merely superseded: if both survived, a night on
+# which the host stayed up would fire the dump twice. It also has to go because a
+# cron failure is invisible to monitoring, whereas a failed timer unit now raises
+# SystemdUnitFailed.
+- name: Remove the legacy pg-backup cron entry
   ansible.builtin.cron:
     name: pg-backup
     user: "{{ pg_backup_cron_user }}"
-    minute: "{{ pg_backup_cron_minute }}"
-    hour: "{{ pg_backup_cron_hour }}"
-    job: "{{ pg_backup_script_dest }}"
+    state: absent
+
+- name: Deploy pg-backup service unit
+  ansible.builtin.template:
+    src: pg-backup.service.j2
+    dest: /etc/systemd/system/pg-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy pg-backup timer unit
+  ansible.builtin.template:
+    src: pg-backup.timer.j2
+    dest: /etc/systemd/system/pg-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd_service:
+    name: pg-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

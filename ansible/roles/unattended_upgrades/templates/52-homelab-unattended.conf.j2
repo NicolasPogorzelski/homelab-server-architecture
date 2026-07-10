@@ -1,0 +1,21 @@
+// {{ ansible_managed }}
+//
+// Read after 50unattended-upgrades (lexical order in /etc/apt/apt.conf.d/), so the
+// values here win. The `#clear` directives are load-bearing: APT *appends* to a
+// list option when it is declared again, so without them this file would add the
+// security origins to the stock list rather than replace it, and the regular
+// archive would stay enabled.
+
+#clear Unattended-Upgrade::Allowed-Origins;
+Unattended-Upgrade::Allowed-Origins {
+{% for origin in unattended_upgrades_allowed_origins %}
+    "{{ origin }}";
+{% endfor %}
+};
+
+#clear Unattended-Upgrade::Package-Blacklist;
+Unattended-Upgrade::Package-Blacklist {
+{% for pkg in unattended_upgrades_blacklist %}
+    "{{ pkg }}";
+{% endfor %}
+};

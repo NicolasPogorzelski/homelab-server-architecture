@@ -225,24 +225,34 @@ PostgreSQL is monitored via:
 ### Implementation
 
 - Tool: `pg_dumpall` (all databases + global objects / roles)
-- Schedule: daily at 03:00 via crontab (`postgres` user)
+- Schedule: `pg-backup.timer` — `OnCalendar=*-*-* 03:00:00`, `Persistent=true`
 - Compression: gzip
 - Target: `/mnt/backups/` (SMB mount on MergerFS, separate failure domain)
 - Retention: 7 days (automatic cleanup via `find -mtime`)
 - Script: `/usr/local/sbin/pg-backup.sh` on lxc260
 - Source of truth (repo): `snippets/postgres/pg-backup.sh`
+- Managed by: `ansible/roles/postgresql_backup/`
 
 ### Operational Notes
 
-- Script runs as `postgres` user (peer authentication, no password required)
+- Service runs as `postgres` user (`User=postgres` in the unit; peer authentication, no password)
 - Script ownership: `root:postgres` (mode 750)
-- Pre-flight check: verifies backup directory exists before writing
+- Pre-flight check: verifies `/mnt/backups` is a **CIFS** mount via `findmnt -no FSTYPE`, and
+  refuses to run otherwise. Testing only that the directory exists was the bug that let 26 days
+  of backups silently write nowhere useful — an empty mountpoint is a directory too.
 - Post-dump check: verifies dump file is non-empty
-- Crontab entry: `0 3 * * * /usr/local/sbin/pg-backup.sh`
+- Success writes `pg_backup_last_success_timestamp` to the node_exporter textfile collector,
+  which feeds the `PostgreSQLBackupStale` alert.
+
+Scheduled via a systemd timer, not cron. The Proxmox host powers down before 03:00 every night,
+so the cron entry never fired: backups had not run for 26 days when this was found on 2026-07-10.
+`Persistent=true` runs the overdue dump at the next boot, and a failed run raises
+`SystemdUnitFailed`.
 
 ### Verification
 
-    crontab -u postgres -l
+    systemctl list-timers pg-backup.timer
+    journalctl -u pg-backup.service -n 30
     ls -la /mnt/backups/
     zcat /mnt/backups/pg_dumpall_<timestamp>.sql.gz | head -20
 

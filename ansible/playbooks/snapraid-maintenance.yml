@@ -1,0 +1,6 @@
+---
+- name: Manage SnapRAID sync and scrub schedules on the storage node
+  hosts: vm102
+  become: true
+  roles:
+    - snapraid_maintenance

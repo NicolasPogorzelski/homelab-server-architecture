@@ -1,0 +1,56 @@
+---
+- name: Deploy the Jellyfin CUDA watchdog script
+  ansible.builtin.copy:
+    src: "{{ jellyfin_watchdog_script_src }}"
+    dest: "{{ jellyfin_watchdog_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the watchdog service unit
+  ansible.builtin.template:
+    src: jellyfin-cuda-watchdog.service.j2
+    dest: /etc/systemd/system/jellyfin-cuda-watchdog.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the watchdog timer unit
+  ansible.builtin.template:
+    src: jellyfin-cuda-watchdog.timer.j2
+    dest: /etc/systemd/system/jellyfin-cuda-watchdog.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# See paperless_inbox_scan for why this is not `ansible.builtin.cron`, and why the
+# filter is `sed -E /d` rather than `grep -v`.
+- name: Read the root crontab
+  ansible.builtin.command:
+    cmd: crontab -l -u root
+  register: jellyfin_watchdog_root_crontab
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Remove the legacy watchdog cron entry
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      crontab -l -u root | sed -E '/{{ jellyfin_watchdog_legacy_cron_pattern }}/d' | crontab -u root -
+    executable: /bin/bash
+  when: jellyfin_watchdog_root_crontab.stdout is search(jellyfin_watchdog_legacy_cron_pattern)
+  changed_when: true
+
+# Skipped in check mode: the unit file above was not really written, so systemd
+# cannot see it yet and `enable` would fail with "Could not find the requested
+# service". Without this guard the role cannot be dry-run at all.
+- name: Enable and start the watchdog timer
+  ansible.builtin.systemd_service:
+    name: jellyfin-cuda-watchdog.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

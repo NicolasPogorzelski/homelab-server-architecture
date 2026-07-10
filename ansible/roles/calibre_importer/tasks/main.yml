@@ -5,16 +5,10 @@
     state: present
     update_cache: true
 
-- name: Verify the rw library mount is present
-  ansible.builtin.command:
-    cmd: mountpoint -q {{ calibre_importer_library }}
-  changed_when: false
-
-- name: Create import + quarantine directories
-  ansible.builtin.command:
-    cmd: mkdir -p {{ calibre_importer_import_dir }}/.failed
-    creates: "{{ calibre_importer_import_dir }}/.failed"
-
+# The script and its units are deployed before the mount is asserted: they carry
+# their own runtime guard and are safe to converge whether or not the CIFS share
+# is up. Asserting first would make a broken host mount block delivery of the very
+# script that handles a broken host mount.
 - name: Deploy import script
   ansible.builtin.copy:
     src: "{{ calibre_importer_script_src }}"
@@ -30,7 +24,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload systemd
+  notify: Reload systemd
 
 - name: Deploy systemd timer unit
   ansible.builtin.template:
@@ -39,7 +33,36 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload systemd
+  notify: Reload systemd
+
+# `mountpoint -q` was the previous guard. It is true for the mp2 bind itself even
+# when the host-side CIFS mount failed, so it could not see the failure class it
+# was written for (2026-07-10 incident). check_mode: false makes the probe run
+# during --check too; a guard that is skipped in a dry-run guards nothing.
+- name: Probe the filesystem type of the rw library mount
+  ansible.builtin.command:
+    cmd: findmnt -no FSTYPE {{ calibre_importer_library }}
+  register: calibre_importer_library_fstype
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the rw library is the CIFS share and not the directory beneath it
+  ansible.builtin.assert:
+    that:
+      - calibre_importer_library_fstype.stdout | trim == "cifs"
+    fail_msg: >-
+      {{ calibre_importer_library }} has fstype
+      '{{ calibre_importer_library_fstype.stdout | trim | default("none", true) }}',
+      expected 'cifs'. The Proxmox host has not mounted the rw Calibre share; the
+      mp2 bind is exposing the empty directory underneath it on pve-root. Mount
+      /mnt/smb/books-rw on the host, then `pct reboot 220`.
+    success_msg: "{{ calibre_importer_library }} is a CIFS mount"
+
+- name: Create import + quarantine directories
+  ansible.builtin.command:
+    cmd: mkdir -p {{ calibre_importer_import_dir }}/.failed
+    creates: "{{ calibre_importer_import_dir }}/.failed"
 
 - name: Enable and start the import timer
   ansible.builtin.systemd_service:
