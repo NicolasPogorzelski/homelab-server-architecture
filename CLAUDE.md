@@ -291,15 +291,29 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   `changed`. A `--fix` run that renames handlers will not update the `notify:` strings pointing
   at them (this happened in `355b449`, fixed 2026-07-10). After any `ansible-lint --fix`, diff
   `handlers/main.yml` names against `notify:` values by hand.
-- **PostgreSQL backups have not run since 2026-06-14 (26 days as of 2026-07-10, ACTIVE):**
-  `pg_backup_last_success_timestamp` = `1781406008`. This entry previously claimed a daily
-  `pg_dump` runs and only lacks restore testing — wrong on the more important half. The
-  `PostgreSQLBackupStale` rule fires correctly and reaches Discord, so detection works;
-  the backup itself does not. Verified: the CIFS target `/mnt/backups` **is** mounted and
-  `/usr/local/sbin/pg-backup.sh` is present. Unverified: whether the `postgres`-user crontab
-  entry exists, whether the target is writable by `postgres`, and the script's failure output.
-  Restore testing remains absent on top of that — there is still no runbook and no periodic
-  validation that a restore succeeds.
+- **PostgreSQL backups: scheduling fixed 2026-07-10, restore still never tested.** They had not
+  run since 2026-06-14 because the role scheduled a **cron job at 03:00** on a host that
+  `homelab_schedule` powers down overnight — cron has no catch-up, so every run was silently
+  lost; the four dumps that existed came from nights the host happened to stay up. Replaced with
+  a systemd timer + `Persistent=true` (fires an overdue run at the next boot). A failed timer
+  unit now also raises `SystemdUnitFailed`; a cron failure never did. **Any daily job on this
+  fleet must be a timer with `Persistent=true`, not a cron entry** — the host is not up at night.
+  Restore testing remains absent: no runbook, no periodic validation that a restore succeeds, and
+  the `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
+
+- **`tailscale cert` on disk needs a reload, not just a renewal (KE-16):** on nodes that read
+  `/var/lib/tailscale/certs/*.crt` directly (only lxc210 — everything else goes through
+  `tailscale serve`, which renews transparently), `tailscaled` renews the file but the consuming
+  daemon keeps the old certificate in memory. Apache served an expired certificate for an hour
+  with a valid one lying next to it. Handled by the `tailscale_cert` role and the
+  `tailscale_cert_ondisk` inventory group. **Never add a serve-backed node to that group.**
+
+- **Apache on lxc210 binds `*:80` and `*:443` (LAN-exposed), violating the platform binding rule:**
+  same defect class as vm100's sshd. MariaDB and Redis on the same node bind single addresses
+  correctly. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
+  start to Tailscale being up — the KE-9/KE-12 boot-race class) or moving Nextcloud behind
+  `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
+  design decision; do not bolt it onto an unrelated pass.
 
 - **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
   because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.

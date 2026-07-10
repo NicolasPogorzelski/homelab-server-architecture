@@ -1,0 +1,33 @@
+---
+- name: Deploy the certificate refresh script
+  ansible.builtin.copy:
+    src: "{{ tailscale_cert_script_src }}"
+    dest: "{{ tailscale_cert_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the refresh service unit
+  ansible.builtin.template:
+    src: tailscale-cert-refresh.service.j2
+    dest: /etc/systemd/system/tailscale-cert-refresh.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the refresh timer unit
+  ansible.builtin.template:
+    src: tailscale-cert-refresh.timer.j2
+    dest: /etc/systemd/system/tailscale-cert-refresh.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start the refresh timer
+  ansible.builtin.systemd_service:
+    name: tailscale-cert-refresh.timer
+    enabled: true
+    state: started
+    daemon_reload: true

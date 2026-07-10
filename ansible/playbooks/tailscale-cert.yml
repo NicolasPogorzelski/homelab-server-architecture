@@ -1,0 +1,8 @@
+---
+# Only nodes that read the Tailscale certificate off disk need this. Nodes behind
+# `tailscale serve` get renewal transparently and are deliberately not targeted.
+- name: Keep on-disk Tailscale certificates fresh and reloaded
+  hosts: tailscale_cert_ondisk
+  become: true
+  roles:
+    - tailscale_cert
