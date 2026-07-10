@@ -1,0 +1,10 @@
+---
+- name: Deploy the unattended-upgrades policy override
+  ansible.builtin.template:
+    src: 52-homelab-unattended.conf.j2
+    dest: /etc/apt/apt.conf.d/52-homelab-unattended.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # apt parses this file on every invocation; a syntax error breaks apt itself.
+    validate: apt-config -c %s dump

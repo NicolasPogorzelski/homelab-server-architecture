@@ -1,0 +1,9 @@
+---
+# vm100 only for now: it is the node where an autonomous kernel upgrade couples to
+# the NVIDIA DKMS module. The Debian LXCs need different origin ids and are a
+# separate decision.
+- name: Restrict unattended-upgrades to security updates, excluding kernel and NVIDIA
+  hosts: vm100
+  become: true
+  roles:
+    - unattended_upgrades

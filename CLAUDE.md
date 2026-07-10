@@ -211,21 +211,31 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   hardening: pin `Storage=persistent` and an explicit `SystemMaxUse=`, because `auto` makes
   persistence a property of a directory that happens to exist rather than of the config, and
   it degrades silently to RAM-only if that directory is ever removed.
-- **unattended-upgrades active on vm100 (uncontrolled change):** installs
-  packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
-  workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
-  reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
+- **unattended-upgrades on vm100 — restricted 2026-07-10.** The real defect was not the missing
+  kernel exclusion but the origin list: the stock config allowed
+  `"${distro_id}:${distro_codename}"`, i.e. the *regular* archive, not just security, with an
+  empty `Package-Blacklist`. Now security pockets only, with `linux-image`/`linux-headers`/
+  `linux-generic`/`linux-modules`/`nvidia-`/`libnvidia-` blacklisted, via the `unattended_upgrades`
+  role. Kernel and driver upgrades belong in `apt-upgrade.yml`, run while someone is watching.
+  Note the `#clear` directives in the drop-in are load-bearing — APT *appends* to a list option
+  when it is redeclared, so without them the regular archive would have stayed enabled.
+  **vm100 and vm102 are Ubuntu 22.04, not Debian**; these origin ids and package names do not
+  transfer to the LXCs unchanged.
 - **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
   application service tiering exception, confirmed intentional 2026-07-08. The
   `calibre-importer` role's auto-import mechanism has no verified dependency on
   tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
   devices don't need Calibre-Web access, so no functional gap results. See the
   Tier Model exception note in `docs/platform/tailscale-acl.md`.
-- **MergerFS pool close to full on vm102 (by design):** the media archive is meant
-  to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
-  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
-  hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
-  disk alert on archive disks is largely non-actionable (alert tiering by role pending).
+- **MergerFS pool close to full on vm102 (by design; alert tiering done 2026-07-10):** the media
+  archive is meant to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
+  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups, whose `/mnt/backups` target sits on
+  this pool) will eventually hit `ENOSPC` — capacity expansion is the lever, not deletion.
+  `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
+  member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
+  wrong measure for a multi-terabyte archive (15% = a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
+  and the member disks; the new `ArchivePoolLowSpace` warns on **absolute** free bytes below
+  100 GiB with `for: 1h`. Currently a low absolute margin.
 
 - **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
   (`ListenAddress` in sshd_config). SSH is unreachable for ~30–60 s after boot until
