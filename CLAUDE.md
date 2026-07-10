@@ -250,16 +250,24 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
   on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
   requires manual re-deploy after VM102 rebuild.
-- **postgres_exporter on LXC260 not Ansible-managed (binds `*:9187`, LAN-exposed):** unlike
-  `node_exporter`, no role deploys or configures `postgres_exporter` — it was installed manually
-  (2026-04-22) and its systemd unit's `ExecStart` has no `--web.listen-address`, so it binds all
-  interfaces instead of the Tailscale IP only. Fix requires a systemd override (must restate the
-  full `ExecStart=` — overrides can't append args to an existing line) plus deciding whether to
-  adopt the exporter's full lifecycle into Ansible or just this one flag; deferred as its own
-  design task rather than bolted onto an unrelated audit pass.
-- **Legacy SSH keys on VM102 (`storage` user):** `root@server` and `admin-laptop` keys remain
-  in `/home/storage/.ssh/authorized_keys`. Flagged for cleanup; no Ansible task to remove stale
-  keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.
+- **postgres_exporter on LXC260 — bind fixed and unit adopted 2026-07-10.** It had bound `*:9187`
+  (LAN-exposed) because the hand-written unit's `ExecStart` carried no `--web.listen-address`. The
+  deferred design question ("drop-in or full lifecycle?") answered itself once measured: the unit
+  is a *local* file in `/etc/systemd/system`, not a package's, so there was nothing to override —
+  the new `postgres_exporter` role simply owns it. It binds the node's Tailscale IP, orders after
+  `tailscaled` (the exporter would otherwise hit the KE-9/KE-12 bind race at boot), and asserts the
+  hand-installed binary and env file exist rather than deploying a unit that cannot start.
+  `/etc/postgres_exporter.env` still holds `DATA_SOURCE_NAME` unmanaged — adopting that needs an
+  Ansible Vault step and is deliberately not bolted onto a bind-address fix.
+- **Legacy SSH keys on vm100 + vm102 — REMOVED 2026-07-10.** The old entry named the wrong keys:
+  `admin-laptop` is a *declared* break-glass key in `group_vars/vms.yml`, not an artefact. The
+  actual strays, present on **both** VMs' admin accounts, were `root@server` (an RSA key belonging
+  to no current machine) and `devops@devops-lxc` (the control node's interactive user on the admin
+  account; Ansible connects as the `ansible` user with its own `authorized_keys`, so removing it
+  cost no automation path). The `breakglass` role now enforces the key set with `exclusive: true`,
+  making the inventory the single source of truth, and keeps a one-time
+  `authorized_keys.pre-ansible` backup. `ssh <admin>@<node>` from lxc250 no longer works by design;
+  `ssh ansible@<node>` and break-glass from either laptop do.
 - **Calibre library on CIFS — SQLite workaround in place, no durable fix:** `metadata.db` cannot
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
   (see `calibre_importer` role). Moving library to local block storage is the durable fix but
