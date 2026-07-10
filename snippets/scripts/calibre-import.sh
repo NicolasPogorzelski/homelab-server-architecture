@@ -45,8 +45,26 @@ WORK=""                             # local working library (mktemp, set below)
 exec 9>"${LOCK}"
 flock -n 9 || { echo "another import run is active — exiting"; exit 0; }
 
-# No-op if the rw mount is absent (VM102/network down) instead of erroring.
-mountpoint -q "${LIBRARY}" || { echo "library mount ${LIBRARY} not present — exiting"; exit 0; }
+# Verify the library is the CIFS share itself, not the directory underneath it.
+# `mountpoint -q` is NOT sufficient: the Proxmox host binds /mnt/smb/books-rw into
+# the container as mp2, and that bind is a mountpoint even when the host-side CIFS
+# mount failed — in which case the bind exposes an empty, host-root-owned directory
+# on pve-root. The guard then passed and the script died on `mkdir` (Permission
+# denied) every 2 min for a month, unnoticed. Test the mount's identity, not its
+# existence: a healthy bind of a CIFS mount reports fstype `cifs` inside the
+# container; the failed one reports `ext4`.
+fstype="$(findmnt -no FSTYPE "${LIBRARY}" 2>/dev/null || true)"
+if [ "${fstype}" != "cifs" ]; then
+    echo "library ${LIBRARY} is not a CIFS mount (fstype='${fstype:-none}') — host share not mounted" >&2
+    exit 1
+fi
+
+# Second guard: right filesystem type, wrong share. Without metadata.db this is not
+# the Calibre library, and importing into it would scatter books into a stray mount.
+if [ ! -f "${LIBRARY}/metadata.db" ]; then
+    echo "library ${LIBRARY} has no metadata.db — refusing to import" >&2
+    exit 1
+fi
 
 mkdir -p "${FAILED_DIR}"
 
