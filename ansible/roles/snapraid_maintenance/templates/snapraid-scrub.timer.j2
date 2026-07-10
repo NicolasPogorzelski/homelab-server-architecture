@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly SnapRAID scrub at {{ snapraid_scrub_oncalendar }}
+
+[Timer]
+OnCalendar={{ snapraid_scrub_oncalendar }}
+# A scrub missed because the host was off on the 1st would otherwise wait a full
+# month. Persistent=true catches it up at the next boot.
+Persistent=true
+Unit=snapraid-maintenance@scrub.service
+
+[Install]
+WantedBy=timers.target

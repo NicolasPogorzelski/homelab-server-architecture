@@ -4,17 +4,16 @@ set -euo pipefail
 # Run snapraid sync or scrub and write a Prometheus textfile metric on success.
 # Usage: snapraid-maintenance.sh sync|scrub
 #
-# Install on VM102:
-#   install -m 0750 -o root -g root /dev/null /usr/local/sbin/snapraid-maintenance.sh
-#   # copy script content, then add crontab entries as root:
-#   echo "0 23 * * *  /usr/local/sbin/snapraid-maintenance.sh sync"    >> /etc/cron.d/snapraid
-#   echo "0 20 1 * *  /usr/local/sbin/snapraid-maintenance.sh scrub"  >> /etc/cron.d/snapraid
+# Deployed to VM102 by the `snapraid_maintenance` Ansible role, which also installs
+# snapraid-sync.timer and snapraid-scrub.timer:
+#   ansible-playbook playbooks/snapraid-maintenance.yml --check --diff
 #
-# Prerequisite: node_exporter on VM102 must have the textfile collector enabled.
-#   Add --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
-#   to ExecStart in /etc/systemd/system/node_exporter.service, then:
-#   mkdir -p /var/lib/node_exporter/textfile_collector
-#   systemctl daemon-reload && systemctl restart node_exporter
+# Do not schedule this from cron. The host is powered down overnight, so a cron
+# entry at 23:00 is silently skipped on every night the shutdown lands first and is
+# never retried. The timers use Persistent=true and catch up at the next boot.
+#
+# Prerequisite: the textfile collector directory, created fleet-wide by the
+# `node_exporter` role (node_exporter_textfile_dir).
 
 MODE="${1:-}"
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"

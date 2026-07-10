@@ -1,0 +1,6 @@
+---
+- name: Manage the Nextcloud Paperless Inbox rescan schedule
+  hosts: lxc210
+  become: true
+  roles:
+    - paperless_inbox_scan

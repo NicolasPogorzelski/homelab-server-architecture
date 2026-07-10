@@ -219,8 +219,9 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   role. Kernel and driver upgrades belong in `apt-upgrade.yml`, run while someone is watching.
   Note the `#clear` directives in the drop-in are load-bearing — APT *appends* to a list option
   when it is redeclared, so without them the regular archive would have stayed enabled.
-  **vm100 and vm102 are Ubuntu 22.04, not Debian**; these origin ids and package names do not
-  transfer to the LXCs unchanged.
+  **vm100 is Ubuntu 22.04** (`/etc/os-release`, verified 2026-07-10) — the only non-Debian node;
+  vm102 and every LXC are Debian 12. The role's origin ids and package names are Ubuntu-specific
+  and do not transfer unchanged, which is why it targets `hosts: vm100` and not a group.
 - **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
   application service tiering exception, confirmed intentional 2026-07-08. The
   `calibre-importer` role's auto-import mechanism has no verified dependency on
@@ -248,18 +249,26 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **`homelab_schedule` role not yet applied to live host (2026-06-17):** role deploys
   `homelab-setwake.sh` + `homelab-shutdown.sh` + `/etc/cron.d/homelab-schedule` via Ansible.
   Scripts and cron file currently managed manually. Run `--check --diff` first, then apply.
-- **`scan-paperless-inbox.sh` on LXC210 not Ansible-managed:** script deployed manually to
-  `/usr/local/sbin/`, scheduled via root crontab. Source: `snippets/scripts/scan-paperless-inbox.sh`.
-  No role exists — will be lost on LXC210 rebuild without manual re-deploy.
-- **`jellyfin-cuda-watchdog.sh` on VM100 not Ansible-managed:** watchdog polls `nvidia-smi` every
-  30 min and auto-restarts Jellyfin on CUDA loss. Deployed manually to `/usr/local/sbin/` via root
-  crontab. Source: `snippets/scripts/jellyfin-cuda-watchdog.sh`. Will be lost on VM100 rebuild.
+  After 2026-07-10 this is the **last homelab-authored cron job** — every guest-side job we wrote
+  is now a systemd timer. Cron is defensible *here*: this job is what powers the host down, so it
+  cannot depend on the host being up, and `Persistent=true` catch-up semantics would be actively
+  wrong for a shutdown trigger. Decide explicitly when applying the role rather than porting it to
+  a timer by reflex. (Distro- and upstream-owned cron remains and is correct: `e2scrub_all`,
+  `sysstat`, `php` sessionclean — which self-disables under systemd — and lxc210's
+  `/etc/cron.d/nextcloud`, running `cron.php` every 5 min, where there is nothing to catch up.
+  Fleet audited 2026-07-10: no other root or user crontab holds an active entry.)
+- **The last three orphaned scripts were adopted into roles on 2026-07-10** — `paperless_inbox_scan`
+  (lxc210), `jellyfin_watchdog` (vm100), `snapraid_maintenance` (vm102). All three were
+  hand-deployed to `/usr/local/sbin/` and scheduled from a crontab, so each would have been lost
+  on a node rebuild. All three now ship a script + service unit + timer, and each role deletes the
+  crontab entry it replaces. `ansible.builtin.cron` cannot remove a hand-written entry (it only
+  recognises the `#Ansible: <name>` marker it writes itself), so the roles filter the crontab with
+  `sed -E '/pat/d' | crontab -u root -` — `grep -v` would exit 1 when it prints nothing, which on a
+  single-entry crontab is exactly what success looks like. vm100's root crontab is now empty.
 - **Jellyfin CUDA access loss intermittent (KE-10):** hardware transcoding stops randomly; root
   cause unconfirmed (NVML connection goes stale). Workaround: `docker restart jellyfin`. Watchdog
   automates this but does not fix the root cause. See `docs/platform/known-errors.md#ke-10`.
-- **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
-  on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
-  requires manual re-deploy after VM102 rebuild.
+  It last fired on 2026-07-10 at 10:00 — the fault is live, not historical.
 - **postgres_exporter on LXC260 — bind fixed and unit adopted 2026-07-10.** It had bound `*:9187`
   (LAN-exposed) because the hand-written unit's `ExecStart` carried no `--web.listen-address`. The
   deferred design question ("drop-in or full lifecycle?") answered itself once measured: the unit

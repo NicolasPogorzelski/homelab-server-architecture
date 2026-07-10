@@ -1,0 +1,50 @@
+---
+- name: Deploy the snapraid maintenance script
+  ansible.builtin.copy:
+    src: "{{ snapraid_script_src }}"
+    dest: "{{ snapraid_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the snapraid maintenance template unit
+  ansible.builtin.template:
+    src: snapraid-maintenance@.service.j2
+    dest: /etc/systemd/system/snapraid-maintenance@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the snapraid timers
+  ansible.builtin.template:
+    src: "{{ item }}.timer.j2"
+    dest: /etc/systemd/system/{{ item }}.timer
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - snapraid-sync
+    - snapraid-scrub
+  notify: Reload systemd
+
+# Removed, not left alongside: with both active, a night on which the host stays up
+# past 23:00 would run two syncs concurrently against the same parity files.
+- name: Remove the legacy snapraid cron file
+  ansible.builtin.file:
+    path: "{{ snapraid_legacy_cron_file }}"
+    state: absent
+
+# Skipped in check mode: the unit files above were not really written, so systemd
+# cannot see them yet and `enable` would fail with "Could not find the requested
+# service". Without this guard the role cannot be dry-run at all.
+- name: Enable and start the snapraid timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.timer"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - snapraid-sync
+    - snapraid-scrub
+  when: not ansible_check_mode

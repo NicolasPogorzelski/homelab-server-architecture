@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Rescan the Nextcloud Paperless Inbox external storage
+# The script talks to Nextcloud's occ, which needs the database and the web stack.
+After=mariadb.service apache2.service
+Wants=mariadb.service
+
+[Service]
+Type=oneshot
+# Runs as root: the script itself drops to www-data via `su` for each occ call,
+# because occ refuses to run as any other user.
+User=root
+ExecStart={{ paperless_scan_script_dest }}

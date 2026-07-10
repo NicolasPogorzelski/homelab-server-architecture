@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Poll Jellyfin CUDA health every {{ jellyfin_watchdog_oninterval }}
+
+[Timer]
+# Monotonic, measured from boot and from the previous run — not wall-clock.
+# No Persistent=: it has no meaning for monotonic timers, and a missed poll while
+# the host was off needs no catch-up.
+OnBootSec={{ jellyfin_watchdog_onbootsec }}
+OnUnitActiveSec={{ jellyfin_watchdog_oninterval }}
+Unit=jellyfin-cuda-watchdog.service
+
+[Install]
+WantedBy=timers.target

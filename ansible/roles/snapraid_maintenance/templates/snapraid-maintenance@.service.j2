@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+#
+# Template unit: %i is the instance name, so snapraid-maintenance@sync.service runs
+# the script with `sync` and snapraid-maintenance@scrub.service with `scrub`. One
+# unit file instead of two near-identical ones.
+[Unit]
+Description=SnapRAID %i
+# The array lives on the MergerFS member disks; nothing to do before they mount.
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart={{ snapraid_script_dest }} %i
+# A sync over ~multi-terabyte can run for hours. systemd's default is no timeout for
+# oneshot units, but be explicit rather than relying on it.
+TimeoutStartSec=infinity
