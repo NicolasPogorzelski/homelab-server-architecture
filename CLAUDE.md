@@ -204,8 +204,9 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   `ServiceDown` rule; Tailscale ACL Rule 1c grants monitoring the service ports.
   First run already caught paperless + openwebui returning 502 (dead backends).
 - **journald persistence on vm100/vm102 — the previously recorded gap does not exist
-  (verified 2026-07-10):** both nodes have `/var/log/journal/<machine-id>/`, retain 12
-  contiguous boots back to 2026-04-27, and *do* hold the KE-8 window. `Storage=` is unset,
+  (verified 2026-07-10, as root):** both nodes have `/var/log/journal/<machine-id>/`. vm100
+  retains **86 boots** back to 2025-12-27, vm102 **64 boots** back to 2026-02-14, and the KE-8
+  window (2026-06-08/09) holds 16,905 and 7,868 journal lines respectively. `Storage=` is unset,
   so `auto` applies, which is persistent whenever `/var/log/journal` exists. Remaining (minor)
   hardening: pin `Storage=persistent` and an explicit `SystemMaxUse=`, because `auto` makes
   persistence a property of a directory that happens to exist rather than of the config, and
@@ -274,13 +275,15 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   were replaced with an `findmnt -no FSTYPE` == `cifs` check on 2026-07-10. See
   `docs/platform/known-errors.md#ke-15`.
 
-- **No alerting on failed systemd units (highest-leverage monitoring gap, KE-15):** monitoring
-  covers `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP probes). A
-  systemd unit in `failed` state fits none of those, which is why `calibre-import.service` could
-  fail ~20,000 times over a month while every dashboard stayed green. Remediation: enable
-  node_exporter's `--collector.systemd` and add a Prometheus rule on
-  `node_systemd_unit_state{state="failed"}` with a `for:` window long enough to absorb boot-time
-  transients. This is the KE-8 blind spot one level deeper.
+- **Alerting on failed systemd units (KE-15 gap — REMEDIATED 2026-07-10):** previously a unit in
+  `failed` state matched no alert category (`NodeDown`, disk fill, and blackbox HTTP probes cover
+  none of it), which is why `calibre-import.service` failed ~20,000 times over a month behind a
+  green dashboard. Now `node_exporter` runs `--collector.systemd` with `.mount` units kept in
+  scope (the stock exclude drops them, and both mount faults found that day were `.mount` units),
+  and the `SystemdUnitFailed` rule alerts on `node_systemd_unit_state{state="failed"} == 1` after
+  `for: 15m`. The rule carries no exception list on purpose: units that can never succeed on a
+  node are masked or removed at the source by the `systemd_hygiene` role. Caveat: lxc200 is not
+  covered (see below).
 
 - **`ansible-lint` cannot see broken handler wiring:** handler names are resolved at *notify*
   time, not parse time, so a `notify:` pointing at a non-existent handler passes `--syntax-check`
@@ -288,9 +291,21 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   `changed`. A `--fix` run that renames handlers will not update the `notify:` strings pointing
   at them (this happened in `355b449`, fixed 2026-07-10). After any `ansible-lint --fix`, diff
   `handlers/main.yml` names against `notify:` values by hand.
-- **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql_backup`
-  role and stored on SMB. No runbook or periodic validation that restores succeed. Backup
-  infrastructure exists; recovery procedure does not.
+- **PostgreSQL backups have not run since 2026-06-14 (26 days as of 2026-07-10, ACTIVE):**
+  `pg_backup_last_success_timestamp` = `1781406008`. This entry previously claimed a daily
+  `pg_dump` runs and only lacks restore testing — wrong on the more important half. The
+  `PostgreSQLBackupStale` rule fires correctly and reaches Discord, so detection works;
+  the backup itself does not. Verified: the CIFS target `/mnt/backups` **is** mounted and
+  `/usr/local/sbin/pg-backup.sh` is present. Unverified: whether the `postgres`-user crontab
+  entry exists, whether the target is writable by `postgres`, and the script's failure output.
+  Restore testing remains absent on top of that — there is still no runbook and no periodic
+  validation that a restore succeeds.
+
+- **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
+  because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
+  The new `SystemdUnitFailed` rule therefore covers eight of nine nodes, and the monitoring node
+  is the blind one. Needs its own design decision (privileged container with `/run/systemd`
+  bind-mounted, or a native node_exporter alongside the container).
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.

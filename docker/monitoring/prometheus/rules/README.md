@@ -14,5 +14,12 @@ Active rules (`alert.rules.yml`):
 - `PostgreSQLDown` — `pg_up == 0` for >2m (critical)
 - `PostgreSQLConnectionsHigh` — active connections >80% of `max_connections` for >5m (warning)
 
+`systemd` group (requires `node_exporter --collector.systemd`):
+- `SystemdUnitFailed` — any unit in `failed` state for >15m (warning). No exception list: units
+  that can never succeed on a node are masked or removed by the `systemd_hygiene` Ansible role.
+  `.mount` units are in scope — node_exporter's stock `unit-exclude` drops them, and the fault
+  this rule was written for (KE-15) is a mount fault.
+
 Planned (`smart` group, not yet implemented):
-- SMART disk health alerts — requires `smartctl_exporter` on VM102
+- SMART disk health alerts — requires `smartctl_exporter` on the **Proxmox host**. All nine disks
+  are attached there; VM102 sees only virtio-SCSI devices and cannot read SMART (see KE-14).

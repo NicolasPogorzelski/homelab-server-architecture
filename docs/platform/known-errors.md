@@ -659,13 +659,18 @@ so `--check` **skipped** it. A dry-run reported the role healthy.
 mounting `/mnt/smb/books-rw` on the host and `pct reboot 220`. Until then the import path is
 down and the role's assert fails by design.
 
-**The gap that let it run for a month:** a `failed` systemd unit raises no alert. Monitoring
-covers `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP probes). A unit
-that fails 20,000 times fits none of those categories. This is the KE-8 blind spot one level
-deeper.
+**The gap that let it run for a month (closed 2026-07-10):** a `failed` systemd unit raised no
+alert. Monitoring covered `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP
+probes); a unit that fails 20,000 times fits none of those. This was the KE-8 blind spot one level
+deeper. Remediated the same day: `node_exporter --collector.systemd` (with `.mount` units kept in
+scope — the stock exclude drops them, and this fault *is* a mount fault) plus the
+`SystemdUnitFailed` Prometheus rule. Verified: lxc220 now exports
+`node_systemd_unit_state{name="calibre-import.service",state="failed"} 1` and Prometheus raises
+the alert.
 
-**Status:** Root cause confirmed; guards fixed in repo; host mount **not** restored; systemd
-unit-failure alerting **not** deployed
+**Status:** Root cause confirmed; guards fixed in repo; unit-failure alerting deployed and
+verified; host mount **not** restored — the import path stays down until `/mnt/smb/books-rw` is
+mounted on the Proxmox host and `pct reboot 220` is run
 
 **References:**
 - [LXC220 node doc](../nodes/lxc220.md)

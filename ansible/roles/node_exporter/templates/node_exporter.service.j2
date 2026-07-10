@@ -5,8 +5,15 @@ Wants=tailscaled.service
 
 [Service]
 User=node_exporter
-{% set textfile_flag = '' %}{% if node_exporter_textfile_dir %}{% set textfile_flag = ' --collector.textfile.directory=' + node_exporter_textfile_dir %}{% endif %}
-ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ ansible_host }}:{{ node_exporter_port }}{{ textfile_flag }}
+{% set flags = ['--web.listen-address=' ~ ansible_host ~ ':' ~ node_exporter_port] %}
+{% if node_exporter_textfile_dir %}
+{% set _ = flags.append('--collector.textfile.directory=' ~ node_exporter_textfile_dir) %}
+{% endif %}
+{% if node_exporter_systemd_collector %}
+{% set _ = flags.append('--collector.systemd') %}
+{% set _ = flags.append('--collector.systemd.unit-exclude=' ~ node_exporter_systemd_unit_exclude) %}
+{% endif %}
+ExecStart=/usr/local/bin/node_exporter {{ flags | join(' ') }}
 Restart=on-failure
 RestartSec=15s
 

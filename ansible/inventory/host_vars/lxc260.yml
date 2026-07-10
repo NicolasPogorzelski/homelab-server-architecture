@@ -23,3 +23,16 @@
 postgres_tenants: []
 # node_exporter: enable textfile collector so pg_backup.prom is scraped.
 node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# Units that can never succeed on this node. Masked by the systemd_hygiene role so
+# that every remaining failed unit on the fleet is a real fault worth alerting on.
+systemd_hygiene_masked_units:
+  - name: nvmf-autoconnect.service
+    reason: >-
+      Connects NVMe-over-Fabrics subsystems at boot. An LXC has no block-device
+      namespace of its own and no NVMe-oF target; the unit cannot succeed here.
+  - name: openipmi.service
+    reason: >-
+      Loads IPMI kernel drivers to talk to a baseboard management controller.
+      There is no BMC reachable from inside a container.
+

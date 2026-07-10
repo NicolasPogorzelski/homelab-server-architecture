@@ -2,3 +2,20 @@
 node_exporter_version: "1.11.1"
 node_exporter_port: 9100
 node_exporter_textfile_dir: ""
+
+# Enables the `systemd` collector, which exports `node_systemd_unit_state`.
+# Without it a unit sitting in `failed` emits no metric at all, so no alert can
+# fire on it — which is how calibre-import.service failed every 2 minutes for a
+# month while every dashboard stayed green (KE-15). The collector reads unit
+# state over the systemd D-Bus API; read-only property queries do not require
+# root, so it works under the unprivileged `node_exporter` user. Verified on
+# lxc260 before fleet rollout.
+node_exporter_systemd_collector: true
+
+# node_exporter's own default is `.+\.(automount|device|mount|scope|slice)`, which
+# drops `.mount` units. Both mount faults found on 2026-07-10 — lxc220's `/books-rw`
+# (KE-15) and vm100's stale `media-mergerfs.mount` — are exactly that unit type, so
+# the stock exclude would filter out the failure class the collector was added for.
+# `.mount` is therefore kept; the two known-noisy mount units are masked at the
+# source by the `systemd_hygiene` role rather than filtered here.
+node_exporter_systemd_unit_exclude: '.+\.(automount|device|scope|slice)'
