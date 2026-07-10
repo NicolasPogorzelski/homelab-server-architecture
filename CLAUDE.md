@@ -203,10 +203,13 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a
   `ServiceDown` rule; Tailscale ACL Rule 1c grants monitoring the service ports.
   First run already caught paperless + openwebui returning 502 (dead backends).
-- **journald not persisting logs on vm100/vm102 (gap, fix planned):** despite
-  `/var/log/journal`, recent boots' logs were lost (see KE-8); forensics fell
-  back to wtmp / apt-dpkg text logs / Docker JSON / Prometheus. Remediation:
-  investigate `Storage=` / `SystemMaxUse`.
+- **journald persistence on vm100/vm102 — the previously recorded gap does not exist
+  (verified 2026-07-10):** both nodes have `/var/log/journal/<machine-id>/`, retain 12
+  contiguous boots back to 2026-04-27, and *do* hold the KE-8 window. `Storage=` is unset,
+  so `auto` applies, which is persistent whenever `/var/log/journal` exists. Remaining (minor)
+  hardening: pin `Storage=persistent` and an explicit `SystemMaxUse=`, because `auto` makes
+  persistence a property of a directory that happens to exist rather than of the config, and
+  it degrades silently to RAM-only if that directory is ever removed.
 - **unattended-upgrades active on vm100 (uncontrolled change):** installs
   packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
   workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
@@ -260,10 +263,31 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
   (see `calibre_importer` role). Moving library to local block storage is the durable fix but
   deferred (no extra volume available). See `docs/decisions/calibre-cifs-sqlite-import.md`.
-- **CIFS automount boot-race on LXC220 (mp2 rw mount):** `/books-rw` sometimes fails at boot if
-  VM102 is still starting; systemd `nofail` lets boot proceed without retry, leaving an empty
-  bind. Fix: `mount /mnt/smb/books-rw` on Proxmox host + `pct reboot 220`. Durable fix
-  (automount + `x-systemd.mount-timeout`) not yet applied.
+- **LXC220 rw library mount is DOWN, and has been since 2026-06-08 (KE-15, active):** not the
+  transient boot-race this entry used to describe — a month-long steady state. The host's
+  `/mnt/smb/books-rw` is unmounted, so the `mp2` bind exposes the empty host-root-owned
+  directory beneath it on `pve-root`; container root (unprivileged, host uid `65534`) cannot
+  write there, and `calibre-import.service` has failed every 2 minutes ever since. Fix:
+  `mount /mnt/smb/books-rw` on the Proxmox host + `pct reboot 220`. Durable fix (automount +
+  `x-systemd.mount-timeout`) still not applied. The role's and script's `mountpoint -q` guards
+  were blind to this by construction — they tested that *a* mount existed, not *which* — and
+  were replaced with an `findmnt -no FSTYPE` == `cifs` check on 2026-07-10. See
+  `docs/platform/known-errors.md#ke-15`.
+
+- **No alerting on failed systemd units (highest-leverage monitoring gap, KE-15):** monitoring
+  covers `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP probes). A
+  systemd unit in `failed` state fits none of those, which is why `calibre-import.service` could
+  fail ~20,000 times over a month while every dashboard stayed green. Remediation: enable
+  node_exporter's `--collector.systemd` and add a Prometheus rule on
+  `node_systemd_unit_state{state="failed"}` with a `for:` window long enough to absorb boot-time
+  transients. This is the KE-8 blind spot one level deeper.
+
+- **`ansible-lint` cannot see broken handler wiring:** handler names are resolved at *notify*
+  time, not parse time, so a `notify:` pointing at a non-existent handler passes `--syntax-check`
+  and every lint profile, and only errors at runtime when a notifying task actually reports
+  `changed`. A `--fix` run that renames handlers will not update the `notify:` strings pointing
+  at them (this happened in `355b449`, fixed 2026-07-10). After any `ansible-lint --fix`, diff
+  `handlers/main.yml` names against `notify:` values by hand.
 - **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql_backup`
   role and stored on SMB. No runbook or periodic validation that restores succeed. Backup
   infrastructure exists; recovery procedure does not.

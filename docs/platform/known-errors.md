@@ -593,3 +593,82 @@ VM102 as previously documented.
 **References:**
 - [Proxmox Host](./proxmox-host.md)
 - [KE-13 — aux-disk physical disk failure](#ke-13-aux-disk-physical-disk-failure-medium-errors) (a separate, genuine media failure on `sdb`; do not conflate)
+
+---
+
+## KE-15: Guard tests mount existence, not mount identity — calibre-import dead for a month
+
+**Affected component:** LXC220 (Calibre-Web) — `calibre-import.service`, the `calibre_importer`
+role, and `snippets/scripts/calibre-import.sh`
+
+**Symptom:**
+`calibre-import.service` fails every 2 minutes (the timer interval) and has done so since
+2026-06-08. No dropped ebook has been imported in that window. Nothing alerted.
+
+```
+calibre-import.sh[3904]: mkdir: cannot create directory '/books-rw/_import': Permission denied
+systemd[1]: calibre-import.service: Main process exited, code=exited, status=1/FAILURE
+```
+
+**Root cause:** a four-step chain, each step individually unremarkable:
+
+1. On the Proxmox host, the rw CIFS mount `/mnt/smb/books-rw` (`//vm102/Books`) is **not
+   mounted**. This is the documented CIFS boot-race, except it is not transient — it has
+   persisted for a month.
+2. The `mp2` bind still maps the host path into LXC220 as `/books-rw`. With the CIFS mount
+   absent, the bind exposes the empty directory *underneath* it, on `pve-root`.
+3. That directory is owned by host root. LXC220 is an **unprivileged** container, so host UID 0
+   appears inside as `65534` (`nobody`). With mode `0755`, container root cannot write to it.
+4. `mkdir -p "${FAILED_DIR}"` fails with `EACCES`; `set -euo pipefail` aborts the script with
+   exit 1.
+
+**Why both guards failed to catch it:**
+
+The script (line 49) and the Ansible role each guarded with:
+
+```bash
+mountpoint -q /books-rw
+```
+
+This returns success. `/books-rw` **is** a mountpoint — the `mp2` bind itself is one, whether or
+not the CIFS mount underneath the host path succeeded. The guard tested the *existence* of a
+mount and could not, in principle, detect a *substituted* one. It was blind to exactly the
+failure class it was written for.
+
+This is the same structural error as `appdata_aux-disk` lacking `is_mountpoint 1`: a check that
+asserts a path exists, where what matters is what is mounted at it.
+
+Compounding it, the Ansible guard was an `ansible.builtin.command` without `check_mode: false`,
+so `--check` **skipped** it. A dry-run reported the role healthy.
+
+**Fix (applied 2026-07-10, repo side):**
+
+- Both guards now test the mount's *identity*, not its existence: `findmnt -no FSTYPE /books-rw`
+  must return `cifs`. A healthy bind of a CIFS mount reports `cifs` inside the container; the
+  failed one reports `ext4` (pve-root). A second guard requires `metadata.db` to be present,
+  covering the "right fstype, wrong share" case.
+- The script now exits **1**, not 0, when the library is absent. The previous `exit 0` was a
+  deliberate no-op ("VM102/network down") and is precisely why a month of failure stayed
+  invisible. Transient absence during the boot window is absorbed by the alert rule's `for:`
+  window, not by silencing the script.
+- The role's probe carries `check_mode: false` so it also runs during `--check`, and the task
+  order was changed to deploy the script and units *before* asserting the mount — otherwise a
+  broken host mount blocks delivery of the script that handles broken host mounts.
+
+**Not fixed (requires Proxmox host access, deferred with the host block):**
+mounting `/mnt/smb/books-rw` on the host and `pct reboot 220`. Until then the import path is
+down and the role's assert fails by design.
+
+**The gap that let it run for a month:** a `failed` systemd unit raises no alert. Monitoring
+covers `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP probes). A unit
+that fails 20,000 times fits none of those categories. This is the KE-8 blind spot one level
+deeper.
+
+**Status:** Root cause confirmed; guards fixed in repo; host mount **not** restored; systemd
+unit-failure alerting **not** deployed
+
+**References:**
+- [LXC220 node doc](../nodes/lxc220.md)
+- [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
+- [KE-8 — observability blind spot](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
+- [KE-13 — the `appdata_aux-disk` `is_mountpoint` note](#ke-13-aux-disk-physical-disk-failure-medium-errors) (same structural error)
