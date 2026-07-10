@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=PostgreSQL cluster-wide backup (pg_dumpall to the CIFS share)
+# The dump needs a running cluster. postgresql_boot_order already gates the
+# cluster on the Tailscale IP being present (KE-9), so this ordering inherits it.
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+# pg_dumpall authenticates via peer auth as the postgres role; running as any
+# other user would need a password in the environment.
+User=postgres
+Group=postgres
+ExecStart={{ pg_backup_script_dest }}
