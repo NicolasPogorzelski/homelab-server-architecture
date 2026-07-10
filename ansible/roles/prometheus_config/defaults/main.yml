@@ -1,0 +1,11 @@
+---
+# === prometheus_config (LXC200) ===
+
+# Alerting rules. Until 2026-07-10 this file was committed to the repo but deployed
+# by nothing — the copy on lxc200 matched by luck, not by convergence. It is copied,
+# not templated: it contains Go template expressions ({{ $labels.instance }}) that
+# Jinja2 would try to evaluate.
+#
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+prometheus_config_rules_src: "{{ playbook_dir }}/../../docker/monitoring/prometheus/rules/alert.rules.yml"
+prometheus_config_rules_dest: /opt/monitoring/prometheus/rules/alert.rules.yml

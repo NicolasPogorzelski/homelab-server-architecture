@@ -41,22 +41,38 @@ A watchdog script checks GPU availability every 30 minutes and restarts the cont
 
 ### Deploy on VM100
 
-```bash
-install -m 0755 -o root -g root /dev/null /usr/local/sbin/jellyfin-cuda-watchdog.sh
-# copy content from snippets/scripts/jellyfin-cuda-watchdog.sh
-```
-
-### Cron entry (root crontab on VM100)
-
-```
-*/30 * * * * /usr/local/sbin/jellyfin-cuda-watchdog.sh
-```
-
-Add via `crontab -e` as root. Logs land in syslog — verify with:
+Managed by the `jellyfin_watchdog` Ansible role — script, service unit and timer:
 
 ```bash
-grep jellyfin-cuda-watchdog /var/log/syslog
+ansible-playbook playbooks/jellyfin-watchdog.yml --check --diff   # preview
+ansible-playbook playbooks/jellyfin-watchdog.yml                  # apply
 ```
+
+### Schedule
+
+`jellyfin-cuda-watchdog.timer` — a **monotonic** timer, not a calendar one:
+
+```
+OnBootSec=5min
+OnUnitActiveSec=30min
+```
+
+The first poll waits 5 minutes after boot so Docker and the NVIDIA runtime have
+settled; restarting a half-started container is worse than checking it late.
+`Persistent=` is deliberately absent — it applies only to `OnCalendar=` timers, and
+a poll missed while the host was powered off has nothing to catch up on.
+
+The role removed the previous `*/30 * * * *` root crontab entry. Do not re-add it.
+
+### Verify
+
+```bash
+systemctl list-timers jellyfin-cuda-watchdog.timer
+journalctl -t jellyfin-cuda-watchdog -n 20
+```
+
+Because the watchdog is a systemd unit, a failing run now raises the fleet-wide
+`SystemdUnitFailed` alert. As a cron job it failed silently.
 
 ### Script reference
 

@@ -10,8 +10,23 @@ groups:
           summary: "Node {{ $labels.instance }} is down"
           description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
 
+      # Percentage is the right measure for a root filesystem and the wrong one for
+      # an archive. Before 2026-07-10 this rule fired 21 times at once, all of them
+      # the same fact: the MergerFS pool, its five member disks, and the twelve CIFS
+      # mounts through which other nodes see that pool, each nearly full. 15% of a
+      # multi-terabyte archive is a large absolute amount — a threshold a pool designed to fill will never
+      # meet again. An alert that is always red is not read.
+      #
+      # Excluded here, and covered by ArchivePoolLowSpace below instead:
+      #   - cifs: a remote view of storage some other node owns; that node alerts.
+      #   - the MergerFS pool and its member disks on vm102.
       - alert: DiskSpaceCritical
-        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}) * 100 < 15
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|cifs|fuse.mergerfs", mountpoint!~"/mnt/disk[0-9]+|/mnt/aux[0-9]+TB"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|cifs|fuse.mergerfs", mountpoint!~"/mnt/disk[0-9]+|/mnt/aux[0-9]+TB"}
+          ) * 100 < 15
         for: 5m
         labels:
           severity: warning
@@ -77,10 +92,59 @@ groups:
           summary: "SnapRAID scrub is stale"
           description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
 
+  - name: storage
+    rules:
+      # The MergerFS archive is meant to fill, so a percentage threshold says
+      # nothing. What matters is whether the next write fits. Read-only consumers
+      # (Jellyfin, Audiobookshelf, Calibre) are unaffected either way; the write
+      # consumers — Nextcloud, Paperless, Vaultwarden, and the nightly pg_dumpall,
+      # whose target /mnt/backups lives on this pool — will hit ENOSPC. Capacity
+      # expansion is the lever, not deletion, so this is a warning with a long
+      # window, not a page.
+      #
+      # 100 GiB ~= two days of headroom at the observed growth rate. Measured on
+      # vm102, which owns the pool; the CIFS mounts on consumer nodes are views of
+      # this same filesystem and are excluded from DiskSpaceCritical for that reason.
+      - alert: ArchivePoolLowSpace
+        expr: node_filesystem_avail_bytes{fstype="fuse.mergerfs"} < 100 * 1024 * 1024 * 1024
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "MergerFS archive pool below 100 GiB free on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, Vaultwarden, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
+
+  - name: systemd
+    rules:
+      # A unit stuck in `failed` fits none of the other alert categories: the node
+      # is up (NodeDown quiet), the disk is fine, and blackbox only knows whether a
+      # port answers. calibre-import.service failed every 2 minutes for a month
+      # while every dashboard stayed green (KE-15).
+      #
+      # `for: 15m` absorbs boot-window transients — units that fail once because a
+      # network mount is not up yet and succeed on the next trigger. Anything still
+      # failed a quarter of an hour after the fact is a real fault.
+      #
+      # This rule deliberately carries no exception list. Units that can never
+      # succeed on a node are masked or removed at the source by the
+      # `systemd_hygiene` Ansible role, so that every alert here means something.
+      - alert: SystemdUnitFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "systemd unit {{ $labels.name }} failed on {{ $labels.instance }}"
+          description: "{{ $labels.name }} has been in the failed state on {{ $labels.instance }} for more than 15 minutes. Check `systemctl status {{ $labels.name }}` and `journalctl -u {{ $labels.name }}` on the node."
+
   - name: smart
     rules: []
     # SMART disk health alerts are planned but not yet implemented.
-    # Requires smartctl_exporter on VM102 (TODO #6).
+    # All nine disks are attached to the Proxmox HOST; VM102 reaches six of them by
+    # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
+    # readable only on the host. An earlier version of this comment named VM102 as
+    # the target and was wrong (see KE-14). Deploying this requires making the host
+    # an Ansible-managed node.
     # Metrics to alert on (once available):
     #   - smartctl_device_smart_status (overall SMART pass/fail)
     #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)

@@ -4,27 +4,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Branch:** `main`. Ansible track complete (items #1–#13). **Next learning track: Terraform.**
-- **Status (2026-07-09):** the learning track is paused. Two independent hardware faults are open
-  on the platform and the fleet is running on a disk with 7680 unreadable sectors. Starting
-  Terraform on top of this is the wrong order.
+- **Branch:** `chore/platform-techdebt-2026-07-10` — **10 commits, pushed to `origin`, no PR open.**
+  The earlier "not pushed" note was wrong: the branch has been on `origin` since 2026-07-10, which
+  is why CI ran against it at all. Ansible track complete (items #1–#13).
+  **Next learning track: Terraform.**
+- **Status (2026-07-10):** the learning track stays paused; a full tech-debt pass was run instead.
+  Everything guest-side is now Ansible-managed and every scheduled job is a systemd timer. Two
+  hardware faults remain open and both are waiting on a replacement NVMe that arrives the week of
+  2026-07-13 and will replace **both** the boot SSD and aux-disk.
+- **What this session closed** (detail in `docs/platform/changelog.md`, 2026-07-10 rows):
+  fleet-wide `SystemdUnitFailed` alerting; pg-backup moved from a dead cron job to a timer;
+  the last three orphaned scripts adopted into roles (`paperless_inbox_scan`, `jellyfin_watchdog`,
+  `snapraid_maintenance`); postgres_exporter bind; break-glass keys enforced; unattended-upgrades
+  restricted on vm100; disk alerts tiered by role; `tailscale_cert` role for KE-16.
 - **Two hardware faults, neither fixed:**
   - **KE-13** — aux-disk (the aux disk) is a real media failure, back in service under protest until
-    the replacement arrives (~6 weeks from 2026-07-09). Still degrading: `Reported_Uncorrect` 18 → 21
-    since the incident. Carries five LXC data-roots and vm100's a few hundred GB `scsi1` disk. No off-site copy.
+    the NVMe arrives. Still degrading: `Reported_Uncorrect` 18 → 21 since the incident. Carries
+    five LXC data-roots and vm100's a few hundred GB `scsi1` disk. No off-site copy.
   - **KE-14** — the boot SSD's I/O errors are **transport faults at the SAS2008 HBA, not media**.
     Media and firmware causes are excluded; the 12 V-rail hypothesis is unverified and needs a
     multimeter, not a shell. `sdc` carries every VM and LXC root disk.
 - **Standing hold:** do not run `docker-compose-update` against the fleet while aux-disk is in
   service — it writes gigabytes of new image layers onto the failing disk.
-- **Host changes are deferred by decision.** This blocks SMART monitoring (readable only on the
-  host), the unapplied `homelab_schedule` role, and the `is_mountpoint 1` storage fix.
+- **Deferred to the NVMe week, by decision.** SMART monitoring (readable only on the host, and it
+  requires making the host an Ansible node), the unapplied `homelab_schedule` role, the
+  `is_mountpoint 1` storage fix, and the NVMe migration design discussion.
+- **Off-site backups: risk consciously accepted.** Critical data was copied to the notebook
+  before aux-disk returned to service. Do not re-raise this as a new finding.
+- **`origin/docs/storage-stack-client-setup`: deliberately ignored**, topic not finished. Five
+  commits stranded; conflicts in `CLAUDE.md` / `samba.md` / `storage-stack.md` need a content
+  decision, not a merge.
+- **One thing is actively broken:** `calibre-import.service` on lxc220 is in `failed` and
+  `SystemdUnitFailed` is red for it. This is correct — the fault is real (KE-15). The library is
+  intact (`/books` is `cifs`); only the write path is dead. The repair is **three commands on the
+  Proxmox host**, which the control node cannot reach over SSH:
+  1. `findmnt /mnt/smb/books-rw ; grep books-rw /etc/fstab`
+  2. `mount /mnt/smb/books-rw && findmnt -no FSTYPE,SOURCE /mnt/smb/books-rw`
+  3. `pct reboot 220 && sleep 20 && pct exec 220 -- findmnt -no FSTYPE /books-rw` → must print `cifs`
+
+  The reboot is required: a bind mount resolves to the inode present at container start, so a host
+  mount established afterwards is not propagated. The fixed script and units are already deployed;
+  `ansible-playbook playbooks/calibre-import.yml` currently deploys them and then fails on its own
+  `fstype == cifs` assertion, by design. Re-run it once the mount is up.
 - **Next session to-do, in this order:**
-  1. Decide the SMART-monitoring path — it requires making the Proxmox host an Ansible-managed
-     node. Its absence is why KE-13 ran to total failure unnoticed.
-  2. Resolve `origin/docs/storage-stack-client-setup` — five commits stranded, never merged, and
-     the conflicts in `CLAUDE.md` / `samba.md` / `storage-stack.md` need a content decision.
-  3. Off-site backups. Two failing disks, zero external copies.
+  1. Push the branch and open the PR (or review first — the user had not decided).
+  2. Calibre: the three host commands above, then re-run the playbook and verify a real import.
+  3. **Test a PostgreSQL restore.** Scheduling is fixed, trust in the dumps is not: no runbook,
+     no periodic validation, and `-mtime +7` retention means one bad dump plus a week of silence
+     loses everything. This is the highest-value item that is *not* blocked on hardware.
+  4. NVMe week: the design discussion, then the deferred host block above.
 - **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in
   [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Platform changes and
   their verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Append new
@@ -103,7 +131,9 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 15 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, and leftover git merge conflict markers.
+This script enforces 16 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, and `ansible-lint` findings.
+
+**Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips — `actions/checkout` leaves a clean tree, so there is no diff — because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 
 ## Documentation Audit Rule
 
@@ -140,7 +170,7 @@ This is a **documentation and configuration repository** — no application code
 - `docker/` — Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` — Operational procedures (must follow the runbook contract)
 - `snippets/` — Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (15-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
+- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (16-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
 - `ansible/` — Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12).
@@ -203,25 +233,40 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   Now `blackbox_exporter` on lxc200 probes 7 services (HTTP + Serve-HTTPS) with a
   `ServiceDown` rule; Tailscale ACL Rule 1c grants monitoring the service ports.
   First run already caught paperless + openwebui returning 502 (dead backends).
-- **journald not persisting logs on vm100/vm102 (gap, fix planned):** despite
-  `/var/log/journal`, recent boots' logs were lost (see KE-8); forensics fell
-  back to wtmp / apt-dpkg text logs / Docker JSON / Prometheus. Remediation:
-  investigate `Storage=` / `SystemMaxUse`.
-- **unattended-upgrades active on vm100 (uncontrolled change):** installs
-  packages incl. kernels autonomously, outside the Ansible `apt-upgrade.yml`
-  workflow — on a GPU node this risks kernel/NVIDIA-DKMS coupling after the next
-  reboot. Decision pending: disable, or restrict to security-only + exclude kernels.
+- **journald persistence on vm100/vm102 — the previously recorded gap does not exist
+  (verified 2026-07-10, as root):** both nodes have `/var/log/journal/<machine-id>/`. vm100
+  retains **86 boots** back to 2025-12-27, vm102 **64 boots** back to 2026-02-14, and the KE-8
+  window (2026-06-08/09) holds 16,905 and 7,868 journal lines respectively. `Storage=` is unset,
+  so `auto` applies, which is persistent whenever `/var/log/journal` exists. Remaining (minor)
+  hardening: pin `Storage=persistent` and an explicit `SystemMaxUse=`, because `auto` makes
+  persistence a property of a directory that happens to exist rather than of the config, and
+  it degrades silently to RAM-only if that directory is ever removed.
+- **unattended-upgrades on vm100 — restricted 2026-07-10.** The real defect was not the missing
+  kernel exclusion but the origin list: the stock config allowed
+  `"${distro_id}:${distro_codename}"`, i.e. the *regular* archive, not just security, with an
+  empty `Package-Blacklist`. Now security pockets only, with `linux-image`/`linux-headers`/
+  `linux-generic`/`linux-modules`/`nvidia-`/`libnvidia-` blacklisted, via the `unattended_upgrades`
+  role. Kernel and driver upgrades belong in `apt-upgrade.yml`, run while someone is watching.
+  Note the `#clear` directives in the drop-in are load-bearing — APT *appends* to a list option
+  when it is redeclared, so without them the regular archive would have stayed enabled.
+  **vm100 is Ubuntu 22.04** (`/etc/os-release`, verified 2026-07-10) — the only non-Debian node;
+  vm102 and every LXC are Debian 12. The role's origin ids and package names are Ubuntu-specific
+  and do not transfer unchanged, which is why it targets `hosts: vm100` and not a group.
 - **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
   application service tiering exception, confirmed intentional 2026-07-08. The
   `calibre-importer` role's auto-import mechanism has no verified dependency on
   tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
   devices don't need Calibre-Web access, so no functional gap results. See the
   Tier Model exception note in `docs/platform/tailscale-acl.md`.
-- **MergerFS pool close to full on vm102 (by design):** the media archive is meant
-  to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
-  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups) will eventually
-  hit `ENOSPC` — capacity expansion is the lever, not deletion. The `<15% free`
-  disk alert on archive disks is largely non-actionable (alert tiering by role pending).
+- **MergerFS pool close to full on vm102 (by design; alert tiering done 2026-07-10):** the media
+  archive is meant to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
+  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups, whose `/mnt/backups` target sits on
+  this pool) will eventually hit `ENOSPC` — capacity expansion is the lever, not deletion.
+  `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
+  member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
+  wrong measure for a multi-terabyte archive (15% = a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
+  and the member disks; the new `ArchivePoolLowSpace` warns on **absolute** free bytes below
+  100 GiB with `for: 1h`. Currently a low absolute margin.
 
 - **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
   (`ListenAddress` in sshd_config). SSH is unreachable for ~30–60 s after boot until
@@ -234,39 +279,123 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **`homelab_schedule` role not yet applied to live host (2026-06-17):** role deploys
   `homelab-setwake.sh` + `homelab-shutdown.sh` + `/etc/cron.d/homelab-schedule` via Ansible.
   Scripts and cron file currently managed manually. Run `--check --diff` first, then apply.
-- **`scan-paperless-inbox.sh` on LXC210 not Ansible-managed:** script deployed manually to
-  `/usr/local/sbin/`, scheduled via root crontab. Source: `snippets/scripts/scan-paperless-inbox.sh`.
-  No role exists — will be lost on LXC210 rebuild without manual re-deploy.
-- **`jellyfin-cuda-watchdog.sh` on VM100 not Ansible-managed:** watchdog polls `nvidia-smi` every
-  30 min and auto-restarts Jellyfin on CUDA loss. Deployed manually to `/usr/local/sbin/` via root
-  crontab. Source: `snippets/scripts/jellyfin-cuda-watchdog.sh`. Will be lost on VM100 rebuild.
+  After 2026-07-10 this is the **last homelab-authored cron job** — every guest-side job we wrote
+  is now a systemd timer. Cron is defensible *here*: this job is what powers the host down, so it
+  cannot depend on the host being up, and `Persistent=true` catch-up semantics would be actively
+  wrong for a shutdown trigger. Decide explicitly when applying the role rather than porting it to
+  a timer by reflex. (Distro- and upstream-owned cron remains and is correct: `e2scrub_all`,
+  `sysstat`, `php` sessionclean — which self-disables under systemd — and lxc210's
+  `/etc/cron.d/nextcloud`, running `cron.php` every 5 min, where there is nothing to catch up.
+  Fleet audited 2026-07-10: no other root or user crontab holds an active entry.)
+- **The last three orphaned scripts were adopted into roles on 2026-07-10** — `paperless_inbox_scan`
+  (lxc210), `jellyfin_watchdog` (vm100), `snapraid_maintenance` (vm102). All three were
+  hand-deployed to `/usr/local/sbin/` and scheduled from a crontab, so each would have been lost
+  on a node rebuild. All three now ship a script + service unit + timer, and each role deletes the
+  crontab entry it replaces. `ansible.builtin.cron` cannot remove a hand-written entry (it only
+  recognises the `#Ansible: <name>` marker it writes itself), so the roles filter the crontab with
+  `sed -E '/pat/d' | crontab -u root -` — `grep -v` would exit 1 when it prints nothing, which on a
+  single-entry crontab is exactly what success looks like. vm100's root crontab is now empty.
 - **Jellyfin CUDA access loss intermittent (KE-10):** hardware transcoding stops randomly; root
   cause unconfirmed (NVML connection goes stale). Workaround: `docker restart jellyfin`. Watchdog
   automates this but does not fix the root cause. See `docs/platform/known-errors.md#ke-10`.
-- **SnapRAID cron on VM102 not Ansible-managed:** `/etc/cron.d/snapraid` (sync 23:00, scrub 20:00
-  on 1st) managed manually. Source: `snippets/storage/snapraid-maintenance.sh`. No Ansible role —
-  requires manual re-deploy after VM102 rebuild.
-- **postgres_exporter on LXC260 not Ansible-managed (binds `*:9187`, LAN-exposed):** unlike
-  `node_exporter`, no role deploys or configures `postgres_exporter` — it was installed manually
-  (2026-04-22) and its systemd unit's `ExecStart` has no `--web.listen-address`, so it binds all
-  interfaces instead of the Tailscale IP only. Fix requires a systemd override (must restate the
-  full `ExecStart=` — overrides can't append args to an existing line) plus deciding whether to
-  adopt the exporter's full lifecycle into Ansible or just this one flag; deferred as its own
-  design task rather than bolted onto an unrelated audit pass.
-- **Legacy SSH keys on VM102 (`storage` user):** `root@server` and `admin-laptop` keys remain
-  in `/home/storage/.ssh/authorized_keys`. Flagged for cleanup; no Ansible task to remove stale
-  keys exists yet. See `docs/nodes/vm102.md` Configuration Management section.
+  It last fired on 2026-07-10 at 10:00 — the fault is live, not historical.
+- **postgres_exporter on LXC260 — bind fixed and unit adopted 2026-07-10.** It had bound `*:9187`
+  (LAN-exposed) because the hand-written unit's `ExecStart` carried no `--web.listen-address`. The
+  deferred design question ("drop-in or full lifecycle?") answered itself once measured: the unit
+  is a *local* file in `/etc/systemd/system`, not a package's, so there was nothing to override —
+  the new `postgres_exporter` role simply owns it. It binds the node's Tailscale IP, orders after
+  `tailscaled` (the exporter would otherwise hit the KE-9/KE-12 bind race at boot), and asserts the
+  hand-installed binary and env file exist rather than deploying a unit that cannot start.
+  `/etc/postgres_exporter.env` still holds `DATA_SOURCE_NAME` unmanaged — adopting that needs an
+  Ansible Vault step and is deliberately not bolted onto a bind-address fix.
+- **Legacy SSH keys on vm100 + vm102 — REMOVED 2026-07-10.** The old entry named the wrong keys:
+  `admin-laptop` is a *declared* break-glass key in `group_vars/vms.yml`, not an artefact. The
+  actual strays, present on **both** VMs' admin accounts, were `root@server` (an RSA key belonging
+  to no current machine) and `devops@devops-lxc` (the control node's interactive user on the admin
+  account; Ansible connects as the `ansible` user with its own `authorized_keys`, so removing it
+  cost no automation path). The `breakglass` role now enforces the key set with `exclusive: true`,
+  making the inventory the single source of truth, and keeps a one-time
+  `authorized_keys.pre-ansible` backup. `ssh <admin>@<node>` from lxc250 no longer works by design;
+  `ssh ansible@<node>` and break-glass from either laptop do.
 - **Calibre library on CIFS — SQLite workaround in place, no durable fix:** `metadata.db` cannot
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
   (see `calibre_importer` role). Moving library to local block storage is the durable fix but
   deferred (no extra volume available). See `docs/decisions/calibre-cifs-sqlite-import.md`.
-- **CIFS automount boot-race on LXC220 (mp2 rw mount):** `/books-rw` sometimes fails at boot if
-  VM102 is still starting; systemd `nofail` lets boot proceed without retry, leaving an empty
-  bind. Fix: `mount /mnt/smb/books-rw` on Proxmox host + `pct reboot 220`. Durable fix
-  (automount + `x-systemd.mount-timeout`) not yet applied.
-- **PostgreSQL backups not restore-tested:** daily `pg_dump` deployed via `postgresql_backup`
-  role and stored on SMB. No runbook or periodic validation that restores succeed. Backup
-  infrastructure exists; recovery procedure does not.
+- **LXC220 rw library mount is DOWN, and has been since 2026-06-08 (KE-15, active):** not the
+  transient boot-race this entry used to describe — a month-long steady state. The host's
+  `/mnt/smb/books-rw` is unmounted, so the `mp2` bind exposes the empty host-root-owned
+  directory beneath it on `pve-root`; container root (unprivileged, host uid `65534`) cannot
+  write there, and `calibre-import.service` has failed every 2 minutes ever since. Fix:
+  `mount /mnt/smb/books-rw` on the Proxmox host + `pct reboot 220`. Durable fix (automount +
+  `x-systemd.mount-timeout`) still not applied. The role's and script's `mountpoint -q` guards
+  were blind to this by construction — they tested that *a* mount existed, not *which* — and
+  were replaced with an `findmnt -no FSTYPE` == `cifs` check on 2026-07-10. See
+  `docs/platform/known-errors.md#ke-15`.
+
+- **Alerting on failed systemd units (KE-15 gap — REMEDIATED 2026-07-10):** previously a unit in
+  `failed` state matched no alert category (`NodeDown`, disk fill, and blackbox HTTP probes cover
+  none of it), which is why `calibre-import.service` failed ~20,000 times over a month behind a
+  green dashboard. Now `node_exporter` runs `--collector.systemd` with `.mount` units kept in
+  scope (the stock exclude drops them, and both mount faults found that day were `.mount` units),
+  and the `SystemdUnitFailed` rule alerts on `node_systemd_unit_state{state="failed"} == 1` after
+  `for: 15m`. The rule carries no exception list on purpose: units that can never succeed on a
+  node are masked or removed at the source by the `systemd_hygiene` role. Caveat: lxc200 is not
+  covered (see below).
+
+- **`ansible-lint` cannot see broken handler wiring:** handler names are resolved at *notify*
+  time, not parse time, so a `notify:` pointing at a non-existent handler passes `--syntax-check`
+  and every lint profile, and only errors at runtime when a notifying task actually reports
+  `changed`. A `--fix` run that renames handlers will not update the `notify:` strings pointing
+  at them (this happened in `355b449`, fixed 2026-07-10). After any `ansible-lint --fix`, diff
+  `handlers/main.yml` names against `notify:` values by hand.
+
+- **The `Ansible-lint` workflow lints *every* branch, `Validate Repository` does not.** Its trigger
+  is a bare `on: push:` with no `branches:` filter; only its `pull_request:` trigger is scoped to
+  `main`. So a feature branch that is pushed but has no PR still sends a red-build mail — which is
+  exactly how three red runs sat unnoticed on `chore/platform-techdebt-2026-07-10` on 2026-07-10
+  while `main` stayed green. This is a feature, not a defect: the alternative is discovering the
+  findings at PR time. The pre-commit gap that let them through in the first place is closed by
+  `validate-repo.sh` Check 16, which is inert unless `ansible-lint` is installed locally
+  (`pipx install 'ansible-lint==26.6.0'` — the pin must match `.github/workflows/ansible-lint.yml`).
+
+- **`ansible-lint`'s `command-instead-of-module` rule has an upstream gap on `systemctl`:** the
+  rule carries an allow-list of subcommands with no module equivalent
+  (`_executable_options["systemctl"]` in `ansiblelint/rules/command_instead_of_module.py`). It
+  contains `reset-failed` but not `is-failed`, so in `systemd_hygiene` only one half of an adjacent
+  pair of `systemctl` calls is flagged. Neither has a module: `systemd_service` has no query-only
+  mode and errors on a unit whose file was just deleted, and `service_facts` sees `.service` units
+  only — half of `systemd_hygiene_masked_units` are `.mount` units. Waived inline with
+  `# noqa: command-instead-of-module`, never in `skip_list`, so the rule stays armed repo-wide.
+  Read the rule's source before assuming a lint finding names a real defect.
+- **PostgreSQL backups: scheduling fixed 2026-07-10, restore still never tested.** They had not
+  run since 2026-06-14 because the role scheduled a **cron job at 03:00** on a host that
+  `homelab_schedule` powers down overnight — cron has no catch-up, so every run was silently
+  lost; the four dumps that existed came from nights the host happened to stay up. Replaced with
+  a systemd timer + `Persistent=true` (fires an overdue run at the next boot). A failed timer
+  unit now also raises `SystemdUnitFailed`; a cron failure never did. **Any daily job on this
+  fleet must be a timer with `Persistent=true`, not a cron entry** — the host is not up at night.
+  Restore testing remains absent: no runbook, no periodic validation that a restore succeeds, and
+  the `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
+
+- **`tailscale cert` on disk needs a reload, not just a renewal (KE-16):** on nodes that read
+  `/var/lib/tailscale/certs/*.crt` directly (only lxc210 — everything else goes through
+  `tailscale serve`, which renews transparently), `tailscaled` renews the file but the consuming
+  daemon keeps the old certificate in memory. Apache served an expired certificate for an hour
+  with a valid one lying next to it. Handled by the `tailscale_cert` role and the
+  `tailscale_cert_ondisk` inventory group. **Never add a serve-backed node to that group.**
+
+- **Apache on lxc210 binds `*:80` and `*:443` (LAN-exposed), violating the platform binding rule:**
+  same defect class as vm100's sshd. MariaDB and Redis on the same node bind single addresses
+  correctly. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
+  start to Tailscale being up — the KE-9/KE-12 boot-race class) or moving Nextcloud behind
+  `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
+  design decision; do not bolt it onto an unrelated pass.
+
+- **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
+  because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
+  The new `SystemdUnitFailed` rule therefore covers eight of nine nodes, and the monitoring node
+  is the blind one. Needs its own design decision (privileged container with `/run/systemd`
+  bind-mounted, or a native node_exporter alongside the container).
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.

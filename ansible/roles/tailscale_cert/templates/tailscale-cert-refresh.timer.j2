@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily Tailscale TLS certificate refresh at {{ tailscale_cert_oncalendar }}
+
+[Timer]
+OnCalendar={{ tailscale_cert_oncalendar }}
+
+# The host is powered down overnight and woken by RTC, so a fixed nightly slot is
+# routinely missed. Persistent=true fires the overdue run at the next boot.
+Persistent=true
+
+Unit=tailscale-cert-refresh.service
+
+[Install]
+WantedBy=timers.target

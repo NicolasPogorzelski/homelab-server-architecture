@@ -8,3 +8,50 @@
     mode: "0644"
     lstrip_blocks: true
   notify: Reload prometheus-config
+
+# The rules are staged, validated, then promoted. Validating them *after* writing
+# them to their final path would leave a broken file in place for the next
+# Prometheus start. The staging suffix is deliberately not `.yml`: prometheus.yml
+# loads `/etc/prometheus/rules/*.yml`, so a staged `.yml` would be picked up before
+# it has been checked.
+#
+# Staging, validation and cleanup carry `check_mode: false` so that a `--check` run
+# really does validate the rules. Otherwise the staged file would never be written
+# during a dry-run and promtool would check a path that does not exist — a guard
+# that is skipped in a dry-run guards nothing. The temporary file is removed in the
+# same run; only the promotion to the live path honours check mode.
+#
+# `copy`, not `template`: the rules file contains Go template expressions
+# ({{ $labels.instance }}) that Jinja2 would try to resolve and fail on.
+- name: Stage the Prometheus alerting rules
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_rules_src }}"
+    dest: "{{ prometheus_config_rules_dest }}.staged"
+    owner: root
+    group: root
+    mode: "0644"
+  changed_when: false
+  check_mode: false
+
+- name: Validate the staged rules with promtool
+  ansible.builtin.command:
+    cmd: docker exec prometheus promtool check rules /etc/prometheus/rules/{{ prometheus_config_rules_dest | basename }}.staged
+  changed_when: false
+  check_mode: false
+
+- name: Promote the validated rules
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_rules_dest }}.staged"
+    dest: "{{ prometheus_config_rules_dest }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload prometheus-config
+
+- name: Remove the staging file
+  ansible.builtin.file:
+    path: "{{ prometheus_config_rules_dest }}.staged"
+    state: absent
+  changed_when: false
+  check_mode: false

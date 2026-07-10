@@ -88,8 +88,14 @@ SnapRAID provides **parity-based** protection for the MergerFS-backed data disks
 Operational expectations:
 
 - Run `snapraid status` regularly
-- `snapraid sync` runs daily at 23:00 via cron (`/etc/cron.d/snapraid`); run manually after large write operations if needed
-- `snapraid scrub` runs monthly on the 1st at 20:00 via cron
+- `snapraid sync` runs daily at 23:00 via `snapraid-sync.timer`; run manually after large write operations if needed
+- `snapraid scrub` runs monthly on the 1st at 20:00 via `snapraid-scrub.timer`
+- Both timers trigger the template unit `snapraid-maintenance@.service` (instance = `sync` / `scrub`)
+  and are managed by the `snapraid_maintenance` Ansible role. They replaced `/etc/cron.d/snapraid`
+  on 2026-07-10: the host powers down before 23:00 on many nights, so the cron sync was skipped
+  without a trace and never retried. `Persistent=true` runs the overdue sync at the next boot,
+  and a failed run now raises the `SystemdUnitFailed` alert.
+- Inspect with `systemctl list-timers 'snapraid-*'` and `journalctl -u snapraid-maintenance@sync`
 
 Risk profile:
 

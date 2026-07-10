@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Nightly SnapRAID sync at {{ snapraid_sync_oncalendar }}
+
+[Timer]
+OnCalendar={{ snapraid_sync_oncalendar }}
+# vm102's boot window ended at 22:14 on 2026-07-05; the 23:00 cron slot was missed
+# and never retried. Persistent=true runs the overdue sync at the next boot.
+Persistent=true
+Unit=snapraid-maintenance@sync.service
+
+[Install]
+WantedBy=timers.target

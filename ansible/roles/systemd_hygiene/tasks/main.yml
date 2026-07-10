@@ -1,0 +1,86 @@
+---
+# Two kinds of unit need two different treatments, and using the wrong one fails
+# loudly rather than silently:
+#
+#   action: mask   (default) — the unit ships with a package under
+#                  /usr/lib/systemd/system. `systemctl mask` symlinks
+#                  /etc/systemd/system/<unit> to /dev/null, shadowing it.
+#   action: remove — the unit is a local file that already lives in
+#                  /etc/systemd/system. Masking it fails ("File ... already
+#                  exists") because the symlink target would be the file itself.
+#                  Such a unit is deleted, not shadowed.
+- name: Mask package-provided units that can never succeed on this node
+  ansible.builtin.systemd_service:
+    name: "{{ item.name }}"
+    masked: true
+  loop: "{{ systemd_hygiene_masked_units }}"
+  loop_control:
+    label: "{{ item.name }} — {{ item.reason }}"
+  when: (item.action | default('mask')) == 'mask'
+
+# systemd_service cannot stop a unit whose file no longer exists — on the second
+# run it errors out. `file: state=absent` is idempotent by nature, but the stop
+# and disable are not, so they have to be gated on the unit still being there.
+- name: Detect which unit files are still present
+  ansible.builtin.stat:
+    path: /etc/systemd/system/{{ item.name }}
+  loop: "{{ systemd_hygiene_masked_units }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: systemd_hygiene_unit_files
+  changed_when: false
+
+- name: Stop and disable locally-defined units scheduled for removal
+  ansible.builtin.systemd_service:
+    name: "{{ item.item.name }}"
+    state: stopped
+    enabled: false
+  loop: "{{ systemd_hygiene_unit_files.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - (item.item.action | default('mask')) == 'remove'
+    - item.stat.exists
+
+- name: Remove locally-defined unit files
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item.name }}
+    state: absent
+  loop: "{{ systemd_hygiene_masked_units }}"
+  loop_control:
+    label: "{{ item.name }} — {{ item.reason }}"
+  when: (item.action | default('mask')) == 'remove'
+  notify: Reload systemd
+
+# Masking or removing stops a unit from starting again; neither clears the
+# `failed` result already recorded for it. Without this, node_systemd_unit_state
+# keeps reporting state="failed" for a unit that can no longer be attempted.
+#
+# Waiver rationale for command-instead-of-module: no module answers this. The rule
+# points at ansible.builtin.systemd_service, which has no query-only mode and
+# errors out on a unit whose file the `remove` task above has just deleted.
+# ansible.builtin.service_facts enumerates .service units only, and half of
+# systemd_hygiene_masked_units are .mount units. Upstream already exempts
+# `systemctl reset-failed` (the task below) in the rule's own allow-list of
+# subcommands with no module equivalent; `is-failed` belongs there too and its
+# absence is an upstream gap, not a signal. Waived here, not in skip_list, so
+# the rule stays armed everywhere else.
+- name: Check which handled units still carry a failed state # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl is-failed {{ item.name }}
+  loop: "{{ systemd_hygiene_masked_units }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: systemd_hygiene_is_failed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Clear the residual failed state
+  ansible.builtin.command:
+    cmd: systemctl reset-failed {{ item.item.name }}
+  loop: "{{ systemd_hygiene_is_failed.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stdout | trim == "failed"
+  changed_when: true

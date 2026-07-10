@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Hourly Nextcloud Paperless Inbox rescan
+
+[Timer]
+OnCalendar={{ paperless_scan_oncalendar }}
+# The host is down overnight; catch up the missed slot at boot rather than leaving
+# the file cache stale until the next full hour.
+Persistent=true
+Unit=paperless-inbox-scan.service
+
+[Install]
+WantedBy=timers.target

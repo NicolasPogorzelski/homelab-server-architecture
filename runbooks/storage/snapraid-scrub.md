@@ -48,7 +48,10 @@ Expected: no errors or hash mismatches reported. Exit code 0 indicates success.
 
 ## Notes
 
-- Scrub runs automatically via cron on VM102 (monthly, 1st of each month at 20:00). Script: `snippets/storage/snapraid-maintenance.sh scrub`
+- Scrub runs automatically on VM102 via `snapraid-scrub.timer` (monthly, 1st of each month at 20:00),
+  which triggers `snapraid-maintenance@scrub.service`. Script: `snippets/storage/snapraid-maintenance.sh scrub`.
+  `Persistent=true` — if the host is powered off on the 1st, the scrub runs at the next boot instead of
+  waiting a full month. Check with `systemctl list-timers snapraid-scrub.timer`.
 - This runbook covers manual execution (ad-hoc scrub, troubleshooting).
 - A hash mismatch is a critical signal — begin disk health investigation immediately; do not defer.
 - See: [Storage Design](../../docs/platform/storage-design.md)

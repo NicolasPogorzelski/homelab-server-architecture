@@ -6,6 +6,13 @@ pg_backup_script_dest: /usr/local/sbin/pg-backup.sh
 
 pg_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
 
+# When the dump runs. A systemd timer, not a cron job: the Proxmox host is powered
+# down overnight (homelab_schedule) and woken by RTC in the morning, so nothing is
+# running at 03:00 and a cron slot is simply missed and lost. That is why only four
+# dumps ever existed and the newest was 2026-06-14 — the successful ones were nights
+# the host happened to stay up. The timer's Persistent=true catches up an overdue
+# run on the next boot instead.
+pg_backup_oncalendar: "*-*-* 03:00:00"
+
+# Retained only so the role can remove the legacy cron entry it used to install.
 pg_backup_cron_user: postgres
-pg_backup_cron_minute: "0"
-pg_backup_cron_hour: "3"

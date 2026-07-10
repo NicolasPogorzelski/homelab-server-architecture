@@ -1,0 +1,23 @@
+---
+# === tailscale_cert ===
+#
+# Only for nodes that read the Tailscale TLS certificate off disk instead of
+# terminating TLS through `tailscale serve`. Serve-backed nodes ask tailscaled for
+# the certificate per connection and need nothing here.
+#
+# Single source of truth for the script lives in snippets/scripts/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+tailscale_cert_script_src: "{{ playbook_dir }}/../../snippets/scripts/tailscale-cert-refresh.sh"
+tailscale_cert_script_dest: /usr/local/sbin/tailscale-cert-refresh.sh
+
+# Renew once the remaining lifetime drops below this. Let's Encrypt issues 90-day
+# certificates, so 30 days leaves two further daily attempts' worth of margin even
+# if the host stays powered off for a week.
+tailscale_cert_min_validity: 720h
+
+# Units to reload after a renewal. Space-separated; the script iterates them.
+tailscale_cert_reload_units: apache2
+
+# Daily. Persistent=true catches up a run missed while the host was powered down
+# overnight — the same reason pg-backup is a timer and not a cron job.
+tailscale_cert_oncalendar: "*-*-* 04:30:00"

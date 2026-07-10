@@ -103,3 +103,11 @@ all:
         vm102:
           ansible_host: <tailscale-ip-storage>
           prometheus_label: storage
+
+    # Nodes whose TLS-terminating service reads the Tailscale certificate straight
+    # off disk instead of going through `tailscale serve`. They need the renewal +
+    # reload timer, because renewing the file does not make the daemon re-read it
+    # (KE-16). Serve-backed nodes must NOT be listed here.
+    tailscale_cert_ondisk:
+      hosts:
+        lxc210:

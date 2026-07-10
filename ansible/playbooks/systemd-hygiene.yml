@@ -1,0 +1,6 @@
+---
+- name: Mask systemd units that can never succeed on their node
+  hosts: all
+  become: true
+  roles:
+    - systemd_hygiene
