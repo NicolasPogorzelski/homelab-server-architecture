@@ -29,7 +29,7 @@ Rules:
   The second command must print nothing. `validate-repo.sh` Check 15 catches conflict markers that
   reach a commit; nothing catches markers sitting in an uncommitted working tree.
 
-On 2026-07-09 the control node was found on branch `docs/storage-stack-client-setup` with
+On 2026-07-09 the control node was found on a documentation feature branch with
 `.git/MERGE_HEAD` present and conflict markers in three documentation files — a `git merge origin/main`
 abandoned partway. The `ansible/` subtree happened to be conflict-free and current, so runs from it
 were correct, but that was luck rather than design. Resolved by aborting the merge (the branch's five

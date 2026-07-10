@@ -2,7 +2,7 @@
 
 ## Context
 
-Code and infrastructure changes were previously made from multiple machines (desktop, notebook).
+Code and infrastructure changes were previously made from multiple machines (admin workstation, admin laptop).
 This created synchronization overhead and inconsistent Git state across devices.
 
 A centralized management node eliminates this problem:
@@ -77,7 +77,7 @@ The CTID 250 follows the established numbering model:
 `tag:admin` was chosen because:
 
 - The DevOps node requires broad access to all tiers (tier0, tier1, tier2, storage) for management and Ansible
-- This matches the access profile of existing admin devices (desktop, notebook)
+- This matches the access profile of existing admin devices (admin workstation, admin laptop)
 - A dedicated `tag:devops` was considered but deferred to avoid premature ACL complexity
 - Can be revisited when automated (non-human) access patterns emerge (e.g., CI runners, scheduled Ansible)
 

@@ -449,15 +449,15 @@ so the live data was recoverable.
 `nofail` on the aux-disk fstab entry keeps the boot out of emergency mode (already in
 place). All live data was rescued read-only **before** any repair attempt —
 per-directory `tar --numeric-owner --ignore-failed-read` streamed to the admin
-notebook, 12 archives (tens of GB), all integrity-verified, 0 real read errors. Disk to
+workstation, 12 archives (tens of GB), all integrity-verified, 0 real read errors. Disk to
 be decommissioned; affected services not yet restored (pending data relocation
 onto healthy storage). This invalidates the `docker-data-root-migration` runbook
 and CLAUDE.md "Adding a New Service" step 6, which both target `/mnt/aux-disk`.
 
 **Status:** Diagnosed; data rescued; disk **returned to service under protest** pending a
-replacement (ordered, ~6 weeks lead time as of 2026-07-09). The disk carries the Docker
-data-roots of LXC200/211/220/230/260 again — and VM100's a few hundred GB `scsi1` data disk — because
-no alternative target exists: the MergerFS pool on VM102 has a few hundred GB free of multi-terabyte, and the LVM
+replacement. The disk carries the Docker
+data-roots of LXC200/211/220/230/260 again — and VM100's `scsi1` data disk — because
+no alternative target exists: the MergerFS pool on VM102 has a low-hundreds-of-GB free, and the LVM
 thin pool on the boot SSD has no headroom.
 
 **Degradation is ongoing.** SMART re-read 2026-07-09 (14 days after the incident):
@@ -474,7 +474,7 @@ the kernel while back in service. The 8 sectors that left `pending` were rewritt
 usable; none were reallocated, so the drive's spare pool is untouched and the remaining 7680
 sectors hold data that cannot be read back.
 
-**What is at stake** (measured 2026-07-09, 181 G used of 916 G):
+**What is at stake** (measured 2026-07-09, ~20% of the disk used):
 
 | Path | Used |
 |---|---|
@@ -498,7 +498,7 @@ Consequences while the disk remains in service:
 
 Discovered while mapping the disk topology. `sdb1` was mounted `rw` on the Proxmox host at
 `/mnt/aux-disk` **and** attached to the running VM102 as `scsi8`
-(`/dev/disk/by-id/ata-<disk-model>_<disk-serial>-part1`), confirmed against the live `kvm`
+(`/dev/disk/by-id/<aux-disk-by-id>`), confirmed against the live `kvm`
 process arguments, not just `qm config`. Both refer to the same filesystem — UUID
 `<fs-uuid>` appears in the host's `EXT4-fs … mounted filesystem`
 line and as VM102's a member disk.
@@ -522,10 +522,10 @@ Fix applied 2026-07-09 (live):
    gone before the cache flush; nothing was dirty). Proxmox removed the config line without
    creating an `unusedN` entry, because a raw device path is not a storage-managed volume —
    no data was touched.
-   Reversal: `qm set 102 --scsi8 /dev/disk/by-id/ata-<disk-model>_<disk-serial>-part1,size=953868M`
+   Reversal: `qm set 102 --scsi8 /dev/disk/by-id/<aux-disk-by-id>,size=<size>`
 2. VM102's commented `/etc/fstab` line replaced with an explicit four-line warning naming the
    host mount and the corruption consequence. A bare `#` documents nothing; the next person to
-   tidy up would have uncommented it. Backup at `/etc/fstab.bak-20260709`; `findmnt --verify`
+   tidy up would have uncommented it. Backup at `/etc/fstab.bak-<date>`; `findmnt --verify`
    clean; `systemctl daemon-reload` run.
 
 ### Related latent fault (not fixed): `appdata_aux-disk` storage lacks `is_mountpoint 1`

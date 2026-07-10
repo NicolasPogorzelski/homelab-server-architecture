@@ -13,7 +13,7 @@ an fstab `nofail` change before this session).
 | 2 | Five service LXCs would not start | Root cause = aux-disk physical disk failure; disk to be decommissioned |
 | 3 | Irreplaceable data on the dying disk | All rescued read-only and verified before any repair attempt; **no data loss** |
 
-The three are linked: the same aux-disk disk that caused the original emergency-mode
+The three are linked: the same aux disk that caused the original emergency-mode
 lockout also held the data-root / bind-mount sources of the five stopped LXCs.
 
 ## 1 — Remote-Access Stabilization
@@ -60,7 +60,7 @@ Clarified and verified the rule that **reachability = binding × network × fire
 | Web UI (`pveproxy`) | host Tailscale IP only (`:8006`) | No — by binding, not by firewall | Yes |
 
 The Proxmox firewall is `disabled` (no `cluster.fw`/`host.fw`); nothing is filtered.
-A LAN-SSH "break-glass" was verified end to end from the admin notebook
+A LAN-SSH "break-glass" was verified end to end from the admin workstation
 (`SSH_CONNECTION` confirmed the LAN path, not a Tailscale tunnel). Emergency mode
 remains the one state that removes **all** network paths at once — the firewall
 notausgang only matters once the network is up.
@@ -106,7 +106,7 @@ into data loss. Method:
 
 - Source mounted strictly read-only (`-o ro,noload`); VM100's jellyfin-data image
   loop-mounted read-only for the data inside it.
-- Per-directory `tar` streamed over SSH to the admin notebook (`<lan-ip-notebook>`,
+- Per-directory `tar` streamed over SSH to the admin workstation (`<lan-ip-admin-workstation>`,
   gigabit wired), landing as archives on its LUKS-encrypted disk. `tar` was chosen
   over file-level `rsync` so ownership/permissions are preserved **inside** the
   archive (no root needed on the receiver, exact UIDs on restore).
@@ -162,7 +162,7 @@ Calibre metadata were never on aux-disk. No re-scrape is required.
 - **Containers:** LXC210/240/250 running. LXC200/211/220/230/260 and VM100 remain
   **down** pending data relocation off aux-disk — not yet restored.
 - **aux-disk:** physically failed, mounted read-only for rescue only; to be
-  decommissioned. All data copied to the admin notebook (`~/aux-disk-rescue/`).
+  decommissioned. All data copied to the admin workstation (`~/aux-disk-rescue/`).
 - **Firewall:** disabled (unchanged).
 
 ## Open Items
@@ -170,7 +170,7 @@ Calibre metadata were never on aux-disk. No re-scrape is required.
 1. **Permanent home + service restart.** Move the rescued databases/configs onto
    healthy storage (local-lvm SSD is the right fit for live DBs; the MergerFS pool
    is for media and is ~full), re-point the LXC bind mounts, restart LXC200/211/220/230/260
-   and VM100. The off-disk copy on the notebook is staging, not a home.
+   and VM100. The off-disk copy on the admin workstation is staging, not a home.
 2. **aux-disk replacement decision.** Replace with a healthy disk vs. decommission
    only — open. Drives whether the Docker data-root strategy is restored on a new
    aux-disk or moved.
@@ -185,7 +185,7 @@ Calibre metadata were never on aux-disk. No re-scrape is required.
    shared script/role is the durable follow-up. See the
    [ADR](../../decisions/pveproxy-tailscale-boot-ordering.md).
 5. **No off-site backup** of the rescued set — it is a single local copy on one
-   notebook (consistent with the existing off-site-backup tech-debt item).
+   admin workstation (consistent with the existing off-site-backup tech-debt item).
 
 ## Configuration Changes Made
 

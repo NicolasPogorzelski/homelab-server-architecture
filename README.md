@@ -85,7 +85,6 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Ollama](docs/services/ollama.md)
 - [Vaultwarden](docs/services/vaultwarden.md)
 - [PostgreSQL Platform](docs/services/postgresql-platform.md)
-- [Storage Stack](docs/services/storage-stack.md)
 
 ### Platform
 

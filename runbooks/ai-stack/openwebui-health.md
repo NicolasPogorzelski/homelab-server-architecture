@@ -119,7 +119,7 @@ pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000
 | Symptom | Likely Cause | Action |
 |---|---|---|
 | `findmnt` returns no output for `/mnt/smb/openwebui` | autofs not triggered or VM102 Samba down | `ls /mnt/smb/openwebui` to trigger; verify VM102 |
-| `findmnt` returns no output for `/mnt/aux-disk/openwebui` | aux-disk disk not mounted on Proxmox host | Check `findmnt /mnt/aux-disk` on Proxmox host |
+| `findmnt` returns no output for `/mnt/aux-disk/openwebui` | aux disk not mounted on Proxmox host | Check `findmnt /mnt/aux-disk` on Proxmox host |
 | `ls /data/openwebui` empty inside CT230 | Host SMB mount active but LXC bind-mount not propagated | `pct stop 230 && pct start 230` |
 | Container in `exited` state | App crash or OOM | `docker compose logs --tail 50` for error; check `dmesg` for OOM |
 | Container in `restarting` loop | DB unreachable at startup or config error | Check step 4 first; then inspect logs |
