@@ -1,0 +1,35 @@
+---
+# === unattended_upgrades ===
+#
+# vm100 is Ubuntu 22.04, not Debian: origins carry `Ubuntu`/`UbuntuESM` ids and the
+# kernel packages are `linux-image-*-generic`. Do not copy these values to the
+# Debian LXCs unchanged.
+#
+# The stock /etc/apt/apt.conf.d/50unattended-upgrades allows
+# "${distro_id}:${distro_codename}" — the *regular* archive, not just security —
+# and ships an empty Package-Blacklist. On a GPU node that means a kernel can be
+# installed autonomously, and the NVIDIA DKMS module is only rebuilt for it on the
+# next boot; if that fails, Jellyfin loses CUDA and nobody knows why.
+#
+# Disabling unattended-upgrades entirely would trade a security window for a
+# stability risk. The narrower answer is to keep security updates and exclude the
+# packages whose upgrade must be a deliberate, observed act.
+
+# Only security pockets. The plain "${distro_id}:${distro_codename}" entry from the
+# stock config is deliberately absent.
+unattended_upgrades_allowed_origins:
+  - "${distro_id}:${distro_codename}-security"
+  - "${distro_id}ESMApps:${distro_codename}-apps-security"
+  - "${distro_id}ESM:${distro_codename}-infra-security"
+
+# Matched as regular expressions against the package name, not as exact names.
+# Kernels and the NVIDIA stack are coupled: a new kernel needs its DKMS module
+# rebuilt, and a driver bump must be paired with a matching container toolkit.
+# Both belong in `ansible/playbooks/apt-upgrade.yml`, run while someone is watching.
+unattended_upgrades_blacklist:
+  - "linux-image"
+  - "linux-headers"
+  - "linux-generic"
+  - "linux-modules"
+  - "nvidia-"
+  - "libnvidia-"
