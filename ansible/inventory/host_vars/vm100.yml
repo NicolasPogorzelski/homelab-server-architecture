@@ -7,3 +7,17 @@ breakglass_user: gpu
 compose_projects:
   - { dest: /opt/docker/audiobookshelf, src: audiobookshelf }
   - { dest: /opt/docker/jellyfin, src: jellyfin }
+
+# Units that can never succeed on this node. Masked by the systemd_hygiene role so
+# that every remaining failed unit on the fleet is a real fault worth alerting on.
+systemd_hygiene_masked_units:
+  # A hand-written unit in /etc/systemd/system, not a package file: it must be
+  # removed, not masked. `systemctl mask` would try to symlink over itself.
+  - name: media-mergerfs.mount
+    action: remove
+    reason: >-
+      Legacy VirtioFS mount for /media/mergerfs. The host no longer exports the
+      `mergerfs` tag (`virtio-fs: tag <mergerfs> not found` at every boot), and
+      nothing consumes the path: Jellyfin and Audiobookshelf read their libraries
+      over autofs/CIFS from vm102. Already recorded as legacy in docs/nodes/vm100.md.
+

@@ -77,10 +77,37 @@ groups:
           summary: "SnapRAID scrub is stale"
           description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
 
+  - name: systemd
+    rules:
+      # A unit stuck in `failed` fits none of the other alert categories: the node
+      # is up (NodeDown quiet), the disk is fine, and blackbox only knows whether a
+      # port answers. calibre-import.service failed every 2 minutes for a month
+      # while every dashboard stayed green (KE-15).
+      #
+      # `for: 15m` absorbs boot-window transients — units that fail once because a
+      # network mount is not up yet and succeed on the next trigger. Anything still
+      # failed a quarter of an hour after the fact is a real fault.
+      #
+      # This rule deliberately carries no exception list. Units that can never
+      # succeed on a node are masked or removed at the source by the
+      # `systemd_hygiene` Ansible role, so that every alert here means something.
+      - alert: SystemdUnitFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "systemd unit {{ $labels.name }} failed on {{ $labels.instance }}"
+          description: "{{ $labels.name }} has been in the failed state on {{ $labels.instance }} for more than 15 minutes. Check `systemctl status {{ $labels.name }}` and `journalctl -u {{ $labels.name }}` on the node."
+
   - name: smart
     rules: []
     # SMART disk health alerts are planned but not yet implemented.
-    # Requires smartctl_exporter on VM102 (TODO #6).
+    # All nine disks are attached to the Proxmox HOST; VM102 reaches six of them by
+    # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
+    # readable only on the host. An earlier version of this comment named VM102 as
+    # the target and was wrong (see KE-14). Deploying this requires making the host
+    # an Ansible-managed node.
     # Metrics to alert on (once available):
     #   - smartctl_device_smart_status (overall SMART pass/fail)
     #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
