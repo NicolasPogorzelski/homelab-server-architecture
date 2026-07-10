@@ -1,7 +1,39 @@
 ---
-- name: Deploy break-glass SSH public keys for the native admin user
+# Taken once, before the first exclusive run ever rewrites the file. `creates:`
+# makes it a no-op afterwards, so the backup keeps the pre-Ansible state instead of
+# being overwritten by whatever the last run produced.
+- name: Back up the pre-existing authorized_keys once
+  ansible.builtin.command:
+    cmd: cp -a /home/{{ breakglass_user }}/.ssh/authorized_keys /home/{{ breakglass_user }}/.ssh/authorized_keys.pre-ansible
+    creates: /home/{{ breakglass_user }}/.ssh/authorized_keys.pre-ansible
+
+# One call with every key joined by newlines, NOT a loop with exclusive: true.
+# `exclusive` applies per invocation: inside a loop, each iteration would delete the
+# keys the previous one added and only the last key would survive.
+#
+# exclusive: true makes the inventory the single source of truth. Until now the file
+# accumulated whatever had ever been added by hand — a legacy `root@server` RSA key
+# belonging to no current machine, and `devops@devops-lxc`, the control node's
+# interactive user, sitting on the *admin* account. Ansible authenticates as the
+# `ansible` user with its own authorized_keys, so dropping the latter costs no
+# automation path; it only ends `ssh <admin>@<node>` from lxc250, which was never
+# the intended route.
+#
+# Break-glass then means exactly what the inventory says: the two admin laptops,
+# and nothing that accreted along the way.
+- name: Enforce the break-glass SSH public keys for the native admin user
   ansible.posix.authorized_key:
     user: "{{ breakglass_user }}"
     state: present
-    key: "{{ item }}"
-  loop: "{{ breakglass_pubkeys }}"
+    exclusive: true
+    key: "{{ breakglass_pubkeys | join(breakglass_key_separator) }}"
+  vars:
+    # The separator must be a real newline. `join("\n")` written inline does not
+    # produce one: Jinja does not unescape \n in that string literal, and a
+    # --check --diff showed the two keys landing on a single line joined by a
+    # literal backslash-n — one malformed entry, both laptop keys dead, with the
+    # old keys already removed by exclusive: true. A double-quoted YAML scalar is
+    # the one place the escape is reliably expanded, so the newline is built here
+    # and handed to Jinja as a value.
+    breakglass_key_separator: "\n"
+  when: breakglass_pubkeys | length > 0

@@ -1,0 +1,23 @@
+---
+# === postgres_exporter (LXC260) ===
+#
+# The exporter was installed by hand on 2026-04-22 and its unit file has lived
+# unmanaged in /etc/systemd/system ever since, with no --web.listen-address, so it
+# bound *:9187 — reachable from the untrusted LAN, contrary to the platform binding
+# rule. Because the unit is a local file rather than a package's, the fix is to own
+# it outright; a systemd drop-in is the tool for units you are not allowed to edit,
+# and would have forced restating the whole ExecStart line anyway.
+#
+# This role deliberately does NOT manage /etc/postgres_exporter.env: it holds
+# DATA_SOURCE_NAME with the database password. Adopting that belongs in a separate
+# Ansible Vault step, not bolted onto a bind-address fix.
+
+postgres_exporter_bin: /usr/local/bin/postgres_exporter
+postgres_exporter_env_file: /etc/postgres_exporter.env
+postgres_exporter_user: postgres_exporter
+postgres_exporter_group: postgres_exporter
+postgres_exporter_port: 9187
+
+# Bind to this node's Tailscale address only. Prometheus scrapes
+# hostvars['lxc260'].ansible_host:9187, which is exactly this address.
+postgres_exporter_listen_address: "{{ ansible_host }}"

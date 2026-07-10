@@ -1,0 +1,6 @@
+---
+- name: Manage postgres_exporter on the database node
+  hosts: database
+  become: true
+  roles:
+    - postgres_exporter
