@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Refresh the Tailscale TLS certificate and reload the services that serve it
+# tailscaled must be up to answer `tailscale cert`; without this the unit fails
+# during the boot window, the same race class as KE-9 and KE-12.
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=oneshot
+# Needs root: writes into /var/lib/tailscale/certs and calls systemctl reload.
+User=root
+Environment=MIN_VALIDITY={{ tailscale_cert_min_validity }}
+Environment=RELOAD_UNITS={{ tailscale_cert_reload_units }}
+ExecStart={{ tailscale_cert_script_dest }}

@@ -672,6 +672,66 @@ the alert.
 verified; host mount **not** restored — the import path stays down until `/mnt/smb/books-rw` is
 mounted on the Proxmox host and `pct reboot 220` is run
 
+---
+
+## KE-16: Apache serves an expired certificate that was already renewed on disk
+
+**Affected component:** LXC210 (Nextcloud) — Apache + the Tailscale-issued TLS certificate
+
+**Symptom:**
+`ServiceDown` fired for `nextcloud` on 2026-07-10. The blackbox probe reported
+`probe_success = 0`; `curl` against the same URL returned `http=000` with
+`ssl_verify_result=10` (`X509_V_ERR_CERT_HAS_EXPIRED`) and exit 60. With `-k` (verification
+disabled) the same URL answered `302`. Apache, MariaDB, Redis and PHP-FPM were all `active`.
+
+**Root cause:**
+The certificate Apache was *serving* had `notAfter=Jul 10 09:53:15 2026 GMT` — it had expired
+about an hour earlier. The certificate *on disk* at `/var/lib/tailscale/certs/` was valid from
+`Jul 10 09:38:32` to `Oct 8 09:38:31`.
+
+`tailscaled` had renewed the file fifteen minutes before the old one expired. **Renewal was never
+the problem.** Apache reads its certificate at start-up and holds it in memory; nothing told it
+to re-read. It went on presenting the April certificate from RAM while a valid one sat on disk
+beside it.
+
+Why only this node: the other five certificate-holding nodes (lxc200, lxc211, lxc220, lxc230,
+lxc240) terminate TLS through `tailscale serve`, which asks `tailscaled` for the certificate per
+connection — renewal is transparent there. LXC210 is the only node whose service reads the file
+directly, via `SSLCertificateFile /var/lib/tailscale/certs/<fqdn>.crt` in
+`sites-available/nextcloud-ssl.conf`.
+
+**Immediate fix (applied 2026-07-10):** `tailscale cert --cert-file … --key-file …
+--min-validity 720h <fqdn>` (reported "unchanged", confirming tailscaled had already renewed),
+then `systemctl reload apache2`. Verified from the wire: the probe now returns `http=302` with
+`ssl_verify=0`, and the served certificate is the October one.
+
+**Durable fix (applied 2026-07-10):** new `tailscale_cert` role — `tailscale-cert-refresh.sh`
+plus a daily systemd timer, targeted at the new inventory group `tailscale_cert_ondisk` (only
+lxc210; serve-backed nodes must not be listed). The script hashes the certificate, runs
+`tailscale cert --min-validity 720h` (a no-op while more than 30 days remain, so a daily run
+costs nothing), and reloads Apache **only if the hash changed**. `reload`, not `restart`: Apache
+re-reads certificates on a graceful reload and live connections survive. The timer carries
+`Persistent=true`, because the host is powered down overnight and a fixed nightly slot would
+simply be missed.
+
+Verified: timer `active`/`enabled`; a manual run of the service logs
+`certificate unchanged (valid for at least 720h) — no reload needed` and exits 0. The reload
+branch was not exercised against a real renewal — forcing one would consume a Let's Encrypt rate
+limit to re-prove a `systemctl reload apache2` that had already succeeded minutes earlier.
+
+**Note:** the detection worked. `ServiceDown` fired within minutes of the expiry and reached
+Discord. The gap was that nothing acted on it, and nothing prevented the recurrence that would
+have happened again on 8 October.
+
+**Related, not fixed:** Apache on lxc210 listens on `*:80` and `*:443`, i.e. on the LAN
+interface, violating the platform binding rule — the same defect class as vm100's sshd. MariaDB
+and Redis on the same node bind single addresses correctly.
+
+**References:**
+- [LXC210 node doc](../nodes/lxc210.md)
+- [Nextcloud service doc](../services/nextcloud.md)
+- [KE-8 — the blind spot this alert closed](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
+
 **References:**
 - [LXC220 node doc](../nodes/lxc220.md)
 - [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
