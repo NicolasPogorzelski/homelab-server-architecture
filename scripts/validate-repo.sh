@@ -255,11 +255,47 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 16: ansible-lint on staged Ansible changes
+# =============================================================================
+# Structural checks 1-15 never look inside Ansible files, so three commits went
+# out green locally on 2026-07-10 and turned CI red. This closes that gap at the
+# pre-commit hook, not in CI: .github/workflows/ansible-lint.yml already runs a
+# version-pinned lint on every push. Consequently this check SKIPs under CI --
+# actions/checkout leaves a clean tree, so there is no diff to test.
+#
+# ansible-lint exits 2 on findings, which `set -e` would turn into a silent
+# abort before the output is printed. The call is therefore guarded.
+echo "Check 16: ansible-lint (production profile)"
+
+# Staged files first: the PreToolUse hook fires while `git commit` holds an
+# index. `git commit -a` stages at commit time instead, leaving --cached empty,
+# so fall back to the working tree. A clean tree (CI) yields neither.
+changed="$(git -C "${REPO_ROOT}" diff --cached --name-only 2>/dev/null || true)"
+if [[ -z "${changed}" ]]; then
+    changed="$(git -C "${REPO_ROOT}" diff --name-only HEAD 2>/dev/null || true)"
+fi
+
+if ! command -v ansible-lint >/dev/null 2>&1; then
+    echo "  SKIP: ansible-lint not in PATH"
+elif ! grep -q '^ansible/' <<< "${changed}"; then
+    echo "  SKIP: no changes under ansible/"
+else
+    # --nocolor: the output is captured, not written to a TTY, and rich would
+    # otherwise emit ANSI colour and OSC-8 hyperlink escapes into the hook log.
+    lint_output="$(cd "${REPO_ROOT}/ansible" && ansible-lint --nocolor . 2>&1)" && lint_rc=0 || lint_rc=$?
+    if [[ "${lint_rc}" -ne 0 ]]; then
+        echo "${lint_output}" | sed 's/^/  /'
+        echo "  ansible-lint failed (exit ${lint_rc})"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 15"
+echo "Checks run: 16"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

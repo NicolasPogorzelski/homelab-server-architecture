@@ -35,4 +35,3 @@ systemd_hygiene_masked_units:
     reason: >-
       Loads IPMI kernel drivers to talk to a baseboard management controller.
       There is no BMC reachable from inside a container.
-

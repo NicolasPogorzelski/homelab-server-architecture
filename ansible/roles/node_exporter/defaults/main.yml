@@ -2,6 +2,11 @@
 node_exporter_version: "1.11.1"
 node_exporter_port: 9100
 
+# Split out of the download URL so the release host can be repointed at an internal
+# mirror without editing a task. Overriding this is the supported way to install
+# node_exporter on a node with no egress to github.com.
+node_exporter_release_base: https://github.com/prometheus/node_exporter/releases/download
+
 # On by default, fleet-wide. It used to default to "" and be switched on per host,
 # which made it a trap: vm102's unit was hand-written and carried the flag, nothing
 # in host_vars did, and the first fleet-wide run of this role silently rewrote the

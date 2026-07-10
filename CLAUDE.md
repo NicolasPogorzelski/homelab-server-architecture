@@ -4,8 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Work in Progress
 
-- **Branch:** `chore/platform-techdebt-2026-07-10` — **8 commits, not pushed, no PR open.**
-  Ansible track complete (items #1–#13). **Next learning track: Terraform.**
+- **Branch:** `chore/platform-techdebt-2026-07-10` — **10 commits, pushed to `origin`, no PR open.**
+  The earlier "not pushed" note was wrong: the branch has been on `origin` since 2026-07-10, which
+  is why CI ran against it at all. Ansible track complete (items #1–#13).
+  **Next learning track: Terraform.**
 - **Status (2026-07-10):** the learning track stays paused; a full tech-debt pass was run instead.
   Everything guest-side is now Ansible-managed and every scheduled job is a systemd timer. Two
   hardware faults remain open and both are waiting on a replacement NVMe that arrives the week of
@@ -129,7 +131,9 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 15 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, and leftover git merge conflict markers.
+This script enforces 16 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, and `ansible-lint` findings.
+
+**Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips — `actions/checkout` leaves a clean tree, so there is no diff — because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 
 ## Documentation Audit Rule
 
@@ -166,7 +170,7 @@ This is a **documentation and configuration repository** — no application code
 - `docker/` — Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` — Operational procedures (must follow the runbook contract)
 - `snippets/` — Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (15-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
+- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (16-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
 - `ansible/` — Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12).
@@ -344,6 +348,25 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   `changed`. A `--fix` run that renames handlers will not update the `notify:` strings pointing
   at them (this happened in `355b449`, fixed 2026-07-10). After any `ansible-lint --fix`, diff
   `handlers/main.yml` names against `notify:` values by hand.
+
+- **The `Ansible-lint` workflow lints *every* branch, `Validate Repository` does not.** Its trigger
+  is a bare `on: push:` with no `branches:` filter; only its `pull_request:` trigger is scoped to
+  `main`. So a feature branch that is pushed but has no PR still sends a red-build mail — which is
+  exactly how three red runs sat unnoticed on `chore/platform-techdebt-2026-07-10` on 2026-07-10
+  while `main` stayed green. This is a feature, not a defect: the alternative is discovering the
+  findings at PR time. The pre-commit gap that let them through in the first place is closed by
+  `validate-repo.sh` Check 16, which is inert unless `ansible-lint` is installed locally
+  (`pipx install 'ansible-lint==26.6.0'` — the pin must match `.github/workflows/ansible-lint.yml`).
+
+- **`ansible-lint`'s `command-instead-of-module` rule has an upstream gap on `systemctl`:** the
+  rule carries an allow-list of subcommands with no module equivalent
+  (`_executable_options["systemctl"]` in `ansiblelint/rules/command_instead_of_module.py`). It
+  contains `reset-failed` but not `is-failed`, so in `systemd_hygiene` only one half of an adjacent
+  pair of `systemctl` calls is flagged. Neither has a module: `systemd_service` has no query-only
+  mode and errors on a unit whose file was just deleted, and `service_facts` sees `.service` units
+  only — half of `systemd_hygiene_masked_units` are `.mount` units. Waived inline with
+  `# noqa: command-instead-of-module`, never in `skip_list`, so the rule stays armed repo-wide.
+  Read the rule's source before assuming a lint finding names a real defect.
 - **PostgreSQL backups: scheduling fixed 2026-07-10, restore still never tested.** They had not
   run since 2026-06-14 because the role scheduled a **cron job at 03:00** on a host that
   `homelab_schedule` powers down overnight — cron has no catch-up, so every run was silently
