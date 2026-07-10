@@ -1,0 +1,17 @@
+---
+# === paperless_inbox_scan (LXC210) ===
+#
+# Replaces the hand-deployed root crontab entry. Paperless deletes consumed files
+# directly on the SMB share, behind Nextcloud's back, so Nextcloud's file cache has
+# to be rescanned or the Inbox keeps showing documents that no longer exist.
+#
+# Persistent=true: the host is powered down overnight, so the first hourly slot
+# after boot should catch up rather than wait for the next full hour.
+
+paperless_scan_script_src: "{{ playbook_dir }}/../../snippets/scripts/scan-paperless-inbox.sh"
+paperless_scan_script_dest: /usr/local/sbin/scan-paperless-inbox.sh
+
+paperless_scan_oncalendar: hourly
+
+# Matched against the root crontab to retire the hand-written entry.
+paperless_scan_legacy_cron_pattern: "scan-paperless-inbox|Paperless Inbox External Storage"

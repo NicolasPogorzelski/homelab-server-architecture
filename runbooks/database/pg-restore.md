@@ -111,7 +111,8 @@ If CT260 must be rebuilt from scratch:
 4. Configure `pg_hba.conf` (service allowlist)
 5. Mount backup share (`/mnt/backups`)
 6. Run restore procedure (steps 5–7 above)
-7. Re-enable backup cron
+7. Re-apply `ansible-playbook playbooks/pg-backup.yml` — this redeploys `pg-backup.sh`,
+   `pg-backup.service` and `pg-backup.timer`. There is no cron entry to restore.
 
 Refer to: [postgresql-platform.md](../../docs/services/postgresql-platform.md) for hardening details.
 

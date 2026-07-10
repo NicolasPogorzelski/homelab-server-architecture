@@ -1,0 +1,62 @@
+---
+- name: Deploy the paperless inbox scan script
+  ansible.builtin.copy:
+    src: "{{ paperless_scan_script_src }}"
+    dest: "{{ paperless_scan_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the scan service unit
+  ansible.builtin.template:
+    src: paperless-inbox-scan.service.j2
+    dest: /etc/systemd/system/paperless-inbox-scan.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the scan timer unit
+  ansible.builtin.template:
+    src: paperless-inbox-scan.timer.j2
+    dest: /etc/systemd/system/paperless-inbox-scan.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# `ansible.builtin.cron` can only remove entries it created itself, which it marks
+# with an `#Ansible: <name>` comment. This one was written by hand, so it is
+# filtered out and the result piped back through `crontab -`, which validates the
+# file rather than editing the spool directly.
+#
+# `sed -E '/pat/d'` rather than `grep -vE pat`: grep exits 1 when it prints no
+# lines, and on a crontab whose only entry is this one that is exactly what
+# success looks like — `set -o pipefail` would turn it into a task failure.
+- name: Read the root crontab
+  ansible.builtin.command:
+    cmd: crontab -l -u root
+  register: paperless_scan_root_crontab
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Remove the legacy paperless scan cron entry
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      crontab -l -u root | sed -E '/{{ paperless_scan_legacy_cron_pattern }}/d' | crontab -u root -
+    executable: /bin/bash
+  when: paperless_scan_root_crontab.stdout is search(paperless_scan_legacy_cron_pattern)
+  changed_when: true
+
+# Skipped in check mode: the unit file above was not really written, so systemd
+# cannot see it yet and `enable` would fail with "Could not find the requested
+# service". Without this guard the role cannot be dry-run at all.
+- name: Enable and start the scan timer
+  ansible.builtin.systemd_service:
+    name: paperless-inbox-scan.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

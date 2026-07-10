@@ -52,6 +52,17 @@
         - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
         - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64
 
+# No owner/group on purpose: on lxc260 this directory belongs to `postgres`, which
+# is the user pg-backup.sh writes its .prom file as. Asserting owner: root here
+# would silently break that backup's metric — the same class of failure this
+# default-on collector is meant to prevent.
+- name: Ensure the textfile collector directory exists
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    mode: "0755"
+  when: node_exporter_textfile_dir | length > 0
+
 - name: Generate UNIT
   ansible.builtin.template:
     src: node_exporter.service.j2

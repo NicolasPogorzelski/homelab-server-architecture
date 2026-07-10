@@ -4,7 +4,15 @@ This document records errors that have been observed in production, their root c
 
 Unlike the incident response playbooks in [operations.md](./operations.md), these are specific, previously encountered issues — not hypothetical failure scenarios.
 
+Every entry carries an explicit `<a id="ke-N"></a>` anchor above its heading, so other documents
+can link to `known-errors.md#ke-N` without depending on the heading text. Four such links were
+already broken on 2026-07-10 because the auto-generated anchor is the full slugified title, and
+titles get reworded. Keep the anchor when adding an entry; `validate-repo.sh` Check 2 verifies the
+file path, not the fragment.
+
 ---
+
+<a id="ke-1"></a>
 
 ## KE-1: SQLite on CIFS — "database is locked"
 
@@ -27,6 +35,8 @@ SQLite was replaced with PostgreSQL running on local block storage in a dedicate
 
 ---
 
+<a id="ke-2"></a>
+
 ## KE-2: Grafana datasource unreachable after host networking switch
 
 **Affected service:** Grafana (LXC200)
@@ -47,6 +57,8 @@ Changed the datasource URL from `http://prometheus:9090` to `http://127.0.0.1:90
 
 ---
 
+<a id="ke-3"></a>
+
 ## KE-3: Failed run-rpc_pipefs.mount in LXC210
 
 **Affected service:** Nextcloud (LXC210)
@@ -66,6 +78,8 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 - [Nextcloud service documentation](../services/nextcloud.md)
 
 ---
+
+<a id="ke-4"></a>
 
 ## KE-4: Docker creates directories for missing bind-mount files
 
@@ -99,6 +113,8 @@ No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates norm
 
 ---
 
+<a id="ke-5"></a>
+
 ## KE-5: Vaultwarden SQLite on CIFS — acknowledged technical debt
 
 **Affected service:** Vaultwarden (LXC240)
@@ -127,6 +143,8 @@ probability of POSIX locking failures relative to the multi-user OpenWebUI case 
 
 ---
 
+<a id="ke-6"></a>
+
 ## KE-6: Tailscale userspace-networking prevents node_exporter from binding to Tailscale IP
 
 **Affected service:** node_exporter (LXC240 Vaultwarden)
@@ -150,6 +168,8 @@ with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 **Status:** Resolved (LXC240)
 
 ---
+
+<a id="ke-7"></a>
 
 ## KE-7: Package corruption when LVM thin-pool overflows during apt upgrade
 
@@ -217,6 +237,8 @@ dpkg --verify 2>&1 | grep -v ' c /'
 
 ---
 
+<a id="ke-8"></a>
+
 ## KE-8: Media services hang while the node stays healthy (observability blind spot)
 
 **Affected services:** Jellyfin + Audiobookshelf (VM100)
@@ -254,6 +276,8 @@ dpkg --verify 2>&1 | grep -v ' c /'
 - [Monitoring platform](./monitoring.md)
 
 ---
+
+<a id="ke-9"></a>
 
 ## KE-9: PostgreSQL binds only loopback after boot (Tailscale-IP startup race)
 
@@ -293,6 +317,8 @@ A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the s
 
 ---
 
+<a id="ke-10"></a>
+
 ## KE-10: Jellyfin loses CUDA access intermittently — container restart required
 
 **Affected service:** Jellyfin (VM100)
@@ -329,6 +355,8 @@ in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
 
 ---
 
+<a id="ke-11"></a>
+
 ## KE-11: Grafana admin password not updated by environment variable after first start
 
 **Affected service:** Grafana (LXC200)
@@ -354,6 +382,8 @@ docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
 - [Monitoring platform](./monitoring.md)
 
 ---
+
+<a id="ke-12"></a>
 
 ## KE-12: pveproxy fails to start after boot (Tailscale-IP bind race)
 
@@ -394,6 +424,8 @@ present now). Durable — systemd drop-in
 - [Proxmox Host](./proxmox-host.md)
 
 ---
+
+<a id="ke-13"></a>
 
 ## KE-13: aux-disk physical disk failure (medium errors)
 
@@ -514,6 +546,8 @@ host changes.
 
 ---
 
+<a id="ke-14"></a>
+
 ## KE-14: Intermittent boot-time I/O errors on the boot SSD (SAS HBA transport, not media)
 
 **Affected component:** Proxmox host — boot SSD the boot SSD behind the LSI SAS2008 HBA
@@ -596,6 +630,8 @@ VM102 as previously documented.
 
 ---
 
+<a id="ke-15"></a>
+
 ## KE-15: Guard tests mount existence, not mount identity — calibre-import dead for a month
 
 **Affected component:** LXC220 (Calibre-Web) — `calibre-import.service`, the `calibre_importer`
@@ -673,6 +709,8 @@ verified; host mount **not** restored — the import path stays down until `/mnt
 mounted on the Proxmox host and `pct reboot 220` is run
 
 ---
+
+<a id="ke-16"></a>
 
 ## KE-16: Apache serves an expired certificate that was already renewed on disk
 

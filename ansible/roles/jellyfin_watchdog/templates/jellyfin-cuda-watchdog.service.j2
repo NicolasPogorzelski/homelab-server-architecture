@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Restart Jellyfin when CUDA access is lost (KE-10)
+# The script shells out to `docker`; without the daemon every run is a no-op error.
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# Root, because the docker socket is root-owned on vm100 (no `docker` group member
+# exists for a service account here).
+User=root
+ExecStart={{ jellyfin_watchdog_script_dest }}
