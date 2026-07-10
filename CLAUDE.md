@@ -2,61 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current Work in Progress
+## Current Status
 
-- **Branch:** `chore/platform-techdebt-2026-07-10` — **10 commits, pushed to `origin`, no PR open.**
-  The earlier "not pushed" note was wrong: the branch has been on `origin` since 2026-07-10, which
-  is why CI ran against it at all. Ansible track complete (items #1–#13).
-  **Next learning track: Terraform.**
-- **Status (2026-07-10):** the learning track stays paused; a full tech-debt pass was run instead.
-  Everything guest-side is now Ansible-managed and every scheduled job is a systemd timer. Two
-  hardware faults remain open and both are waiting on a replacement NVMe that arrives the week of
-  2026-07-13 and will replace **both** the boot SSD and aux-disk.
-- **What this session closed** (detail in `docs/platform/changelog.md`, 2026-07-10 rows):
-  fleet-wide `SystemdUnitFailed` alerting; pg-backup moved from a dead cron job to a timer;
-  the last three orphaned scripts adopted into roles (`paperless_inbox_scan`, `jellyfin_watchdog`,
-  `snapraid_maintenance`); postgres_exporter bind; break-glass keys enforced; unattended-upgrades
-  restricted on vm100; disk alerts tiered by role; `tailscale_cert` role for KE-16.
-- **Two hardware faults, neither fixed:**
-  - **KE-13** — aux-disk (the aux disk) is a real media failure, back in service under protest until
-    the NVMe arrives. Still degrading: `Reported_Uncorrect` 18 → 21 since the incident. Carries
-    five LXC data-roots and vm100's a few hundred GB `scsi1` disk. No off-site copy.
-  - **KE-14** — the boot SSD's I/O errors are **transport faults at the SAS2008 HBA, not media**.
-    Media and firmware causes are excluded; the 12 V-rail hypothesis is unverified and needs a
-    multimeter, not a shell. `sdc` carries every VM and LXC root disk.
-- **Standing hold:** do not run `docker-compose-update` against the fleet while aux-disk is in
-  service — it writes gigabytes of new image layers onto the failing disk.
-- **Deferred to the NVMe week, by decision.** SMART monitoring (readable only on the host, and it
-  requires making the host an Ansible node), the unapplied `homelab_schedule` role, the
-  `is_mountpoint 1` storage fix, and the NVMe migration design discussion.
-- **Off-site backups: risk consciously accepted.** Critical data was copied to the notebook
-  before aux-disk returned to service. Do not re-raise this as a new finding.
-- **`origin/docs/storage-stack-client-setup`: deliberately ignored**, topic not finished. Five
-  commits stranded; conflicts in `CLAUDE.md` / `samba.md` / `storage-stack.md` need a content
-  decision, not a merge.
-- **One thing is actively broken:** `calibre-import.service` on lxc220 is in `failed` and
-  `SystemdUnitFailed` is red for it. This is correct — the fault is real (KE-15). The library is
-  intact (`/books` is `cifs`); only the write path is dead. The repair is **three commands on the
-  Proxmox host**, which the control node cannot reach over SSH:
-  1. `findmnt /mnt/smb/books-rw ; grep books-rw /etc/fstab`
-  2. `mount /mnt/smb/books-rw && findmnt -no FSTYPE,SOURCE /mnt/smb/books-rw`
-  3. `pct reboot 220 && sleep 20 && pct exec 220 -- findmnt -no FSTYPE /books-rw` → must print `cifs`
+The Ansible learning track (roadmap items #1–#13) is complete and merged to `main`: everything
+guest-side is Ansible-managed and every scheduled job is a systemd timer. The next learning track is
+Terraform. The completed role/playbook catalog and per-session narratives live in
+[`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md); platform changes and their
+verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
+notes there and keep this section short.
 
-  The reboot is required: a bind mount resolves to the inode present at container start, so a host
-  mount established afterwards is not propagated. The fixed script and units are already deployed;
-  `ansible-playbook playbooks/calibre-import.yml` currently deploys them and then fails on its own
-  `fstype == cifs` assertion, by design. Re-run it once the mount is up.
-- **Next session to-do, in this order:**
-  1. Push the branch and open the PR (or review first — the user had not decided).
-  2. Calibre: the three host commands above, then re-run the playbook and verify a real import.
-  3. **Test a PostgreSQL restore.** Scheduling is fixed, trust in the dumps is not: no runbook,
-     no periodic validation, and `-mtime +7` retention means one bad dump plus a week of silence
-     loses everything. This is the highest-value item that is *not* blocked on hardware.
-  4. NVMe week: the design discussion, then the deferred host block above.
-- **Detailed handover** — the completed roles/playbooks catalog and per-session narratives live in
-  [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md). Platform changes and
-  their verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Append new
-  session notes there; keep this section short.
+**Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md)):
+
+- **KE-13 — aux-disk media failure.** The auxiliary disk is back in service under protest pending a
+  replacement and still degrades slowly (`Reported_Uncorrect` rising). It carries five LXC
+  data-roots and VM100's secondary disk, with no off-site copy. Standing hold: do not run
+  `docker-compose-update` against the fleet while this disk is in service — it writes gigabytes of
+  new image layers onto a failing disk.
+- **KE-14 — boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
+  media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
+  verification. `sdc` carries every VM and LXC root disk.
+- **KE-15 — calibre-import write path.** `calibre-import.service` on lxc220 is `failed` because the
+  host's `/mnt/smb/books-rw` mount is down; the library itself (`/books`, `cifs`) is intact. The
+  repair is three commands on the Proxmox host (documented in known-errors.md) plus a container
+  reboot, then a re-run of `playbooks/calibre-import.yml`.
+- **PostgreSQL restore testing.** Backup scheduling is fixed (systemd timer, `Persistent=true`), but
+  restores are never validated — no runbook, no periodic check, and `-mtime +7` retention means one
+  bad dump plus a week of silence loses everything. Highest-value item not blocked on hardware.
+- **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
+  Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
+  storage fix, and the storage-migration design discussion.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~ ✅
@@ -97,8 +71,9 @@ When working on tasks here:
   from an empty file without AI or copied snippets — AI is used only to review
   afterwards. The goal is active recall, not recognition; the struggle is the point.
 
-OS context: Proxmox host + Debian 12 LXCs. Daily driver is admin workstation (Fedora/rpm-ostree-based).
-Commands must be OS-specific — no generic "Linux commands" when behavior differs.
+OS context: Proxmox host + Debian 12 LXCs. The admin workstation runs an immutable
+Fedora/rpm-ostree-based OS. Commands must be OS-specific — no generic "Linux commands" when
+behavior differs.
 
 ## Commit Policy
 
@@ -264,7 +239,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   this pool) will eventually hit `ENOSPC` — capacity expansion is the lever, not deletion.
   `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
   member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
-  wrong measure for a multi-terabyte archive (15% = a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
+  wrong measure for a multi-terabyte archive (15% is a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
   and the member disks; the new `ArchivePoolLowSpace` warns on **absolute** free bytes below
   100 GiB with `for: 1h`. Currently a low absolute margin.
 
@@ -316,7 +291,7 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   cost no automation path). The `breakglass` role now enforces the key set with `exclusive: true`,
   making the inventory the single source of truth, and keeps a one-time
   `authorized_keys.pre-ansible` backup. `ssh <admin>@<node>` from lxc250 no longer works by design;
-  `ssh ansible@<node>` and break-glass from either laptop do.
+  `ssh ansible@<node>` and break-glass from either admin machine do.
 - **Calibre library on CIFS — SQLite workaround in place, no durable fix:** `metadata.db` cannot
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
   (see `calibre_importer` role). Moving library to local block storage is the durable fix but
@@ -426,8 +401,8 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
   `sdc` carries every VM and LXC root disk, so an `EIO` into the thin pool during guest start
   could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
-- **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement ~6 weeks out:**
-  it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's a few hundred GB `scsi1` disk**
+- **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement pending:**
+  it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's `scsi1` disk**
   (allocated). `Reported_Uncorrect` rose 18 → 21 since the 2026-06-25 incident — it is
   still degrading in service. Nothing on `/mnt/aux-disk` has an off-site copy.
 - **Standing hold on `docker-compose-update` (until aux-disk is replaced):** the role pulls new

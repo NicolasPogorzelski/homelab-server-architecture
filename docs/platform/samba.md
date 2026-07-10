@@ -75,9 +75,9 @@ and assign ownership to the corresponding Paperless user.
 
 ---
 
-### Desktop Shares
+### Workstation Shares
 
-The `storage` OS user doubles as the desktop identity for direct media library access.
+The `storage` OS user doubles as the admin-workstation identity for direct media library access.
 Four shares expose the media library paths read-write to the admin workstation:
 
 - Filme → /mnt/mergerfs/Filme
@@ -86,9 +86,9 @@ Four shares expose the media library paths read-write to the admin workstation:
 - Books → /mnt/mergerfs/Books
 
 These shares have no `create mask` / `directory mask` set (inherits filesystem defaults)
-because no other service identity writes to these paths alongside the desktop user.
+because no other service identity writes to these paths alongside the workstation user.
 
-On the desktop, all five shares are mounted via `/etc/fstab` (CIFS, `vers=3`, `_netdev`, `nofail`)
+On the admin workstation, all five shares are mounted via `/etc/fstab` (CIFS, `vers=3`, `_netdev`, `nofail`)
 using a credentials file at `/etc/samba/credentials-storage`.
 
 ---
@@ -108,39 +108,6 @@ These shares are:
 - bound to dedicated service users
 
 This reduces risk of accidental modification or deletion.
-
----
-
-### Media Share (media files)
-
-The `[media]` share exposes the media media library with a three-user access model:
-
-- `storage` — read-write; primary workflow user on the admin workstation for media and firmware file management (consistent with all other write operations on VM102)
-- `data-admin` — read-write; used by the frontend scraper on the admin workstation for writing `media/` and `catalogs/`
-- `media` — read-only; used by all other media clients (`tag:storage-client`)
-
-Path: `/mnt/mergerfs/media/`
-
-Directory layout:
-
-```
-media/
-├── ps1/  ps2/  n64/  gamecube/  wii/  gbc/  gba/  nds/
-├── firmware/       — shared firmware files (mounted as the emulator system path on Windows/Linux)
-├── media/      — scraped artwork, screenshots, videos (written by data-admin)
-└── catalogs/  — catalog.xml per console (written by data-admin)
-```
-
-A separate `[media-share]` share exists at `/srv/client/` (read-only, `media` user/group) for the
-media client client — a distinct local path from `/mnt/mergerfs/media/`, not a bind-mount of it. See
-`snippets/storage/smb.conf.storage-vm102.sanitized.conf`.
-
-Access is enforced at three levels:
-1. **Tailscale ACL** — `tag:storage-client` can only reach `tag:storage:445`; no other infrastructure is reachable
-2. **Samba `valid users`** — share only accepts `media` and `data-admin` credentials
-3. **Samba permissions** — `media` is read-only; `data-admin` has write access
-
-See: [Storage Stack](../services/storage-stack.md)
 
 ---
 

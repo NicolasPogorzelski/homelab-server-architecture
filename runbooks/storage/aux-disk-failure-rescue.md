@@ -28,7 +28,7 @@ into data loss.
   smartctl -A /dev/<disk> | grep -iE 'Pending|Uncorrect|Reallocated'
   ```
   `Current_Pending_Sector` / `Offline_Uncorrectable` in the thousands = decommission.
-- A healthy rescue target with enough free space (here: the admin notebook over a
+- A healthy rescue target with enough free space (here: the admin workstation over a
   wired LAN path). The target must preserve Linux ownership — use `tar` archives so
   it does not have to.
 - No writer holds the disk. The host fstab entry should already be `nofail` (so the
@@ -56,7 +56,7 @@ ls /mnt/aux-disk && df -h /mnt/aux-disk
 ### Copy off, ownership-preserving, most-valuable-first
 
 Stream each directory as a `tar` over SSH to the rescue target. Run **from the
-rescue host** (here the notebook), pulling from the Proxmox host:
+rescue host** (here the admin workstation), pulling from the Proxmox host:
 
 ```bash
 mkdir -p ~/aux-disk-rescue && cd ~/aux-disk-rescue

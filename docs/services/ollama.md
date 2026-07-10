@@ -25,13 +25,13 @@ Two inference nodes are operational:
 - Models: `qwen3-8b-16k` (16K context via Modelfile)
 - Model storage: `/mnt/vm-data/ollama/models`
 
-### admin workstation (Primary)
+### Admin Workstation (Primary)
 
-- **Status: Setup pending** — distro changed from admin workstation to admin workstation (2026-06-17); previous
-  Ollama installation (`ollama-rocm` via pacman) is no longer available. Setup must be redone.
-- Installation (previous): `ollama-rocm` via pacman (admin workstation repository)
+- **Status: Setup pending** — the admin workstation was reinstalled (2026-06-17); the previous
+  distro-package Ollama installation (`ollama-rocm`) is no longer available. Setup must be redone.
+- Installation (previous): distro-package `ollama-rocm`
 - Installation (pending): Ollama install script (`curl -fsSL https://ollama.com/install.sh | sh`);
-  detects ROCm automatically on admin workstation
+  detects ROCm automatically
 - Override: `/etc/systemd/system/ollama.service.d/override.conf` (to be re-applied)
 - Bind address: Tailscale IP only (`<tailscale-ip-admin-workstation>:11434`)
 - GPU: AMD RX 7900 XT (20GB VRAM), ROCm 7.2.0, gfx1100
@@ -48,7 +48,7 @@ Two inference nodes are operational:
 |---|---|---|---|
 | `qwen3-8b-16k` | ~5GB | 16K | General, RAG |
 
-### admin workstation (Primary)
+### Admin Workstation (Primary)
 
 | Model | VRAM | Context | Use Case |
 |---|---|---|---|
