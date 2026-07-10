@@ -18,17 +18,20 @@
     # stdout in others; match against both rather than betting on one.
     node_exporter_version_output: >-
       {{ (node_exporter_installed.stdout | default('')) + (node_exporter_installed.stderr | default('')) }}
+    # The upstream release artefact name, reused by the download, the unarchive,
+    # the copy and the cleanup. Spelling it out five times invited them to drift.
+    node_exporter_dist: node_exporter-{{ node_exporter_version }}.linux-amd64
   when: node_exporter_version not in node_exporter_version_output
   block:
     - name: Deploy node_exporter
       ansible.builtin.get_url:
-        url: https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
-        dest: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        url: "{{ node_exporter_release_base }}/v{{ node_exporter_version }}/{{ node_exporter_dist }}.tar.gz"
+        dest: /tmp/{{ node_exporter_dist }}.tar.gz
         mode: "0644"
 
     - name: Unarchive node_exporter
       ansible.builtin.unarchive:
-        src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        src: /tmp/{{ node_exporter_dist }}.tar.gz
         dest: /tmp/
         remote_src: true
 
@@ -36,7 +39,7 @@
     # the old process running until the next reboot.
     - name: Copy file with owner and permissions
       ansible.builtin.copy:
-        src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter
+        src: /tmp/{{ node_exporter_dist }}/node_exporter
         dest: /usr/local/bin/node_exporter
         owner: root
         group: root
@@ -49,8 +52,8 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
-        - /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64
+        - /tmp/{{ node_exporter_dist }}.tar.gz
+        - /tmp/{{ node_exporter_dist }}
 
 # No owner/group on purpose: on lxc260 this directory belongs to `postgres`, which
 # is the user pg-backup.sh writes its .prom file as. Asserting owner: root here

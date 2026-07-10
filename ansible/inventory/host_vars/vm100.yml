@@ -20,4 +20,3 @@ systemd_hygiene_masked_units:
       `mergerfs` tag (`virtio-fs: tag <mergerfs> not found` at every boot), and
       nothing consumes the path: Jellyfin and Audiobookshelf read their libraries
       over autofs/CIFS from vm102. Already recorded as legacy in docs/nodes/vm100.md.
-

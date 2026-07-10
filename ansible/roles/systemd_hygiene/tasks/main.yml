@@ -55,7 +55,17 @@
 # Masking or removing stops a unit from starting again; neither clears the
 # `failed` result already recorded for it. Without this, node_systemd_unit_state
 # keeps reporting state="failed" for a unit that can no longer be attempted.
-- name: Check which handled units still carry a failed state
+#
+# Waiver rationale for command-instead-of-module: no module answers this. The rule
+# points at ansible.builtin.systemd_service, which has no query-only mode and
+# errors out on a unit whose file the `remove` task above has just deleted.
+# ansible.builtin.service_facts enumerates .service units only, and half of
+# systemd_hygiene_masked_units are .mount units. Upstream already exempts
+# `systemctl reset-failed` (the task below) in the rule's own allow-list of
+# subcommands with no module equivalent; `is-failed` belongs there too and its
+# absence is an upstream gap, not a signal. Waived here, not in skip_list, so
+# the rule stays armed everywhere else.
+- name: Check which handled units still carry a failed state # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl is-failed {{ item.name }}
   loop: "{{ systemd_hygiene_masked_units }}"
