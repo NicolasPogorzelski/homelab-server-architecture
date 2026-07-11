@@ -106,7 +106,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 16 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, and `ansible-lint` findings.
+This script enforces 18 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, and size-encoding disk labels (`auxNtb`).
 
 **Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips — `actions/checkout` leaves a clean tree, so there is no diff — because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 

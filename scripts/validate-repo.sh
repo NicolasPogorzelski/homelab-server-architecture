@@ -291,11 +291,47 @@ else
 fi
 
 # =============================================================================
+# Check 17: private *.local.md legend files must never be tracked
+# =============================================================================
+# The sanitization legend maps public placeholders back to real capacities,
+# device paths and disk labels. It is gitignored on purpose; a single tracked
+# copy would re-leak everything the history rewrite removed.
+echo "Check 17: private .local.md files not tracked"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    if git -C "${REPO_ROOT}" ls-files --error-unmatch "${rel}" >/dev/null 2>&1; then
+        echo "  Tracked private file (must stay gitignored): ${rel}"
+        ERRORS=$((ERRORS + 1))
+    fi
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.local.md" -type f)
+
+# =============================================================================
+# Check 18: no size-encoding disk labels (auxNtb -> use aux-diskN)
+# =============================================================================
+# Labels that encode a disk's capacity in the name were sanitized out of the
+# public history; the sanitized form is `aux-diskN`. Gitignored files (the
+# private legend, which legitimately holds the real labels) are skipped.
+echo "Check 18: no size-encoding disk labels (auxNtb)"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    { grep -niE 'aux[0-9]+tb' "${file}" || true; } | while read -r match; do
+        echo "  Size-encoding disk label: ${file}:${match}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" -o -name "*.conf" -o -name "*.j2" \) -type f)
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 16"
+echo "Checks run: 18"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
