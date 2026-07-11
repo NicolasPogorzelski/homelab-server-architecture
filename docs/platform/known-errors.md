@@ -775,3 +775,75 @@ and Redis on the same node bind single addresses correctly.
 - [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
 - [KE-8 — observability blind spot](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
 - [KE-13 — the `appdata_aux-disk` `is_mountpoint` note](#ke-13-aux-disk-physical-disk-failure-medium-errors) (same structural error)
+
+<a id="ke-17"></a>
+## KE-17: VM100 silent guest hard-freeze — no logged root cause, recovered by hard power-cycle
+
+**Affected component:** VM100 (GPU / NVIDIA-passthrough node, Ubuntu 22.04.5, kernel
+`5.15.0-185-generic`) — the guest OS, not the hypervisor.
+
+**Symptom:**
+On 2026-07-11 vm100 was unreachable over SSH and Tailscale. `ssh gpu` hung at the TCP-connect
+stage — no `Connection refused`, no auth prompt — placing the fault in the reachability class, not
+a bind or key fault. `tailscale status` showed the node `offline, last seen 8h ago, tx … rx 0`:
+the host was sending into the tunnel and getting nothing back. `qm status 100` reported
+`running`, but that only means the hypervisor is scheduling the vCPU and says nothing about guest
+health. A WebUI reboot returned `QEMU Guest Agent is not running — guest-ping … got timeout` and
+`VM quit/powerdown failed — got timeout`: both the guest agent and ACPI were unresponsive. The
+serial console (`qm terminal 100`) was completely blank — no login prompt, no echo on Enter, no
+panic trace. The guest was hard-frozen.
+
+**Root cause:** Undetermined from logs — named as such rather than guessed. What the evidence
+rules in and out:
+
+- The guest's own journal (`journalctl -b -1`) ends abruptly at `01:41:13 UTC` mid-normal-operation,
+  with no shutdown sequence (`Stopping…` / `Reached target Shutdown` absent). That is the signature
+  of a freeze so hard journald could not write another line — not a reboot. A kernel-signature grep
+  (`oom|hung task|soft lockup|BUG:|call trace|watchdog`) over that boot returned only the benign
+  boot-time `NMI watchdog: Enabled` line. No OOM, no lockup, no panic was logged inside the guest.
+- The host was healthy at the freeze moment. `01:41:13 UTC = 03:41:13 CEST` (see the timeline
+  caveat). The host journal for 03:30–03:50 CEST holds no `kvm` / `vfio` / `nvidia` / `oom` /
+  VMID-100 message, and the `node-exporter-smarttext` SMART collector completed successfully at
+  03:41:14–16. **This is not KE-14** — the host disk / HBA layer threw nothing.
+
+So: a silent, guest-internal hard freeze on a node that does NVIDIA GPU passthrough and already
+carries an intermittent NVIDIA/CUDA fault (KE-10). A causal link to KE-10 is plausible but unproven.
+
+**Timeline caveat (load-bearing):** the guest clock is `Etc/UTC`, the host clock is
+`Europe/Berlin` (CEST, +2h). Read naively, the guest's last line (`01:41`) falls inside the host's
+nightly power-off gap — host boot -1 ended `01:01:10 CEST`, boot 0 began `01:58:09 CEST` — which is
+impossible, since the guest cannot log while the host is off. The +2h offset resolves it: the
+freeze was `03:41 CEST`, well inside host boot 0. The host was up off-schedule because the admin
+had powered it on manually for night work and gone to sleep before the freeze; this is **not** a
+`homelab_schedule` defect.
+
+**Immediate fix (applied 2026-07-11):** graceful recovery was already exhausted (QGA guest-ping
+and ACPI powerdown both timed out), so a hard power-cycle — `qm stop 100` (QMP quit attempt, then
+the QEMU process is killed, the plug-pull equivalent) followed by `qm start 100`. The node returned
+to `active; direct` within ~2 min; the clean host disk layer made the unclean-shutdown journal
+replay low-risk. All alerts resolved at 11:45 CEST.
+
+**Detection worked; response did not.** `NodeDown` fired at 03:45 CEST — ~4 min after the freeze,
+after >2 min of failed scrapes — alongside `ServiceDown` for jellyfin and audiobookshelf
+(independent blackbox probes). The alerts stayed firing for ~8 h and re-notified at 07:50. The gap
+was purely human: the alert reached Discord at 03:45 while the admin slept, and there is no
+overnight escalation and no auto-recovery. For a hobby media node, an auto-recovering watchdog is
+the proportionate fix, not a 03:45 page.
+
+**Durable fix — not yet applied (follow-ups):**
+
+- Auto-recovery: a QEMU watchdog device (`i6300esb`) plus `softdog` in the guest would reset a
+  wedged guest automatically instead of leaving it dead for 8 h. The in-guest **NMI watchdog is not
+  a substitute** — it depends on hardware PMU counters that are unreliably virtualized under KVM,
+  which is why it caught nothing here.
+- Post-mortem forensics that survive the freeze: `kdump` / `pstore` to capture a panic trace next
+  time, since the live console and journal yield nothing after a hard freeze.
+- Recurrence is unquantified — this is the first recorded occurrence. If it repeats, escalate to a
+  real investigation (candidate: the KE-10 NVIDIA path).
+
+**References:**
+- [VM100 node doc](../nodes/vm100.md)
+- [Incident record — 2026-07-11 vm100 silent freeze](incidents/2026-07-11-vm100-silent-freeze.md)
+- [KE-10 — Jellyfin loses CUDA access (same node, NVIDIA path)](#ke-10)
+- [KE-14 — boot-SSD I/O errors (excluded here)](#ke-14)
+- [KE-8 — the observability model that caught this](#ke-8)
