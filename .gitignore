@@ -97,3 +97,10 @@ ansible/inventory/hosts.yml
 # =====================================================
 
 .claude/settings.local.json
+
+# =====================================================
+# Private sanitization legend (placeholders -> real values, NEVER COMMIT)
+# =====================================================
+
+SANITIZATION-LEGEND.local.md
+*.local.md
