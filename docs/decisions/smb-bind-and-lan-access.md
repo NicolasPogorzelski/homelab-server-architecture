@@ -193,10 +193,24 @@ rather than the only control.
 
 ### Step 2 — migrate the mounts (deferred, separate change)
 
+**The Samba bind limitation does not block this.** It constrains what `smbd` can *listen* on, not
+what a client can *connect to*: `smbd` listens on the wildcard address and therefore accepts
+sessions arriving on `tailscale0` perfectly well. The proof has been running for weeks — the
+Proxmox host's `/mnt/smb/postgres-backups` mount points at `//<tailscale-ip-vm102>/Postgres-Backups`
+(changed 2026-06-12) and came straight back after this node's reboot, and the admin workstation
+mounts the same way. Step 2 changes only the **target address in `fstab`**, nothing about binding.
+
 Move the seven CIFS mounts (five on the Proxmox host, two on VM100) from the LAN IP to VM102's
 Tailscale IP, one at a time, each with automount and `x-systemd.mount-timeout`, each verified
-across a reboot. Only when all seven survive a reboot does `<lan-ip-vm102>` leave `interfaces` and
-the LAN entries leave `hosts allow`.
+across a reboot.
+
+**Corrected end state.** An earlier draft of this document said the LAN address would then leave
+Samba's `interfaces` list. That is impossible — `interfaces` cannot be used at all on this node.
+The end state is instead a **tightened `smb_guard` table**: once all seven mounts arrive over
+Tailscale, the IPv4 exception for VM100 and the Proxmox host is deleted and the table drops
+*everything* on port 445 arriving on `ens18`, v4 and v6 alike. Only `tailscale0` remains — which
+is exactly what the platform binding rule intends, enforced one layer below where Samba could
+deliver it.
 
 This is deliberately **not** bundled into step 1. A mount that depends on Tailscale can fail at
 boot before `tailscaled` has connected — the KE-9 / KE-12 fault class, and precisely the mechanism
