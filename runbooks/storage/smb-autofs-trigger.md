@@ -1,5 +1,20 @@
 # Runbook: SMB autofs boot stabilization
 
+> **Caveat (added 2026-07-14): this unit cannot stabilize mounts served by VM102.** It is ordered
+> `After=network-online.target`, which on the Proxmox host is reached *before* `pve-guests.service`
+> starts VM102 — measured on the 2026-07-14 boot: the trigger ran at 12:16:15, VM102 was started at
+> 12:16:23. It therefore pokes automounts whose SMB server does not exist yet. This is harmless
+> (the autofs triggers stay armed and fire later on first access) but it stabilizes nothing here.
+>
+> What actually makes `/mnt/smb/*` reliable is **`x-systemd.automount` on every fstab entry**: the
+> mount is established lazily on first access, which happens when Proxmox sets up a container's
+> bind — long after VM102 is up. A single fstab line missing that option is what caused
+> [KE-15](../../docs/platform/known-errors.md#ke-15) (a month of silent failure). Check with:
+>
+> ```bash
+> grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount   # must print nothing
+> ```
+
 ## Problem
 SMB mounts under `/mnt/smb/*` are access-triggered (autofs/systemd automount). Some services may access bind-mounted paths during startup before the automount is activated, causing:
 - empty directories instead of mounted storage
