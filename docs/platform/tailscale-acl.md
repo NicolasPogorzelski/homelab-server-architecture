@@ -31,14 +31,14 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Client | `tag:client` | Trusted end-user devices | example-device |
 | Database | `tag:database` | Central PostgreSQL platform service | example-device |
 | AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
-| Untrusted | `tag:untrusted` | Guest / restricted devices | example-device |
+| Untrusted | `tag:untrusted` | Household TVs — not centrally administered | example-device |
 
 **Exception:** Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2`, despite
 being an application service by the table above. Confirmed intentional (2026-07-08);
 the specific technical rationale is being re-confirmed and is not yet documented here.
 The auto-import mechanism itself (`calibre-importer` role) has no verified dependency
 on tier1 access — it only needs the SMB port (445), which tier1 and tier2 grant
-identically. Untrusted/guest devices do not need Calibre-Web access, so the loss of
+identically. Household TVs do not need Calibre-Web access, so the loss of
 untrusted reachability (Rule 7 only grants `tag:tier2:443`) is not a regression.
 
 ---
@@ -262,7 +262,12 @@ currently unused (no tier2 node serves HTTPS).
 
 ### Rule 7 — Untrusted: minimal access
 
-Guest and restricted devices have access to media services only.
+The `untrusted` tier is a fixed set of individually enumerated household TVs.
+"Untrusted" is a statement about *device administration*, not about the people:
+these are appliances the operator does not manage, patch, or control, so they are
+kept off every infrastructure path and get media streaming only. The tier is not a
+guest-invite mechanism — devices are tagged individually by the admin
+(`tagOwners: autogroup:admin`), and a device cannot self-assign the tag.
 ```json
 {
     "action": "accept",
@@ -365,6 +370,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (household TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged — `tagOwners: autogroup:admin` already made self-assignment impossible |
 | (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
