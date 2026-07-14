@@ -117,11 +117,28 @@ This reduces risk of accidental modification or deletion.
 - Mandatory signing
 - User-based authentication
 - No anonymous access
-- No public exposure
-- Access restricted to LAN and Tailscale overlay
 - No implicit subnet-wide trust beyond defined ACL model
 
 SMB is not used for internet-facing services.
+
+### Binding: known deviation from the platform rule
+
+Samba does **not** follow the platform binding rule ("services bind to the Tailscale IP, never to
+LAN interfaces"). `bind interfaces only = no` makes `smbd` accept on every interface, including
+the LAN interface and its globally routable IPv6 address; access control rests entirely on
+`hosts allow` / `hosts deny`, which Samba applies *after* accepting the TCP connection.
+
+An earlier version of this section claimed "No public exposure". That was an unverified assertion
+and has been removed: port 445 is bound on a world-routable IPv6 address, and what prevents
+reachability today is the router's default block on inbound IPv6 plus the absence of any IPv6
+entry in `hosts allow` — not the service's binding.
+
+The deviation exists because VM100 and the Proxmox host mount their shares over the LAN IP; a
+Tailscale-only bind would break seven CIFS mounts. Throughput is not the reason — measured
+2026-07-14, Tailscale costs ~8 % on this link (741 vs 809 Mbit/s), because same-subnet peers
+negotiate a direct WireGuard path over the LAN rather than via a relay.
+
+Remediation is tracked in [SMB bind and LAN access](../decisions/smb-bind-and-lan-access.md).
 
 ---
 
