@@ -1,0 +1,15 @@
+[Unit]
+Description=Verify all /mnt/smb/* mounts are backed by CIFS (boot check)
+Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/storage/smb-autofs-trigger.md
+# After the guests, because the SMB server (VM102) is itself a guest of this host.
+# The predecessor ran After=network-online.target and therefore before VM102 existed.
+After=pve-guests.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/check-smb-mounts.sh
+
+[Install]
+WantedBy=multi-user.target
