@@ -1,0 +1,19 @@
+[Unit]
+Description=SMB boundary enforcement for VM102 (nftables table inet smb_guard)
+Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/docs/decisions/smb-bind-and-lan-access.md
+# Load before the network is configured, so port 445 is never briefly unguarded at boot.
+After=network-pre.target
+Wants=network-pre.target
+# Deliberately NOT nftables.service: its stock /etc/nftables.conf starts with `flush ruleset`
+# and its ExecStop flushes the whole ruleset -- either would wipe Tailscale's own ts-input /
+# ts-forward chains. Own table, own unit.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/smb-guard.nft
+# Remove only our own table. Never `flush ruleset`.
+ExecStop=/usr/sbin/nft delete table inet smb_guard
+
+[Install]
+WantedBy=multi-user.target
