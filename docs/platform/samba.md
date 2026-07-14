@@ -133,12 +133,21 @@ and has been removed: port 445 is bound on a world-routable IPv6 address, and wh
 reachability today is the router's default block on inbound IPv6 plus the absence of any IPv6
 entry in `hosts allow` — not the service's binding.
 
-The deviation exists because VM100 and the Proxmox host mount their shares over the LAN IP; a
-Tailscale-only bind would break seven CIFS mounts. Throughput is not the reason — measured
-2026-07-14, Tailscale costs ~8 % on this link (741 vs 809 Mbit/s), because same-subnet peers
-negotiate a direct WireGuard path over the LAN rather than via a relay.
+The deviation persists for a reason that is **not** configuration laziness: **Samba cannot bind an
+IPv4 address on `tailscale0` at all.** The interface is a point-to-point TUN device without the
+`BROADCAST` flag, and Samba's IPv4 interface selection skips such interfaces. Tried and verified
+2026-07-14 with `<ip>/32`, with the bare IP, and with the interface name — none binds the Tailscale
+IPv4 address, and an explicit `interfaces` list therefore *removes* the Tailscale SMB path instead
+of securing it. (The IPv6 ULA does bind as `/128`, because IPv6 has no broadcast concept.) The
+`# Robust: listen on all available interfaces (avoid bind failures)` comment in the live `smb.conf`
+is the fossil of an earlier attempt that hit the same wall.
 
-Remediation is tracked in [SMB bind and LAN access](../decisions/smb-bind-and-lan-access.md).
+Throughput is not the reason either — measured 2026-07-14, Tailscale costs ~8 % on this link
+(741 vs 809 Mbit/s), because same-subnet peers negotiate a direct WireGuard path over the LAN
+rather than via a relay.
+
+The boundary therefore moves to the kernel (an nftables table on VM102) instead of the
+application. Tracked in [SMB bind and LAN access](../decisions/smb-bind-and-lan-access.md).
 
 ---
 
