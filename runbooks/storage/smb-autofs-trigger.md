@@ -1,111 +1,115 @@
-# Runbook: SMB autofs boot stabilization
-
-> **Caveat (added 2026-07-14): this unit cannot stabilize mounts served by VM102.** It is ordered
-> `After=network-online.target`, which on the Proxmox host is reached *before* `pve-guests.service`
-> starts VM102 — measured on the 2026-07-14 boot: the trigger ran at 12:16:15, VM102 was started at
-> 12:16:23. It therefore pokes automounts whose SMB server does not exist yet. This is harmless
-> (the autofs triggers stay armed and fire later on first access) but it stabilizes nothing here.
->
-> What actually makes `/mnt/smb/*` reliable is **`x-systemd.automount` on every fstab entry**: the
-> mount is established lazily on first access, which happens when Proxmox sets up a container's
-> bind — long after VM102 is up. A single fstab line missing that option is what caused
-> [KE-15](../../docs/platform/known-errors.md#ke-15) (a month of silent failure). Check with:
->
-> ```bash
-> grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount   # must print nothing
-> ```
+# Runbook: SMB mounts on the Proxmox host — automount + boot verification
 
 ## Problem
-SMB mounts under `/mnt/smb/*` are access-triggered (autofs/systemd automount). Some services may access bind-mounted paths during startup before the automount is activated, causing:
-- empty directories instead of mounted storage
-- failed migrations / startup errors
-- nondeterministic reboot behavior
 
-## Preconditions
+The Proxmox host mounts `/mnt/smb/*` over CIFS **from VM102 — a guest of that same host.** At boot
+the host therefore tries to reach an SMB server it has not started yet. A plain fstab entry fails
+once, `nofail` lets the boot proceed, and systemd never retries: the mount unit stays `failed`
+forever, the container bind that depends on it exposes the empty directory underneath (on
+`pve-root`), and the service inside the container fails silently.
 
-- VM102 (Storage) is running and Samba is active
-- SMB automount units exist under `/mnt/smb/*` on the Proxmox host
-- Network is reachable (automounts depend on `network-online.target`)
+That is not hypothetical. It is [KE-15](../../docs/platform/known-errors.md#ke-15): one fstab line
+missing one option, one month of failure, ~20 000 failed service runs, nothing alerted.
 
-## Solution (Proxmox host)
-Create a systemd oneshot unit that triggers all `/mnt/smb/*` automounts after `network-online.target`, forcing early activation during boot.
+## The two mechanisms that fix it
 
-## Implementation (script-based, recommended)
+**1. `x-systemd.automount` on every `/mnt/smb/*` fstab entry.** The mount is then established
+*lazily, on first access*, rather than once at boot. The first access happens when Proxmox sets up
+a container's bind mount — by which time VM102 has been running for minutes. This is the only
+mechanism that can work, because no boot ordering can put the host's mount after a VM the host
+itself starts.
 
-Repo snippets (source of truth for this runbook):
+**2. `smb-mounts-check.service` — verification that fails loudly.** Ordered `After=pve-guests.service`,
+it forces every automount to resolve and exits non-zero if any `/mnt/smb/*` path is not backed by
+CIFS. `node_exporter --collector.systemd` exports the failed unit and the `SystemdUnitFailed` rule
+alerts on it.
 
-- Unit: [trigger-smb.mounts.service](../../snippets/systemd/trigger-smb.mounts.service)
-- Script: [trigger-smb-automounts.sh](../../snippets/scripts/trigger-smb-automounts.sh)
+> **Historical note.** This runbook previously described `trigger-smb.mounts.service`, which could
+> not work by construction: it ran `After=network-online.target` — reached *before* `pve-guests`
+> starts VM102 (measured on the 2026-07-14 boot: trigger at 12:16:15, VM102 started at 12:16:23) —
+> so it poked automounts whose server did not yet exist. And it swallowed every error (`|| true`),
+> so it reported success unconditionally. It was removed on 2026-07-14 and replaced by the check
+> above.
 
-Rationale:
-- Avoid complex quoting in ExecStart (common systemd failure mode)
-- Keep logic testable as a standalone script
-- The unit stays stable while the script can evolve
+## Precondition
 
----
+- VM102 is running and Samba is active
+- Every `/mnt/smb/*` entry in the host's `/etc/fstab` carries `x-systemd.automount`
+- The host's `node_exporter` runs with `--collector.systemd` (otherwise a failing check unit
+  raises no alert — see the note under Failure)
 
-### Install steps (Proxmox host)
+Audit the fstab requirement in one line — it must print nothing:
 
-1) Install script
+```bash
+grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount
+```
 
-install -m 0755 -o root -g root /dev/null /usr/local/sbin/trigger-smb-automounts.sh
-nano /usr/local/sbin/trigger-smb-automounts.sh
+## Implementation (Proxmox host)
 
-Script content:
+Sources of truth for this runbook:
 
-#!/usr/bin/env bash
-set -euo pipefail
-shopt -s nullglob
+- Script: [check-smb-mounts.sh](../../snippets/scripts/check-smb-mounts.sh)
+- Unit: [smb-mounts-check.service](../../snippets/systemd/smb-mounts-check.service)
 
-for d in /mnt/smb/*; do
-  [[ -d "$d" ]] || continue
-  timeout 3s ls -la "$d"/. >/dev/null 2>&1 || true
-done
-
-2) Install unit
-
-nano /etc/systemd/system/trigger-smb.mounts.service
-
-Unit content:
-
-[Unit]
-Description=Trigger all SMB automounts (boot stabilization)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/trigger-smb-automounts.sh
-
-[Install]
-WantedBy=multi-user.target
-
-3) Enable + start
-
+```bash
+install -m 0755 -o root -g root check-smb-mounts.sh /usr/local/sbin/check-smb-mounts.sh
+install -m 0644 -o root -g root smb-mounts-check.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now trigger-smb.mounts.service
+systemctl enable --now smb-mounts-check.service
+```
 
----
+Adding `x-systemd.automount` to an entry that lacks it:
+
+```bash
+cp -a /etc/fstab /etc/fstab.bak-$(date +%F)
+# add `x-systemd.automount,x-systemd.mount-timeout=30` to the options of the entry
+systemctl daemon-reload
+systemctl reset-failed 'mnt-smb-<name>.mount'
+systemctl start 'mnt-smb-<name>.automount'
+```
+
+A container whose bind was set up while the host mount was down keeps pointing at the empty
+directory. It must be restarted afterwards: `pct reboot <ctid>`.
 
 ## Verification
 
-systemctl status trigger-smb.mounts.service --no-pager
-findmnt -t cifs | grep -E '^/mnt/smb/' || true
-/usr/local/sbin/trigger-smb-automounts.sh
+```bash
+systemctl status smb-mounts-check.service --no-pager   # expect: active (exited), "SMB mount check OK"
+findmnt -t cifs /mnt/smb/                              # expect: every path, fstype cifs
+findmnt -t autofs /mnt/smb/                            # expect: an autofs trigger per path
+```
 
----
+Inside a container that binds one of these paths:
 
-## Failure Modes
+```bash
+pct exec <ctid> -- findmnt /<mountpoint> -o TARGET,FSTYPE,SOURCE   # expect cifs, NOT ext4
+```
 
-| Symptom | Likely Cause | Action |
+`ext4 /dev/mapper/pve-root[...]` inside the container is the KE-15 signature: the bind is showing
+the empty directory under the failed mount.
+
+Negative test (proves the check is not another silent guard):
+
+```bash
+mkdir /mnt/smb/zz-test
+systemctl restart smb-mounts-check.service    # expect: failed, exit 1
+curl -s localhost:9100/metrics | grep 'smb-mounts-check.*failed'   # expect: ... 1
+rmdir /mnt/smb/zz-test
+systemctl reset-failed smb-mounts-check.service && systemctl start smb-mounts-check.service
+```
+
+## Failure
+
+| Symptom | Cause | Action |
 |---|---|---|
-| Unit stays `failed` after boot | Script not executable or path wrong | Check `ls -l /usr/local/sbin/trigger-smb-automounts.sh`; verify `ExecStart` path matches |
-| `/mnt/smb/*` dirs still empty after trigger | VM102 or Samba not yet ready at trigger time | Check `systemctl status smb` on VM102; verify `network-online.target` dependency is active |
-| `findmnt` shows no CIFS mounts | Automount units not configured or wrong mount paths | Inspect `/etc/systemd/system/mnt-smb-*.mount` units; verify `pct config` mp entries |
-| Script exits immediately, no mounts triggered | No directories found under `/mnt/smb/` | Confirm `shopt -s nullglob` is set; check that automount dirs exist on Proxmox host |
+| `smb-mounts-check.service` failed, log names a path with `fstype=ext4` | The CIFS mount for that path is down; the bare directory on `pve-root` is showing | `mount /mnt/smb/<name>`, then `pct reboot <ctid>` for every container binding it |
+| `smb-mounts-check.service` failed, `fstype=none` | Path exists under `/mnt/smb/` but is not a mount at all (e.g. a stray directory) | Remove the directory, or add the missing fstab entry |
+| Mount unit `failed` after boot, works when mounted by hand | The fstab entry lacks `x-systemd.automount` — it was tried once, before VM102 existed | Add the option (see above). This was KE-15 |
+| Check unit fails but no alert arrives | The host's `node_exporter` lacks `--collector.systemd`, so `node_systemd_unit_state` is never exported for this host | Add `--collector.systemd --collector.systemd.unit-exclude='.+\.(automount\|device\|scope\|slice)'` to its `ExecStart`, mirroring the `node_exporter` Ansible role |
+| Container still sees an empty directory although the host mount is up | The bind was created while the mount was down; it does not heal by itself | `pct reboot <ctid>` |
 
----
+## Related
 
-## Notes
-- Databases must not run on CIFS/SMB.
-- This boot trigger reduces race conditions for automount-backed shares.
+- [KE-15 — calibre-import dead for a month](../../docs/platform/known-errors.md#ke-15)
+- [Samba architecture](../../docs/platform/samba.md)
+- [Storage design](../../docs/platform/storage-design.md)
