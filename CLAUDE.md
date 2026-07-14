@@ -21,10 +21,10 @@ notes there and keep this section short.
 - **KE-14 — boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
   verification. `sdc` carries every VM and LXC root disk.
-- **KE-15 — calibre-import write path.** `calibre-import.service` on lxc220 is `failed` because the
-  host's `/mnt/smb/books-rw` mount is down; the library itself (`/books`, `cifs`) is intact. The
-  repair is three commands on the Proxmox host (documented in known-errors.md) plus a container
-  reboot, then a re-run of `playbooks/calibre-import.yml`.
+- **KE-15 — RESOLVED 2026-07-14.** The host's `/mnt/smb/books-rw` fstab entry lacked
+  `x-systemd.automount`, so the mount was attempted once at boot — against a VM the host itself
+  had not started yet — failed, and was never retried. Fixed, `calibre-import` runs, lxc220 has no
+  failed unit. Awaiting only confirmation across the next scheduled host boot.
 - **PostgreSQL restore testing.** Backup scheduling is fixed (systemd timer, `Persistent=true`), but
   restores are never validated — no runbook, no periodic check, and `-mtime +7` retention means one
   bad dump plus a week of silence loses everything. Highest-value item not blocked on hardware.
@@ -296,16 +296,27 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
   (see `calibre_importer` role). Moving library to local block storage is the durable fix but
   deferred (no extra volume available). See `docs/decisions/calibre-cifs-sqlite-import.md`.
-- **LXC220 rw library mount is DOWN, and has been since 2026-06-08 (KE-15, active):** not the
-  transient boot-race this entry used to describe — a month-long steady state. The host's
-  `/mnt/smb/books-rw` is unmounted, so the `mp2` bind exposes the empty host-root-owned
-  directory beneath it on `pve-root`; container root (unprivileged, host uid `65534`) cannot
-  write there, and `calibre-import.service` has failed every 2 minutes ever since. Fix:
-  `mount /mnt/smb/books-rw` on the Proxmox host + `pct reboot 220`. Durable fix (automount +
-  `x-systemd.mount-timeout`) still not applied. The role's and script's `mountpoint -q` guards
-  were blind to this by construction — they tested that *a* mount existed, not *which* — and
-  were replaced with an `findmnt -no FSTYPE` == `cifs` check on 2026-07-10. See
-  `docs/platform/known-errors.md#ke-15`.
+- **Host CIFS mounts must carry `x-systemd.automount` — this is not optional (KE-15, RESOLVED
+  2026-07-14):** the Proxmox host mounts `/mnt/smb/*` from **vm102, a guest it starts itself**, so
+  at boot the SMB server does not exist yet. A plain fstab entry is tried once, fails
+  (`mount error(113)`), and `nofail` lets the boot proceed while systemd never retries — the unit
+  stays `failed` forever, the container bind exposes the empty directory on `pve-root`, and the
+  service inside fails silently. That is exactly what happened: `/mnt/smb/books-rw` was the one
+  entry missing the option, and `calibre-import.service` failed every 2 minutes for a month.
+  No boot ordering can fix this class; only lazy, on-access mounting can. Audit with
+  `grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount` — it must print nothing. A container
+  whose bind was set up while the mount was down does **not** heal by itself: `pct reboot <ctid>`.
+  See `docs/platform/known-errors.md#ke-15`.
+- **Samba cannot bind an IPv4 address on `tailscale0` (vm102):** the interface is a point-to-point
+  TUN device without the `BROADCAST` flag, and Samba's IPv4 interface selection skips it. Verified
+  2026-07-14 with `<ip>/32`, the bare IP, and the interface name — an explicit `interfaces` list
+  *removes* the Tailscale SMB path instead of securing it, so `bind interfaces only = no` stays,
+  deliberately. The boundary is enforced one layer down instead: the nftables table `inet
+  smb_guard` on vm102 (`smb-guard.service`) drops inbound TCP/445 over IPv6 on the LAN interface
+  and accepts IPv4 only from vm100 and the Proxmox host. **It must never be loaded via
+  `nftables.service`** — the stock `/etc/nftables.conf` starts with `flush ruleset` and its
+  `ExecStop` flushes everything, either of which wipes Tailscale's own chains. Do not "fix" the
+  bind: read `docs/decisions/smb-bind-and-lan-access.md` first.
 
 - **Alerting on failed systemd units (KE-15 gap — REMEDIATED 2026-07-10):** previously a unit in
   `failed` state matched no alert category (`NodeDown`, disk fill, and blackbox HTTP probes cover
@@ -368,9 +379,18 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 
 - **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
   because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
-  The new `SystemdUnitFailed` rule therefore covers eight of nine nodes, and the monitoring node
-  is the blind one. Needs its own design decision (privileged container with `/run/systemd`
-  bind-mounted, or a native node_exporter alongside the container).
+  lxc200 is now the **only** node without `SystemdUnitFailed` coverage — the Proxmox host was the
+  second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
+  container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
+- **The Proxmox host's `node_exporter` is hand-managed and would be lost on a rebuild
+  (2026-07-14):** it now runs `--collector.systemd` (it had only the textfile collector, so a
+  failed unit on the *hypervisor* reached no alert — the gap that would have made
+  `smb-mounts-check.service` another silent guard) and binds `100.x:9100` instead of `*:9100`,
+  which had been LAN-exposed in violation of the binding rule. Both changes were made by hand,
+  because the host is still not an Ansible node. The `node_exporter` role would own this properly
+  — but adopting the host requires `host_vars` with `node_exporter_textfile_dir` set, or the role
+  silently drops the textfile collector and with it the host's SMART metrics. Same class of trap
+  as KE-15. See the host-adoption design decision (pending).
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.
