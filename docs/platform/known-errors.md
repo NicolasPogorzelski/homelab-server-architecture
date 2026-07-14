@@ -728,9 +728,13 @@ been up for two minutes. Proven on the live host: with `noatime` replaced by
 `x-systemd.automount,x-systemd.mount-timeout=30,noatime`, `/mnt/smb/books-rw` now reports
 `autofs` + `cifs` stacked, exactly like `/mnt/smb/books`.
 
-**Side finding — `trigger-smb.mounts.service` cannot do what its name claims.** It runs *before*
-`pve-guests` starts VM102, so it pokes automounts whose server does not exist yet. It is harmless
-(the autofs triggers stay armed) but it stabilizes nothing for vm102-backed mounts. See
+**Side finding, fixed the same day — the "boot stabilization" service was cargo cult.**
+`trigger-smb.mounts.service` ran *before* `pve-guests` starts VM102, so it poked automounts whose
+server did not exist yet, and its script swallowed every error (`timeout 3s ls … || true`), so it
+always reported success. Removed and replaced by `smb-mounts-check.service`, which runs
+`After=pve-guests.service` and **exits 1** if any `/mnt/smb/*` path is not `cifs`. Its prerequisite
+was fixed too: the host's `node_exporter` had no `--collector.systemd`, so a failed unit on the
+host reached no alert. Both verified, including the negative case. See
 [runbook](../../runbooks/storage/smb-autofs-trigger.md).
 
 **Verification (2026-07-14):**
