@@ -691,9 +691,68 @@ so `--check` **skipped** it. A dry-run reported the role healthy.
   order was changed to deploy the script and units *before* asserting the mount — otherwise a
   broken host mount blocks delivery of the script that handles broken host mounts.
 
-**Not fixed (requires Proxmox host access, deferred with the host block):**
-mounting `/mnt/smb/books-rw` on the host and `pct reboot 220`. Until then the import path is
-down and the role's assert fails by design.
+**Host-side root cause found and fixed (2026-07-14) — it was never "a boot race that stuck":**
+
+The host mount did not fail *randomly*. It failed **deterministically, at every boot**, and the
+`/etc/fstab` line says why:
+
+```
+# working sibling (read-only)
+//<lan-ip-vm102>/Books-service  /mnt/smb/books     cifs  _netdev,nofail,x-systemd.automount,…
+# broken (read-write)
+//<lan-ip-vm102>/Books          /mnt/smb/books-rw  cifs  _netdev,nofail,noatime,…
+```
+
+`books-rw` lacked **`x-systemd.automount`**. Without it, systemd mounts the share once, during
+boot, and if that attempt fails it is never retried — `nofail` lets the boot proceed and the unit
+stays `failed` forever. The journal shows the same line at every single boot:
+
+```
+mount error(113): could not connect to <lan-ip-vm102> — Unable to find suitable address.
+```
+
+The reason it cannot succeed at boot is structural, and it is why no amount of ordering would have
+helped: **the Proxmox host is mounting a share from a VM that the host itself has not started
+yet.** Boot timeline of 2026-07-14:
+
+| Time | Event |
+|---|---|
+| 12:16:15 | `trigger-smb.mounts.service` starts (the "boot stabilization" unit) |
+| 12:16:22 | `pve-guests.service` starts |
+| 12:16:23 | **VM102 is started** — the SMB server only comes up now |
+| 12:18:37 | CT220 starts |
+
+`x-systemd.automount` is what makes the sibling work: the mount is established lazily, on first
+access, and the first access happens when Proxmox sets up the container's bind — by then VM102 has
+been up for two minutes. Proven on the live host: with `noatime` replaced by
+`x-systemd.automount,x-systemd.mount-timeout=30,noatime`, `/mnt/smb/books-rw` now reports
+`autofs` + `cifs` stacked, exactly like `/mnt/smb/books`.
+
+**Side finding, fixed the same day — the "boot stabilization" service was cargo cult.**
+`trigger-smb.mounts.service` ran *before* `pve-guests` starts VM102, so it poked automounts whose
+server did not exist yet, and its script swallowed every error (`timeout 3s ls … || true`), so it
+always reported success. Removed and replaced by `smb-mounts-check.service`, which runs
+`After=pve-guests.service` and **exits 1** if any `/mnt/smb/*` path is not `cifs`. Its prerequisite
+was fixed too: the host's `node_exporter` had no `--collector.systemd`, so a failed unit on the
+host reached no alert. Both verified, including the negative case. See
+[runbook](../../runbooks/storage/smb-autofs-trigger.md).
+
+**Verification (2026-07-14):**
+
+- Container bind before `pct reboot 220`: `/books-rw` → `ext4 /dev/mapper/pve-root[…]` — the
+  KE-15 signature, the empty directory on the boot SSD.
+- After the reboot: `/books-rw` → `cifs //<lan-ip-vm102>/Books`, and a write as container root
+  succeeds.
+- `calibre-import.service`: `Result=success`, exit 0. Two consecutive timer runs finished cleanly
+  (12:19:10, 12:20:12 UTC); the last failure was 12:17:32, before the fix. **lxc220 now has no
+  failed unit at all.**
+- The `findmnt -no FSTYPE` guard added on 2026-07-10 now passes for the right reason rather than
+  failing for the right reason.
+
+Still to prove: survival across a **host** reboot. The host powers down and boots daily
+(`homelab_schedule`), so the next scheduled boot is the test — `systemctl is-failed
+'mnt-smb-books\x2drw.mount'` must not report `failed`, and `calibre-import.service` must keep
+finishing.
 
 **The gap that let it run for a month (closed 2026-07-10):** a `failed` systemd unit raised no
 alert. Monitoring covered `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP
@@ -704,9 +763,11 @@ scope — the stock exclude drops them, and this fault *is* a mount fault) plus 
 `node_systemd_unit_state{name="calibre-import.service",state="failed"} 1` and Prometheus raises
 the alert.
 
-**Status:** Root cause confirmed; guards fixed in repo; unit-failure alerting deployed and
-verified; host mount **not** restored — the import path stays down until `/mnt/smb/books-rw` is
-mounted on the Proxmox host and `pct reboot 220` is run
+**Status:** **RESOLVED 2026-07-14.** Root cause confirmed on both sides: the guard was blind
+(fixed 2026-07-10), and the host mount lacked `x-systemd.automount`, so a mount against a VM the
+host had not yet started failed once at boot and was never retried (fixed 2026-07-14). Import path
+restored and verified; lxc220 has no failed unit. Open only for confirmation across the next
+scheduled host boot.
 
 ---
 

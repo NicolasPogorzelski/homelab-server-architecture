@@ -1,0 +1,47 @@
+#!/usr/sbin/nft -f
+#
+# SMB boundary enforcement for VM102 (sanitized).
+# Deployed to /etc/nftables.d/smb-guard.nft, loaded by snippets/systemd/smb-guard.service.
+#
+# WHY THIS EXISTS
+# Samba cannot bind an IPv4 address on tailscale0: the interface is a point-to-point TUN device
+# without the BROADCAST flag (ens18 has it), and Samba's IPv4 interface selection skips such
+# interfaces. `bind interfaces only = yes` therefore removes the Tailscale SMB path instead of
+# securing it -- verified on the live node with <ip>/32, the bare IP, and the interface name.
+# smbd consequently listens on the wildcard address, and the boundary is enforced here instead:
+# a kernel filter, evaluated before Samba sees the connection -- unlike `hosts allow`, which
+# Samba applies only after the TCP accept.
+#
+# WHY NOT nftables.service
+# Its stock /etc/nftables.conf begins with `flush ruleset`, and its ExecStop flushes the whole
+# ruleset. Either would wipe Tailscale's own ts-input / ts-forward chains. Hence: own table,
+# own unit, and never a `flush ruleset` in this file.
+#
+# See docs/decisions/smb-bind-and-lan-access.md
+
+# Idempotent prelude: declaring the table before deleting it makes `nft -f` re-appliable, and
+# lets the delete succeed on the very first run too (deleting a non-existent table is an error).
+table inet smb_guard
+delete table inet smb_guard
+
+table inet smb_guard {
+  chain input {
+    type filter hook input priority filter; policy accept;
+
+    # Only the LAN interface is in scope. Tailscale traffic arrives on tailscale0 and is never
+    # evaluated here -- which is why admin workstations (on the LAN, but mounting over the
+    # Tailscale IP) are unaffected by the rules below.
+    iifname != "ens18" accept
+
+    # The point of this table: VM102's LAN interface carries a globally routable IPv6 address,
+    # and smbd listens on [::]:445. Without this rule, port 445 is bound on a world-routable
+    # address and the only thing preventing reachability is the router's default inbound block.
+    meta nfproto ipv6 tcp dport 445 counter drop
+
+    # SMB over LAN IPv4: only the two nodes that actually mount shares (established from
+    # `smbstatus -b`, not from the config). Everything else on the LAN is dropped.
+    # The counters are the audit trail: a rising drop counter means a consumer was missed.
+    ip saddr { <lan-ip-vm100>, <lan-ip-proxmox> } tcp dport 445 counter accept
+    tcp dport 445 counter drop
+  }
+}
