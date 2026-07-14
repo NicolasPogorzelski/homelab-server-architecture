@@ -146,8 +146,16 @@ Throughput is not the reason either — measured 2026-07-14, Tailscale costs ~8 
 (741 vs 809 Mbit/s), because same-subnet peers negotiate a direct WireGuard path over the LAN
 rather than via a relay.
 
-The boundary therefore moves to the kernel (an nftables table on VM102) instead of the
-application. Tracked in [SMB bind and LAN access](../decisions/smb-bind-and-lan-access.md).
+The boundary therefore lives in the kernel instead of the application. Since 2026-07-14 the
+nftables table `inet smb_guard` on VM102 (loaded by `smb-guard.service`) drops inbound TCP/445 over
+IPv6 on the LAN interface — closing the world-routable socket — and over IPv4 accepts only VM100
+and the Proxmox host, the two nodes that actually mount. Tailscale traffic arrives on `tailscale0`
+and is not evaluated. `hosts allow` remains underneath as redundancy.
+
+Reasoning, measurements and the reboot verification: [SMB bind and LAN
+access](../decisions/smb-bind-and-lan-access.md). Sources:
+[smb-guard.nft](../../snippets/storage/smb-guard.nft),
+[smb-guard.service](../../snippets/systemd/smb-guard.service).
 
 ---
 

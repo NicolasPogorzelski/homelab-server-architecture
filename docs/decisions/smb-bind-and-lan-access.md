@@ -110,7 +110,7 @@ Three steps, in order of increasing risk. Step 1a is done; 1b replaces the rejec
 empty since 2026-06-17. The desktop behind it holds `tag:admin`, which ACL Rule 1 grants full
 access to `tag:storage` — so it keeps SMB access over Tailscale and loses nothing.
 
-### Step 1b — enforce the boundary in the kernel, not in Samba (planned)
+### Step 1b — enforce the boundary in the kernel, not in Samba (done 2026-07-14)
 
 Since Samba cannot be made to bind correctly, the boundary moves one layer down, to an nftables
 rule on VM102. This is strictly better than the `interfaces` approach it replaces: it is a kernel
@@ -172,6 +172,24 @@ Loaded by a dedicated unit (`smb-guard.service`, `Type=oneshot`, `RemainAfterExi
 `After=network-pre.target`, `ExecStart=/usr/sbin/nft -f /etc/nftables.d/smb-guard.nft`,
 `ExecStop=/usr/sbin/nft delete table inet smb_guard`). It must **not** be `nftables.service`,
 whose `ExecStop` flushes the whole ruleset and would take Tailscale's chains with it.
+
+Deployed sources: [smb-guard.nft](../../snippets/storage/smb-guard.nft),
+[smb-guard.service](../../snippets/systemd/smb-guard.service).
+
+**Result (measured, 2026-07-14).** Applied, then proved across a reboot of VM102 — the only test
+that distinguishes "works" from "comes back":
+
+- Counters after load: **99 packets accepted** (VM100 + Proxmox host, unaffected), **3 dropped**
+  (the SYN retries of a deliberate probe from the admin workstation's LAN address), **0** on the
+  IPv6 rule — nothing had ever tried.
+- Tailscale's `ts-input` / `ts-forward` chains intact (8 rule lines, unchanged).
+- After reboot: table loaded by the unit, all six CIFS mounts on the Proxmox host and both on
+  VM100 back with successful read tests, all eight SMB sessions re-established.
+- From the admin workstation: Tailscale `:445` open, LAN `:445` refused — as intended, since it
+  is neither VM100 nor the Proxmox host and reaches the share over `tailscale0` anyway.
+
+`hosts allow` remains in place underneath as a second line of defence. It is now redundancy
+rather than the only control.
 
 ### Step 2 — migrate the mounts (deferred, separate change)
 
