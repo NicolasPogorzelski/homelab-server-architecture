@@ -14,10 +14,28 @@ notes there and keep this section short.
 **Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md)):
 
 - **KE-13 — aux-disk media failure.** The auxiliary disk is back in service under protest pending a
-  replacement and still degrades slowly (`Reported_Uncorrect` rising). It carries five LXC
-  data-roots and VM100's secondary disk, with no off-site copy. Standing hold: do not run
-  `docker-compose-update` against the fleet while this disk is in service — it writes gigabytes of
-  new image layers onto a failing disk.
+  replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
+  Standing hold: do not run `docker-compose-update` against the fleet while this disk is in service
+  — it writes gigabytes of new image layers onto a failing disk. **Correction (measured
+  2026-07-28):** the earlier "still degrades slowly" no longer holds. `Reported_Uncorrect` rose
+  18 → 21 between 2026-06-25 and 2026-07-09 and has been **static at 21 since**, with
+  `Current_Pending_Sector` static at 7680 — nineteen further days in service with no new
+  uncorrectable error. Static is not safe (those 7680 sectors still hold unreadable data, and
+  `smartctl -H PASSED` is meaningless here: `Current_Pending_Sector` normalises to 054 against
+  threshold 000 and can never trip the self-assessment), but the failure is not accelerating, so
+  the replacement is a planned task rather than an emergency.
+- **KE-18 — Tailscale readiness races (class entry, added 2026-07-28).** Four instances, all fixed:
+  lxc260 PostgreSQL (KE-9), host `pveproxy` (KE-12), host `node_exporter` and lxc210
+  `tailscale-cert-refresh` (both 2026-07-28). The host `node_exporter` case was a **regression from
+  `54402ed`**, which moved the bind to the Tailscale IP on 2026-07-14 and thereby put the unit into
+  this class; it had failed at every boot since, and the failure concealed itself because a dead
+  host exporter is precisely what stops the host from reporting. Two fixes await cold-boot
+  confirmation — the nightly power cycle tests them automatically.
+- **KE-6 recurrence on lxc220 — RESOLVED 2026-07-28.** The node had been running a second,
+  hand-written `tailscaled-userspace.service` alongside the packaged unit, so two daemons started
+  every boot and its `node_exporter` had, as far as can be established, never been scraped. KE-6 had
+  been closed after fixing lxc240 without sweeping the fleet. **Take the general lesson: when
+  closing a configuration error, sweep the other nodes and record that you did.**
 - **KE-14 — boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
   verification. `sdc` carries every VM and LXC root disk.
@@ -423,14 +441,28 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
 - **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement pending:**
   it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's `scsi1` disk**
-  (allocated). `Reported_Uncorrect` rose 18 → 21 since the 2026-06-25 incident — it is
-  still degrading in service. Nothing on `/mnt/aux-disk` has an off-site copy.
+  (allocated). `Reported_Uncorrect` rose 18 → 21 between the 2026-06-25 incident and 2026-07-09,
+  but has been **static at 21 since** (re-read 2026-07-28), as has `Current_Pending_Sector` at 7680.
+  The failure is not accelerating; see the KE-13 note in Current Status for why that is not the same
+  as safe. Nothing on `/mnt/aux-disk` has an off-site copy.
 - **Standing hold on `docker-compose-update` (until aux-disk is replaced):** the role pulls new
   images, writing gigabytes of fresh blocks onto that disk. The repo-side image pins and the
   role's compose-file-sync fix can wait for the replacement.
 - **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
   mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
   filling the boot SSD — the KE-7 failure class. `mkdir 0` does not prevent this.
+- **LVM thin-pool fill has no alert at all (found 2026-07-28):** `pve/data` measured **86.15 %** data
+  and 3.40 % metadata. No rule covers it, and none can with the current exporters: a thin pool is a
+  block-layer object with no filesystem, so `node_filesystem_*` cannot observe it — the metric a
+  `DiskSpaceCritical`-style rule would need simply does not exist. This is the KE-7 failure class
+  (thin-pool overflow corrupting packages mid-`apt`), which has already hit this platform once, and
+  it would currently arrive with **zero warning**. Needs a textfile-collector metric from `lvs
+  --reportformat json` on the host, plus a rule — and therefore shares the "host must become an
+  Ansible node" prerequisite with SMART monitoring and `homelab_schedule`.
+- **`tailscaled-userspace.service` on lxc220 is disabled, not deleted (2026-07-28):** the KE-6
+  recurrence was closed by `systemctl disable --now`, which stops it returning at boot but leaves
+  the unit file in `/etc/systemd/system/`. A future `systemctl enable` or a rebuild from this
+  machine's state would revive it. Remove the file during the next lxc220 pass.
 
 ## Platform Changelog
 
