@@ -93,10 +93,18 @@ ansible/inventory/hosts.yml
 .aider.tags.cache.v4/
 
 # =====================================================
-# Claude Code local settings (environment-specific paths)
+# Claude Code (default-deny: local state ignored, shared assets opted in)
 # =====================================================
+# `.claude/*` excludes the *contents*, not the directory itself. That distinction
+# matters: excluding `.claude/` outright would stop git descending into it, and a
+# later `!.claude/...` negation would silently have no effect (see gitignore(5),
+# "It is not possible to re-include a file if a parent directory is excluded").
+# Verified empirically before choosing this form. New files the tool writes here
+# are ignored by default; anything meant to be versioned is opted in below.
 
-.claude/settings.local.json
+.claude/*
+!.claude/skills/
+!.claude/agents/
 
 # =====================================================
 # Private sanitization legend (placeholders -> real values, NEVER COMMIT)

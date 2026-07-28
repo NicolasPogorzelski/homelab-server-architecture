@@ -43,6 +43,21 @@ See: [KE-12](./known-errors.md#ke-12-pveproxy-fails-to-start-after-boot-tailscal
 [ADR pveproxy-tailscale-boot-ordering](../decisions/pveproxy-tailscale-boot-ordering.md),
 [runbook](../../runbooks/platform/pveproxy-tailscale-boot-race.md).
 
+`node_exporter` on the host has the same dependency and, since 2026-07-14, the same bind
+(`--web.listen-address=<tailscale-ip-proxmox-host>:9100`) — but it had no gate, so it failed at
+every boot from that change until 2026-07-28. Gated the same way:
+`/etc/systemd/system/node_exporter.service.d/wait-tailscale.conf` with
+`ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh 90` and `RestartSec=5`. The script is a
+verbatim copy of the one the `postgresql_boot_order` role deploys on LXC260; it derives the address
+via `tailscale ip -4` instead of hard-coding it, which is why it could be reused unchanged.
+
+Both the script and the drop-in are **hand-deployed** — the host is not an Ansible-managed node, so
+they will be lost on a host rebuild. Note also that the older `pveproxy` drop-in still carries its
+Tailscale IP inline rather than calling the shared script; folding it into the same pattern is a
+small cleanup for the next host pass.
+
+See: [KE-18](./known-errors.md#ke-18-services-start-before-tailscale-is-ready-ordering-is-not-readiness).
+
 ## Disk Passthrough (VM102)
 
 Data and parity disks for VM102 are passed through by ID from the host:

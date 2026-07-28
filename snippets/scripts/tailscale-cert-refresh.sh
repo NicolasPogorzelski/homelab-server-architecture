@@ -27,9 +27,32 @@ RELOAD_UNITS="${RELOAD_UNITS:-apache2}"  # space-separated
 
 # The node's own MagicDNS name, without the trailing dot. Derived rather than
 # configured: a hard-coded FQDN silently breaks if the node is renamed.
-FQDN="$(tailscale status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
+#
+# Polled rather than read once. The timer sets Persistent=true and the host is
+# powered down overnight, so the missed 04:30 run always fires inside the boot
+# window. There tailscaled's process is already running -- which is all that
+# After=tailscaled.service guarantees -- but it has not finished joining the
+# tailnet, so Self.DNSName is still empty and a single read failed the unit on
+# every single boot. Ordering is not readiness; poll for the value you need.
+# Same lesson as KE-9 (postgresql) and KE-12 (pveproxy).
+FQDN=""
+fqdn_deadline=90   # seconds; joining the tailnet is normally well under 30
+fqdn_waited=0
+while [ "${fqdn_waited}" -lt "${fqdn_deadline}" ]; do
+    # `|| true` keeps `set -e`/`pipefail` from killing the script while
+    # tailscaled is still starting: an unparseable or absent answer must cost
+    # one iteration, not the whole run.
+    FQDN="$(tailscale status --json 2>/dev/null \
+        | python3 -c 'import sys,json; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null \
+        || true)"
+    if [ -n "${FQDN}" ]; then
+        break
+    fi
+    sleep 2
+    fqdn_waited=$((fqdn_waited + 2))
+done
 if [ -z "${FQDN}" ]; then
-    echo "could not determine the node's MagicDNS name" >&2
+    echo "could not determine the node's MagicDNS name after ${fqdn_deadline}s" >&2
     exit 1
 fi
 
