@@ -165,7 +165,56 @@ This was a legacy workaround predating the CT210-pattern TUN configuration.
 Remove the flag from `/etc/default/tailscaled`. Restart tailscaled. Verify `tailscale0` appears
 with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
 
-**Status:** Resolved (LXC240)
+### Recurrence on LXC220 (2026-07-28) — same cause, different delivery, misleading symptom
+
+Closing this entry on LXC240 in 2026 fixed the node where the error was noticed. **No fleet sweep
+followed**, and LXC220 was running in userspace-networking mode the whole time — its
+`node_exporter` had, as far as can be established, never been scraped successfully.
+
+Two things made it hard to see:
+
+**It was not a flag in a config file.** `/etc/default/tailscaled` on LXC220 read `FLAGS=""`, and
+the packaged unit is unmodified. The mode came from a **second, hand-written systemd unit**,
+`/etc/systemd/system/tailscaled-userspace.service`, `enabled` alongside the stock
+`tailscaled.service`. Every boot started *two* daemons against the same `--state` and `--socket`
+paths, 2 s apart. Grepping configuration files finds nothing; only the running process shows it:
+
+```
+ps -o pid,ppid,lstart,args -C tailscaled     # expect exactly one process
+systemctl list-unit-files | grep -i tailscale # expect exactly one enabled unit
+systemctl status <pid>                        # maps a stray process back to its unit
+```
+
+**The symptom is the inverse of the one described above.** On LXC240 the bind *failed* and the
+service would not start. On LXC220 `node_exporter` was `active`, `ss -tlnp` showed it listening on
+the Tailscale IP, and `ip addr show tailscale0` showed the interface with its address — everything
+an operator would check looked correct. Only the scrape failed, with `connection refused`, because
+the userspace daemon terminates the connection in netstack and never hands it to the kernel socket
+that `node_exporter` is bound to. `tailscale serve` traffic (port 443, Calibre-Web) worked
+throughout, since serve is answered inside that same process — which is why the node looked healthy
+in the blackbox probes while its metrics target was down.
+
+**Do not conclude from a successful `bind()` that this error is absent.** The discriminator is a
+scrape from the monitoring node, not the local socket state:
+
+```
+pct exec 200 -- curl -s -o /dev/null -w '%{http_code}\n' http://<tailscale-ip-lxc220>:9100/metrics
+```
+
+**Fix applied:** `systemctl disable --now tailscaled-userspace.service`, then
+`systemctl restart tailscaled.service` so the remaining daemon claims the TUN device cleanly.
+Verified: one `tailscaled` process, `tailscale0` carries the address, scrape returns `HTTP 200`,
+Prometheus target `health: up`, `NodeDown` cleared, and Calibre-Web still answers `HTTP 302`
+through `tailscale serve` with `probe_success = 1`. `/dev/net/tun` was present on the node all
+along, so the userspace mode had no remaining purpose.
+
+**Status:** Resolved on LXC240 (2026) and on LXC220 (2026-07-28). The unit file is disabled, not
+deleted, so a future `systemctl enable` would revive it — remove it during the next lxc220 pass.
+Not verified across a cold boot yet. **Lesson: a per-node fix is not a fleet fix.** When closing a
+configuration error, sweep the other nodes for the same condition and record that you did.
+
+**References:**
+- [KE-18 — Tailscale readiness races](#ke-18-services-start-before-tailscale-is-ready-ordering-is-not-readiness) (different cause, same `EADDRNOTAVAIL` symptom — check which one you have)
 
 ---
 
@@ -908,3 +957,113 @@ the proportionate fix, not a 03:45 page.
 - [KE-10 — Jellyfin loses CUDA access (same node, NVIDIA path)](#ke-10)
 - [KE-14 — boot-SSD I/O errors (excluded here)](#ke-14)
 - [KE-8 — the observability model that caught this](#ke-8)
+
+---
+
+## KE-18: Services start before Tailscale is ready (ordering is not readiness)
+
+**Affected:** platform-wide class. Start here when a service that binds or queries a Tailscale
+resource fails during the boot window, before opening the per-service entries below.
+
+**Why this entry exists:** the platform binding rule requires services to bind their Tailscale IP
+rather than `0.0.0.0`. The rule is right, but it makes those services depend on a resource that does
+not exist yet at boot. The same fault has now been diagnosed from scratch four times. This entry
+records the shape once so the fifth is a lookup rather than an investigation.
+
+**Symptom:** during the boot window only — a manual start afterwards always succeeds.
+
+```
+bind: cannot assign requested address        # kernel EADDRNOTAVAIL
+could not determine the node's MagicDNS name # the query-time variant
+```
+
+### Why `After=tailscaled.service` is not enough
+
+`After=` orders the unit after tailscaled has **started**, and systemd considers a `Type=simple`
+service started the moment its process is alive. Joining the tailnet, negotiating with the control
+plane and assigning an address all happen *afterwards*. Ordering guarantees sequence, not
+readiness — the unit must poll for the resource it actually needs.
+
+The second, quieter half is systemd's restart rate limiter. `Restart=on-failure` with the default
+`RestartSec=100ms` means five attempts inside ~24 ms; `StartLimitBurst` is then exhausted and the
+unit stays dead until someone intervenes. A rapid-restart loop is not a retry strategy — it is a
+way to convert a two-second race into a permanent outage.
+
+### Instances
+
+| Node / unit | Variant | Status |
+|---|---|---|
+| lxc260 `postgresql@15-main` | bind | Fixed 2026-06-09 — [KE-9](#ke-9), `postgresql-boot-order` role |
+| host `pveproxy` | bind | Fixed 2026-06-25 — [KE-12](#ke-12), `wait-tailscale.conf` drop-in |
+| host `node_exporter` | bind | Fixed 2026-07-28 (below) |
+| lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
+
+**What makes this platform unusually exposed:** `homelab-schedule` powers the host down at 01:00 and
+wakes it by RTC in the morning, so **every day is a cold boot**. Timers that carry `Persistent=true`
+to catch up runs missed overnight therefore fire *inside the boot window* by design — that is how
+the lxc210 certificate job became a boot-time job without anyone choosing that. On this platform the
+boot window is a routine execution context, not an edge case.
+
+### Instance: host `node_exporter` (found and fixed 2026-07-28)
+
+A **regression** introduced by `54402ed` (2026-07-14), which moved the host's `node_exporter` from a
+wildcard bind to `--web.listen-address=<tailscale-ip-proxmox-host>:9100` — correct per the binding
+rule, but it placed the unit into this failure class. It had failed at every boot since, i.e. daily,
+and the failure hid itself: the host's own down-ness is exactly what stops it from being reported.
+`NodeDown` did fire, and was read as a stale artifact of the nightly power cycle.
+
+Diagnosis: `Active: failed`, `Duration: 24ms`, `Start request repeated too quickly`, restart counter
+at 5.
+
+Fix: `/usr/local/bin/wait-for-tailscale-ip.sh` (copied from lxc260, unchanged — it derives the
+address via `tailscale ip -4` rather than hard-coding it) plus a drop-in at
+`/etc/systemd/system/node_exporter.service.d/wait-tailscale.conf` with
+`ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh 90` and `RestartSec=5`.
+
+Verified: `ExecStartPre` `status=0/SUCCESS`, listening on `:9100`, Prometheus target `health: up`
+with an empty `lastError`, `NodeDown` cleared. **Cold-boot verification pending** — the nightly
+power cycle tests it automatically at the next wake-up.
+
+### Instance: lxc210 `tailscale-cert-refresh` (found and fixed 2026-07-28)
+
+The query-time variant: the unit does not bind anything, it *asks* tailscaled for the node's
+MagicDNS name (`tailscale status --json` → `Self.DNSName`) and derives the certificate paths from
+it. At boot that field is still empty, so under `set -euo pipefail` the script exited 1 — on every
+boot from at least 2026-07-26 onward, and most likely on every boot-triggered run ever. Renewal was
+therefore never running; the certificate happened to be valid until 2026-10-08, so nothing had
+broken yet. See [KE-16](#ke-16) for what happens when that certificate does go stale.
+
+Fix: the FQDN derivation in `snippets/scripts/tailscale-cert-refresh.sh` now polls for up to 90 s
+instead of reading once, with `|| true` inside the loop so `pipefail` cannot abort the script while
+tailscaled is still starting.
+
+Verified: `Result=success`, `ExecMainStatus=0`, no failed unit anywhere in the fleet, certificate
+untouched (`no reload needed`, still `notAfter=Oct 8 2026`). **The retry path itself is not yet
+proven** — this run happened with tailscaled already up, so it exercised the normal path. The race
+path is tested by the next RTC wake-up.
+
+### Fix shapes
+
+- **Bind-time** (a service binds the address): gate the unit with
+  `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh <timeout>`, plus `RestartSec` well above the
+  default so a later tailscaled blip cannot exhaust the start limit in milliseconds.
+- **Query-time** (a script reads a value from tailscaled): poll for the value inside the script.
+  An `ExecStartPre` that waits for the *IP* is not a correct proxy for the *DNS name* being known.
+
+Prefer reusing `wait-for-tailscale-ip.sh` over writing shell into a unit file: systemd applies its
+own `$`-expansion to `ExecStartPre=`, so an inline `for i in $(seq 1 30)` can silently degrade to a
+zero-iteration loop that exits 0 without ever waiting — a gate that reports success while doing
+nothing.
+
+**Status:** Class documented 2026-07-28; all four known instances fixed. Two await cold-boot
+confirmation. The host's `pveproxy` drop-in still hard-codes its Tailscale IP inline rather than
+calling the shared script — harmless today, worth folding into the same pattern on the next host
+pass.
+
+**References:**
+- [KE-6 — userspace-networking](#ke-6-tailscale-userspace-networking-prevents-node_exporter-from-binding-to-tailscale-ip) — produces the *same* `EADDRNOTAVAIL` message from an unrelated cause; a restart fixes this class and does nothing for that one
+- [KE-9 — PostgreSQL loopback-only bind](#ke-9)
+- [KE-12 — pveproxy boot failure](#ke-12)
+- [KE-16 — stale certificate served from memory](#ke-16)
+- [ADR — PostgreSQL boot ordering](../decisions/postgresql-tailscale-boot-ordering.md)
+- [ADR — pveproxy boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
