@@ -126,6 +126,37 @@ Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapR
 
 Source: `scripts/homelab-shutdown.sh` — deployed to `/usr/local/sbin/homelab-shutdown.sh`.
 
+## Host Systemd Timers
+
+Homelab-authored periodic jobs on the host are systemd timers, not cron entries. The power
+schedule above is the deliberate exception — it is the job that powers the host down, so it cannot
+depend on the host being up, and catch-up semantics would be actively wrong for a shutdown trigger.
+
+| Timer | Schedule | Unit | Purpose |
+|---|---|---|---|
+| `lxc-fstrim.timer` | `*-*-* 10:30`, `Persistent=true` | `/usr/local/sbin/lxc-fstrim.sh` | Return blocks freed inside LXC containers to the `pve/data` thin pool |
+| `lvm-thin-metrics.timer` | every 60 s, no catch-up | `/usr/local/sbin/lvm-thin-metrics.sh` | Export thin-pool utilisation to the node_exporter textfile collector |
+| `node-exporter-smarttext.timer` | every 60 s | `/usr/local/sbin/node-exporter-smarttext.sh` | Export SMART health + temperature per disk (pre-existing, hand-deployed) |
+
+### lxc-fstrim.timer (added 2026-08-10)
+
+Containers cannot trim themselves: the stock `fstrim.timer` carries
+`ConditionVirtualization=!container` so systemd never starts it there, and an unprivileged
+container is refused the ioctl regardless. Without a host-side job, freed blocks stay allocated in
+the thin pool forever — which is how `pve/data` reached 92.55% with only 23 GiB actually in use.
+
+`Persistent=true` is load-bearing. `homelab-setwake.sh` wakes the host at 07:30 on most days but at
+**16:00 on Tuesday and Wednesday**, so no single wall-clock time is inside the awake window every
+day. On those two days the host is still off at 10:30 and the overdue run fires just after the
+16:00 boot. Without catch-up the job would silently never run on Tue/Wed — the same defect that
+cost the PostgreSQL backups two months.
+
+Source: `snippets/scripts/lxc-fstrim.sh`, `snippets/systemd/lxc-fstrim.service`,
+`snippets/systemd/lxc-fstrim.timer`. **Hand-deployed** — the host is not an Ansible node, so these
+would be lost on a rebuild, the same debt as the host's `node_exporter`.
+
+See: [LVM thin pool full](../../runbooks/platform/lvm-thin-pool-full.md).
+
 ## Ansible Management
 
 The Proxmox host is **not yet a fully managed Ansible node**. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied — those are currently deployed manually. Full host management (package updates, SSH hardening) is not implemented.

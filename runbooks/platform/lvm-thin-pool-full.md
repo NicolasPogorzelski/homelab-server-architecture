@@ -200,20 +200,49 @@ pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
 
 ## Prevention
 
-- **Periodic fstrim:** Run `snippets/scripts/lxc-fstrim.sh` after every `apt-upgrade` playbook run to return freed blocks to the pool. A Proxmox-host cronjob is planned.
+- **Periodic fstrim:** Automated since 2026-08-10 — `lxc-fstrim.timer` on the Proxmox host runs
+  `snippets/scripts/lxc-fstrim.sh` daily at 10:30 with `Persistent=true`. It derives the container
+  list from `pct list` rather than a hardcoded array, so a new container is covered on creation;
+  the previous array omitted lxc250, which was the fullest container in the fleet. A manual run
+  after a large `apt-upgrade` is still reasonable, but nothing depends on remembering it. Note the
+  units are hand-deployed — the host is not yet an Ansible node, so they would be lost on a rebuild
+  (same debt as the host's `node_exporter`).
 - **Serial upgrades:** `apt-upgrade.yml` uses `serial: 1` to prevent simultaneous downloads from spiking pool utilization. The `dpkg --verify` post-task catches binary corruption before it propagates across nodes.
 - **apt clean after upgrade:** `apt-upgrade.yml` runs `apt clean` on each node after upgrading.
-- **Monitor pool utilization:** Add a Prometheus alert for `local-lvm` pool above 85% (`node_filesystem_avail_bytes` on the thin pool mount point).
+- **Monitor pool utilization:** Implemented 2026-08-10. The approach previously named here could
+  not work — a thin pool is a block-layer object with **no filesystem and no mount point**, so
+  `node_filesystem_*` cannot observe it and the metric that rule would have needed does not exist.
+  Instead `lvm-thin-metrics.sh` runs on the Proxmox host every 60 s as a node_exporter textfile
+  collector and emits `lvm_thin_pool_data_percent`, `lvm_thin_pool_metadata_percent`,
+  `lvm_thin_pool_size_bytes`, `lvm_vg_free_bytes` and `lvm_thin_metrics_scrape_success`. Rules:
+  `LvmThinPoolWarning` (>85%, 1 h), `LvmThinPoolCritical` (>90%, 15 min),
+  `LvmThinPoolMetadataCritical` (>80%, 15 min) and `LvmThinMetricsStale` (file older than 15 min,
+  so a stopped timer cannot leave the other three evaluating a frozen value).
+  `lvm_vg_free_bytes` is exported deliberately: it is 0 on this host, which means `lvextend` — the
+  first reflex when a pool fills — is not available without shrinking `root`/`swap` or adding a PV.
 
 ---
 
 ## Notes
 
 - `df -h /` inside a container reports filesystem usage, not thin-pool utilization. Always check the pool directly via `lvs` on the Proxmox host.
-- `fstrim` must be run from the Proxmox host via `nsenter` for LXCs. Running it inside an LXC fails with `FITRIM ioctl failed: Operation not permitted`.
+- `fstrim` must be run from the Proxmox host for LXCs (`pct fstrim <ctid>`, which enters the
+  container's mount namespace and skips bind and read-only mountpoints). Running it inside an LXC
+  fails two ways independently: the stock `fstrim.timer` carries `ConditionVirtualization=!container`
+  so systemd never starts it, and the ioctl itself is refused with `FITRIM ioctl failed: Operation
+  not permitted`. Both failures are silent — `systemctl is-enabled` reports `enabled` and
+  `Result=success` is the default of a unit that never ran, so no alert can see this.
+- **Proving a unit actually ran:** for `Type=oneshot` without `RemainAfterExit=yes`, systemd
+  releases the unit's runtime state once it completes, so `ExecMainStartTimestamp`,
+  `InactiveExitTimestamp` and `ActiveEnterTimestamp` are all **empty whether it ran or not**. They
+  are not evidence in either direction. `journalctl -u <unit>` is — `-- No entries --` means never
+  ran. For timer-driven units, `systemctl list-timers` also keeps a persistent `LAST` column.
 - For VMs, `fstrim` runs normally via SSH since they have full kernel access.
 - See: [Storage Design](../../docs/platform/storage-design.md)
-- See: [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh)
+- See: [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh),
+  [lxc-fstrim.service](../../snippets/systemd/lxc-fstrim.service),
+  [lxc-fstrim.timer](../../snippets/systemd/lxc-fstrim.timer)
+- See: [Proxmox host — Host Systemd Timers](../../docs/platform/proxmox-host.md#host-systemd-timers)
 
 ---
 

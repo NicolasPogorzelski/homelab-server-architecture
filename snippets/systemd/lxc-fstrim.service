@@ -1,0 +1,14 @@
+[Unit]
+Description=Return blocks freed inside LXC containers to the LVM thin pool
+Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/platform/lvm-thin-pool-full.md
+# pct fstrim enters each container's mount namespace, so the containers must be up.
+# Timer-triggered runs are far past boot; this ordering only matters for a manual
+# `systemctl start` early in the boot sequence.
+After=pve-guests.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lxc-fstrim.sh
+
+[Install]
+WantedBy=multi-user.target
