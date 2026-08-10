@@ -1,0 +1,22 @@
+[Unit]
+Description=Daily LXC thin-pool reclaim
+Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/platform/lvm-thin-pool-full.md
+
+[Timer]
+# homelab-setwake.sh wakes this host at 07:30 on most days but at 16:00 on Tuesday and
+# Wednesday, so no single wall-clock time is inside the awake window every day. 10:30 is
+# chosen for the five 07:30 days (and is offset from the stock fstrim.timer, which fires
+# ~10:12); on Tue/Wed the host is still off at 10:30 and Persistent=true runs the overdue
+# job just after the 16:00 boot instead. That is the intended behaviour, not a workaround.
+OnCalendar=*-*-* 10:30:00
+
+# Load-bearing. The host is not up at night, and a timer without catch-up semantics silently
+# loses every run it misses -- that is how the PostgreSQL backups went two months without
+# running while their cron entry looked fine. Any periodic job on this fleet needs this.
+Persistent=true
+
+RandomizedDelaySec=10m
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target

@@ -114,6 +114,71 @@ groups:
           summary: "MergerFS archive pool below 100 GiB free on {{ $labels.instance }}"
           description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, Vaultwarden, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
 
+  - name: lvm
+    rules:
+      # A thin pool is a block-layer object with no filesystem and no mount point, so
+      # node_filesystem_* cannot see it and no DiskSpaceCritical-style rule can be written
+      # against it. The metrics below come from lvm-thin-metrics.sh, a node_exporter textfile
+      # collector on the Proxmox host (added 2026-08-10). Before that the pool was unobservable:
+      # it was found at 92.55% by a manual audit, thirteen days after being recorded at 86.15%.
+      #
+      # Why this matters more than a full filesystem: overflowing a thin pool corrupts whatever
+      # was mid-write, which on this host means packages during apt. That is KE-7, and it has
+      # already happened here once.
+      #
+      # Thresholds are set against a measured ~0.49 pp/day: 85% leaves roughly a month before
+      # the pool is full, 90% roughly three weeks. Both are long windows on purpose, because
+      # the remedy is slow. Check lvm_vg_free_bytes before reaching for `lvextend` — on this
+      # host it is 0, the VG is fully allocated, and extending the pool first requires shrinking
+      # root/swap or adding a PV. See runbooks/platform/lvm-thin-pool-full.md.
+      - alert: LvmThinPoolWarning
+        expr: lvm_thin_pool_data_percent > 85
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} at {{ $value | printf \"%.2f\" }}% allocated"
+          description: "Allocation is above 85% on {{ $labels.instance }}. Run lxc-fstrim.service first — containers cannot trim themselves, so freed blocks stay allocated until the host does it. If that does not help, the pool is genuinely growing and needs capacity, not reclaim."
+
+      - alert: LvmThinPoolCritical
+        expr: lvm_thin_pool_data_percent > 90
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} at {{ $value | printf \"%.2f\" }}% allocated"
+          description: "Overflow corrupts in-flight writes across every guest on this pool (KE-7). Do not start an apt upgrade. Reclaim via lxc-fstrim.service, then check lvm_vg_free_bytes to see whether lvextend is even available."
+
+      # Metadata exhaustion is the worse failure: the pool flips read-only and recovery is far
+      # more involved than for a full data area. It sits at ~3.4% here, so any approach to 80%
+      # is anomalous rather than gradual, and 15m is enough of a window.
+      - alert: LvmThinPoolMetadataCritical
+        expr: lvm_thin_pool_metadata_percent > 80
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} metadata at {{ $value | printf \"%.2f\" }}%"
+          description: "Metadata exhaustion makes the pool read-only. This is not the same failure as a full data area and is harder to undo."
+
+      # The collector exits non-zero on failure, so a broken run reaches SystemdUnitFailed. That
+      # does not cover the timer being stopped or masked, in which case the last .prom file stays
+      # in place and every rule above keeps evaluating a frozen value that looks healthy. Alert on
+      # the file's age instead — the same "absence of a failure is not success" trap that hid the
+      # container fstrim units for months.
+      - alert: LvmThinMetricsStale
+        # node_exporter labels this with the *full path*, not the basename, so an exact match on
+        # "lvm-thin.prom" silently matches nothing and the alert never fires. Anchored regex
+        # instead, which also survives the textfile directory moving when the host is adopted
+        # into Ansible.
+        expr: time() - node_textfile_mtime_seconds{file=~".*/lvm-thin\\.prom$"} > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LVM thin-pool metrics on {{ $labels.instance }} are stale"
+          description: "lvm-thin.prom has not been rewritten for over 15 minutes (timer runs every 60s). Every LvmThinPool* rule is now evaluating a frozen value. Check lvm-thin-metrics.timer on the Proxmox host."
+
   - name: systemd
     rules:
       # A unit stuck in `failed` fits none of the other alert categories: the node
