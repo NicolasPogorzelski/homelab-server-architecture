@@ -11,7 +11,7 @@ Terraform. The completed role/playbook catalog and per-session narratives live i
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
 notes there and keep this section short.
 
-**Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md)):
+**Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md); ordering and dependencies in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md)):
 
 - **KE-13 — aux-disk media failure.** The auxiliary disk is back in service under protest pending a
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
