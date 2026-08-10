@@ -441,9 +441,18 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.
-- **SMART monitoring not deployed (highest-leverage gap):** no `smartctl_exporter` or
-  node-exporter textfile collector for disk health. Disk failure detection relies on SnapRAID
-  alerts, not SMART. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
+- **SMART monitoring is partly deployed, and the deployed part cannot detect the failure it exists
+  for (entry corrected 2026-08-10 after measuring the host).**
+  `/usr/local/sbin/node-exporter-smarttext.sh` has been running on the host every 60 s since
+  2025-12, emitting `smart_health_passed` and `smart_temperature_celsius` for all nine disks. But
+  `smart_health_passed` reads **1 (PASSED)** for the aux-disk with 7680 unreadable sectors, exactly
+  as KE-13 records (`Current_Pending_Sector` normalises to 054 against threshold 000 and can never
+  trip the self-assessment). The attributes that matter — `Reported_Uncorrect`,
+  `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count` — are **not exported**,
+  and the `smart` rule group in `alert.rules.yml` is still `rules: []` with a comment assuming
+  `smartctl_exporter` metric names that do not exist here. So the collector is real and the gap is
+  real: metrics exist, the ones that would have caught KE-13 do not. Disk failure detection still
+  relies on SnapRAID alerts. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
   returned to service without anyone seeing it still degrading.** Note: all nine disks are attached
   to the **Proxmox host**; VM102 reaches six of them via `by-id` passthrough and sees only
   virtio-SCSI devices, so SMART is readable *only on the host* — the previous wording here named
@@ -480,14 +489,16 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
   mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
   filling the boot SSD — the KE-7 failure class. `mkdir 0` does not prevent this.
-- **LVM thin-pool fill has no alert at all (found 2026-07-28):** `pve/data` measured **86.15 %** data
-  and 3.40 % metadata. No rule covers it, and none can with the current exporters: a thin pool is a
-  block-layer object with no filesystem, so `node_filesystem_*` cannot observe it — the metric a
-  `DiskSpaceCritical`-style rule would need simply does not exist. This is the KE-7 failure class
-  (thin-pool overflow corrupting packages mid-`apt`), which has already hit this platform once, and
-  it would currently arrive with **zero warning**. Needs a textfile-collector metric from `lvs
-  --reportformat json` on the host, plus a rule — and therefore shares the "host must become an
-  Ansible node" prerequisite with SMART monitoring and `homelab_schedule`.
+- **LVM thin-pool fill — RESOLVED 2026-08-10.** `pve/data` had gone 86.15 % (2026-07-28) → 92.55 %
+  in thirteen days with no rule able to see it, because a thin pool is a block-layer object with no
+  filesystem and `node_filesystem_*` cannot observe it. Now covered by `lvm-thin-metrics.sh`, a
+  node_exporter textfile collector on the host (60 s), plus `LvmThinPoolWarning` / `Critical` /
+  `MetadataCritical` / `LvmThinMetricsStale`. Reclaimed to 81.20 % by `pct fstrim` and kept there by
+  `lxc-fstrim.timer` — **containers cannot trim themselves**: the stock `fstrim.timer` carries
+  `ConditionVirtualization=!container` and the ioctl is refused anyway, both silently. Note
+  `lvm_vg_free_bytes` is **0**: the VG is fully allocated, so `lvextend` is not an available remedy
+  without shrinking `root`/`swap` or adding a PV. Units are hand-deployed; folding them into a role
+  still waits on the host becoming an Ansible node.
 - **`tailscaled-userspace.service` on lxc220 is disabled, not deleted (2026-07-28):** the KE-6
   recurrence was closed by `systemctl disable --now`, which stops it returning at boot but leaves
   the unit file in `/etc/systemd/system/`. A future `systemctl enable` or a rebuild from this
