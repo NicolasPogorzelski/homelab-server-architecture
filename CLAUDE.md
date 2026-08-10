@@ -107,6 +107,13 @@ When working on tasks here:
 - Root cause before fix: symptom → verification command → diagnosis → fix.
 - Small steps, verify before next step.
 - When unsure, say so. Don't hallucinate flags, paths, or behavior.
+- Name the general pattern, not just the fix. Every finding belongs to a class, and this
+  platform usually already holds other instances of it — cross-link them. Example: "ordering
+  is not readiness" (KE-18) and "free is not deallocated" (thin-pool discard) are the same
+  abstraction gap, one layer apart.
+- Address wrong assumptions head-on. When a stated assumption is incorrect, say why it is
+  intuitive and where exactly it breaks. Quietly answering around it leaves the
+  misconception intact and it resurfaces later, usually as an outage.
 - Code learning (Bash/Python/YAML): blank-file-first. The first draft is written
   from an empty file without AI or copied snippets — AI is used only to review
   afterwards. The goal is active recall, not recognition; the struggle is the point.
