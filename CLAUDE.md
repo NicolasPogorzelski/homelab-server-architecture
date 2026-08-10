@@ -46,6 +46,28 @@ notes there and keep this section short.
 - **PostgreSQL restore testing.** Backup scheduling is fixed (systemd timer, `Persistent=true`), but
   restores are never validated — no runbook, no periodic check, and `-mtime +7` retention means one
   bad dump plus a week of silence loses everything. Highest-value item not blocked on hardware.
+- **LXC250 control node sits outside the system it manages (found 2026-07-28).** It holds three
+  roles and none is secured: it is the *deployment source* (playbooks read the working tree, not a
+  commit), the *only copy* of `~/.vault_pass`, the real `hosts.yml` and the Ansible SSH key (all
+  gitignored, no backup, and the container lives on the KE-14 boot SSD), and it appears in **no
+  inventory** — so `hosts: all` silently excludes it and it has no `node_exporter`, no `NodeDown`,
+  no disk alert on its 8 GB, and neither Ansible-driven nor unattended patching. Found two commits
+  behind `origin/main`; a `tailscale-cert.yml` run would have re-deployed the pre-fix
+  `tailscale-cert-refresh.sh` over the live KE-18 fix and the symptom would have surfaced ~2 months
+  later as an expired certificate. Agreed plan, in order: **(1)** escrow `~/.vault_pass` +
+  `hosts.yml` in Vaultwarden and demote the GitHub key to a read-only deploy key (no repo change,
+  irreversible-loss risk, do first); **(2)** branch `feat/lxc250-ansible-adoption` — add to `lxcs`
+  with `prometheus_label: devops`, re-render prometheus config, adopt the hand-written
+  `ssh.service.d/override.conf` into a role and convert it to the `wait-for-tailscale-ip.sh` gate
+  (it is an unlisted **fifth KE-18 instance**, currently surviving on a retry loop, not a readiness
+  check); **(3)** branch `feat/control-node-preflight` — `preflight.yml` imported via
+  `import_playbook`, asserting a clean `main` in sync with `origin`, plus a drift metric once the
+  exporter exists. Rejected on purpose: auto-pull (trades awareness for convenience), ephemeral
+  per-run clones (right answer, revisit for Terraform where state raises the stakes), and
+  Actions-triggered deploys (needs a self-hosted runner plus fleet secrets in GitHub, and "on
+  merge" means nothing on a host that sleeps at night). Also correct the claim elsewhere in this
+  file that lxc200 is the *only* node without `SystemdUnitFailed` coverage — lxc250 lacks it too,
+  it just falls outside the definition of "node" by being absent from the inventory.
 - **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
   Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
   storage fix, and the storage-migration design discussion.
