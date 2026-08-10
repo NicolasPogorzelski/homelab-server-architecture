@@ -1,0 +1,10 @@
+[Unit]
+Description=Export LVM thin-pool utilisation to the node_exporter textfile collector
+Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/platform/lvm-thin-pool-full.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lvm-thin-metrics.sh
+
+[Install]
+WantedBy=multi-user.target

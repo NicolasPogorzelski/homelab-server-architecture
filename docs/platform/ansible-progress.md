@@ -22,7 +22,9 @@ Append new session notes to this file.
 - **Playbooks complete:**
   - `ansible/playbooks/apt-upgrade.yml` — two plays (lxcs/vms), `serial: 1`, `become: true`, `apt clean` after upgrade, `dpkg --verify` post-task (fails on binary corruption, KE-7 guard)
   - `ansible/playbooks/bootstrap-ansible-user.yml` — one-time bootstrap: creates `ansible` user, deploys SSH key, installs sudo, sets NOPASSWD sudoers rule across all 9 nodes
-  - Run after every upgrade: `snippets/scripts/lxc-fstrim.sh` on Proxmox host to reclaim thin-pool blocks
+  - Thin-pool reclaim after upgrades is no longer a manual step: `lxc-fstrim.timer` on the Proxmox
+    host runs `snippets/scripts/lxc-fstrim.sh` daily since 2026-08-10 (hand-deployed — the host is
+    still outside Ansible)
 
 - **Roles complete:**
   - `ansible/roles/node_exporter/` — deploys binary via get_url, unarchive, copy; systemd unit via Jinja2 template (`{{ ansible_host }}:{{ node_exporter_port }}`); handler restarts service on unit change; excludes lxc200 (runs node_exporter as Docker container)
