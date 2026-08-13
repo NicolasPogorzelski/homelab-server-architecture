@@ -204,16 +204,30 @@ groups:
 
   - name: smart
     rules: []
-    # SMART disk health alerts are planned but not yet implemented.
+    # Deliberately empty. A collector IS deployed -- node-exporter-smarttext.sh has run
+    # on the Proxmox host every 60 s since 2025-12 -- but it exports only two metrics,
+    # and neither can express disk degradation:
+    #   smart_health_passed{disk=...}        the drive's own self-assessment
+    #   smart_temperature_celsius{disk=...}
+    # Measured 2026-08-13: the KE-13 aux-disk, with 7680 unreadable sectors, exports
+    # smart_health_passed = 1. That is not a bug in the collector -- Current_Pending_Sector
+    # normalises to VALUE=054 against THRESH=000, so the self-assessment can never trip.
+    # An alert on smart_health_passed would therefore be worse than none: it would read
+    # green on a failing disk.
+    #
+    # What is missing is per-attribute export (Reported_Uncorrect, Current_Pending_Sector,
+    # Reallocated_Sector_Ct, Wear_Leveling_Count). Note the metric names below are
+    # smartctl_exporter's; that exporter is NOT installed here, so do not write rules
+    # against them without deploying it first.
+    #   - smartctl_device_smart_status (overall SMART pass/fail -- same blindness as above)
+    #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
+    #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
+    #
     # All nine disks are attached to the Proxmox HOST; VM102 reaches six of them by
     # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
     # readable only on the host. An earlier version of this comment named VM102 as
-    # the target and was wrong (see KE-14). Deploying this requires making the host
+    # the target and was wrong (see KE-14). Extending this requires making the host
     # an Ansible-managed node.
-    # Metrics to alert on (once available):
-    #   - smartctl_device_smart_status (overall SMART pass/fail)
-    #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
-    #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
 
   - name: blackbox
     rules:
