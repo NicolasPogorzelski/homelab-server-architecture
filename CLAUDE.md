@@ -49,15 +49,19 @@ notes there and keep this section short.
   lacked `x-systemd.automount`, so the mount was attempted once at boot — against a VM the host
   itself had not started yet — failed, and was never retried. Confirmed across a real host power
   cycle: all seven `/mnt/smb` entries resolve to `cifs`, `calibre-import` exits 0.
-- **PostgreSQL restore testing — validated 2026-08-13, but not yet periodic.** The earlier wording
-  here ("restores are never validated — no runbook, no periodic check") was wrong on two of three
-  counts: `runbooks/database/pg-restore.md` exists and had a recorded pass from 2026-04-04. It has
-  now been validated properly — a **full-cluster** restore of the current dump into a throwaway
-  cluster on port 5433, both databases and all roles compared against live, nothing live touched.
-  What remains open is **cadence**: one manual run is not a control. Also open, and cheap: the
-  backup script verifies only that the dump is non-empty — neither `gzip -t` nor the
-  `cluster dump complete` marker is checked, so a truncated dump would be discovered at recovery
-  time. `-mtime +7` retention still means one bad dump plus a week of silence loses everything.
+- **PostgreSQL restore testing — validated and automated 2026-08-13.** The earlier wording here
+  ("restores are never validated — no runbook, no periodic check") was wrong on two of three
+  counts: `runbooks/database/pg-restore.md` exists and had a recorded pass from 2026-04-04. Now
+  a **full-cluster** restore into a throwaway cluster on port 5433 runs monthly via the
+  `postgresql_restore_test` role (`*-*-01 09:00`, `Persistent=true`), asserting dump integrity,
+  restore success and non-empty key tables, with `PostgreSQLRestoreTestStale` alerting at 40 days.
+  Nothing live is touched. **The 09:00 slot is load-bearing:** the restored cluster holds ~150 MB
+  of thin-pool blocks and a container cannot `fstrim` itself, so it relies on the host's
+  `lxc-fstrim.timer` at 10:30 to reclaim them the same morning.
+  Still open: the backup script verifies only that the dump is non-empty — neither `gzip -t` nor
+  the `cluster dump complete` marker is checked at **write** time, so a bad dump is now caught by
+  the monthly test rather than at write. `-mtime +7` retention still means one bad dump plus a
+  week of silence loses everything, and there is still no off-site copy.
 - **LXC250 control node sits outside the system it manages (found 2026-07-28).** It holds three
   roles and none is secured: it is the *deployment source* (playbooks read the working tree, not a
   commit), the *only copy* of `~/.vault_pass`, the real `hosts.yml` and the Ansible SSH key (all
