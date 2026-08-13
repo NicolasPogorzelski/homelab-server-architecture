@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly PostgreSQL restore validation at {{ pg_restore_test_oncalendar }}
+
+[Timer]
+OnCalendar={{ pg_restore_test_oncalendar }}
+
+# The Proxmox host is powered down overnight and is not guaranteed to be running
+# on any given calendar day, so a monthly slot is missed outright more often than
+# not. Persistent=true records the last run under /var/lib/systemd/timers/ and
+# fires an overdue one at the next boot instead of skipping the month.
+Persistent=true
+
+# That catch-up lands in the boot window, where every other Persistent=true job
+# on this node fires as well. Five minutes of jitter keeps the restore from
+# competing with the backup dump for the same CIFS share.
+RandomizedDelaySec=300
+
+Unit=pg-restore-test.service
+
+[Install]
+WantedBy=timers.target
