@@ -280,9 +280,38 @@ if ! command -v ansible-lint >/dev/null 2>&1; then
 elif ! grep -q '^ansible/' <<< "${changed}"; then
     echo "  SKIP: no changes under ansible/"
 else
+    # ansible.cfg sets vault_password_file = ~/.vault_pass, and that file exists
+    # by design only on the control node (lxc250) -- it is the single copy this
+    # repo tracks as an irreversible-loss risk. Without it, the per-playbook
+    # `ansible-playbook --syntax-check` that ansible-lint runs aborts with an
+    # internal-error for EVERY playbook, and this check reports dozens of
+    # failures that have nothing to do with the diff. That blocked all Ansible
+    # commits from the admin workstation -- the machine this repo says feature
+    # work belongs on -- and it did so by conflating "cannot run" with "found
+    # problems".
+    #
+    # A throwaway password is sufficient and is what CI already does
+    # (.github/workflows/ansible-lint.yml): --syntax-check parses the committed
+    # !vault vars but never decrypts them. Deliberately NOT written to
+    # ~/.vault_pass: a dummy sitting at the real path would later be mistaken
+    # for the real secret. Skipping instead would reopen the very gap this check
+    # exists to close, silently.
+    vault_pw_file=""
+    if [[ ! -r "${HOME}/.vault_pass" ]]; then
+        vault_pw_file="$(mktemp)"
+        echo 'syntax-check-only' > "${vault_pw_file}"
+        export ANSIBLE_VAULT_PASSWORD_FILE="${vault_pw_file}"
+    fi
+
     # --nocolor: the output is captured, not written to a TTY, and rich would
     # otherwise emit ANSI colour and OSC-8 hyperlink escapes into the hook log.
     lint_output="$(cd "${REPO_ROOT}/ansible" && ansible-lint --nocolor . 2>&1)" && lint_rc=0 || lint_rc=$?
+
+    if [[ -n "${vault_pw_file}" ]]; then
+        rm -f "${vault_pw_file}"
+        unset ANSIBLE_VAULT_PASSWORD_FILE
+    fi
+
     if [[ "${lint_rc}" -ne 0 ]]; then
         echo "${lint_output}" | sed 's/^/  /'
         echo "  ansible-lint failed (exit ${lint_rc})"
