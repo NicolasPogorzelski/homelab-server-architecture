@@ -208,10 +208,12 @@ Prometheus target `health: up`, `NodeDown` cleared, and Calibre-Web still answer
 through `tailscale serve` with `probe_success = 1`. `/dev/net/tun` was present on the node all
 along, so the userspace mode had no remaining purpose.
 
-**Status:** Resolved on LXC240 (2026) and on LXC220 (2026-07-28). The unit file is disabled, not
-deleted, so a future `systemctl enable` would revive it — remove it during the next lxc220 pass.
-Not verified across a cold boot yet. **Lesson: a per-node fix is not a fleet fix.** When closing a
-configuration error, sweep the other nodes for the same condition and record that you did.
+**Status:** Resolved on LXC240 (2026) and on LXC220 (2026-07-28). **Cold-boot verified
+2026-08-13:** exactly one `tailscaled` process on lxc220 after a real host power cycle, no failed
+unit, node scraped. The unit file is disabled, not deleted (confirmed still present 2026-08-13),
+so a future `systemctl enable` would revive it — remove it during the next lxc220 pass.
+**Lesson: a per-node fix is not a fleet fix.** When closing a configuration error, sweep the other
+nodes for the same condition and record that you did.
 
 **References:**
 - [KE-18 — Tailscale readiness races](#ke-18-services-start-before-tailscale-is-ready-ordering-is-not-readiness) (different cause, same `EADDRNOTAVAIL` symptom — check which one you have)
@@ -318,7 +320,7 @@ dpkg --verify 2>&1 | grep -v ' c /'
 **Status:**
 - **Monitoring gap (RESOLVED 2026-06-08):** `blackbox_exporter` deployed on LXC200 probes 7 service endpoints (HTTP + Tailscale Serve HTTPS) with a `ServiceDown` alert rule. Tailscale ACL Rule 1c grants monitoring access to service ports. See [changelog 2026-06-08](./changelog.md) and [Monitoring platform](./monitoring.md).
 - **Root cause (OPEN):** Media hang root cause not definitively determined.
-- **journald persistence (OPEN):** Logs for the incident window were lost. `Storage=` / `SystemMaxUse=` fix not yet applied on VM100.
+- **journald persistence (NOT A GAP — corrected 2026-07-10, re-measured 2026-08-13):** the logs for the incident window were indeed lost, but not because the journal is volatile. Both VMs have `/var/log/journal/<machine-id>/` and retain many boots — vm100 **111 boots**, vm102 **29** as of 2026-08-13. `Storage=` is unset, so `auto` applies, which is persistent whenever that directory exists. What remains is hardening, not repair: pin `Storage=persistent` and an explicit `SystemMaxUse=`, so persistence is a property of the configuration rather than of a directory that happens to exist and would degrade to RAM-only if it were ever removed.
 
 **References:**
 - [VM100 node documentation](../nodes/vm100.md)
@@ -395,7 +397,11 @@ Restores hardware transcoding immediately.
 in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
 [`snippets/scripts/jellyfin-cuda-watchdog.sh`](../../snippets/scripts/jellyfin-cuda-watchdog.sh).
 
-**Status:** Known, unresolved — automated restart workaround deployed
+**Status:** Known, unresolved — automated restart workaround deployed. **The fault is active, not
+historical:** the watchdog last restarted Jellyfin on **2026-08-07 06:10** and **2026-08-10 10:44**
+(journal of `jellyfin-cuda-watchdog.service` on vm100, read 2026-08-13). Every occurrence is
+absorbed silently by the workaround, so the only record that the root cause is still live is that
+journal — no alert fires, because from the outside the service recovers.
 
 **References:**
 - [VM100 node doc](../nodes/vm100.md)
@@ -463,9 +469,16 @@ Immediate — `systemctl reset-failed pveproxy && systemctl restart pveproxy` (t
 present now). Durable — systemd drop-in
 `/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf` ordering after
 `tailscaled` plus an `ExecStartPre` that polls until the Tailscale IP is on
-`tailscale0` (≤30 s). Validated by warm restart (HTTP 200); cold-boot test pending.
+`tailscale0` (≤30 s). Validated by warm restart (HTTP 200) at the time.
 
-**Status:** Fixed (drop-in installed); cold-boot verification pending
+**Cold-boot verified 2026-08-13.** On a real host power cycle (boot at 10:52:21) the unit started
+once and stayed up: start requested 10:52:26, main process 10:52:30, `NRestarts=0`, `Result=success`
+— i.e. the `ExecStartPre` poll absorbed a four-second wait for the address instead of burning the
+start limit on it.
+
+**Status:** Resolved (drop-in installed 2026-06-25, cold-boot verified 2026-08-13). Note the
+drop-in still hard-codes the Tailscale IP inline rather than calling the shared
+`wait-for-tailscale-ip.sh`; harmless, tracked in [KE-18](#ke-18)
 
 **References:**
 - [ADR — pveproxy Tailscale boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
@@ -498,10 +511,14 @@ so the live data was recoverable.
 `nofail` on the aux-disk fstab entry keeps the boot out of emergency mode (already in
 place). All live data was rescued read-only **before** any repair attempt —
 per-directory `tar --numeric-owner --ignore-failed-read` streamed to the admin
-workstation, 12 archives (tens of GB), all integrity-verified, 0 real read errors. Disk to
-be decommissioned; affected services not yet restored (pending data relocation
-onto healthy storage). This invalidates the `docker-data-root-migration` runbook
-and CLAUDE.md "Adding a New Service" step 6, which both target `/mnt/aux-disk`.
+workstation, 12 archives (tens of GB), all integrity-verified, 0 real read errors. This
+invalidates the `docker-data-root-migration` runbook and CLAUDE.md "Adding a New Service"
+step 6, which both target `/mnt/aux-disk`.
+
+The sentence "disk to be decommissioned; affected services not yet restored" stood here until
+2026-08-13 and had been wrong since the disk went back into service — see the Status below,
+which is the authoritative half of this entry. Verified 2026-08-13: the aux-disk is mounted and
+carries the five container data-roots as described.
 
 **Status:** Diagnosed; data rescued; disk **returned to service under protest** pending a
 replacement. The disk carries the Docker
@@ -509,19 +526,29 @@ data-roots of LXC200/211/220/230/260 again — and VM100's `scsi1` data disk —
 no alternative target exists: the MergerFS pool on VM102 has a low-hundreds-of-GB free, and the LVM
 thin pool on the boot SSD has no headroom.
 
-**Degradation is ongoing.** SMART re-read 2026-07-09 (14 days after the incident):
+**Degradation stopped after the first two weeks and has been static since.** SMART re-reads
+(identify the disk by `by-id`, not by kernel letter — see the note in [KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 |
-|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 |
-| `Offline_Uncorrectable` | 7688 | 7680 |
-| `Reallocated_Sector_Ct` | 0 | 0 |
-| `Reported_Uncorrect` | 18 | **21** |
+| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 |
+|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 |
+| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | **21** | 21 | 21 |
 
-`Reported_Uncorrect` rose by 3 — the drive has surfaced three further uncorrectable errors to
-the kernel while back in service. The 8 sectors that left `pending` were rewritten and proved
-usable; none were reallocated, so the drive's spare pool is untouched and the remaining 7680
-sectors hold data that cannot be read back.
+`Reported_Uncorrect` rose by 3 in the first fortnight back in service and has **not moved in the
+35 days since**. The 8 sectors that left `pending` were rewritten and proved usable; none were
+reallocated, so the drive's spare pool is untouched and the remaining 7680 sectors hold data
+that cannot be read back.
+
+**Static is not safe, and it is not "recovered".** Those 7680 sectors are still unreadable; the
+drive has simply not been asked to read them again. What the flat curve does change is urgency:
+replacement is a **planned task, not an emergency**. Do not read `smartctl -H` as a second
+opinion — measured again 2026-08-13, it returns `PASSED` on this disk, because
+`Current_Pending_Sector` normalises to `VALUE=054` against `THRESH=000` and can therefore never
+trip the self-assessment. The textfile collector on the host inherits that blindness verbatim:
+it exports `smart_health_passed{disk=…} 1` for this drive and nothing else that would contradict
+it (see the SMART gap in [`operations.md`](./operations.md)).
 
 **What is at stake** (measured 2026-07-09, ~20% of the disk used):
 
@@ -545,8 +572,8 @@ Consequences while the disk remains in service:
 
 ### Follow-up finding (2026-07-09): the disk was simultaneously host-mounted and passed through to VM102
 
-Discovered while mapping the disk topology. `sdb1` was mounted `rw` on the Proxmox host at
-`/mnt/aux-disk` **and** attached to the running VM102 as `scsi8`
+Discovered while mapping the disk topology. The aux-disk's single partition was mounted `rw` on
+the Proxmox host at `/mnt/aux-disk` **and** attached to the running VM102 as `scsi8`
 (`/dev/disk/by-id/<aux-disk-by-id>`), confirmed against the live `kvm`
 process arguments, not just `qm config`. Both refer to the same filesystem — UUID
 `<fs-uuid>` appears in the host's `EXT4-fs … mounted filesystem`
@@ -599,33 +626,45 @@ host changes.
 
 ## KE-14: Intermittent boot-time I/O errors on the boot SSD (SAS HBA transport, not media)
 
-**Affected component:** Proxmox host — boot SSD the boot SSD behind the LSI SAS2008 HBA
+**Affected component:** Proxmox host — the boot SSD behind the LSI SAS2008 HBA
+(`scsi 9:0:0:0`, `phy(3)`, driver `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`)
+
+> **Do not identify this disk by its kernel letter.** `sd*` names are assigned in probe order and
+> change between boots: this entry documented `sdc` throughout July 2026, and on the 2026-08-13
+> boot the same disk came up as `sda`. Identify it by the SCSI address `9:0:0:0` or by `by-id`;
+> both are stable. The same applies to the aux-disk of [KE-13](#ke-13). This is the KE-15 lesson
+> one layer down — a name that *looks* like an identifier but only describes a position.
 
 **Symptom:**
-On some boots the kernel logs a burst of read failures against `sdc` roughly three minutes
-after start, then falls silent:
+On some boots the kernel logs a burst of read failures against the boot SSD roughly three
+minutes after start, then falls silent (`<boot-ssd>` below is whatever letter that boot
+assigned):
 
 ```
-sd 9:0:0:0: [sdc] tag#628 FAILED Result: hostbyte=DID_SOFT_ERROR driverbyte=DRIVER_OK cmd_age=19s
-sd 9:0:0:0: [sdc] tag#628 CDB: Read(10) 28 00 07 7c 0e 60 00 00 18 00
-I/O error, dev sdc, sector 125570656 op 0x0:(READ) flags 0x80700 phys_seg 3 prio class 2
+sd 9:0:0:0: [<boot-ssd>] tag#628 FAILED Result: hostbyte=DID_SOFT_ERROR driverbyte=DRIVER_OK cmd_age=19s
+sd 9:0:0:0: [<boot-ssd>] tag#628 CDB: Read(10) 28 00 07 7c 0e 60 00 00 18 00
+I/O error, dev <boot-ssd>, sector 125570656 op 0x0:(READ) flags 0x80700 phys_seg 3 prio class 2
 ```
 
-`sdc` carries `/boot/efi`, `pve-root`, and the entire `pve-data` thin pool — i.e. the root
+The disk carries `/boot/efi`, `pve-root`, and the entire `pve-data` thin pool — i.e. the root
 disks of every VM and LXC on the host. No filesystem damage has resulted so far (no
 `EXT4-fs error`, no read-only remount).
 
 Observed frequency (persistent journal, `journalctl -k -b <n>`):
 
-| Boot | Date | `sdc` error lines |
+| Boot | Date | Error lines |
 |---|---|---|
+| — | 2026-08-13 10:52 | 2 |
+| — | 2026-08-10 08:36 | 0 |
 | 0 | 2026-07-09 07:38 | 11 |
 | −1 | 2026-07-08 10:44 | 0 |
 | −2 | 2026-07-06 16:10 | 20 |
 | −3 | 2026-07-05 07:31 | 0 |
 
-Errors occur only during the boot window and never afterwards; 11 errors hit 11 distinct
-sectors, so no single block is repeatedly unreadable.
+Errors occur only during the boot window and never afterwards; the 11 errors of 2026-07-09 hit
+11 distinct sectors, so no single block is repeatedly unreadable. The fault is **still live**:
+the 2026-08-13 boot produced `cmd_age=29s` at boot + 3 min while the preceding boot was clean,
+which is the documented on/off pattern rather than a drift toward failure.
 
 **Root cause:** *Not yet confirmed.* What has been ruled out:
 
@@ -638,9 +677,10 @@ sectors, so no single block is repeatedly unreadable.
   that cannot read a sector reports so in milliseconds.
 - **Not HBA firmware.** `FWVersion(20.00.07.00)` is the known-good P20 phase; the problematic
   phases are 20.00.00.00 through 20.00.04.00.
-- **Not the SATA controller.** `sdc` is not on AHCI at all. It hangs off the SAS2008
-  (`scsi target9:0:0`, `phy(3)`, driver `mpt2sas`). Only `sda` (`ata5.00`) and `sdb`
-  (`ata6.00`) are AHCI devices.
+- **Not the SATA controller.** The boot SSD is not on AHCI at all. It hangs off the SAS2008
+  (`scsi target9:0:0`, `phy(3)`, driver `mpt2sas`); the only AHCI devices on this host are the
+  two auxiliary disks (`ata5.00` and `ata6.00`, the latter being the KE-13 aux-disk). Confirmed
+  again 2026-08-13 with `lsblk -dno NAME,TRAN`: the boot SSD reports `sas`, the aux-disk `sata`.
 
 Leading hypothesis: **12 V rail sag under peak boot load.** Boot is the moment of maximum draw
 — two mechanical drives spin up simultaneously (spindle inrush current is several times the
@@ -666,7 +706,8 @@ filesystem damage). The risk is that an `EIO` returned into the thin pool during
 could corrupt a guest filesystem.
 
 **Status:** Diagnosed to transport layer; media and firmware causes excluded; physical root
-cause unconfirmed pending the verification steps above
+cause unconfirmed pending the verification steps above. Re-confirmed live on 2026-08-13 — the
+fault has not resolved itself and none of the four verification steps has been performed.
 
 **Incidental correction:** all nine disks are attached to the **Proxmox host**. VM102 reaches
 six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART
@@ -675,7 +716,7 @@ VM102 as previously documented.
 
 **References:**
 - [Proxmox Host](./proxmox-host.md)
-- [KE-13 — aux-disk physical disk failure](#ke-13-aux-disk-physical-disk-failure-medium-errors) (a separate, genuine media failure on `sdb`; do not conflate)
+- [KE-13 — aux-disk physical disk failure](#ke-13) (a separate, genuine media failure on the aux-disk, which is an AHCI device and not behind the HBA; do not conflate)
 
 ---
 
@@ -798,10 +839,12 @@ host reached no alert. Both verified, including the negative case. See
 - The `findmnt -no FSTYPE` guard added on 2026-07-10 now passes for the right reason rather than
   failing for the right reason.
 
-Still to prove: survival across a **host** reboot. The host powers down and boots daily
-(`homelab_schedule`), so the next scheduled boot is the test — `systemctl is-failed
-'mnt-smb-books\x2drw.mount'` must not report `failed`, and `calibre-import.service` must keep
-finishing.
+**Proven across a host reboot (2026-08-13).** All seven `/mnt/smb/*` fstab entries carry
+`x-systemd.automount` and every one resolves to `cifs`; the `books-rw` automount included.
+`smb-mounts-check.service` reports `Result=success` / exit 0, `calibre-import.service` on lxc220
+likewise, and `findmnt -no FSTYPE /books-rw` inside the container returns `cifs` — the identity
+test, not the existence test. The fstab audit
+(`grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount`) prints nothing.
 
 **The gap that let it run for a month (closed 2026-07-10):** a `failed` systemd unit raised no
 alert. Monitoring covered `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP
@@ -815,8 +858,14 @@ the alert.
 **Status:** **RESOLVED 2026-07-14.** Root cause confirmed on both sides: the guard was blind
 (fixed 2026-07-10), and the host mount lacked `x-systemd.automount`, so a mount against a VM the
 host had not yet started failed once at boot and was never retried (fixed 2026-07-14). Import path
-restored and verified; lxc220 has no failed unit. Open only for confirmation across the next
-scheduled host boot.
+restored and verified; lxc220 has no failed unit. **Closed 2026-08-13** — confirmed across a real
+host power cycle, see above.
+
+**References:**
+- [LXC220 node doc](../nodes/lxc220.md)
+- [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
+- [KE-8 — observability blind spot](#ke-8)
+- [KE-13 — the `appdata_aux-disk` `is_mountpoint` note](#ke-13) (same structural error: a check that asserts a path exists where what matters is what is mounted at it)
 
 ---
 
@@ -873,18 +922,15 @@ have happened again on 8 October.
 
 **Related, not fixed:** Apache on lxc210 listens on `*:80` and `*:443`, i.e. on the LAN
 interface, violating the platform binding rule — the same defect class as vm100's sshd. MariaDB
-and Redis on the same node bind single addresses correctly.
+and Redis on the same node bind single addresses correctly. Re-confirmed live 2026-08-13: both
+wildcard listeners are still present.
 
 **References:**
 - [LXC210 node doc](../nodes/lxc210.md)
 - [Nextcloud service doc](../services/nextcloud.md)
-- [KE-8 — the blind spot this alert closed](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
+- [KE-8 — the blind spot this alert closed](#ke-8)
 
-**References:**
-- [LXC220 node doc](../nodes/lxc220.md)
-- [ADR — Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
-- [KE-8 — observability blind spot](#ke-8-media-services-hang-while-the-node-stays-healthy-observability-blind-spot)
-- [KE-13 — the `appdata_aux-disk` `is_mountpoint` note](#ke-13-aux-disk-physical-disk-failure-medium-errors) (same structural error)
+---
 
 <a id="ke-17"></a>
 ## KE-17: VM100 silent guest hard-freeze — no logged root cause, recovered by hard power-cycle
@@ -960,6 +1006,8 @@ the proportionate fix, not a 03:45 page.
 
 ---
 
+<a id="ke-18"></a>
+
 ## KE-18: Services start before Tailscale is ready (ordering is not readiness)
 
 **Affected:** platform-wide class. Start here when a service that binds or queries a Tailscale
@@ -1021,8 +1069,19 @@ address via `tailscale ip -4` rather than hard-coding it) plus a drop-in at
 `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh 90` and `RestartSec=5`.
 
 Verified: `ExecStartPre` `status=0/SUCCESS`, listening on `:9100`, Prometheus target `health: up`
-with an empty `lastError`, `NodeDown` cleared. **Cold-boot verification pending** — the nightly
-power cycle tests it automatically at the next wake-up.
+with an empty `lastError`, `NodeDown` cleared.
+
+**Cold-boot verified 2026-08-13**, and the gate demonstrably did work rather than merely being
+present — the journal of that boot reads:
+
+```
+10:52:24  Starting node_exporter.service …
+10:52:30  wait-for-tailscale-ip: <tailscale-ip-proxmox-host> present after 6s
+10:52:30  Started node_exporter.service
+```
+
+Six seconds of real waiting, `NRestarts=0`. Without the gate the bind would have been attempted at
+10:52:24 against an address that did not exist until 10:52:30 — the original failure, exactly.
 
 ### Instance: lxc210 `tailscale-cert-refresh` (found and fixed 2026-07-28)
 
@@ -1037,10 +1096,17 @@ Fix: the FQDN derivation in `snippets/scripts/tailscale-cert-refresh.sh` now pol
 instead of reading once, with `|| true` inside the loop so `pipefail` cannot abort the script while
 tailscaled is still starting.
 
-Verified: `Result=success`, `ExecMainStatus=0`, no failed unit anywhere in the fleet, certificate
-untouched (`no reload needed`, still `notAfter=Oct 8 2026`). **The retry path itself is not yet
-proven** — this run happened with tailscaled already up, so it exercised the normal path. The race
-path is tested by the next RTC wake-up.
+Verified 2026-07-28: `Result=success`, `ExecMainStatus=0`, no failed unit anywhere in the fleet,
+certificate untouched (`no reload needed`, still `notAfter=Oct 8 2026`). That run happened with
+tailscaled already up, so it exercised only the normal path.
+
+**The race path itself is now proven (2026-08-13).** The host booted at 08:52:21 UTC and the
+`Persistent=true` catch-up fired the overdue 04:30 job at **08:53:43 — 82 seconds into the boot
+window**, precisely the condition that used to fail. The unit finished at 08:53:54 with
+`ExecMainStatus=0`: the FQDN poll spent **11 seconds** waiting for `Self.DNSName` to become
+non-empty and then proceeded normally (`certificate unchanged … no reload needed`). This is the
+one instance in this class whose fix could not be proven by a warm restart, and it has now been
+exercised by the boot window it was written for.
 
 ### Fix shapes
 
@@ -1055,10 +1121,19 @@ own `$`-expansion to `ExecStartPre=`, so an inline `for i in $(seq 1 30)` can si
 zero-iteration loop that exits 0 without ever waiting — a gate that reports success while doing
 nothing.
 
-**Status:** Class documented 2026-07-28; all four known instances fixed. Two await cold-boot
-confirmation. The host's `pveproxy` drop-in still hard-codes its Tailscale IP inline rather than
-calling the shared script — harmless today, worth folding into the same pattern on the next host
-pass.
+**Status:** Class documented 2026-07-28; all four known instances fixed and **all four cold-boot
+confirmed on 2026-08-13** against a real host power cycle — including the lxc210 query-time
+instance, whose retry path only a boot could exercise. Fleet state at that boot: no failed unit on
+any node, 19/19 Prometheus targets up, no alert firing.
+
+Two loose ends, neither a readiness fault:
+
+- The host's `pveproxy` drop-in still hard-codes its Tailscale IP inline rather than calling the
+  shared script — harmless today, worth folding into the same pattern on the next host pass.
+- **A fifth instance remains unfixed:** lxc250's hand-written `ssh.service.d/override.conf` uses
+  `After=` plus a `RestartSec=15s` retry loop instead of a readiness gate. It survives because the
+  retry loop is slow enough to outlast the race, which is luck rather than design. See
+  [lxc250 § Open Items](../nodes/lxc250.md#open-items-2026-07-28).
 
 **References:**
 - [KE-6 — userspace-networking](#ke-6-tailscale-userspace-networking-prevents-node_exporter-from-binding-to-tailscale-ip) — produces the *same* `EADDRNOTAVAIL` message from an unrelated cause; a restart fixes this class and does nothing for that one
