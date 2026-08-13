@@ -18,9 +18,9 @@ notes there and keep this section short.
   Standing hold: do not run `docker-compose-update` against the fleet while this disk is in service
   — it writes gigabytes of new image layers onto a failing disk. **Correction (measured
   2026-07-28):** the earlier "still degrades slowly" no longer holds. `Reported_Uncorrect` rose
-  18 → 21 between 2026-06-25 and 2026-07-09 and has been **static at 21 since**, with
-  `Current_Pending_Sector` static at 7680 — nineteen further days in service with no new
-  uncorrectable error. Static is not safe (those 7680 sectors still hold unreadable data, and
+  18 → 21 between 2026-06-25 and 2026-07-09 and has been **static at 21 since** (re-measured
+  2026-08-13), with `Current_Pending_Sector` static at 7680 — thirty-five further days in service
+  with no new uncorrectable error. Static is not safe (those 7680 sectors still hold unreadable data, and
   `smartctl -H PASSED` is meaningless here: `Current_Pending_Sector` normalises to 054 against
   threshold 000 and can never trip the self-assessment), but the failure is not accelerating, so
   the replacement is a planned task rather than an emergency.
@@ -29,8 +29,11 @@ notes there and keep this section short.
   `tailscale-cert-refresh` (both 2026-07-28). The host `node_exporter` case was a **regression from
   `54402ed`**, which moved the bind to the Tailscale IP on 2026-07-14 and thereby put the unit into
   this class; it had failed at every boot since, and the failure concealed itself because a dead
-  host exporter is precisely what stops the host from reporting. Two fixes await cold-boot
-  confirmation — the nightly power cycle tests them automatically.
+  host exporter is precisely what stops the host from reporting. **All four cold-boot confirmed
+  2026-08-13**, including the lxc210 query-time instance, whose fix only a boot could exercise:
+  its `Persistent=true` catch-up fired 82 s into the boot window and the poll waited 11 s for
+  `Self.DNSName`. A **fifth instance is still open** — lxc250's hand-written sshd drop-in, which
+  retries rather than waits.
 - **KE-6 recurrence on lxc220 — RESOLVED 2026-07-28.** The node had been running a second,
   hand-written `tailscaled-userspace.service` alongside the packaged unit, so two daemons started
   every boot and its `node_exporter` had, as far as can be established, never been scraped. KE-6 had
@@ -38,11 +41,14 @@ notes there and keep this section short.
   closing a configuration error, sweep the other nodes and record that you did.**
 - **KE-14 — boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
-  verification. `sdc` carries every VM and LXC root disk.
-- **KE-15 — RESOLVED 2026-07-14.** The host's `/mnt/smb/books-rw` fstab entry lacked
-  `x-systemd.automount`, so the mount was attempted once at boot — against a VM the host itself
-  had not started yet — failed, and was never retried. Fixed, `calibre-import` runs, lxc220 has no
-  failed unit. Awaiting only confirmation across the next scheduled host boot.
+  verification. The boot SSD carries every VM and LXC root disk. **Fired again 2026-08-13**
+  (`cmd_age=29s`, boot + 3 min, preceding boot clean) — live, and no verification step performed.
+  **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
+  enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
+- **KE-15 — RESOLVED 2026-07-14, closed 2026-08-13.** The host's `/mnt/smb/books-rw` fstab entry
+  lacked `x-systemd.automount`, so the mount was attempted once at boot — against a VM the host
+  itself had not started yet — failed, and was never retried. Confirmed across a real host power
+  cycle: all seven `/mnt/smb` entries resolve to `cifs`, `calibre-import` exits 0.
 - **PostgreSQL restore testing.** Backup scheduling is fixed (systemd timer, `Persistent=true`), but
   restores are never validated — no runbook, no periodic check, and `-mtime +7` retention means one
   bad dump plus a week of silence loses everything. Highest-value item not blocked on hardware.
@@ -65,8 +71,13 @@ notes there and keep this section short.
   exporter exists. Rejected on purpose: auto-pull (trades awareness for convenience), ephemeral
   per-run clones (right answer, revisit for Terraform where state raises the stakes), and
   Actions-triggered deploys (needs a self-hosted runner plus fleet secrets in GitHub, and "on
-  merge" means nothing on a host that sleeps at night). Also correct the claim elsewhere in this
-  file that lxc200 is the *only* node without `SystemdUnitFailed` coverage — lxc250 lacks it too,
+  merge" means nothing on a host that sleeps at night). **Measured 2026-08-13: the node is not
+  missing an exporter, it runs a wrong one** — a hand-written unit from 2026-04-22 starts
+  `node_exporter` with no arguments, so it binds `*:9100` (LAN-exposed, the third instance of the
+  defect fixed on lxc260 and the host) and is scraped by nobody. `systemctl is-active` says
+  `active`, which reads as coverage. Step (2) is therefore a replacement, not an addition.
+  The claim elsewhere in this file that lxc200 is the *only* node without `SystemdUnitFailed`
+  coverage was corrected 2026-08-13 — lxc250 lacks it too,
   it just falls outside the definition of "node" by being absent from the inventory.
 - **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
   Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
@@ -192,7 +203,7 @@ This is a **documentation and configuration repository** — no application code
 - `docker/` — Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` — Operational procedures (must follow the runbook contract)
 - `snippets/` — Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (16-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
+- `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (18-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
 - `ansible/` — Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12).
@@ -320,7 +331,8 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 - **Jellyfin CUDA access loss intermittent (KE-10):** hardware transcoding stops randomly; root
   cause unconfirmed (NVML connection goes stale). Workaround: `docker restart jellyfin`. Watchdog
   automates this but does not fix the root cause. See `docs/platform/known-errors.md#ke-10`.
-  It last fired on 2026-07-10 at 10:00 — the fault is live, not historical.
+  It last fired on **2026-08-07 and 2026-08-10** (watchdog journal, read 2026-08-13) — the fault is
+  live, not historical, and each occurrence is absorbed silently, so nothing alerts.
 - **postgres_exporter on LXC260 — bind fixed and unit adopted 2026-07-10.** It had bound `*:9187`
   (LAN-exposed) because the hand-written unit's `ExecStart` carried no `--web.listen-address`. The
   deferred design question ("drop-in or full lifecycle?") answered itself once measured: the unit
@@ -426,7 +438,8 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
 
 - **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
   because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
-  lxc200 is now the **only** node without `SystemdUnitFailed` coverage — the Proxmox host was the
+  lxc200 and lxc250 are the **two** nodes without `SystemdUnitFailed` coverage, for different
+  reasons: lxc200's exporter cannot see systemd, lxc250's is never scraped. The Proxmox host was the
   second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
   container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
 - **The Proxmox host's `node_exporter` is hand-managed and would be lost on a rebuild
@@ -475,8 +488,8 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
   Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
-  `sdc` carries every VM and LXC root disk, so an `EIO` into the thin pool during guest start
-  could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
+  The boot SSD (`scsi 9:0:0:0`, never a fixed kernel letter) carries every VM and LXC root disk,
+  so an `EIO` into the thin pool during guest start could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
 - **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement pending:**
   it carries the Docker data-roots of LXC200/211/220/230/260 **and VM100's `scsi1` disk**
   (allocated). `Reported_Uncorrect` rose 18 → 21 between the 2026-06-25 incident and 2026-07-09,
