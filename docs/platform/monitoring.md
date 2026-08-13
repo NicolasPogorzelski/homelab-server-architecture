@@ -27,13 +27,16 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 14 active scrape jobs (19 targets) — all UP, verified 2026-07-08
+- 14 active scrape jobs (19 targets) — all UP, re-verified 2026-08-13 against the Prometheus API
+- **LXC250 is not among the targets.** It sits in no inventory group, so the template renders no
+  target for it — yet it *does* run a `node_exporter` (hand-installed, binding `*:9100`, scraped
+  by nobody). See [LXC250 § Open Items](../nodes/lxc250.md#open-items-2026-07-28)
 
 | Job name | Target | Notes |
 |---|---|---|
 | `prometheus` | `127.0.0.1:9090` | Prometheus self-scrape |
 | `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback) |
-| `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | textfile collector enabled (`smart.prom` active) |
+| `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | systemd + textfile collector (`smart.prom`, `lvm-thin.prom`) |
 | `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.11.1; textfile collector enabled (`snapraid_sync.prom`, `snapraid_scrub.prom`) |
 | `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc210-nextcloud` | LXC210 Tailscale IP`:9100` | systemd binary, v1.11.1 |
@@ -52,7 +55,18 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- Alert rules active: `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLDown`, `PostgreSQLConnectionsHigh`, `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `ServiceDown`
+- **15 alert rules active** in 7 groups (verified against the live Prometheus API 2026-08-13; the `smart` group exists but is deliberately empty, see below):
+
+| Group | Rules |
+|---|---|
+| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale` |
+| `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
+| `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale` |
+| `storage` | `ArchivePoolLowSpace` |
+| `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
+| `systemd` | `SystemdUnitFailed` |
+| `blackbox` | `ServiceDown` |
+| `smart` | *(empty — the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook)
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`

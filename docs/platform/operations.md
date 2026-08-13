@@ -69,7 +69,15 @@ See: [Known Errors & Workarounds](./known-errors.md)
 
 ### Planned Enhancements
 
-- SMART metrics integration (either `smartctl_exporter` or node-exporter textfile collector)
+- **SMART: the collector is deployed, the useful attributes are not exported.**
+  `node-exporter-smarttext.sh` has run on the Proxmox host every 60 s since 2025-12 (textfile
+  collector), but emits only `smart_health_passed` and `smart_temperature_celsius`. Measured
+  2026-08-13, the failing aux-disk of [KE-13](./known-errors.md#ke-13) — 7680 unreadable sectors —
+  exports `smart_health_passed 1`, because `Current_Pending_Sector` normalises to `054` against
+  threshold `000` and can never trip the drive's self-assessment. What is missing is
+  `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count`,
+  plus rules in the (currently empty) `smart` group. Disk-failure detection still rests on SnapRAID
+  alerts. Blocked on the host becoming an Ansible node
 - Alerting with Alertmanager (routing via SMTP or webhook)
 - “Golden signals” dashboards per tier (Storage/Compute/Services)
 
@@ -356,7 +364,8 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 ### Monthly
 
 - SnapRAID scrub (cadence depends on dataset churn)
-- Review disk SMART health (once integrated)
+- Review disk SMART health **by hand** (`smartctl -A` per disk, identified by `by-id`) — the
+  exported metrics cannot show degradation, see the SMART note under Planned Enhancements
 - Validate that backups can be restored (spot test)
 
 ### After Major Changes
@@ -371,7 +380,7 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 ## 7. Future Improvements (Roadmap)
 
 - ~~Automated SnapRAID sync + scrub schedule~~ (done: `snapraid-maintenance.sh`, Prometheus alerts)
-- SMART monitoring integration + alerting
+- SMART monitoring: extend the existing collector to the attributes that indicate degradation, and populate the empty `smart` rule group
 - Off-site backups for critical datasets (Nextcloud DB/config, Vault exports)
 - IaC-style documentation:
   - compose files in repo (sanitized)
