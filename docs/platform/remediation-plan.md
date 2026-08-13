@@ -66,10 +66,14 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 
 ## Tier 4 — Ordinary backlog
 
-lxc250 inventory adoption and its `preflight.yml` gate · the lxc250 sshd drop-in as the fifth
+lxc250 inventory adoption and its `preflight.yml` gate — which must **replace** that node's
+hand-written `node_exporter` binding `*:9100`, not merely add one ([lxc250 § Open
+Items](../nodes/lxc250.md#open-items-2026-07-28)) · the lxc250 sshd drop-in as the fifth
 [KE-18](known-errors.md#ke-18) instance · `DATA_SOURCE_NAME` into Vault · delete the disabled
 `tailscaled-userspace.service` file on lxc220 · pin journald `Storage=persistent` on vm100/vm102 ·
-`pveproxy` drop-in onto the shared wait script · lxc200's missing `SystemdUnitFailed` coverage ·
+`pveproxy` drop-in onto the shared wait script · the missing `SystemdUnitFailed` coverage on
+lxc200 **and lxc250** · clean up the ten orphaned `smart.prom.*` temp files in the host's textfile
+directory (still present 2026-08-13; the collector leaks one per failed run) ·
 [KE-5](known-errors.md#ke-5) Vaultwarden migration off CIFS.
 
 ---
@@ -82,16 +86,7 @@ lxc250 inventory adoption and its `preflight.yml` gate · the lxc250 sshd drop-i
   entirely. That is a project, not a fix to bolt onto an unrelated pass.
 - **Alertmanager routing and per-tier dashboards.** The alerts exist; only delivery is crude.
 - **Molecule.** Out of scope for the current learning arc, per the roadmap.
-- **KE-3, KE-10, KE-11, KE-17.** Non-blocking, or no confirmed root cause to act on.
-
-## Recently closed
-
-Kept short on purpose — the detail is in [`changelog.md`](changelog.md).
-
-- **Thin-pool observability (2026-08-10).** `pve/data` reclaimed 92.55 % → 81.20 %, cause closed
-  structurally via `lxc-fstrim.timer`, and instrumented for the first time via
-  `lvm-thin-metrics` plus four alert rules. Note `lvm_vg_free_bytes` is **0**: `lvextend` is not an
-  available remedy on this host without shrinking `root`/`swap` or adding a PV.
-- **Four Tailscale-readiness and mount fixes confirmed across a real cold boot (2026-08-10):**
-  [KE-12](known-errors.md#ke-12), [KE-15](known-errors.md#ke-15), and both 2026-07-28
-  [KE-18](known-errors.md#ke-18) instances.
+- **KE-3, KE-11, KE-17.** Non-blocking, or no confirmed root cause to act on.
+- **[KE-10](known-errors.md#ke-10) (Jellyfin CUDA loss).** Deferred, but note it is *active*, not
+  historical — the watchdog restarted Jellyfin on 2026-08-07 and 2026-08-10. The workaround
+  absorbs each occurrence silently, which is why it looks dormant.
