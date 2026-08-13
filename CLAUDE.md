@@ -49,9 +49,15 @@ notes there and keep this section short.
   lacked `x-systemd.automount`, so the mount was attempted once at boot — against a VM the host
   itself had not started yet — failed, and was never retried. Confirmed across a real host power
   cycle: all seven `/mnt/smb` entries resolve to `cifs`, `calibre-import` exits 0.
-- **PostgreSQL restore testing.** Backup scheduling is fixed (systemd timer, `Persistent=true`), but
-  restores are never validated — no runbook, no periodic check, and `-mtime +7` retention means one
-  bad dump plus a week of silence loses everything. Highest-value item not blocked on hardware.
+- **PostgreSQL restore testing — validated 2026-08-13, but not yet periodic.** The earlier wording
+  here ("restores are never validated — no runbook, no periodic check") was wrong on two of three
+  counts: `runbooks/database/pg-restore.md` exists and had a recorded pass from 2026-04-04. It has
+  now been validated properly — a **full-cluster** restore of the current dump into a throwaway
+  cluster on port 5433, both databases and all roles compared against live, nothing live touched.
+  What remains open is **cadence**: one manual run is not a control. Also open, and cheap: the
+  backup script verifies only that the dump is non-empty — neither `gzip -t` nor the
+  `cluster dump complete` marker is checked, so a truncated dump would be discovered at recovery
+  time. `-mtime +7` retention still means one bad dump plus a week of silence loses everything.
 - **LXC250 control node sits outside the system it manages (found 2026-07-28).** It holds three
   roles and none is secured: it is the *deployment source* (playbooks read the working tree, not a
   commit), the *only copy* of `~/.vault_pass`, the real `hosts.yml` and the Ansible SSH key (all
@@ -412,15 +418,17 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   only — half of `systemd_hygiene_masked_units` are `.mount` units. Waived inline with
   `# noqa: command-instead-of-module`, never in `skip_list`, so the rule stays armed repo-wide.
   Read the rule's source before assuming a lint finding names a real defect.
-- **PostgreSQL backups: scheduling fixed 2026-07-10, restore still never tested.** They had not
+- **PostgreSQL backups: scheduling fixed 2026-07-10, restore validated 2026-08-13.** They had not
   run since 2026-06-14 because the role scheduled a **cron job at 03:00** on a host that
   `homelab_schedule` powers down overnight — cron has no catch-up, so every run was silently
   lost; the four dumps that existed came from nights the host happened to stay up. Replaced with
   a systemd timer + `Persistent=true` (fires an overdue run at the next boot). A failed timer
   unit now also raises `SystemdUnitFailed`; a cron failure never did. **Any daily job on this
   fleet must be a timer with `Persistent=true`, not a cron entry** — the host is not up at night.
-  Restore testing remains absent: no runbook, no periodic validation that a restore succeeds, and
-  the `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
+  Restore validation is no longer absent — a full-cluster restore into a throwaway cluster passed
+  on 2026-08-13 (procedure and result in the runbook's Verification section) — but it is still
+  **manual and unscheduled**, and the dumps are never checked for readability at write time.
+  The `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
 
 - **`tailscale cert` on disk needs a reload, not just a renewal (KE-16):** on nodes that read
   `/var/lib/tailscale/certs/*.crt` directly (only lxc210 — everything else goes through
