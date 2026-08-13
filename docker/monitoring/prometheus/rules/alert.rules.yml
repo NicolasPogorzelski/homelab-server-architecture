@@ -52,6 +52,19 @@ groups:
           summary: "PostgreSQL backup is stale"
           description: "Last successful pg_dumpall on CT260 was more than 25 hours ago."
 
+      # 40 days, against a monthly schedule: one missed run is slack, two is a
+      # fault. Note this rule cannot fire while the metric has never been written
+      # at all -- an absent series produces no result -- which it shares with
+      # PostgreSQLBackupStale above. The first successful run arms it.
+      - alert: PostgreSQLRestoreTestStale
+        expr: (time() - pg_restore_test_last_success_timestamp) > 3456000
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL restore validation is overdue"
+          description: "The last successful restore test on CT260 was more than 40 days ago. Dumps are still being written, but nothing has proven they can be read back."
+
   - name: postgres
     rules:
       - alert: PostgreSQLDown

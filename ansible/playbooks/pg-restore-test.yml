@@ -1,0 +1,7 @@
+---
+- name: Deploy PostgreSQL restore validation
+  hosts: database
+  become: true
+  serial: 1
+  roles:
+    - postgresql_restore_test

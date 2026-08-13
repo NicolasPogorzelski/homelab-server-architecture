@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Validate that the newest pg_dumpall backup can be restored
+# Ordering only, no Wants=: this job does not touch the live cluster and must not
+# pull it up. What it actually depends on is the CIFS backup share, and that
+# cannot be expressed as a unit dependency here — it is a Proxmox bind mount of a
+# host automount. The script guards it by testing the mount's identity instead
+# (findmnt must report cifs), which is the only check that survives KE-15.
+After=postgresql.service
+# When both timers catch up in the same boot window, let the dump finish first so
+# the test does not pick a half-written file. The script's -mmin guard covers the
+# case where they are not part of the same transaction.
+After=pg-backup.service
+
+[Service]
+Type=oneshot
+# Runs as root, unlike pg-backup.service. pg_createcluster and pg_dropcluster
+# write to /etc/postgresql and /var/lib/postgresql and register cluster units;
+# the postgres user cannot do that. The script drops to postgres via runuser for
+# every psql call.
+WorkingDirectory=/tmp
+ExecStart={{ pg_restore_test_script_dest }}
