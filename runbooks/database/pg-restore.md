@@ -118,7 +118,15 @@ Refer to: [postgresql-platform.md](../../docs/services/postgresql-platform.md) f
 
 ---
 
-## Non-destructive verification (use this for scheduled tests)
+## Non-destructive verification (automated since 2026-08-13)
+
+> **This procedure now runs by itself.** The `postgresql_restore_test` role deploys
+> `pg-restore-test.sh` plus a timer firing `*-*-01 09:00` with `Persistent=true`, and
+> `PostgreSQLRestoreTestStale` alerts if no run has succeeded for 40 days. The steps below are
+> what that script does, kept here so the mechanism can be read, audited and executed by hand —
+> `systemctl start pg-restore-test.service` triggers it on demand. Note the script asserts dump
+> integrity and non-empty key tables rather than comparing against the live database; see step 4
+> for why a live comparison would report a difference on every run.
 
 The procedure above is the **recovery** path: it drops a live database, so it can only be
 rehearsed by accepting an outage. For periodic *validation* — proving that the dumps on disk are

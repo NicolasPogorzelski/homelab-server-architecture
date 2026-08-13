@@ -43,7 +43,7 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 | # | Item | What is lost |
 |---|---|---|
 | 1 | Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key into Vaultwarden; demote the GitHub key to a read-only deploy key | **Unrecoverable.** One copy, gitignored, on the boot SSD with the unresolved [KE-14](known-errors.md#ke-14) faults. Losing the vault password makes every vaulted secret undecryptable — there is no restore path. See [lxc250 § Open Items](../nodes/lxc250.md) |
-| 2 | ~~Execute `runbooks/database/pg-restore.md` and record the date~~ **Done 2026-08-13.** Remaining: put it on a cadence, and make the backup script verify its own output (`gzip -t` + completion marker) | Full-cluster restore validated against the current dump; the runbook now carries a non-destructive procedure for repeat runs. One manual pass is not a control, and an unreadable dump is still only discovered at recovery time |
+| 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ **Done 2026-08-13.** Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time | Full-cluster restore validated and now automated monthly (`postgresql_restore_test`, `PostgreSQLRestoreTestStale` at 40 days). A dump that cannot be read is caught within a month rather than at recovery — but still not at the moment it is written |
 | 3 | Off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents) | All backups are local, on the same site. No protection against site loss or ransomware |
 
 ## Tier 2 — Blocked on hardware
