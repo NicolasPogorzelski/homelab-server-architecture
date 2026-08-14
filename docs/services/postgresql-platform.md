@@ -240,14 +240,51 @@ PostgreSQL is monitored via:
 - Pre-flight check: verifies `/mnt/backups` is a **CIFS** mount via `findmnt -no FSTYPE`, and
   refuses to run otherwise. Testing only that the directory exists was the bug that let 26 days
   of backups silently write nowhere useful — an empty mountpoint is a directory too.
-- Post-dump check: verifies dump file is non-empty
+- Post-dump checks (three, each catching a different class): the file is non-empty; `gzip -t`
+  proves the compressed stream is intact; and the dump carries exactly one
+  `PostgreSQL database cluster dump complete` marker. The third is the one that matters — a
+  `pg_dumpall` killed halfway still produces a **valid** gzip member, so `gzip -t` reports
+  success on a dump that restores without error into empty tables.
+- The dump is written to `<name>.sql.gz.partial` and renamed only after all three checks pass.
+  A plain redirect creates the file before `pg_dumpall` writes a byte, so an aborted run would
+  leave a ruin under the real name — which the restore test selects as "newest dump" and a human
+  would mistake for a backup during recovery. Retention covers both names, so failed runs cannot
+  accumulate `.partial` files on the share.
+- **Verification runs before retention deletion, and that ordering is the point.** Retention keeps
+  7 days; the monthly restore test detects a bad dump up to 31 days later. The retention window is
+  shorter than the detection window, so a dump checked only by the monthly test is found broken at
+  a moment when every healthy predecessor has already been deleted.
 - Success writes `pg_backup_last_success_timestamp` to the node_exporter textfile collector,
-  which feeds the `PostgreSQLBackupStale` alert.
+  which feeds the `PostgreSQLBackupStale` alert. Only reached when all three checks passed, so
+  the metric means "a verified dump exists", not "the script ran".
+
+**What the write-time checks do not prove:** that the bytes reached vm102. The read-back is served
+from the CIFS page cache (`cache=strict`), so this establishes that the stream is complete and
+self-consistent, not that it is durable on the far side. Durability is what the monthly restore
+test covers — it reads a dump the cache has long since forgotten.
 
 Scheduled via a systemd timer, not cron. The Proxmox host powers down before 03:00 every night,
 so the cron entry never fired: backups had not run for 26 days when this was found on 2026-07-10.
 `Persistent=true` runs the overdue dump at the next boot, and a failed run raises
 `SystemdUnitFailed`.
+
+**Blind spot of `PostgreSQLBackupStale` (measured 2026-08-14).** The rule fires after 25 hours,
+but it cannot see an outage in which the host is off, because Prometheus runs on that same host.
+Measured over the seven days to 2026-08-14, the `up{job="node-lxc260-postgres"}` series holds 48
+of 169 hourly points, with a 62-hour gap from Mon 2026-08-10 21:50 to Thu 2026-08-13 11:50 — and
+`ALERTS{alertname="PostgreSQLBackupStale"}` is empty across the whole range. Nothing observed the
+gap: while the host was down there was no scrape, and by the time Prometheus came back the
+`Persistent=true` catch-up had already refreshed the timestamp. The dumps confirm it — 2026-08-07,
+09, 10, 13, 14, none of them at 03:00, all at boot time (05:32 to 08:53).
+
+So the rule means **"not more than 25 hours of uptime without a backup"**, not "a backup every
+day". Three days can pass with no dump and nothing turns red. This is not worth
+"fixing" with an alert — on a host that powers down nightly by design, an alert for "the host was
+off" is pure noise — but the 25-hour figure promises daily coverage it does not deliver, and that
+is what makes it worth writing down. Same class as the host `node_exporter` whose failure
+concealed itself ([KE-18](../platform/known-errors.md#ke-18)): a guard that shares a failure
+domain with the thing it guards. A second consequence: retention is *7 days*, not *7 dumps* —
+days without a boot produce no dump, and the share currently holds five.
 
 ### Verification
 
@@ -263,9 +300,15 @@ Database backups → SMB allowed (MergerFS, separate failure domain)
 
 ### Planned Improvements
 
-- Restore test runbook (periodic validation)
+- ~~Restore test runbook (periodic validation)~~ **done 2026-08-13** — `runbooks/database/pg-restore.md`
+  executed and recorded, then automated as the `postgresql_restore_test` role (monthly,
+  `PostgreSQLRestoreTestStale` at 40 days)
+- ~~Backup monitoring integration (alert on missing/stale dumps)~~ **done** — `PostgreSQLBackupStale`,
+  with the blind spot documented above
 - Per-database `pg_dump` once multiple consumers exist
-- Backup monitoring integration (alert on missing/stale dumps)
+- **Off-site copy.** Still the largest remaining gap: every dump lives on vm102, on the same site,
+  in the same rack. Write-time verification proves a dump is readable; it does not survive site
+  loss or ransomware.
 
 ---
 
