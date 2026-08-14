@@ -228,7 +228,10 @@ PostgreSQL is monitored via:
 - Schedule: `pg-backup.timer` — `OnCalendar=*-*-* 03:00:00`, `Persistent=true`
 - Compression: gzip
 - Target: `/mnt/backups/` (SMB mount on MergerFS, separate failure domain)
-- Retention: 7 days (automatic cleanup via `find -mtime`)
+- Retention: 7 days nominal, **8 in practice** — `find -mtime +7` truncates age to whole 24-hour
+  units and `+7` requires strictly greater, so a dump is removed only once it passes 8 days
+  (observed 2026-08-14: the 2026-08-07 dump survived at 7 d 5 h). Covers `*.sql.gz` and
+  `*.sql.gz.partial`
 - Script: `/usr/local/sbin/pg-backup.sh` on lxc260
 - Source of truth (repo): `snippets/postgres/pg-backup.sh`
 - Managed by: `ansible/roles/postgresql_backup/`
