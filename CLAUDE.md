@@ -58,10 +58,21 @@ notes there and keep this section short.
   Nothing live is touched. **The 09:00 slot is load-bearing:** the restored cluster holds ~150 MB
   of thin-pool blocks and a container cannot `fstrim` itself, so it relies on the host's
   `lxc-fstrim.timer` at 10:30 to reclaim them the same morning.
-  Still open: the backup script verifies only that the dump is non-empty — neither `gzip -t` nor
-  the `cluster dump complete` marker is checked at **write** time, so a bad dump is now caught by
-  the monthly test rather than at write. `-mtime +7` retention still means one bad dump plus a
-  week of silence loses everything, and there is still no off-site copy.
+  **Write-time verification closed 2026-08-14.** `pg-backup.sh` now writes to `*.sql.gz.partial`
+  and renames only after three checks pass — non-empty, `gzip -t`, and exactly one
+  `cluster dump complete` marker — with verification ordered **before** retention deletion,
+  because retention keeps 7 days while the monthly test detects up to 31 days late. Only the
+  marker check catches a valid gzip of a half-finished dump, which restores without error into
+  empty tables. What it does not prove: durability on vm102 — the read-back comes from the CIFS
+  page cache. Still open: **no off-site copy**.
+- **`PostgreSQLBackupStale` cannot see an outage (measured 2026-08-14).** The 25-hour rule is blind
+  whenever the host is off, because Prometheus runs on that same host: no scrape, and the timer's
+  `Persistent=true` catch-up refreshes the timestamp before Prometheus is back. Measured: a 62-hour
+  scrape gap 2026-08-10 21:50 → 2026-08-13 11:50, no dump written in it, alert empty across the
+  range. It means "not more than 25 h of **uptime** without a backup", not "a backup every day".
+  Deliberately not fixed — on a host that powers down nightly by design, an alert for "the host was
+  off" is noise. Same class as the host `node_exporter` whose failure concealed itself: **a guard
+  that shares a failure domain with what it guards.** Corollary: retention is 7 *days*, not 7 dumps.
 - **LXC250 control node sits outside the system it manages (found 2026-07-28).** It holds three
   roles and none is secured: it is the *deployment source* (playbooks read the working tree, not a
   commit), the *only copy* of `~/.vault_pass`, the real `hosts.yml` and the Ansible SSH key (all
