@@ -36,7 +36,7 @@ Repo snippet (source of truth):
 | Target | `/mnt/backups/` (SMB on MergerFS) |
 | Write | to `*.sql.gz.partial`, renamed only after verification passes |
 | Verification | non-empty · `gzip -t` · exactly one `dump complete` marker |
-| Retention | 7 days, both `*.sql.gz` and `*.sql.gz.partial` — runs only after verification |
+| Retention | 7 days nominal / 8 in practice (`-mtime +7` truncates to whole days), both `*.sql.gz` and `*.sql.gz.partial` — runs only after verification |
 | Auth | peer (no password, local socket) |
 
 ### Install steps (CT260)
@@ -84,6 +84,15 @@ A dump that passes `gzip -t` but prints `0` on the last command is **truncated**
 stopped early and what it managed to emit was compressed correctly. It will restore without a
 single error and leave the tables empty. That is why the marker check exists and why
 `gzip -t` alone is not enough.
+
+### Verification record
+
+| Date | Scope | Result |
+|---|---|---|
+| 2026-08-14 | Write-time verification deployed and exercised on lxc260: playbook `changed=1` then `changed=0`, manual `systemctl start pg-backup.service` | Pass — `Result=success`, `ExecMainStatus=0`, `OK: /mnt/backups/pg_dumpall_20260814_111738.sql.gz (41M), gzip and completion marker verified`; no `.partial` left, new dump `gzip -t` clean with `marker: 1`, metric scraped by Prometheus within 29 s, `ALERTS` empty, timer armed for 2026-08-15 03:00 UTC |
+
+The pre-flight before deployment checked the five dumps already on the share — all `gzip=OK`,
+`marker=1` — so the tightened check was known not to raise a false alarm on existing data.
 
 ---
 
