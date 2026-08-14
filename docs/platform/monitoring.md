@@ -59,7 +59,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 | Group | Rules |
 |---|---|
-| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale` |
+| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale` |
 | `storage` | `ArchivePoolLowSpace` |
@@ -68,7 +68,13 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `blackbox` | `ServiceDown` |
 | `smart` | *(empty — the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
-- `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook)
+- `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook).
+  **It cannot see an outage in which the host is off**, because Prometheus runs on that same host:
+  no scrape happens, and by the time Prometheus returns, the timer's `Persistent=true` catch-up has
+  already refreshed the timestamp. Measured 2026-08-14 — a 62-hour scrape gap (2026-08-10 21:50 to
+  2026-08-13 11:50) with no dump written and the alert empty across the whole range. The rule means
+  "not more than 25 hours of **uptime** without a backup", not "a backup every day". Detail and
+  reasoning in [`postgresql-platform.md`](../services/postgresql-platform.md#backup-strategy).
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
 ## Failure / Dependency Notes
