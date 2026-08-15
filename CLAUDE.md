@@ -109,8 +109,14 @@ notes there and keep this section short.
   files rely on SnapRAID parity and nothing else: parity protects against *disk* loss, not against
   deletion, corruption or ransomware, because the next `snapraid sync` writes the damage into the
   parity. Tier 1 #3 was reworded — it had presumed local copies existed to be duplicated off-site.
-  **Still to verify live on the node**; the evidence so far is absence in the repository plus the
-  2026-07-10 crontab audit.
+  **Verified live 2026-08-15** via `pct exec`: empty root crontab, no dump among eleven timers, and
+  the only dumps anywhere under `/mnt/smb` are six `pg_dumpall_*` files. The schema is 38.3 MB
+  across 179 InnoDB tables — **the gap was never a cost problem.** `postgresql_backup` was built
+  when lxc260 became "the platform database", and nobody checked whether that phrase covered every
+  database; Nextcloud's predates the decision and fell outside a category declared complete. The
+  `mariadb_backup` role, script and runbook now exist and are **blocked on provisioning a backup
+  share** (vm102 export → host fstab with `x-systemd.automount` → `mp1` bind → `pct reboot 210`) —
+  a host-level change, therefore manual. Vaultwarden still has no consistent export.
 - **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
   Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
   storage fix, and the storage-migration design discussion.

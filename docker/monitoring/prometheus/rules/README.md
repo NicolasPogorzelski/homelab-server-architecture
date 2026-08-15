@@ -11,6 +11,8 @@ Active rules (`alert.rules.yml`):
   group.
 - `HighMemoryUsage` — memory >90% for >5m (warning)
 - `PostgreSQLBackupStale` — no successful pg_dumpall in >25h (warning; requires textfile collector on CT260)
+- `MariaDBBackupStale` — no successful mariadb-dump in >25h (warning; requires textfile collector on CT210).
+  Covers Nextcloud's own database, which the PostgreSQL dump never touched.
 
 `postgres` group (requires `postgres_exporter` on CT260):
 - `PostgreSQLDown` — `pg_up == 0` for >2m (critical)
