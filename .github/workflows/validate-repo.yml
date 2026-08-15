@@ -11,7 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        # Pinned to a commit SHA, not a tag: `v4` is a moving reference the upstream owner can
+        # repoint at any commit, so a compromised or mistaken retag would execute unreviewed code
+        # in this workflow. The trailing comment carries the human-readable version, and Dependabot
+        # updates both together.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Run validation script
         run: |
