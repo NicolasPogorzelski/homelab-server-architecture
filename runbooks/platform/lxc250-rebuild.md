@@ -207,3 +207,24 @@ non-default key path. Run `ssh -vT git@github.com` for verbose output.
 The installer requires internet access. Verify with `curl -I https://claude.ai`.
 If the install script URL has changed, check the official Claude Code documentation
 for the current install command.
+
+---
+
+## Rollback
+
+The safest property of this procedure is that it **builds a new container instead of repairing the
+old one**, so the rollback is simply not to switch over.
+
+- Keep the old CT250 in place, **stopped rather than destroyed**, until the new one has passed the
+  Verification section. The constraint is thin-pool space on the boot SSD -- check it before
+  starting, not after.
+- If the new container fails verification: `pct stop <new>` and `pct start 250`. Nothing outside the
+  container changes, because lxc250 is a control node and no service depends on it.
+- Destroy the old container only after a full Ansible run from the new one has completed against at
+  least one node.
+
+**What has no rollback is the un-versioned material.** `~/.vault_pass`, the real `hosts.yml` and the
+Ansible SSH key are gitignored and exist only on this node. If they were not recovered from the old
+container or retrieved from the escrow, the rebuild produces a control node that cannot decrypt
+anything. Confirm you hold them **before creating** the new container, not after destroying the old
+one.

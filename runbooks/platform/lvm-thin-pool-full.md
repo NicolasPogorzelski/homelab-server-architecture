@@ -221,6 +221,24 @@ pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
   `lvm_vg_free_bytes` is exported deliberately: it is 0 on this host, which means `lvextend` — the
   first reflex when a pool fills — is not available without shrinking `root`/`swap` or adding a PV.
 
+## Rollback
+
+Mixed, and the split is the point:
+
+- **Freeing space is not reversible.** `fstrim` discards blocks the filesystem has already released,
+  so nothing recoverable is lost -- but nothing comes back either.
+- **Deleting files to free space is irreversible and has no safety net here.** Nothing on the thin
+  pool is backed up as a filesystem. Prefer `pct fstrim` and removing container images over deleting
+  anything a service owns.
+- **Resuming a frozen VM (step 2) is reversible** -- it can be suspended again.
+- **The dpkg repair steps are the ones with a real rollback**, because they reinstall from the
+  archive. If a reinstall makes matters worse, the previous package version is still installable by
+  version number.
+
+**Abort criterion:** if the pool is above the critical threshold and still rising while you work,
+stop repairing and stop the writers first. Repairing dpkg inside a guest whose filesystem is still
+being starved produces a second corruption on top of the first.
+
 ---
 
 ## Notes

@@ -228,6 +228,31 @@ data: 2,648 documents spanning 1906-04-01 to 2026-05-07. Live cluster untouched 
 same backend PID before and after, no restart, no failed unit. Thin pool 81.76 % before and
 after (152 MiB reclaimed by `fstrim`).
 
+## Rollback
+
+**Step 4 drops the target database. There is no undo after it**, and the state being dropped may be
+the only copy of everything written since the dump was taken.
+
+The rollback therefore has to be *created before* the destructive step, not looked for afterwards:
+
+```bash
+# Dump the CURRENT state first -- the one you are about to destroy
+pct exec 260 -- su -s /bin/bash -c \
+  "pg_dump -Fc <target_db> > /mnt/backups/pre-restore_<target_db>_$(date +%Y%m%d_%H%M%S).dump" postgres
+```
+
+If the restore fails, or the restored data turns out to be the wrong snapshot, drop again and load
+that file back. Keep it until the result has been verified by someone *using* the service, not
+merely by the row counts in the Verification section.
+
+**Abort criteria — do not proceed to step 4 if any of these hold:** the dump fails `gzip -t`; it
+does not contain exactly one completion marker; its timestamp is older than expected; or the
+pre-restore dump above did not complete. All four are cheaper to discover now than after the drop.
+
+**Validation, as opposed to recovery, needs no rollback at all.** Restore into a throwaway cluster on
+a separate port instead -- the non-destructive procedure in this runbook touches nothing live and is
+the right tool whenever the question is "do the dumps work" rather than "get the data back".
+
 ---
 
 ## Related Documents
