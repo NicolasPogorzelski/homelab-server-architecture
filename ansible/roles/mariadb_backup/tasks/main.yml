@@ -1,0 +1,66 @@
+---
+# The share has to exist before anything else is deployed, and the role asserts
+# it rather than creating it: the mount is a Proxmox host bind mount configured
+# in /etc/pve/lxc/210.conf, which is outside every Ansible node. A task here
+# could only create an empty directory that looks like the mount and silently
+# is not -- the KE-7 failure class, one layer up from the check the script does
+# at runtime.
+- name: Assert the backup share is mounted into this container
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.mounts
+        | selectattr('mount', 'equalto', mariadb_backup_dir)
+        | selectattr('fstype', 'equalto', 'cifs')
+        | list | length == 1
+    fail_msg: >-
+      {{ mariadb_backup_dir }} is not a CIFS mount on this node. The host-side
+      share, its fstab entry and the container bind mount must be provisioned
+      first — see runbooks/database/mariadb-backup.md. Deploying the timer now
+      would install a unit that fails every night, which reads as a broken
+      backup rather than as an unfinished installation.
+    success_msg: "{{ mariadb_backup_dir }} is a CIFS mount — safe to deploy."
+
+- name: Deploy mariadb-backup script
+  ansible.builtin.copy:
+    src: "{{ mariadb_backup_script_src }}"
+    dest: "{{ mariadb_backup_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+# Owned by root, unlike the PostgreSQL equivalent which is owned by postgres.
+# The difference follows from the unit: pg-backup runs as the postgres user for
+# peer authentication, this one runs as root for unix_socket authentication.
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ mariadb_backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy mariadb-backup service unit
+  ansible.builtin.template:
+    src: mariadb-backup.service.j2
+    dest: /etc/systemd/system/mariadb-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy mariadb-backup timer unit
+  ansible.builtin.template:
+    src: mariadb-backup.timer.j2
+    dest: /etc/systemd/system/mariadb-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd_service:
+    name: mariadb-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

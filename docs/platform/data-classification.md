@@ -42,7 +42,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Vaultwarden vault (all household credentials) | `/mnt/smb/vaultwarden` on the archive pool | C1 | Yes | Parity only. No export, no versions. |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes — identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
-| Nextcloud MariaDB | Inside lxc210, on the boot SSD | C1 | Yes | **None.** See below. |
+| Nextcloud MariaDB — 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | **None today.** Dump role, script and runbook built 2026-08-15; waiting on the backup share being provisioned. |
 | Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Nightly verified dump, ~8-day retention, monthly restore test. |
 | Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump. |
 | Platform configuration and documentation | This repository — GitHub plus two workstations | C2 | No | Git. Distributed by nature, and the only dataset here with a genuine off-site copy. |
@@ -73,8 +73,17 @@ files are opaque blobs in Nextcloud's storage layout, with no owner, no share, a
 Nextcloud will recognise. **The two halves of one dataset are on different disks with different
 protection, and the weaker half is the one that makes the other meaningful.**
 
-This should be verified live on the node before being treated as final — the evidence here is the
-absence of a job in the repository plus a month-old audit, not a fresh measurement.
+**Verified live the same day** (2026-08-15, via `pct exec` from the hypervisor): the root crontab is
+empty, `/etc/cron.d/` holds only `e2scrub_all`, `nextcloud` and `php`, `cron.daily/` is distribution
+stock, and of eleven timers none is a dump. A search across the whole `/mnt/smb` tree returned six
+files, all of them `pg_dumpall_*`. The schema is 38.3 MB across 179 tables, every one InnoDB.
+
+That last number is the part worth sitting with. **The gap does not exist because a backup would
+have been expensive.** It exists because `postgresql_backup` was built when lxc260 became "the
+platform database", and nobody checked whether that phrase covered every database on the platform.
+Nextcloud brought its own, from before that decision, and it fell outside a category that had been
+declared complete. Same shape as [KE-6](known-errors.md#ke-6): a control was closed for one node and
+the fleet was never swept.
 
 ## Recovery objectives
 
@@ -139,11 +148,16 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    are explicitly excluded — copying a media archive off-site would dominate the cost of the whole
    exercise and protect nothing that matters.
 2. **Two of those rows need a local backup before an off-site copy is even meaningful.** The
-   Nextcloud database has none, and Vaultwarden has no consistent export — an SQLite file copied
-   from a live CIFS mount is not a backup, it is a gamble on timing.
+   Nextcloud database had none — addressed 2026-08-15 by the `mariadb_backup` role and
+   [its runbook](../../runbooks/database/mariadb-backup.md), pending the share being provisioned.
+   Vaultwarden still has no consistent export: an SQLite file copied from a live CIFS mount is not a
+   backup, it is a gamble on timing.
 3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
-   C1 set, which nobody has measured. Until that number exists, the choice between an encrypted
-   object store, a rotated external disk kept elsewhere, and a self-hosted target is unanswerable.
+   C1 set. One row is now measured — the Nextcloud database at 38.3 MB, which compresses to a
+   rounding error and tells us the databases are not what drives the decision. The documents are:
+   Paperless originals, Nextcloud files and the Vaultwarden vault are still unmeasured, and until
+   they are, the choice between an encrypted object store, a rotated external disk kept elsewhere,
+   and a self-hosted target is unanswerable.
 
 ## Review
 

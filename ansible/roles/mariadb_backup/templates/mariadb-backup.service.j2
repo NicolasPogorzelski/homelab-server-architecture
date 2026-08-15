@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+[Unit]
+Description=MariaDB full backup (mariadb-dump to the CIFS share)
+# The dump needs a running server. Unlike lxc260, there is no boot-ordering role
+# here: MariaDB is local to this container and does not wait on a Tailscale
+# address, so the KE-9 readiness race does not apply.
+After=mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=oneshot
+# root, so mariadb-dump authenticates through the unix_socket plugin without a
+# password. The alternative is a dedicated backup account, which needs its
+# credential stored on the node, vaulted in the repository and rotated -- more
+# surface, on a single-tenant node, to avoid a privilege the script already needs
+# for /usr/local/sbin anyway. Same reasoning that made pg-backup run as postgres
+# rather than carry a password in the environment.
+User=root
+Group=root
+ExecStart={{ mariadb_backup_script_dest }}
