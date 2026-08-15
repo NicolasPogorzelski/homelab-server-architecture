@@ -1142,3 +1142,111 @@ Two loose ends, neither a readiness fault:
 - [KE-16 — stale certificate served from memory](#ke-16)
 - [ADR — PostgreSQL boot ordering](../decisions/postgresql-tailscale-boot-ordering.md)
 - [ADR — pveproxy boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
+
+---
+
+<a id="ke-19"></a>
+
+## KE-19: A file that changes during a sync poisons the health signal of the whole array
+
+**Affected:** vm102, SnapRAID. Start here when `SnapRAIDSyncStale` and `SystemdUnitFailed` fire
+together for `snapraid-maintenance@sync.service` while the array itself looks fine.
+
+**Why this entry exists:** the failure looks like a storage fault and is not one. The array was
+fully in sync except for a log file nobody wants protected, and the alert said "no sync for more
+than 26 hours".
+
+**Symptom:** the sync runs to completion, saves and verifies every content file, and then exits 1.
+
+```
+Unexpected size change at file '/mnt/disk03/Nextcloud/nextcloud.log' from 3541768 to 3554509.
+WARNING! You cannot modify files during a sync.
+      14 file errors
+       0 io errors
+       0 data errors
+WARNING! Unexpected file errors!
+```
+
+`0 io errors` and `0 data errors` are the discriminator: **no media fault and no corruption.** All
+14 errors were the same file.
+
+### Root cause
+
+SnapRAID computes parity over the bytes it reads. A file that changes underneath a running sync
+cannot be parity-protected, so SnapRAID fails that file, continues with the rest, and exits
+non-zero at the end. Nextcloud writes its own application log inside the protected pool.
+
+### Why it surfaces in the morning rather than at 23:00
+
+The sync is scheduled for 23:00 precisely because nothing is active then. But `homelab_schedule`
+powers the host down overnight, so the timer never fires at 23:00 — `Persistent=true` catches it up
+**at the next boot**, in the morning, when the services are running again. The journal shows both
+patterns: runs at 23:02 on nights the host stayed up, and at 07:34 / 09:30 / 10:09 after a
+power-down.
+
+**The catch-up semantics that fixed one failure created another.** They are still correct — a
+backup-class job must be caught up — but the quiescence the 23:00 slot was chosen for is gone, and
+nothing recorded that trade. Same shape as the `PostgreSQLBackupStale` finding: a property everyone
+assumed still held after the mechanism underneath it changed.
+
+### Why one log file breaks the signal for the whole array
+
+`snapraid sync` exits 1 → `set -e` in `snapraid-maintenance.sh` aborts → the success metric is never
+written → `SnapRAIDSyncStale` fires, and `SystemdUnitFailed` alongside it. Parity was current for
+everything except that log.
+
+**A health signal that is all-or-nothing gets held hostage by its least important member.** Same
+abstraction as `DiskSpaceCritical` firing 21 times for one fact ([changelog 2026-07-10](changelog.md))
+and as `smart_health_passed` reading PASSED on a disk with 7680 unreadable sectors
+([KE-13](#ke-13)): the measurement does not answer the question being asked of it.
+
+### Fix
+
+Exclude the volatile files. SnapRAID is built for archives of files that do not change, and the
+config had excludes only for `*.tmp`, `*.bak`, `lost+found/`, `/tmp/` and `/cache/`.
+
+```
+exclude /Nextcloud/nextcloud.log
+exclude /Nextcloud/nextcloud.log.*
+exclude *.sqlite3-shm
+exclude *.sqlite3-wal
+exclude *.db-shm
+exclude *.db-wal
+exclude /Nextcloud/appdata_*/richdocuments/remoteData/
+```
+
+**A first attempt used `exclude *.log` and was wrong.** The next `diff` showed it also dropping four
+static CD-rip logs out of the audiobook archive — files that never change and were never the
+problem. The rule is **exclude what changes, not what shares a suffix**; an over-broad exclude
+silently reduces coverage, which is the failure mode this whole entry is about, one layer up.
+
+### The finding that outlives the incident
+
+`diff` also reported `Vaultwarden/db.sqlite3-shm` and `-wal` inside the array. Those are SQLite side
+files, ephemeral by definition, and parity over them captured at a different moment than the main
+database is an **inconsistent set** — a reconstruction from it can be corrupt.
+
+`db.sqlite3` itself deliberately **stays** in the array: imperfect protection beats none while
+Vaultwarden has no consistent export at all. That export is remediation plan Tier 1 #3, and this is
+the second, purely technical reason for it — the first being that parity does not survive deletion
+or ransomware. See [`data-classification.md`](data-classification.md).
+
+### Verification (2026-08-15)
+
+Ordered deliberately, because `snapraid sync` has no rollback (see the rollback section of
+[`snapraid-sync.md`](../../runbooks/storage/snapraid-sync.md)):
+
+1. `snapraid diff` **before** touching anything: 2 added (both explainable — the day's PostgreSQL
+   dump and the first MariaDB dump), 1 removed (retention), 5 updated. No unexplained deletion.
+2. Excludes added, `diff` re-run: over-broad `*.log` caught, narrowed, re-run again — 0 updated,
+   7 removed, every one accounted for.
+3. `systemctl start snapraid-maintenance@sync.service` → `Result=success`, `ExecMainStatus=0`.
+4. `snapraid diff` → **No differences**, every file equal.
+5. Metric written, scraped, both alerts cleared. vm102 reports no failed units.
+
+**Status:** Fixed 2026-08-15. **Open:** `/etc/snapraid.conf` is hand-managed — the
+`snapraid_maintenance` role owns the script and the two timers but not the configuration, so these
+excludes are lost on a rebuild of vm102. Noted in the [remediation plan](remediation-plan.md).
+
+**References:** [runbooks/storage/snapraid-sync.md](../../runbooks/storage/snapraid-sync.md) ·
+[KE-13](#ke-13) · [data-classification.md](data-classification.md)
