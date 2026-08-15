@@ -148,6 +148,40 @@ Restore into a throwaway instance rather than over the live one wherever the goa
 rather than recovery — see the non-destructive procedure in [`pg-restore.md`](pg-restore.md), which
 is directly transferable.
 
+## Rollback
+
+Everything this runbook installs is additive, so backing it out cannot lose data.
+
+**The role:**
+
+```bash
+pct exec 210 -- systemctl disable --now mariadb-backup.timer
+pct exec 210 -- rm /etc/systemd/system/mariadb-backup.service /etc/systemd/system/mariadb-backup.timer
+pct exec 210 -- systemctl daemon-reload
+```
+
+**The provisioning**, in reverse order — bind mount, then host mount, then share:
+
+```bash
+sudo pct set 210 -delete mp1
+sudo pct reboot 210
+sudo umount /mnt/smb/db-backups   # then remove the fstab line and daemon-reload
+# on vm102: remove the [DB-Backups] stanza, reload smbd
+```
+
+Leave the dumps in place if the share survives. They are the only reason any of this exists, and
+nothing needs the units in order to read them back.
+
+**Abort criteria:** stop before `pct set` if `ls /mnt/smb/db-backups` on the host errors — binding a
+mount that is not up produces a container pointing at an empty directory that looks exactly like a
+working one, and the dump would then land in the container rootfs on the boot SSD. That is the KE-7
+class, and it is why the role asserts the mount rather than creating the path.
+
+**Nothing here is irreversible**, which is the unusual part and worth saying out loud: this runbook
+adds a backup where none existed. The risk of running it is low; the risk of not running it is the
+whole reason it was written.
+
+---
 ## Notes
 
 - **Why a timer and not cron:** the Proxmox host is powered down overnight and woken by RTC. A cron
