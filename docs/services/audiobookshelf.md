@@ -12,8 +12,8 @@ Audiobookshelf is deployed via Docker Compose on VM100.
 
 Media is read-only mounted from VM102 via systemd automount (SMB/autofs):
 
-- `${ABS_AUDIOBOOKS_ROOT}` → `/audiobooks:ro`
-- `${ABS_PODCASTS_ROOT}` → `/podcasts:ro`
+- `${ABS_AUDIOBOOKS_ROOT}` -> `/audiobooks:ro`
+- `${ABS_PODCASTS_ROOT}` -> `/podcasts:ro`
 
 Config and metadata use local persistent volumes on VM100.
 
@@ -25,7 +25,7 @@ Config and metadata use local persistent volumes on VM100.
 - LAN exposure is intentional and limited to port 13378 only.
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md) — section "Documented Exceptions"
+- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md) - section "Documented Exceptions"
 
 | Source | Port | Access |
 |---|---|---|
@@ -38,7 +38,7 @@ Config and metadata use local persistent volumes on VM100.
 If VM100 becomes unavailable:
 
 - No audiobook or podcast streaming.
-- No data loss — media is read-only from VM102 storage.
+- No data loss - media is read-only from VM102 storage.
 - Recovery: restart VM100, verify SMB automounts, confirm Docker containers are running.
 
 ## Related Documents

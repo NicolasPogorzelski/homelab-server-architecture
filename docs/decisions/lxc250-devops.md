@@ -62,14 +62,14 @@ Considered but not chosen:
 
 The CTID 250 follows the established numbering model:
 
-- 100–109: Hardware-proximate VMs (GPU, Storage)
-- 200–209: Monitoring
-- 210–219: Cloud (Nextcloud)
-- 220–229: Media (Calibre-Web)
-- 230–239: AI Stack (OpenWebUI)
-- 240–249: Secrets (Vaultwarden)
-- 250–259: DevOps / Management Tooling
-- 260–269: Database / Platform Services
+- 100-109: Hardware-proximate VMs (GPU, Storage)
+- 200-209: Monitoring
+- 210-219: Cloud (Nextcloud)
+- 220-229: Media (Calibre-Web)
+- 230-239: AI Stack (OpenWebUI)
+- 240-249: Secrets (Vaultwarden)
+- 250-259: DevOps / Management Tooling
+- 260-269: Database / Platform Services
 ---
 
 ## Tailscale Tag Rationale

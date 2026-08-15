@@ -1,4 +1,4 @@
-# Infrastructure Architecture – Logical View
+# Infrastructure Architecture - Logical View
 
 This diagram shows the logical separation of layers, storage dependencies, and the access model:
 
@@ -47,7 +47,7 @@ flowchart TB
   %% Storage Consumers
   Samba --> VM100
   Samba --> LXC210
-  Samba --> LXC211 
+  Samba --> LXC211
   Samba --> LXC220
   Samba --> LXC230
   Samba --> LXC240

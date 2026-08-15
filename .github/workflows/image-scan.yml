@@ -4,7 +4,7 @@ name: Image vulnerability scan
 #
 # Every image in `docker/` is pinned to an exact version, and `docker-compose-update` is under a
 # standing hold until the aux-disk is replaced (`docs/platform/known-errors.md#ke-13`). Pinned plus
-# frozen means known-aging images are running on purpose — a documented, accepted risk.
+# frozen means known-aging images are running on purpose - a documented, accepted risk.
 #
 # ISO/IEC 27001 treats an accepted risk as something that must stay *monitored*, not something that
 # stops being tracked. This scan is that monitoring: it answers "how exposed are we right now",
@@ -20,14 +20,14 @@ name: Image vulnerability scan
 # Two severity tiers, and the reason is a measurement rather than a preference.
 #
 # The first version of this workflow uploaded every HIGH and CRITICAL finding to the Security tab.
-# Its first run produced **6928 open alerts** — 139 critical, 2162 high by GitHub's own rating, with
+# Its first run produced **6928 open alerts** - 139 critical, 2162 high by GitHub's own rating, with
 # `gotenberg` alone contributing 3538. Every one of them fixable, since `ignore-unfixed` is on. That
 # is not a signal, it is a wall, and a wall is read exactly once. The workflow that warns against
 # building an unreadable gate had built an unreadable report.
 #
 # So the two outputs answer two different questions:
 #
-#   * The **run summary** carries per-image CRITICAL and HIGH counts. That is the trend metric — a
+#   * The **run summary** carries per-image CRITICAL and HIGH counts. That is the trend metric - a
 #     number to compare week over week, the same shape as alerting on absolute free bytes rather
 #     than a percentage.
 #   * The **Security tab** receives CRITICAL only, so a new entry there is visible instead of being
@@ -44,7 +44,7 @@ name: Image vulnerability scan
 
 on:
   schedule:
-    # Friday 06:00 UTC — results are waiting when the weekly fleet audit starts.
+    # Friday 06:00 UTC - results are waiting when the weekly fleet audit starts.
     - cron: "0 6 * * 5"
   workflow_dispatch:
   push:
@@ -102,7 +102,7 @@ jobs:
           slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
           echo "value=${slug}" >> "$GITHUB_OUTPUT"
 
-      - name: Trivy scan — counts for the trend metric
+      - name: Trivy scan - counts for the trend metric
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}
@@ -110,7 +110,7 @@ jobs:
           output: trivy.json
           severity: CRITICAL,HIGH
           # Report only vulnerabilities that have a fix available upstream. During the hold, the
-          # number that matters is "how much is fixable and not being fixed" — that is the price
+          # number that matters is "how much is fixable and not being fixed" - that is the price
           # of the hold, expressed in findings. Unfixable CVEs would inflate the count without
           # changing any available decision.
           ignore-unfixed: true
@@ -123,10 +123,10 @@ jobs:
         run: |
           crit="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy.json)"
           high="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy.json)"
-          printf -- '- `%s` — critical: **%s**, high: **%s**\n' "${IMAGE}" "${crit}" "${high}" \
+          printf -- '- `%s` - critical: **%s**, high: **%s**\n' "${IMAGE}" "${crit}" "${high}" \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Trivy scan — critical only, for the Security tab
+      - name: Trivy scan - critical only, for the Security tab
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}

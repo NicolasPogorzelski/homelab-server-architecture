@@ -1,6 +1,6 @@
 # Dependabot configuration
 #
-# Scope note — why only GitHub Actions appears here.
+# Scope note - why only GitHub Actions appears here.
 #
 # Dependabot does two different things, and only one of them belongs in this file:
 #
@@ -11,7 +11,7 @@
 #
 # The Docker images in `docker/` are deliberately **not** listed for version updates. They are
 # pinned on purpose, and `docker-compose-update` is under a standing hold until the aux-disk is
-# replaced (see `docs/platform/known-errors.md#ke-13`) — the role writes gigabytes of new image
+# replaced (see `docs/platform/known-errors.md#ke-13`) - the role writes gigabytes of new image
 # layers onto a disk with 7680 unreadable sectors. A stream of pull requests proposing upgrades
 # that must not be applied would be pure noise, and this platform has already recorded what
 # happens to a signal nobody can act on.

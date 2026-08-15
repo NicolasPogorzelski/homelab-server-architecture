@@ -6,7 +6,7 @@
 # Debian LXCs unchanged.
 #
 # The stock /etc/apt/apt.conf.d/50unattended-upgrades allows
-# "${distro_id}:${distro_codename}" — the *regular* archive, not just security —
+# "${distro_id}:${distro_codename}" - the *regular* archive, not just security -
 # and ships an empty Package-Blacklist. On a GPU node that means a kernel can be
 # installed autonomously, and the NVIDIA DKMS module is only rebuilt for it on the
 # next boot; if that fails, Jellyfin loses CUDA and nobody knows why.

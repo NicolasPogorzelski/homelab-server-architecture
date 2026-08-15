@@ -2,10 +2,10 @@
 # Two kinds of unit need two different treatments, and using the wrong one fails
 # loudly rather than silently:
 #
-#   action: mask   (default) — the unit ships with a package under
+#   action: mask   (default) - the unit ships with a package under
 #                  /usr/lib/systemd/system. `systemctl mask` symlinks
 #                  /etc/systemd/system/<unit> to /dev/null, shadowing it.
-#   action: remove — the unit is a local file that already lives in
+#   action: remove - the unit is a local file that already lives in
 #                  /etc/systemd/system. Masking it fails ("File ... already
 #                  exists") because the symlink target would be the file itself.
 #                  Such a unit is deleted, not shadowed.
@@ -15,10 +15,10 @@
     masked: true
   loop: "{{ systemd_hygiene_masked_units }}"
   loop_control:
-    label: "{{ item.name }} — {{ item.reason }}"
+    label: "{{ item.name }} - {{ item.reason }}"
   when: (item.action | default('mask')) == 'mask'
 
-# systemd_service cannot stop a unit whose file no longer exists — on the second
+# systemd_service cannot stop a unit whose file no longer exists - on the second
 # run it errors out. `file: state=absent` is idempotent by nature, but the stop
 # and disable are not, so they have to be gated on the unit still being there.
 - name: Detect which unit files are still present
@@ -48,7 +48,7 @@
     state: absent
   loop: "{{ systemd_hygiene_masked_units }}"
   loop_control:
-    label: "{{ item.name }} — {{ item.reason }}"
+    label: "{{ item.name }} - {{ item.reason }}"
   when: (item.action | default('mask')) == 'remove'
   notify: Reload systemd
 

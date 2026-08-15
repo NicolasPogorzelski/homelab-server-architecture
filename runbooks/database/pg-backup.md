@@ -35,13 +35,13 @@ Repo snippet (source of truth):
 | Compression | gzip |
 | Target | `/mnt/backups/` (SMB on MergerFS) |
 | Write | to `*.sql.gz.partial`, renamed only after verification passes |
-| Verification | non-empty · `gzip -t` · exactly one `dump complete` marker |
-| Retention | 7 days nominal / 8 in practice (`-mtime +7` truncates to whole days), both `*.sql.gz` and `*.sql.gz.partial` — runs only after verification |
+| Verification | non-empty; `gzip -t`; exactly one `dump complete` marker |
+| Retention | 7 days nominal / 8 in practice (`-mtime +7` truncates to whole days), both `*.sql.gz` and `*.sql.gz.partial` - runs only after verification |
 | Auth | peer (no password, local socket) |
 
 ### Install steps (CT260)
 
-Deployment is owned by the [`postgresql_backup`](../../ansible/roles/postgresql_backup/) role —
+Deployment is owned by the [`postgresql_backup`](../../ansible/roles/postgresql_backup/) role -
 script, service unit, timer and textfile directory. There are no manual install steps, and the
 role also removes the legacy cron entry it used to install.
 
@@ -52,7 +52,7 @@ ansible-playbook playbooks/pg-backup.yml
 ```
 
 **Not cron.** The Proxmox host powers down before 03:00 every night, so a cron slot is simply
-missed and lost — that is why backups had silently not run for 26 days when this was found on
+missed and lost - that is why backups had silently not run for 26 days when this was found on
 2026-07-10. A timer with `Persistent=true` runs the overdue dump at the next boot instead, and a
 failed timer unit raises `SystemdUnitFailed` where a cron failure raised nothing.
 
@@ -80,7 +80,7 @@ gzip -cd /mnt/backups/pg_dumpall_<timestamp>.sql.gz \
   | grep -c 'PostgreSQL database cluster dump complete'   # must print exactly 1
 ```
 
-A dump that passes `gzip -t` but prints `0` on the last command is **truncated**: `pg_dumpall`
+A dump that passes `gzip -t` but prints `0` on the last command is truncated: `pg_dumpall`
 stopped early and what it managed to emit was compressed correctly. It will restore without a
 single error and leave the tables empty. That is why the marker check exists and why
 `gzip -t` alone is not enough.
@@ -89,10 +89,10 @@ single error and leave the tables empty. That is why the marker check exists and
 
 | Date | Scope | Result |
 |---|---|---|
-| 2026-08-14 | Write-time verification deployed and exercised on lxc260: playbook `changed=1` then `changed=0`, manual `systemctl start pg-backup.service` | Pass — `Result=success`, `ExecMainStatus=0`, `OK: /mnt/backups/pg_dumpall_20260814_111738.sql.gz (41M), gzip and completion marker verified`; no `.partial` left, new dump `gzip -t` clean with `marker: 1`, metric scraped by Prometheus within 29 s, `ALERTS` empty, timer armed for 2026-08-15 03:00 UTC |
+| 2026-08-14 | Write-time verification deployed and exercised on lxc260: playbook `changed=1` then `changed=0`, manual `systemctl start pg-backup.service` | Pass - `Result=success`, `ExecMainStatus=0`, `OK: /mnt/backups/pg_dumpall_20260814_111738.sql.gz (41M), gzip and completion marker verified`; no `.partial` left, new dump `gzip -t` clean with `marker: 1`, metric scraped by Prometheus within 29 s, `ALERTS` empty, timer armed for 2026-08-15 03:00 UTC |
 
-The pre-flight before deployment checked the five dumps already on the share — all `gzip=OK`,
-`marker=1` — so the tightened check was known not to raise a false alarm on existing data.
+The pre-flight before deployment checked the five dumps already on the share - all `gzip=OK`,
+`marker=1` - so the tightened check was known not to raise a false alarm on existing data.
 
 ---
 
@@ -100,14 +100,14 @@ The pre-flight before deployment checked the five dumps already on the share —
 
 | Symptom | Likely Cause | Action |
 |---|---|---|
-| `is not a CIFS mount` | SMB mount missing or down | Check `findmnt /mnt/backups`, verify VM102 Samba, then `pct reboot 260` — a container whose bind was set up while the mount was down does not heal by itself (KE-15) |
+| `is not a CIFS mount` | SMB mount missing or down | Check `findmnt /mnt/backups`, verify VM102 Samba, then `pct reboot 260` - a container whose bind was set up while the mount was down does not heal by itself (KE-15) |
 | `dump is empty` | PostgreSQL not running | Check `pg_isready`, inspect PG logs |
 | `fails the gzip integrity check` | Write interrupted, or the share filled up | `df -h /mnt/backups`; check the MergerFS pool on vm102 (`ArchivePoolLowSpace`) |
 | `0 completion markers, expected 1` | `pg_dumpall` died mid-dump | Inspect `journalctl -u pg-backup.service`; check PG logs for an OOM kill or a connection drop |
-| `.partial` file on the share, no new dump | A run failed verification | The old dumps are intact — verification runs *before* retention deletion, so nothing was removed. Diagnose from the messages above |
+| `.partial` file on the share, no new dump | A run failed verification | The old dumps are intact - verification runs *before* retention deletion, so nothing was removed. Diagnose from the messages above |
 | Permission denied | Script ownership wrong | Verify `root:postgres` and mode 750 |
 | Timer not firing | Timer disabled or unit failed | `systemctl list-timers pg-backup.timer`, `systemctl status pg-backup.timer` |
-| Stale backups (no recent files) | Failed run, or the host was simply powered off | `journalctl -u pg-backup.service`. Note gaps are normal: the host powers down nightly, and `Persistent=true` runs one catch-up at the next boot — several missed nights coalesce into a **single** dump |
+| Stale backups (no recent files) | Failed run, or the host was simply powered off | `journalctl -u pg-backup.service`. Note gaps are normal: the host powers down nightly, and `Persistent=true` runs one catch-up at the next boot - several missed nights coalesce into a single dump |
 
 ---
 

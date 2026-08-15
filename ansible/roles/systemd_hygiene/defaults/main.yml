@@ -10,7 +10,7 @@
 #   name:   the unit, e.g. "openipmi.service"
 #   reason: why it can never succeed on this node (printed on every run)
 #   action: "mask" (default) for package-provided units under /usr/lib/systemd/system,
-#           "remove" for hand-written units that already live in /etc/systemd/system —
+#           "remove" for hand-written units that already live in /etc/systemd/system -
 #           masking those fails, because the mask symlink and the unit file are the
 #           same path.
 systemd_hygiene_masked_units: []

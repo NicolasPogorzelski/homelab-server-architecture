@@ -14,7 +14,7 @@ groups:
       # an archive. Before 2026-07-10 this rule fired 21 times at once, all of them
       # the same fact: the MergerFS pool, its five member disks, and the twelve CIFS
       # mounts through which other nodes see that pool, each at 0.5% free. 15% of a
-      # multi-terabyte archive is several TB — a threshold a pool designed to fill will never
+      # multi-terabyte archive is several TB - a threshold a pool designed to fill will never
       # meet again. An alert that is always red is not read.
       #
       # Excluded here, and covered by ArchivePoolLowSpace below instead:
@@ -126,8 +126,8 @@ groups:
       # The MergerFS archive is meant to fill, so a percentage threshold says
       # nothing. What matters is whether the next write fits. Read-only consumers
       # (Jellyfin, Audiobookshelf, Calibre) are unaffected either way; the write
-      # consumers — Nextcloud, Paperless, Vaultwarden, and the nightly pg_dumpall,
-      # whose target /mnt/backups lives on this pool — will hit ENOSPC. Capacity
+      # consumers - Nextcloud, Paperless, Vaultwarden, and the nightly pg_dumpall,
+      # whose target /mnt/backups lives on this pool - will hit ENOSPC. Capacity
       # expansion is the lever, not deletion, so this is a warning with a long
       # window, not a page.
       #
@@ -157,7 +157,7 @@ groups:
       #
       # Thresholds are set against a measured ~0.49 pp/day: 85% leaves roughly a month before
       # the pool is full, 90% roughly three weeks. Both are long windows on purpose, because
-      # the remedy is slow. Check lvm_vg_free_bytes before reaching for `lvextend` — on this
+      # the remedy is slow. Check lvm_vg_free_bytes before reaching for `lvextend` - on this
       # host it is 0, the VG is fully allocated, and extending the pool first requires shrinking
       # root/swap or adding a PV. See runbooks/platform/lvm-thin-pool-full.md.
       - alert: LvmThinPoolWarning
@@ -167,7 +167,7 @@ groups:
           severity: warning
         annotations:
           summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} at {{ $value | printf \"%.2f\" }}% allocated"
-          description: "Allocation is above 85% on {{ $labels.instance }}. Run lxc-fstrim.service first — containers cannot trim themselves, so freed blocks stay allocated until the host does it. If that does not help, the pool is genuinely growing and needs capacity, not reclaim."
+          description: "Allocation is above 85% on {{ $labels.instance }}. Run lxc-fstrim.service first - containers cannot trim themselves, so freed blocks stay allocated until the host does it. If that does not help, the pool is genuinely growing and needs capacity, not reclaim."
 
       - alert: LvmThinPoolCritical
         expr: lvm_thin_pool_data_percent > 90
@@ -193,7 +193,7 @@ groups:
       # The collector exits non-zero on failure, so a broken run reaches SystemdUnitFailed. That
       # does not cover the timer being stopped or masked, in which case the last .prom file stays
       # in place and every rule above keeps evaluating a frozen value that looks healthy. Alert on
-      # the file's age instead — the same "absence of a failure is not success" trap that hid the
+      # the file's age instead - the same "absence of a failure is not success" trap that hid the
       # container fstrim units for months.
       - alert: LvmThinMetricsStale
         # node_exporter labels this with the *full path*, not the basename, so an exact match on
@@ -215,7 +215,7 @@ groups:
       # port answers. calibre-import.service failed every 2 minutes for a month
       # while every dashboard stayed green (KE-15).
       #
-      # `for: 15m` absorbs boot-window transients — units that fail once because a
+      # `for: 15m` absorbs boot-window transients - units that fail once because a
       # network mount is not up yet and succeed on the next trigger. Anything still
       # failed a quarter of an hour after the fact is a real fault.
       #

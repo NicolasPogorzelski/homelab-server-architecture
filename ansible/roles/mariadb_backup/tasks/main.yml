@@ -16,10 +16,10 @@
     fail_msg: >-
       {{ mariadb_backup_dir }} is not a CIFS mount on this node. The host-side
       share, its fstab entry and the container bind mount must be provisioned
-      first — see runbooks/database/mariadb-backup.md. Deploying the timer now
+      first - see runbooks/database/mariadb-backup.md. Deploying the timer now
       would install a unit that fails every night, which reads as a broken
       backup rather than as an unfinished installation.
-    success_msg: "{{ mariadb_backup_dir }} is a CIFS mount — safe to deploy."
+    success_msg: "{{ mariadb_backup_dir }} is a CIFS mount - safe to deploy."
 
 - name: Deploy mariadb-backup script
   ansible.builtin.copy:

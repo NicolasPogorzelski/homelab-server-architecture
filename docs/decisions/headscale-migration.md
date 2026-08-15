@@ -2,7 +2,7 @@
 
 ## Status
 
-**Deferred** — planned as entry point for Phase 6 (Terraform/IaC).
+**Deferred** - planned as entry point for Phase 6 (Terraform/IaC).
 Not implemented. Decision to migrate is made; timing is not yet.
 
 ---
@@ -22,15 +22,15 @@ The control plane dependency introduces a structural contradiction with that goa
 
 ### What Tailscale SaaS sees
 
-Tailscale traffic is WireGuard end-to-end encrypted — Tailscale cannot see payload content.
+Tailscale traffic is WireGuard end-to-end encrypted - Tailscale cannot see payload content.
 However, the SaaS control plane has persistent visibility into:
 
 - **Full network topology**: every node, its name, OS, Tailscale IP, last-seen timestamp
 - **Device names**: node names like `lxc240-vaultwarden`, `lxc220-calibreweb` reveal service inventory
-- **ACL policy**: the complete access control ruleset — what is allowed to talk to what
+- **ACL policy**: the complete access control ruleset - what is allowed to talk to what
 - **Authentication events**: device registration, pre-auth key usage, login events
 - **DERP relay traffic**: when P2P connections fail (NAT traversal), encrypted traffic transits Tailscale-operated relay servers
-- **Behavioral metadata**: connection timing, duration, frequency — which device connects to which node, and when
+- **Behavioral metadata**: connection timing, duration, frequency - which device connects to which node, and when
 
 The last point is the primary privacy concern for this platform.
 Services like Jellyfin (media), Audiobookshelf, and Calibre-Web produce recognizable connection patterns
@@ -43,7 +43,7 @@ This directly contradicts the platform's stated goal of maximum data sovereignty
 
 ## Decision
 
-Migrate the Tailscale control plane to **Headscale**, a self-hosted open-source
+Migrate the Tailscale control plane to Headscale, a self-hosted open-source
 reimplementation of the Tailscale coordination server.
 
 Official documentation: https://headscale.net/
@@ -69,8 +69,8 @@ Headscale replaces the control plane, but does not eliminate all Tailscale SaaS 
 By default, Tailscale clients fall back to Tailscale-operated DERP relay servers when P2P
 connections fail. Full independence requires:
 
-1. **Headscale** — self-hosted control plane (replaces `login.tailscale.com`)
-2. **Self-hosted DERP** — relay server for NAT traversal fallback (Tailscale publishes the DERP server code as open source)
+1. **Headscale** - self-hosted control plane (replaces `login.tailscale.com`)
+2. **Self-hosted DERP** - relay server for NAT traversal fallback (Tailscale publishes the DERP server code as open source)
 
 Both components are in scope for the Phase 6 implementation.
 
@@ -79,7 +79,7 @@ Both components are in scope for the Phase 6 implementation.
 ## Infrastructure Requirements
 
 Headscale must be reachable from all nodes, including remote devices outside the home network.
-This requires a publicly addressable server — the current platform has no public ingress by design.
+This requires a publicly addressable server - the current platform has no public ingress by design.
 
 **Planned approach:** Hetzner VPS (CX22, ~4 EUR/month) dedicated to the control plane.
 This node sits outside the Proxmox infrastructure and is not subject to homelab downtime.
@@ -96,7 +96,7 @@ A dedicated VPS provides availability independent of local infrastructure.
 
 1. **Exploration run (manual):** Set up Headscale on a temporary VPS manually.
    Understand the configuration model, ACL format differences, node registration flow.
-   This run is intentionally discarded — it is a learning exercise, not production.
+   This run is intentionally discarded - it is a learning exercise, not production.
 
 2. **Terraform:** Provision the Hetzner VPS, DNS record, firewall rules declaratively.
 
@@ -113,7 +113,7 @@ A dedicated VPS provides availability independent of local infrastructure.
 
 The current ACL source of truth is managed in the Tailscale web interface.
 Before migration, the policy must be exported and committed to this repository
-as a version-controlled file. Headscale uses file-based policy configuration —
+as a version-controlled file. Headscale uses file-based policy configuration -
 this is an improvement over the current model.
 
 ---
@@ -132,7 +132,7 @@ Rejected because:
 
 ### Stay with Tailscale SaaS indefinitely
 
-Operationally simplest. Privacy concern is metadata-only — no payload exposure.
+Operationally simplest. Privacy concern is metadata-only - no payload exposure.
 
 Rejected because:
 - Contradicts the platform's long-term goal of full data sovereignty
@@ -166,6 +166,6 @@ Full solution includes self-hosted DERP.
 
 - [Design Decisions #4: Zero-Trust Overlay (Tailscale)](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy)
 - [Design Decisions #9: Planned Network Hardening](design-decisions.md#9-planned-architectural-evolution-network-hardening--phase-2)
-- [Loopback + Tailscale Serve — Vendor Lock-in Awareness](loopback-tailscale-serve.md#vendor-lock-in-awareness)
+- [Loopback + Tailscale Serve - Vendor Lock-in Awareness](loopback-tailscale-serve.md#vendor-lock-in-awareness)
 - [Networking & Zero-Trust Model](../platform/networking.md)
 - [Tailscale ACL Model](../platform/tailscale-acl.md)

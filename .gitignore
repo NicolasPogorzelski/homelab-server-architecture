@@ -78,7 +78,7 @@ docker/monitoring/grafana/provisioning/datasources/prometheus.yml
 docker/monitoring/alertmanager/alertmanager.yml
 
 # =====================================================
-# Ansible – real inventory (contains Tailscale IPs)
+# Ansible - real inventory (contains Tailscale IPs)
 # =====================================================
 
 ansible/inventory/hosts.yml

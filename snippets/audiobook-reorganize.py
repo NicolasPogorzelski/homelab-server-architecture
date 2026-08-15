@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-audiobook-reorganize.py — Strip author prefix + sort into series subfolders.
+audiobook-reorganize.py - Strip author prefix + sort into series subfolders.
 
 Designed for Audiobookshelf libraries where book folders follow the pattern:
   "Author Name - Series Name NN - Book Title"
@@ -23,7 +23,7 @@ Dependencies: Python 3.6+, no third-party packages.
 import sys, re
 from pathlib import Path
 
-# Map author folder name → list of prefix variants to strip from book folders.
+# Map author folder name -> list of prefix variants to strip from book folders.
 # A prefix variant is the leading "Author Name" segment before the first " - ".
 # Multiple variants handle cases where the folder name and the prefix in book
 # names differ (e.g. typos, co-author combos). An empty list means no prefix
@@ -99,11 +99,11 @@ def compute_moves(author_dir, prefixes):
             warnings.append(
                 f"  !! CONFLICT: '{name}'\n"
                 f"     same target as '{seen_targets[rel_str]}'\n"
-                f"     → '{rel_str}' — SKIPPED"
+                f"     -> '{rel_str}' - SKIPPED"
             )
             continue
         if new_path.exists():
-            warnings.append(f"  !! EXISTS: target '{rel_str}' already on disk — SKIPPED")
+            warnings.append(f"  !! EXISTS: target '{rel_str}' already on disk - SKIPPED")
             continue
 
         seen_targets[rel_str] = name
@@ -132,7 +132,7 @@ def main():
 
         print(f"\n{'='*60}")
         print(f"Author : {author_name}")
-        print(f"Prefix : {prefixes or '(none — no stripping)'}")
+        print(f"Prefix : {prefixes or '(none - no stripping)'}")
         print(f"Mode   : {'*** EXECUTE ***' if execute else 'dry-run'}")
         print('='*60)
 
@@ -142,10 +142,10 @@ def main():
             if series_info:
                 series, num, title = series_info
                 print(f"  '{old.name}'")
-                print(f"    → [{series}] / {num} - {title}")
+                print(f"    -> [{series}] / {num} - {title}")
             else:
                 print(f"  '{old.name}'")
-                print(f"    → {clean}  (standalone)")
+                print(f"    -> {clean}  (standalone)")
             print()
 
         for w in warnings:

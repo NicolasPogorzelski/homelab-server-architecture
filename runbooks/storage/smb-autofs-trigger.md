@@ -1,8 +1,8 @@
-# Runbook: SMB mounts on the Proxmox host — automount + boot verification
+# Runbook: SMB mounts on the Proxmox host - automount + boot verification
 
 ## Problem
 
-The Proxmox host mounts `/mnt/smb/*` over CIFS **from VM102 — a guest of that same host.** At boot
+The Proxmox host mounts `/mnt/smb/*` over CIFS from VM102 - a guest of that same host. At boot
 the host therefore tries to reach an SMB server it has not started yet. A plain fstab entry fails
 once, `nofail` lets the boot proceed, and systemd never retries: the mount unit stays `failed`
 forever, the container bind that depends on it exposes the empty directory underneath (on
@@ -15,18 +15,18 @@ missing one option, one month of failure, ~20 000 failed service runs, nothing a
 
 **1. `x-systemd.automount` on every `/mnt/smb/*` fstab entry.** The mount is then established
 *lazily, on first access*, rather than once at boot. The first access happens when Proxmox sets up
-a container's bind mount — by which time VM102 has been running for minutes. This is the only
+a container's bind mount - by which time VM102 has been running for minutes. This is the only
 mechanism that can work, because no boot ordering can put the host's mount after a VM the host
 itself starts.
 
-**2. `smb-mounts-check.service` — verification that fails loudly.** Ordered `After=pve-guests.service`,
+**2. `smb-mounts-check.service` - verification that fails loudly.** Ordered `After=pve-guests.service`,
 it forces every automount to resolve and exits non-zero if any `/mnt/smb/*` path is not backed by
 CIFS. `node_exporter --collector.systemd` exports the failed unit and the `SystemdUnitFailed` rule
 alerts on it.
 
 > **Historical note.** This runbook previously described `trigger-smb.mounts.service`, which could
-> not work by construction: it ran `After=network-online.target` — reached *before* `pve-guests`
-> starts VM102 (measured on the 2026-07-14 boot: trigger at 12:16:15, VM102 started at 12:16:23) —
+> not work by construction: it ran `After=network-online.target` - reached *before* `pve-guests`
+> starts VM102 (measured on the 2026-07-14 boot: trigger at 12:16:15, VM102 started at 12:16:23) -
 > so it poked automounts whose server did not yet exist. And it swallowed every error (`|| true`),
 > so it reported success unconditionally. It was removed on 2026-07-14 and replaced by the check
 > above.
@@ -36,9 +36,9 @@ alerts on it.
 - VM102 is running and Samba is active
 - Every `/mnt/smb/*` entry in the host's `/etc/fstab` carries `x-systemd.automount`
 - The host's `node_exporter` runs with `--collector.systemd` (otherwise a failing check unit
-  raises no alert — see the note under Failure)
+  raises no alert - see the note under Failure)
 
-Audit the fstab requirement in one line — it must print nothing:
+Audit the fstab requirement in one line - it must print nothing:
 
 ```bash
 grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount
@@ -104,7 +104,7 @@ systemctl reset-failed smb-mounts-check.service && systemctl start smb-mounts-ch
 |---|---|---|
 | `smb-mounts-check.service` failed, log names a path with `fstype=ext4` | The CIFS mount for that path is down; the bare directory on `pve-root` is showing | `mount /mnt/smb/<name>`, then `pct reboot <ctid>` for every container binding it |
 | `smb-mounts-check.service` failed, `fstype=none` | Path exists under `/mnt/smb/` but is not a mount at all (e.g. a stray directory) | Remove the directory, or add the missing fstab entry |
-| Mount unit `failed` after boot, works when mounted by hand | The fstab entry lacks `x-systemd.automount` — it was tried once, before VM102 existed | Add the option (see above). This was KE-15 |
+| Mount unit `failed` after boot, works when mounted by hand | The fstab entry lacks `x-systemd.automount` - it was tried once, before VM102 existed | Add the option (see above). This was KE-15 |
 | Check unit fails but no alert arrives | The host's `node_exporter` lacks `--collector.systemd`, so `node_systemd_unit_state` is never exported for this host | Add `--collector.systemd --collector.systemd.unit-exclude='.+\.(automount\|device\|scope\|slice)'` to its `ExecStart`, mirroring the `node_exporter` Ansible role |
 | Container still sees an empty directory although the host mount is up | The bind was created while the mount was down; it does not heal by itself | `pct reboot <ctid>` |
 
@@ -137,6 +137,6 @@ mounted, and a container whose bind was set up during the broken window still ne
 ---
 ## Related
 
-- [KE-15 — calibre-import dead for a month](../../docs/platform/known-errors.md#ke-15)
+- [KE-15 - calibre-import dead for a month](../../docs/platform/known-errors.md#ke-15)
 - [Samba architecture](../../docs/platform/samba.md)
 - [Storage design](../../docs/platform/storage-design.md)

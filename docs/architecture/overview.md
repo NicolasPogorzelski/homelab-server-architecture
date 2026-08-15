@@ -11,19 +11,19 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ### VMs
 
-- VM100 – Compute / GPU (Ubuntu, Docker, NVIDIA passthrough, media services)
-- VM102 – Storage (Debian, MergerFS + SnapRAID + Samba)
+- VM100 - Compute / GPU (Ubuntu, Docker, NVIDIA passthrough, media services)
+- VM102 - Storage (Debian, MergerFS + SnapRAID + Samba)
 
 ### Service LXCs
 
-- LXC200 – Monitoring (Prometheus + Grafana + Node Exporter)
-- LXC210 – Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
-- LXC211 – Paperless-ngx (document management, Docker in LXC)
-- LXC220 – Calibre-Web (Docker in LXC)
-- LXC230 – OpenWebUI (AI stack entrypoint, Docker in LXC)
-- LXC240 – Vaultwarden (Docker in LXC, secrets tier)
-- LXC250 – DevOps (central management workstation; Git, Ansible, IaC)
-- LXC260 – PostgreSQL (centralized platform database)
+- LXC200 - Monitoring (Prometheus + Grafana + Node Exporter)
+- LXC210 - Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
+- LXC211 - Paperless-ngx (document management, Docker in LXC)
+- LXC220 - Calibre-Web (Docker in LXC)
+- LXC230 - OpenWebUI (AI stack entrypoint, Docker in LXC)
+- LXC240 - Vaultwarden (Docker in LXC, secrets tier)
+- LXC250 - DevOps (central management workstation; Git, Ansible, IaC)
+- LXC260 - PostgreSQL (centralized platform database)
 
 ## Design Principles
 
@@ -42,16 +42,16 @@ The infrastructure is modular and responsibility-driven. It is designed around c
 
 ## Nodes
 
-- [VM100 – GPU / Compute](../nodes/vm100.md)
-- [VM102 – Storage](../nodes/vm102.md)
-- [LXC200 – Monitoring](../nodes/lxc200.md)
-- [LXC210 – Nextcloud](../nodes/lxc210.md)
-- [LXC211 – Paperless-ngx](../nodes/lxc211.md)
-- [LXC220 – Calibre-Web](../nodes/lxc220.md)
-- [LXC230 – OpenWebUI](../nodes/lxc230.md)
-- [LXC240 – Vaultwarden](../nodes/lxc240.md)
-- [LXC250 – DevOps](../nodes/lxc250.md)
-- [LXC260 – PostgreSQL](../nodes/lxc260.md)
+- [VM100 - GPU / Compute](../nodes/vm100.md)
+- [VM102 - Storage](../nodes/vm102.md)
+- [LXC200 - Monitoring](../nodes/lxc200.md)
+- [LXC210 - Nextcloud](../nodes/lxc210.md)
+- [LXC211 - Paperless-ngx](../nodes/lxc211.md)
+- [LXC220 - Calibre-Web](../nodes/lxc220.md)
+- [LXC230 - OpenWebUI](../nodes/lxc230.md)
+- [LXC240 - Vaultwarden](../nodes/lxc240.md)
+- [LXC250 - DevOps](../nodes/lxc250.md)
+- [LXC260 - PostgreSQL](../nodes/lxc260.md)
 
 ## Services
 

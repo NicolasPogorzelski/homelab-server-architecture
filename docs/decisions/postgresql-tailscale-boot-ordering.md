@@ -3,12 +3,12 @@
 ## Context
 
 LXC260 runs the central PostgreSQL. Per the platform binding rule it listens on
-loopback **and its Tailscale IP only** (`listen_addresses = '127.0.0.1,
+loopback and its Tailscale IP only (`listen_addresses = '127.0.0.1,
 <tailscale-ip-lxc260>'`), never on `0.0.0.0`/LAN. Remote consumers
-(OpenWebUI, Paperless, …) reach it over Tailscale on `:5432`.
+(OpenWebUI, Paperless, ...) reach it over Tailscale on `:5432`.
 
 On boot, `postgresql@15-main.service` ordered only `After=network.target`. That
-target is reached very early — **before** `tailscaled` has assigned the node's
+target is reached very early - before `tailscaled` has assigned the node's
 Tailscale IP to an interface. PostgreSQL can only bind addresses that exist at
 startup, so it bound loopback, logged
 
@@ -17,7 +17,7 @@ could not bind IPv4 address "100.x.y.z": Cannot assign requested address
 ```
 
 (kernel `EADDRNOTAVAIL`), and continued with loopback only (the unit's
-`ExecStart=-…` ignores startup failures). The Tailscale bind was never retried →
+`ExecStart=-...` ignores startup failures). The Tailscale bind was never retried ->
 all remote DB consumers failed until a manual `systemctl restart postgresql`.
 Full incident: [KE-9](../platform/known-errors.md#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race).
 
@@ -41,11 +41,11 @@ ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh 90
 
 Two parts, both required:
 
-1. **Ordering** (`After=`/`Wants=tailscaled.service`) — start PostgreSQL after
-   the tailscaled *daemon*. Necessary but **not sufficient**: tailscaled being up
+1. **Ordering** (`After=`/`Wants=tailscaled.service`) - start PostgreSQL after
+   the tailscaled *daemon*. Necessary but not sufficient: tailscaled being up
    does not mean the IP is assigned yet (it happens asynchronously after the
    daemon starts).
-2. **Wait-for-IP gate** (`ExecStartPre`) — `wait-for-tailscale-ip.sh` polls until
+2. **Wait-for-IP gate** (`ExecStartPre`) - `wait-for-tailscale-ip.sh` polls until
    this node's `tailscale ip -4` is actually present in `ip -4 addr show`, then
    lets PostgreSQL start. This closes the race the ordering alone leaves open.
 
@@ -57,7 +57,7 @@ drop-in); the script's single source of truth is
 
 ### `listen_addresses = '*'` (rejected)
 
-Binding all interfaces sidesteps the race — PostgreSQL would bind `0.0.0.0` and
+Binding all interfaces sidesteps the race - PostgreSQL would bind `0.0.0.0` and
 pick up the Tailscale IP whenever it appears. Rejected: it also binds the **LAN
 interface**, violating the platform binding rule (bind to Tailscale, never LAN).
 `pg_hba.conf` would still gate authentication, but defence-in-depth means not
@@ -77,8 +77,8 @@ address we care about. The explicit poll does.
 
 The gate script could exit non-zero on timeout, failing the unit so PostgreSQL
 does not start without its Tailscale IP. Rejected: a slow/broken tailscaled would
-then take the **entire** database offline, including loopback — worse than the
-original bug for a central platform DB. The script is **fail-open**: on timeout
+then take the entire database offline, including loopback - worse than the
+original bug for a central platform DB. The script is fail-open: on timeout
 (default 90s) it logs a warning and exits 0, so PostgreSQL still starts (loopback
 at minimum). A timeout is an exceptional condition the existing `blackbox` /
 `ServiceDown` monitoring already surfaces.
@@ -92,7 +92,7 @@ at minimum). A timeout is an exceptional condition the existing `blackbox` /
   the wait does not trip a start timeout.
 - One more moving part (a poll script as `ExecStartPre`) on the DB node.
 - Fail-open means a (rare) tailscaled timeout reproduces the old loopback-only
-  state rather than failing hard — accepted, because it is detectable and keeps
+  state rather than failing hard - accepted, because it is detectable and keeps
   the DB locally usable.
 
 ### Verification
@@ -110,7 +110,7 @@ First post-fix boot: gate reported `tailscale IP present after 2s`, log showed
 
 ## Related Documents
 
-- [KE-9 — PostgreSQL loopback-only after boot](../platform/known-errors.md#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race)
+- [KE-9 - PostgreSQL loopback-only after boot](../platform/known-errors.md#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race)
 - [LXC260 PostgreSQL node](../nodes/lxc260.md)
 - [Ansible Platform](../platform/ansible.md)
-- devops-til: `linux/systemd-service-hardening.md` (reactive vs proactive readiness gates — the transferable concept)
+- devops-til: `linux/systemd-service-hardening.md` (reactive vs proactive readiness gates - the transferable concept)

@@ -7,7 +7,7 @@ OnCalendar={{ pg_backup_oncalendar }}
 
 # The Proxmox host is powered down overnight and woken by RTC in the morning
 # (homelab_schedule), so nothing is running at 03:00. A cron job simply misses
-# that slot and is lost — which is why only four dumps exist and the last one is
+# that slot and is lost - which is why only four dumps exist and the last one is
 # from 2026-06-14: the three that succeeded were nights the host happened to stay
 # up. Persistent=true makes systemd record the last run under
 # /var/lib/systemd/timers/ and fire an overdue job on the next boot instead.

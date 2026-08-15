@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# calibre-import.sh — auto-import dropped ebooks into the Calibre library.
+# calibre-import.sh - auto-import dropped ebooks into the Calibre library.
 #
 # Deployed on LXC220 by the Ansible role `calibre-importer`, triggered by the
 # systemd timer `calibre-import.timer` (polling, NOT inotify: the library is a
@@ -18,7 +18,7 @@
 #     3. `calibredb add` into the LOCAL library (book files + DB rows land there)
 #     4. push the new book directories back onto the CIFS library (plain tar,
 #        no byte-range locks) and atomically swap the updated metadata.db in
-#     5. delete each source file ONLY now — after it is durably on the share
+#     5. delete each source file ONLY now - after it is durably on the share
 #     6. restart calibre-web (guaranteed via an EXIT trap)
 #
 # Flow: find *settled* ebooks in $IMPORT_DIR; a file that fails `calibredb add`
@@ -26,7 +26,7 @@
 # only AFTER the new books are written back to the share (the MergerFS pool is
 # near full, so we keep no second copy). If the run is interrupted before that
 # write-back, the sources stay in $IMPORT_DIR and are retried on the next run
-# (`calibredb --automerge ignore` makes a retry idempotent) — so a crash mid-run
+# (`calibredb --automerge ignore` makes a retry idempotent) - so a crash mid-run
 # never loses a book.
 #
 # Paths fixed by homelab convention: the Proxmox host binds the rw CIFS mount
@@ -43,26 +43,26 @@ WORK=""                             # local working library (mktemp, set below)
 
 # Single instance only: take an exclusive lock on FD 9 or exit quietly.
 exec 9>"${LOCK}"
-flock -n 9 || { echo "another import run is active — exiting"; exit 0; }
+flock -n 9 || { echo "another import run is active - exiting"; exit 0; }
 
 # Verify the library is the CIFS share itself, not the directory underneath it.
 # `mountpoint -q` is NOT sufficient: the Proxmox host binds /mnt/smb/books-rw into
 # the container as mp2, and that bind is a mountpoint even when the host-side CIFS
-# mount failed — in which case the bind exposes an empty, host-root-owned directory
+# mount failed - in which case the bind exposes an empty, host-root-owned directory
 # on pve-root. The guard then passed and the script died on `mkdir` (Permission
 # denied) every 2 min for a month, unnoticed. Test the mount's identity, not its
 # existence: a healthy bind of a CIFS mount reports fstype `cifs` inside the
 # container; the failed one reports `ext4`.
 fstype="$(findmnt -no FSTYPE "${LIBRARY}" 2>/dev/null || true)"
 if [ "${fstype}" != "cifs" ]; then
-    echo "library ${LIBRARY} is not a CIFS mount (fstype='${fstype:-none}') — host share not mounted" >&2
+    echo "library ${LIBRARY} is not a CIFS mount (fstype='${fstype:-none}') - host share not mounted" >&2
     exit 1
 fi
 
 # Second guard: right filesystem type, wrong share. Without metadata.db this is not
 # the Calibre library, and importing into it would scatter books into a stray mount.
 if [ ! -f "${LIBRARY}/metadata.db" ]; then
-    echo "library ${LIBRARY} has no metadata.db — refusing to import" >&2
+    echo "library ${LIBRARY} has no metadata.db - refusing to import" >&2
     exit 1
 fi
 
@@ -78,7 +78,7 @@ mapfile -d '' -t FILES < <(find "${IMPORT_DIR}" -mindepth 1 -type f \
 [ "${#FILES[@]}" -eq 0 ] && exit 0
 
 # Local working library under /tmp (local disk, never CIFS). Cleaned up and
-# calibre-web restarted on EXIT — even if the script errors out partway.
+# calibre-web restarted on EXIT - even if the script errors out partway.
 WORK="$(mktemp -d /tmp/calibre-import.XXXXXX)"
 cleanup() {
     docker start "${CONTAINER}" >/dev/null 2>&1 || true   # no-op if already running
@@ -99,12 +99,12 @@ imported_srcs=()
 for f in "${FILES[@]}"; do
     echo "importing: ${f}"
     if calibredb add --with-library "${WORK}" --automerge ignore "${f}"; then
-        # Do NOT delete the source yet — it only lives in the volatile local WORK
+        # Do NOT delete the source yet - it only lives in the volatile local WORK
         # copy at this point. Track it; delete after it is written back (below).
         imported_srcs+=("${f}")
         echo "added to working library (source kept until written back): ${f}"
     else
-        echo "FAILED — quarantining: ${f}"
+        echo "FAILED - quarantining: ${f}"
         mv -f "${f}" "${FAILED_DIR}/"
     fi
 done
@@ -124,7 +124,7 @@ if [ "${#imported_srcs[@]}" -gt 0 ]; then
     # Durable now: the books are on the share AND referenced by the swapped-in DB.
     # Only here is it safe to delete the sources (no second copy is kept). Had the
     # script died before this point, `set -e` would have aborted with the sources
-    # still in $IMPORT_DIR — they would simply be retried on the next run.
+    # still in $IMPORT_DIR - they would simply be retried on the next run.
     for f in "${imported_srcs[@]}"; do
         rm -f "${f}"
         echo "source removed (durably imported): ${f}"

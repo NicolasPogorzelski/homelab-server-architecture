@@ -44,7 +44,7 @@ DUMP_BIN="$(command -v mariadb-dump || command -v mysqldump)"
 # KE-7 failure class and the reason this check is first.
 FSTYPE="$(findmnt -no FSTYPE "$BACKUP_DIR" 2>/dev/null || true)"
 if [ "$FSTYPE" != "cifs" ]; then
-  echo "ERROR: ${BACKUP_DIR} is not a CIFS mount (fstype='${FSTYPE:-none}') — refusing to dump onto local disk" >&2
+  echo "ERROR: ${BACKUP_DIR} is not a CIFS mount (fstype='${FSTYPE:-none}') - refusing to dump onto local disk" >&2
   exit 1
 fi
 
@@ -114,7 +114,7 @@ fi
 #    `|| true` is for the exit status 1 that grep returns on zero matches.
 MARKERS="$(gzip -cd "$PARTIAL_FILE" | grep -c '^-- Dump completed on ' || true)"
 if [ "$MARKERS" -ne 1 ]; then
-  echo "ERROR: dump carries ${MARKERS} completion markers, expected 1 — truncated: ${PARTIAL_FILE}" >&2
+  echo "ERROR: dump carries ${MARKERS} completion markers, expected 1 - truncated: ${PARTIAL_FILE}" >&2
   exit 1
 fi
 
