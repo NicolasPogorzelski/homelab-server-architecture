@@ -67,19 +67,19 @@ if [[ -d "${REPO_ROOT}/docs/services" ]]; then
 fi
 
 # =============================================================================
-# Check 5: Runbook contract — required sections
+# Check 5: Runbook contract - required sections
 # =============================================================================
 # Contract from runbooks/README.md:
 # Preconditions, Commands/steps, Verification, Failure modes, Rollback / abort
 #
 # Rollback became mandatory on 2026-08-15. The contract had listed it as "only if applicable"
-# since the beginning, and the result was that it appeared in 2 runbooks out of 13 — present in
+# since the beginning, and the result was that it appeared in 2 runbooks out of 13 - present in
 # exactly the two written most recently, when the danger was fresh. An optional section is a
 # preference, not a contract.
 #
 # "Not applicable" remains a legitimate answer and must be *written down with its reason*. A
 # read-only procedure genuinely has nothing to undo, but a document with no such section cannot
-# be distinguished from one where nobody thought about it — and that difference is the whole
+# be distinguished from one where nobody thought about it - and that difference is the whole
 # value of asking.
 echo "Check 5: runbook contract sections"
 
@@ -119,7 +119,7 @@ echo "Check 13: Configuration Management in node docs"
 
 if [[ -d "${REPO_ROOT}/docs/nodes" ]]; then
     while read -r file; do
-        # lxc250 is the Ansible control node — excluded from inventory, has ## Ansible Setup instead
+        # lxc250 is the Ansible control node - excluded from inventory, has ## Ansible Setup instead
         [[ "$(basename "${file}")" == "lxc250.md" ]] && continue
         if ! grep -q "## Configuration Management" "${file}"; then
             echo "  Missing 'Configuration Management' section: ${file}"
@@ -231,7 +231,7 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 #                    README.md CLAUDE.md LICENSE .gitignore
 # LICENSE must sit in the repository root: GitHub's license detection only looks there, so moving
 # it into a subdirectory would silently drop the license badge and the API field. SECURITY.md is
-# deliberately *not* listed — it lives in .github/, which this check skips as a hidden entry, and
+# deliberately *not* listed - it lives in .github/, which this check skips as a hidden entry, and
 # GitHub reads it from there just as well.
 echo "Check 12: files outside directory structure"
 
@@ -371,11 +371,48 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 19: plain-ASCII punctuation only
+# =============================================================================
+# Documentation here is read in terminals, greps and diffs as often as in a
+# browser. Typographic punctuation (em dash, en dash, curly quotes, ellipsis,
+# arrows, multiplication sign, emoji) renders inconsistently across terminals and
+# fonts, is awkward to type, and is easy to search for only if you already know
+# which of the several look-alike codepoints was used. Config files, scripts and
+# unit templates in this repository are ASCII anyway, so the documentation
+# follows the same rule rather than keeping a second convention.
+#
+# Two exceptions, both deliberate:
+#   U+2500-U+257F  box-drawing characters, used in the ASCII architecture
+#                  diagrams, where they are the conventional tool and not a
+#                  stylistic flourish
+#   U+00A7         the section sign, used when citing a document section
+#
+# The check deliberately reports the offending character and its position rather
+# than only the file, because a single stray character in a 400-line document is
+# otherwise a search problem. Gitignored files are skipped.
+echo "Check 19: plain-ASCII punctuation"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    { grep -noP '(?![\x{2500}-\x{257F}\x{00A7}])[^\x00-\x7F]' "${file}" || true; } | while read -r match; do
+        echo "  Non-ASCII punctuation: ${rel}:${match}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
+              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
+                 -o -name "*.j2" -o -name "*.conf" -o -name "*.py" -o -name "*.json" \
+                 -o -name "*.example" \))
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 18"
+echo "Checks run: 19"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

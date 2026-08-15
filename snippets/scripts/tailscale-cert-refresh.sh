@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# tailscale-cert-refresh.sh — keep a node's Tailscale TLS certificate fresh AND
+# tailscale-cert-refresh.sh - keep a node's Tailscale TLS certificate fresh AND
 # make the service that serves it pick the new one up.
 #
 # Why this exists (KE-16, 2026-07-10):
 #   Nodes that terminate TLS through `tailscale serve` never need this: serve asks
 #   tailscaled for the certificate on every connection, so renewal is transparent.
-#   LXC210 is different — Apache reads the certificate straight off disk from
+#   LXC210 is different - Apache reads the certificate straight off disk from
 #   /var/lib/tailscale/certs/. tailscaled did renew the file (15 minutes before it
 #   expired), but Apache had loaded the April certificate at start-up and kept
 #   serving it from memory. Nextcloud went unreachable over HTTPS with a perfectly
@@ -73,7 +73,7 @@ tailscale cert \
 after="$(sha256sum "${CERT}" 2>/dev/null | cut -d' ' -f1 || true)"
 
 if [ "${before}" = "${after}" ]; then
-    echo "certificate unchanged (valid for at least ${MIN_VALIDITY}) — no reload needed"
+    echo "certificate unchanged (valid for at least ${MIN_VALIDITY}) - no reload needed"
     exit 0
 fi
 

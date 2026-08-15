@@ -1,4 +1,4 @@
-# Paperless-ngx (CT211) — Service Documentation
+# Paperless-ngx (CT211) - Service Documentation
 
 ## Purpose
 
@@ -27,7 +27,7 @@ classification, tagging, and full-text search.
 | Data type | Location | Mount |
 |---|---|---|
 | DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
-| Documents (originals, archive) | MergerFS/SMB | `mp0: /mnt/smb/paperless → /data/paperless` |
+| Documents (originals, archive) | MergerFS/SMB | `mp0: /mnt/smb/paperless -> /data/paperless` |
 | Thumbnails | MergerFS/SMB | `/data/paperless/thumbnails` |
 | Consumption inbox | MergerFS/SMB | `/data/paperless/consumption` |
 | Export | MergerFS/SMB | `/data/paperless/export` |
@@ -48,7 +48,7 @@ classification, tagging, and full-text search.
 |---|---|---|
 | paperless | `ghcr.io/paperless-ngx/paperless-ngx:latest` | Web UI + API + Celery workers |
 | paperless-redis | `redis:7-alpine` | Task queue, cache, locking |
-| paperless-gotenberg | `gotenberg/gotenberg:8` | Document conversion (Office → PDF) |
+| paperless-gotenberg | `gotenberg/gotenberg:8` | Document conversion (Office -> PDF) |
 | paperless-tika | `apache/tika:latest` | Content extraction (metadata, text) |
 
 All containers run in Docker bridge network. Inter-container communication
@@ -84,9 +84,9 @@ Paperless-ngx is only healthy if all dependencies are satisfied:
 ## Access Model (Zero Trust)
 
 - No public ingress (no router port-forwarding, no public reverse proxy)
-- No LAN exposure — Tailscale-only
+- No LAN exposure - Tailscale-only
 - Service binds to loopback (`127.0.0.1:8000`)
-- Exposed via Tailscale Serve (`https=443 → 8000`)
+- Exposed via Tailscale Serve (`https=443 -> 8000`)
 - URL: `https://paperless.<tailnet-id>.ts.net`
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON)
 - See: [Tailscale ACL model](../platform/tailscale-acl.md)
@@ -103,7 +103,7 @@ Both values must match the Tailscale Serve URL (`https://paperless.<tailnet-id>.
 ### Client Access
 
 - Browser: via Tailscale Serve URL (HTTPS)
-- Mobile: Paperless Mobile (Android) — connects to the same Tailscale Serve URL
+- Mobile: Paperless Mobile (Android) - connects to the same Tailscale Serve URL
 - Both require the device to be authenticated on the Tailnet
 
 ---
@@ -140,8 +140,8 @@ Documents are ingested via Nextcloud External Storage into per-user consumption 
 
 ### Consumer Settings
 
-- `PAPERLESS_CONSUMER_RECURSIVE=true` — required for subdirectory scanning
-- `PAPERLESS_CONSUMER_POLLING=30` — inotify does not work on CIFS/SMB mounts
+- `PAPERLESS_CONSUMER_RECURSIVE=true` - required for subdirectory scanning
+- `PAPERLESS_CONSUMER_POLLING=30` - inotify does not work on CIFS/SMB mounts
 
 ### Workflows
 
@@ -154,15 +154,15 @@ Wildcard filters are required for Paperless v2.20 path matching.
 
 ### SMB Shares (VM102)
 
-- `Paperless-ingest-user1` → `/mnt/mergerfs/Paperless/consumption/user1`
-- `Paperless-ingest-user2` → `/mnt/mergerfs/Paperless/consumption/user2`
+- `Paperless-ingest-user1` -> `/mnt/mergerfs/Paperless/consumption/user1`
+- `Paperless-ingest-user2` -> `/mnt/mergerfs/Paperless/consumption/user2`
 - Dedicated SMB user: `paperless-ingest` (write access, scoped to consumption subdirectories)
 
 ### Nextcloud External Storage (LXC210)
 
 - App: `files_external`
-- Mount ID 4: Operator → `Paperless-ingest-user1` share
-- Mount ID 5: user2 → `Paperless-ingest-user2` share
+- Mount ID 4: Operator -> `Paperless-ingest-user1` share
+- Mount ID 5: user2 -> `Paperless-ingest-user2` share
 - Auth: global SMB credentials (not per-session)
 
 ### Post-Import Behavior
@@ -212,7 +212,7 @@ deletes the underlying consumption subdirectory:
         pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --remove-user <user> <mount-id>" www-data
         pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --add-user <user> <mount-id>" www-data
 
-4. Confirm with `files_external:verify <mount-id>` → status: ok
+4. Confirm with `files_external:verify <mount-id>` -> status: ok
 
 ## Operational Notes
 

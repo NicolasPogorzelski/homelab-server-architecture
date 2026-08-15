@@ -27,7 +27,7 @@ TEST_PORT="5433"
 
 # Must match the live cluster (SELECT datcollate FROM pg_database). The dump
 # carries CREATE DATABASE ... LC_COLLATE 'en_US.UTF-8', which fails against a
-# cluster built with a different locale — and the container's own default is
+# cluster built with a different locale - and the container's own default is
 # LANG=C, so this cannot be left implicit.
 TEST_LOCALE="en_US.UTF-8"
 
@@ -35,7 +35,7 @@ TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 METRIC_FILE="${TEXTFILE_DIR}/pg_restore_test.prom"
 
 # Ignore dumps younger than this. pg-backup.service may be writing one right now
-# — most likely during a boot-window catch-up, when both timers fire — and a
+# - most likely during a boot-window catch-up, when both timers fire - and a
 # half-written file would fail the integrity check and report a false alarm.
 # Same "wait until it has settled" guard as calibre-import.sh uses on inbox files.
 DUMP_MIN_AGE_MIN=5
@@ -70,7 +70,7 @@ cluster_exists() {
 cleanup() {
     if cluster_exists; then
         pg_dropcluster "${PG_VERSION}" "${TEST_CLUSTER}" --stop \
-            || echo "WARNING: could not drop cluster ${TEST_CLUSTER} — remove it by hand" >&2
+            || echo "WARNING: could not drop cluster ${TEST_CLUSTER} - remove it by hand" >&2
     fi
     [ -n "${STDERR_LOG}" ] && rm -f "${STDERR_LOG}"
     return 0
@@ -90,7 +90,7 @@ fi
 
 # === Select the newest settled dump ===
 # awk, not `head -1`: head exits after the first line and closes the pipe, which
-# can hand `sort` a SIGPIPE — and `set -o pipefail` would turn that into a failed
+# can hand `sort` a SIGPIPE - and `set -o pipefail` would turn that into a failed
 # run. It survives here only because five filenames fit in the pipe buffer, which
 # is luck, not design. awk reads its input to the end and cannot trigger it.
 # The sub() strips the sort key rather than using $2, so a path containing a
@@ -109,7 +109,7 @@ echo "selected dump: ${DUMP}"
 # compressed stream is intact; it does not prove the dump is complete, because a
 # pg_dumpall killed mid-write still produces a valid gzip member. Only the
 # trailer that pg_dumpall writes as its final line separates finished from
-# truncated — and the backup script checks neither.
+# truncated - and the backup script checks neither.
 if ! gzip -t "${DUMP}"; then
     echo "ERROR: ${DUMP} fails the gzip integrity check" >&2
     exit 1
@@ -117,7 +117,7 @@ fi
 
 MARKERS="$(gzip -cd "${DUMP}" | grep -c 'PostgreSQL database cluster dump complete' || true)"
 if [ "${MARKERS}" -ne 1 ]; then
-    echo "ERROR: ${DUMP} carries ${MARKERS} completion markers, expected 1 — truncated dump" >&2
+    echo "ERROR: ${DUMP} carries ${MARKERS} completion markers, expected 1 - truncated dump" >&2
     exit 1
 fi
 
@@ -146,7 +146,7 @@ STDERR_LOG="$(mktemp)"
 if ! gzip -cd "${DUMP}" \
         | runuser -u postgres -- psql --port "${TEST_PORT}" --quiet --dbname postgres \
           >/dev/null 2>"${STDERR_LOG}"; then
-    echo "ERROR: restore failed — psql exited non-zero" >&2
+    echo "ERROR: restore failed - psql exited non-zero" >&2
     head -20 "${STDERR_LOG}" >&2
     exit 1
 fi
@@ -186,7 +186,7 @@ done
 
 # === Publish the result ===
 # A run that fails raises SystemdUnitFailed. A run that never happens raises
-# nothing at all — the gap LvmThinMetricsStale exists for — so publish a
+# nothing at all - the gap LvmThinMetricsStale exists for - so publish a
 # timestamp and let PostgreSQLRestoreTestStale alert on its age.
 if [ -d "${TEXTFILE_DIR}" ]; then
     printf 'pg_restore_test_last_success_timestamp %s\n' "$(date +%s)" > "${METRIC_FILE}"

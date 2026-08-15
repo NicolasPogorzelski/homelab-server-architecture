@@ -41,11 +41,11 @@ The decision prioritizes operational predictability over theoretical performance
 
 ### Read-Write Shares (Service Identities)
 
-- Nextcloud → /mnt/mergerfs/Nextcloud
-- Vaultwarden → /mnt/mergerfs/Vaultwarden
-- Paperless → /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
-- openwebui → /mnt/mergerfs/openwebui
-- Postgres-backups → /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
+- Nextcloud -> /mnt/mergerfs/Nextcloud
+- Vaultwarden -> /mnt/mergerfs/Vaultwarden
+- Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
+- openwebui -> /mnt/mergerfs/openwebui
+- Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
 
 Ownership enforcement:
 
@@ -61,8 +61,8 @@ This ensures consistent file ownership regardless of client context.
 Paperless consumption directories are exposed as separate shares per user,
 allowing Nextcloud External Storage to write files for automatic ingestion.
 
-- Paperless-ingest-user1 → /mnt/mergerfs/Paperless/consumption/user1
-- Paperless-ingest-user2 → /mnt/mergerfs/Paperless/consumption/user2
+- Paperless-ingest-user1 -> /mnt/mergerfs/Paperless/consumption/user1
+- Paperless-ingest-user2 -> /mnt/mergerfs/Paperless/consumption/user2
 
 These shares use a dedicated SMB user (`paperless-ingest`) with write access
 scoped to the consumption subdirectories only.
@@ -80,10 +80,10 @@ and assign ownership to the corresponding Paperless user.
 The `storage` OS user doubles as the admin-workstation identity for direct media library access.
 Four shares expose the media library paths read-write to the admin workstation:
 
-- Filme → /mnt/mergerfs/Filme
-- Serien → /mnt/mergerfs/Serien
-- Audiobooks → /mnt/mergerfs/Audiobooks
-- Books → /mnt/mergerfs/Books
+- Filme -> /mnt/mergerfs/Filme
+- Serien -> /mnt/mergerfs/Serien
+- Audiobooks -> /mnt/mergerfs/Audiobooks
+- Books -> /mnt/mergerfs/Books
 
 These shares have no `create mask` / `directory mask` set (inherits filesystem defaults)
 because no other service identity writes to these paths alongside the workstation user.
@@ -97,9 +97,9 @@ using a credentials file at `/etc/samba/credentials-storage`.
 
 Media services receive read-only access:
 
-- Jellyfin (`media-jf`) → /mnt/mergerfs (full pool, RO)
-- Audiobookshelf (`media-abs`) → /mnt/mergerfs (full pool, RO)
-- Calibre-Web (`books-svc`) → /mnt/mergerfs/Books (scoped to Books, RO)
+- Jellyfin (`media-jf`) -> /mnt/mergerfs (full pool, RO)
+- Audiobookshelf (`media-abs`) -> /mnt/mergerfs (full pool, RO)
+- Calibre-Web (`books-svc`) -> /mnt/mergerfs/Books (scoped to Books, RO)
 
 These shares are:
 
@@ -123,7 +123,7 @@ SMB is not used for internet-facing services.
 
 ### Binding: known deviation from the platform rule
 
-Samba does **not** follow the platform binding rule ("services bind to the Tailscale IP, never to
+Samba does not follow the platform binding rule ("services bind to the Tailscale IP, never to
 LAN interfaces"). `bind interfaces only = no` makes `smbd` accept on every interface, including
 the LAN interface and its globally routable IPv6 address; access control rests entirely on
 `hosts allow` / `hosts deny`, which Samba applies *after* accepting the TCP connection.
@@ -131,24 +131,24 @@ the LAN interface and its globally routable IPv6 address; access control rests e
 An earlier version of this section claimed "No public exposure". That was an unverified assertion
 and has been removed: port 445 is bound on a world-routable IPv6 address, and what prevents
 reachability today is the router's default block on inbound IPv6 plus the absence of any IPv6
-entry in `hosts allow` — not the service's binding.
+entry in `hosts allow` - not the service's binding.
 
-The deviation persists for a reason that is **not** configuration laziness: **Samba cannot bind an
+The deviation persists for a reason that is not configuration laziness: **Samba cannot bind an
 IPv4 address on `tailscale0` at all.** The interface is a point-to-point TUN device without the
 `BROADCAST` flag, and Samba's IPv4 interface selection skips such interfaces. Tried and verified
-2026-07-14 with `<ip>/32`, with the bare IP, and with the interface name — none binds the Tailscale
+2026-07-14 with `<ip>/32`, with the bare IP, and with the interface name - none binds the Tailscale
 IPv4 address, and an explicit `interfaces` list therefore *removes* the Tailscale SMB path instead
 of securing it. (The IPv6 ULA does bind as `/128`, because IPv6 has no broadcast concept.) The
 `# Robust: listen on all available interfaces (avoid bind failures)` comment in the live `smb.conf`
 is the fossil of an earlier attempt that hit the same wall.
 
-Throughput is not the reason either — measured 2026-07-14, Tailscale costs ~8 % on this link
+Throughput is not the reason either - measured 2026-07-14, Tailscale costs ~8 % on this link
 (741 vs 809 Mbit/s), because same-subnet peers negotiate a direct WireGuard path over the LAN
 rather than via a relay.
 
 The boundary therefore lives in the kernel instead of the application. Since 2026-07-14 the
 nftables table `inet smb_guard` on VM102 (loaded by `smb-guard.service`) drops inbound TCP/445 over
-IPv6 on the LAN interface — closing the world-routable socket — and over IPv4 accepts only VM100
+IPv6 on the LAN interface - closing the world-routable socket - and over IPv4 accepts only VM100
 and the Proxmox host, the two nodes that actually mount. Tailscale traffic arrives on `tailscale0`
 and is not evaluated. `hosts allow` remains underneath as redundancy.
 

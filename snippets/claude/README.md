@@ -14,7 +14,7 @@ session start. Eliminates the need to manually brief Claude on where work left o
 
 **PreToolUse (`git commit *`)**
 Runs two checks before every commit:
-1. Blocks direct commits on `main` — a branch must be used
+1. Blocks direct commits on `main` - a branch must be used
 2. Runs `validate-repo.sh` and blocks the commit if any check fails
 
 **Stop**

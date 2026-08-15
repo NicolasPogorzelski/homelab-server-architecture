@@ -4,7 +4,7 @@
 
 ## About
 
-Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps and platform engineering. The emphasis is on cost-aware, risk-conscious engineering — explicit trade-offs over cargo-culted complexity. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
+Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into DevOps and platform engineering. The emphasis is on cost-aware, risk-conscious engineering - explicit trade-offs over cargo-culted complexity. Incidents are documented, post-mortems written, and every failure turned into a runbook or known-error entry.
 
 A self-designed, security-focused platform architecture built on Proxmox.
 
@@ -18,13 +18,13 @@ It is not built as a collection of services, but as a layered infrastructure pla
 
 | Phase | Topic | Status |
 |---|---|---|
-| 1 | Linux, Bash, Git, Networking | ✅ Done |
-| 2 | Docker + Compose | ✅ Done |
-| 3 | Monitoring — Prometheus, Grafana, Alertmanager | ✅ Done |
-| 4 | Zero Trust Networking — Tailscale, ACL design | ✅ Done |
-| 5 | Ansible — playbooks, roles, vault, hardening | ✅ Done |
-| 6 | Terraform — IaC on AWS (free tier) + Proxmox provisioning | Planned |
-| 7 | Kubernetes — k3s in the homelab | Planned |
+| 1 | Linux, Bash, Git, Networking | Done |
+| 2 | Docker + Compose | Done |
+| 3 | Monitoring - Prometheus, Grafana, Alertmanager | Done |
+| 4 | Zero Trust Networking - Tailscale, ACL design | Done |
+| 5 | Ansible - playbooks, roles, vault, hardening | Done |
+| 6 | Terraform - IaC on AWS (free tier) + Proxmox provisioning | Planned |
+| 7 | Kubernetes - k3s in the homelab | Planned |
 | 8 | Cloud depth (AWS) + Python | Planned |
 
 Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
@@ -59,20 +59,20 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
 - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
-- [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty — deferred to Phase 6)
+- [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
 
 ### Nodes
 
-- [VM100 – GPU / Compute](docs/nodes/vm100.md) (Docker, NVIDIA, Jellyfin, Audiobookshelf)
-- [VM102 – Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
-- [LXC200 – Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
-- [LXC210 – Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
-- [LXC211 – Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
-- [LXC220 – Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
-- [LXC230 – OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
-- [LXC240 – Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
-- [LXC250 – DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
-- [LXC260 – PostgreSQL](docs/nodes/lxc260.md) (centralized platform database)
+- [VM100 - GPU / Compute](docs/nodes/vm100.md) (Docker, NVIDIA, Jellyfin, Audiobookshelf)
+- [VM102 - Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
+- [LXC200 - Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
+- [LXC210 - Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
+- [LXC211 - Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
+- [LXC220 - Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
+- [LXC230 - OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
+- [LXC240 - Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
+- [LXC250 - DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
+- [LXC260 - PostgreSQL](docs/nodes/lxc260.md) (centralized platform database)
 
 ### Services
 
@@ -104,7 +104,7 @@ This platform is not designed for high availability. It prioritizes deterministi
 
 ### Automation
 
-- [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized — real IPs gitignored)
+- [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Playbooks](ansible/playbooks/) (apt-upgrade, bootstrap-ansible-user, node-exporter, prometheus-config, paperless-env)
 - [Roles](ansible/roles/) (node_exporter, prometheus-config, paperless-env)
 - [Ansible Platform Doc](docs/platform/ansible.md) (control node, vault setup, conventions)

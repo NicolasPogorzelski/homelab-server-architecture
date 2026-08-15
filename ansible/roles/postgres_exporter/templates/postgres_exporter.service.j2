@@ -3,7 +3,7 @@
 Description=Prometheus PostgreSQL Exporter
 After=network.target postgresql.service
 # The exporter binds a Tailscale address, so tailscaled must have assigned it
-# first — the KE-9/KE-12 boot-race class. postgresql_boot_order gates the database
+# first - the KE-9/KE-12 boot-race class. postgresql_boot_order gates the database
 # on the same condition.
 Wants=tailscaled.service
 After=tailscaled.service

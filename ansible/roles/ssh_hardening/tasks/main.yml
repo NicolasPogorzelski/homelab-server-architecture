@@ -8,7 +8,7 @@
     content: |
       # Managed by the ssh-hardening Ansible role.
       # sshd applies the *first* match for a given directive it encounters,
-      # and Include expands sshd_config.d/*.conf in filename-sort order — so a
+      # and Include expands sshd_config.d/*.conf in filename-sort order - so a
       # 00-prefixed file here wins over e.g. cloud-init's 50-cloud-init.conf
       # without editing or removing that distro/cloud-init-owned file (which
       # cloud-init can regenerate on a future run).
