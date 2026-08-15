@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily MariaDB backup at {{ mariadb_backup_oncalendar }}
+
+[Timer]
+OnCalendar={{ mariadb_backup_oncalendar }}
+
+# The Proxmox host is powered down overnight and woken by RTC in the morning
+# (homelab_schedule), so nothing is running at 03:30. A cron job would simply
+# miss the slot and be lost -- which is exactly how the PostgreSQL dumps stopped
+# for two months without anything noticing. Persistent=true makes systemd record
+# the last run under /var/lib/systemd/timers/ and fire an overdue job at the next
+# boot instead.
+Persistent=true
+
+# Because of that catch-up, the half-hour offset from pg-backup's 03:00 buys
+# nothing on the run that matters: after an overnight power-down both timers are
+# overdue and fire within seconds of each other, streaming to the same CIFS
+# server on vm102. The randomised delay spreads them without coupling the two
+# units together -- ordering one after the other would make each backup depend on
+# a database it has nothing to do with.
+RandomizedDelaySec={{ mariadb_backup_randomized_delay_sec }}
+
+Unit=mariadb-backup.service
+
+[Install]
+WantedBy=timers.target

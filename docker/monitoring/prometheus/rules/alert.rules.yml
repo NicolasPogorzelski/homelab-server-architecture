@@ -52,6 +52,22 @@ groups:
           summary: "PostgreSQL backup is stale"
           description: "Last successful pg_dumpall on CT260 was more than 25 hours ago."
 
+      # Same 25-hour threshold and the same blind spot as the PostgreSQL rule
+      # above: it means "not more than 25 hours of uptime without a backup", not
+      # "a backup every day", because Prometheus runs on the host that powers
+      # down overnight and the timer's Persistent=true catch-up refreshes the
+      # timestamp before Prometheus is back to look. Deliberately not corrected
+      # here -- on a host that sleeps by design, an alert for "the host was off"
+      # is noise, and the honest fix is the external heartbeat on the backlog.
+      - alert: MariaDBBackupStale
+        expr: (time() - mariadb_backup_last_success_timestamp) > 90000
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MariaDB backup is stale"
+          description: "Last successful mariadb-dump on CT210 was more than 25 hours ago. Nextcloud's file data is on the archive pool; without this database those files are unusable."
+
       # 40 days, against a monthly schedule: one missed run is slack, two is a
       # fault. Note this rule cannot fire while the metric has never been written
       # at all -- an absent series produces no result -- which it shares with

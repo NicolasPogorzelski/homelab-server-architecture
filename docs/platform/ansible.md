@@ -113,6 +113,7 @@ See: [CLAUDE.md — Vault password changed](../../CLAUDE.md)
 | `docker-compose-update.yml` | `docker` | `docker compose pull` + `up` per stack via `docker_compose_v2` (`pull: always`), `serial: 1` |
 | `postgresql-provisioning.yml` | `database` | Declarative tenant onboarding: DB + user + grants + `pg_hba` `hostssl` line + reload, looping over `postgres_tenants` |
 | `pg-backup.yml` | `database` | Deploy pg-backup infrastructure to LXC260: `pg-backup.sh` script, textfile collector directory, `pg-backup.service` + `pg-backup.timer` (03:00, `Persistent=true`); removes the legacy cron entry |
+| `mariadb-backup.yml` | `lxc210` | Deploy mariadb-backup infrastructure to LXC210: `mariadb-backup.sh` script, textfile collector directory, `mariadb-backup.service` + `mariadb-backup.timer` (03:30, `Persistent=true`, `RandomizedDelaySec=300`). Asserts `/mnt/backups` is a CIFS mount and refuses to deploy otherwise. Targets the host by name, not the `services` group — lxc211 is in that group and runs no database of its own |
 | `calibre-import.yml` | `lxc220` | Deploy Calibre auto-import service via `calibre_importer` role (systemd oneshot + 2-min timer) |
 | `fleet-health-check.yml` | `all` | Query all nodes for uptime, RAM, mounts, Docker state; write Markdown report |
 | `onboarding.yml` | new nodes | Three-play node onboarding: bootstrap as root → ssh_hardening → node_exporter |

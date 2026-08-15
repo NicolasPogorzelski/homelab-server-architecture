@@ -55,11 +55,14 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- **15 alert rules active** in 7 groups (verified against the live Prometheus API 2026-08-13; the `smart` group exists but is deliberately empty, see below):
+- **17 alert rules active** in 7 groups (the `smart` group exists but is deliberately empty, see
+  below). Corrected 2026-08-15: this line read "15" while the table below listed 16, and the live
+  Prometheus API reported 16 on 2026-08-13 — the prose had not been recounted when the `lvm` group
+  grew. `MariaDBBackupStale` makes 17.
 
 | Group | Rules |
 |---|---|
-| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale` |
+| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBBackupStale` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale` |
 | `storage` | `ArchivePoolLowSpace` |
@@ -75,6 +78,11 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   2026-08-13 11:50) with no dump written and the alert empty across the whole range. The rule means
   "not more than 25 hours of **uptime** without a backup", not "a backup every day". Detail and
   reasoning in [`postgresql-platform.md`](../services/postgresql-platform.md#backup-strategy).
+- `MariaDBBackupStale` requires the Node Exporter textfile collector on lxc210 (see the
+  [MariaDB backup runbook](../../runbooks/database/mariadb-backup.md)). It carries the same
+  host-is-off blind spot as the PostgreSQL rule above, for the same structural reason. It covers
+  Nextcloud's own database, which the nightly `pg_dumpall` never touched — a gap that existed
+  unnoticed until the 2026-08-15 data classification looked for it.
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
 ## Failure / Dependency Notes
