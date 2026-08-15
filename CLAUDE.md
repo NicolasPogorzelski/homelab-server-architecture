@@ -108,7 +108,7 @@ notes there and keep this section short.
   file intact and unusable. Same pass found that Vaultwarden, Paperless documents and Nextcloud
   files rely on SnapRAID parity and nothing else: parity protects against *disk* loss, not against
   deletion, corruption or ransomware, because the next `snapraid sync` writes the damage into the
-  parity. Tier 1 #3 was reworded — it had presumed local copies existed to be duplicated off-site.
+  parity. **And parity over a live database is worse than it looks (KE-19, 2026-08-15):** `Vaultwarden/db.sqlite3-shm` and `-wal` sat in the array, so parity captured them at a different moment than the main database — an inconsistent set from which a reconstruction can be corrupt. The side files are now excluded; `db.sqlite3` itself deliberately stays in, because imperfect protection beats none until the export exists. Tier 1 #3 was reworded — it had presumed local copies existed to be duplicated off-site.
   **Verified live 2026-08-15** via `pct exec`: empty root crontab, no dump among eleven timers, and
   the only dumps anywhere under `/mnt/smb` are six `pg_dumpall_*` files. The schema is 38.3 MB
   across 179 InnoDB tables — **the gap was never a cost problem.** `postgresql_backup` was built
