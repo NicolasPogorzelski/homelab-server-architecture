@@ -257,7 +257,7 @@ hidden entry and which GitHub reads just as well.
 |---|---|
 | `docs/services/*.md` | `## Access Model` (Zero Trust) |
 | `docs/nodes/*.md` | `## Failure Impact` |
-| `runbooks/**/*.md` (non-README) | `Precondition`, `Verification`, `Failure` |
+| `runbooks/**/*.md` (non-README) | `Precondition`, `Verification`, `Failure`, `Rollback` |
 
 **Sanitization rules** (enforced by validation):
 

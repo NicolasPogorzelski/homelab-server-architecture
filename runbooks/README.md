@@ -7,7 +7,17 @@ Operational procedures for deterministic recovery and reproducible operations.
 - Commands (copy/paste safe, deterministic order)
 - Verification (how to confirm success)
 - Failure modes (common errors + what to check next)
-- Rollback / abort (only if applicable)
+- Rollback / abort (**required**, and enforced by `validate-repo.sh` Check 5)
+
+"Not applicable" is a legitimate rollback section — a procedure that only reads has nothing to
+undo — but it has to be written down together with its reason. Omitting the section makes "there is
+nothing to reverse" indistinguishable from "nobody considered it", and those two are very different
+things to discover at 02:00 with a service down.
+
+Where a step is genuinely irreversible, the section states that plainly and names the **abort
+criteria** instead: the conditions under which the step must not be taken at all. `snapraid sync` is
+the clearest case in this repository — it has no rollback whatsoever, which is precisely why its
+pre-checks are the control.
 
 Related operational model:
 - See: [Platform Operations](../docs/platform/operations.md)

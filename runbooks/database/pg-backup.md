@@ -124,6 +124,24 @@ psql -U postgres -c '\l'
 
 Full restore procedure: [pg-restore.md](pg-restore.md)
 
+## Rollback
+
+The role deploys a script, two units and a textfile directory. None of it touches the database, so
+backing it out cannot lose data.
+
+```bash
+pct exec 260 -- systemctl disable --now pg-backup.timer
+pct exec 260 -- rm /etc/systemd/system/pg-backup.service /etc/systemd/system/pg-backup.timer
+pct exec 260 -- systemctl daemon-reload
+```
+
+Leave the dumps on the share. They are the part worth keeping, and nothing needs the units in order
+to read them.
+
+**What is deliberately not reversible is the removal of the legacy cron entry.** If both mechanisms
+existed, a night on which the host stayed up would fire the dump twice. Re-adding it by hand would
+reintroduce exactly the silent-loss failure the timer exists to fix.
+
 ---
 
 ## Notes
