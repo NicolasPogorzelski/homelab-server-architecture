@@ -217,7 +217,12 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # =============================================================================
 # Check 12: no files outside defined directory structure
 # =============================================================================
-# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ ansible/ terraform/ README.md .gitignore
+# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ ansible/ terraform/
+#                    README.md CLAUDE.md LICENSE .gitignore
+# LICENSE must sit in the repository root: GitHub's license detection only looks there, so moving
+# it into a subdirectory would silently drop the license badge and the API field. SECURITY.md is
+# deliberately *not* listed — it lives in .github/, which this check skips as a hidden entry, and
+# GitHub reads it from there just as well.
 echo "Check 12: files outside directory structure"
 
 while read -r file; do
@@ -225,7 +230,7 @@ while read -r file; do
     case "${rel}" in
         docs|docker|snippets|runbooks|scripts|ansible|terraform) continue ;;
         docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*|terraform/*) continue ;;
-        README.md|CLAUDE.md|.gitignore) continue ;;
+        README.md|CLAUDE.md|LICENSE|.gitignore) continue ;;
         .*) continue ;;  # hidden files managed by git
         *)
            if git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null; then
