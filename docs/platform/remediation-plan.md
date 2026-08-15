@@ -10,6 +10,11 @@ else is why these items must happen in this sequence, and that is what this file
 No dates. Milestones are expressed as dependencies, so a slipped hardware delivery does not make
 the document wrong. **Update it in the same commit as the work it describes.**
 
+For the same items read as security controls rather than as work — which standard control each one
+implements, and which are enforced rather than merely practised — see
+[`security-controls.md`](security-controls.md). It does not duplicate this ordering; it explains
+what is at stake in each item's language rather than in this repository's.
+
 ---
 
 ## The dependency chain
@@ -44,7 +49,7 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 |---|---|---|
 | 1 | Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key **off-site** — sealed on paper outside the flat, plus a password manager somebody else operates. Demote the GitHub key to a read-only deploy key | **Unrecoverable.** One copy, gitignored, on the boot SSD with the unresolved [KE-14](known-errors.md#ke-14) faults. Losing the vault password makes every vaulted secret undecryptable — there is no restore path. See [lxc250 § Open Items](../nodes/lxc250.md). **Target corrected 2026-08-14 — this line used to say "into Vaultwarden", and that was wrong:** see the note below |
 | 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ **Done 2026-08-13.** ~~Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time~~ **Done 2026-08-14** — plus write-to-`.partial`-then-rename, so an unverified dump never appears under the real name, and verification ordered before retention deletion | Closed. A dump that cannot be read now fails the run that wrote it and raises `SystemdUnitFailed`, instead of surviving up to 31 days until the monthly restore test — by which point the 7-day retention has deleted every healthy predecessor. Note the write-time checks prove the stream is complete, not that it is durable on vm102: the read-back is served from the CIFS page cache. Durability remains the restore test's job |
-| 3 | Off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents) | All backups are local, on the same site. No protection against site loss or ransomware |
+| 3 | Off-site copy of the **C1 datasets** defined in [`data-classification.md`](data-classification.md) | All backups are local, on the same site. No protection against site loss or ransomware. **Scope defined 2026-08-15 — and this line's earlier wording was wrong.** It read "off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which presumes local copies exist that merely need duplicating elsewhere. Two of them do not exist: the Nextcloud MariaDB has **no backup at all**, and Vaultwarden has no consistent export. Those must be created first — an off-site copy of nothing is nothing |
 
 **Why item 1 no longer says "into Vaultwarden" (decided 2026-08-14).** Vaultwarden's persistent data
 lives on `mp0: /mnt/smb/vaultwarden`, i.e. on vm102's MergerFS pool — so against the *predicted*
@@ -72,7 +77,7 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 
 | # | Item | Unblocks |
 |---|---|---|
-| 4 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) | Lifts the standing hold on `docker-compose-update`; removes the last store with no off-site copy |
+| 4 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) — **including erasure of the removed disk before it leaves the flat** | Lifts the standing hold on `docker-compose-update`; removes the last store with no off-site copy. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with 7680 unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
 | 5 | [KE-14](known-errors.md#ke-14) physical verification — 12 V rail, cable reseat, HBA temperature, PSU age | **Not delivery-blocked.** Needs only host downtime, which the nightly RTC cycle already provides |
 | 6 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
 
@@ -100,6 +105,14 @@ service somebody else operates (a free heartbeat SaaS), because a self-hosted on
 of its own. Note the fleet already builds absence-alerts twice — `LvmThinMetricsStale` and
 `PostgreSQLRestoreTestStale` — this extends the same idea to the alerting chain itself.
 
+
+**Physical and environmental controls are undocumented (added 2026-08-15).** The whole A.7 family —
+who has physical access to the machine, whether the disks are encrypted at rest, whether there is an
+uninterruptible supply — has never been written down. It surfaces here because it stopped being
+abstract: the leading hypothesis for [KE-14](known-errors.md#ke-14) is a sagging 12 V rail, i.e. an
+open incident whose suspected cause is exactly the control nobody documented. Cheap to close on
+paper, and the paper is what makes the KE-14 verification a planned step instead of a recurring
+intention.
 
 lxc250 inventory adoption and its `preflight.yml` gate — which must **replace** that node's
 hand-written `node_exporter` binding `*:9100`, not merely add one ([lxc250 § Open
