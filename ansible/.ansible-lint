@@ -4,7 +4,7 @@
 # Enforced at the strictest built-in profile (production) with a single documented
 # waiver:
 #
-#   var-naming[no-role-prefix] — requires every role variable to carry the role
+#   var-naming[no-role-prefix] - requires every role variable to carry the role
 #   name as a prefix (e.g. paperless_dbuser -> paperless_env_dbuser). For a private
 #   single-tenant homelab repo this anti-collision guarantee has negligible value:
 #   the roles are never shared to Galaxy, the variables are already semantically

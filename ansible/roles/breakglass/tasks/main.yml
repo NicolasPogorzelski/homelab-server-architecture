@@ -12,7 +12,7 @@
 # keys the previous one added and only the last key would survive.
 #
 # exclusive: true makes the inventory the single source of truth. Until now the file
-# accumulated whatever had ever been added by hand — a legacy `root@server` RSA key
+# accumulated whatever had ever been added by hand - a legacy `root@server` RSA key
 # belonging to no current machine, and `devops@devops-lxc`, the control node's
 # interactive user, sitting on the *admin* account. Ansible authenticates as the
 # `ansible` user with its own authorized_keys, so dropping the latter costs no
@@ -31,7 +31,7 @@
     # The separator must be a real newline. `join("\n")` written inline does not
     # produce one: Jinja does not unescape \n in that string literal, and a
     # --check --diff showed the two keys landing on a single line joined by a
-    # literal backslash-n — one malformed entry, both laptop keys dead, with the
+    # literal backslash-n - one malformed entry, both laptop keys dead, with the
     # old keys already removed by exclusive: true. A double-quoted YAML scalar is
     # the one place the escape is reliably expanded, so the newline is built here
     # and handed to Jinja as a value.

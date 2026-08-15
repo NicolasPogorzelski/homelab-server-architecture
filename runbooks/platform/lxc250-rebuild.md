@@ -1,7 +1,7 @@
 # LXC250 Rebuild
 
 Procedure for recreating the DevOps workstation from scratch after loss or intentional rebuild.
-Running services on other nodes are not affected — LXC250 is not in the data path.
+Running services on other nodes are not affected - LXC250 is not in the data path.
 
 ## Preconditions
 
@@ -35,8 +35,8 @@ pct create 250 local:vztmpl/<debian-12-template>.tar.zst \
   --onboot 1
 ```
 
-`<debian-12-template>` — use the current template name from `pveam list local`.
-`local-lvm` and `vmbr0` — adjust to your Proxmox storage pool and bridge if needed.
+`<debian-12-template>` - use the current template name from `pveam list local`.
+`local-lvm` and `vmbr0` - adjust to your Proxmox storage pool and bridge if needed.
 
 Add Tailscale TUN config to `/etc/pve/lxc/250.conf`:
 
@@ -66,7 +66,7 @@ Generate a random temporary password and save it in your password manager immedi
 ```bash
 PASS=$(openssl rand -base64 16)
 echo "devops:$PASS" | chpasswd
-echo "Temporary password: $PASS — save this in your password manager now"
+echo "Temporary password: $PASS - save this in your password manager now"
 ```
 
 Switch to devops user for all remaining steps:
@@ -95,7 +95,7 @@ tailscale ip -4
 
 ---
 
-## 4. SSH — bind to Tailscale IP
+## 4. SSH - bind to Tailscale IP
 
 Edit `/etc/ssh/sshd_config`, set:
 
@@ -123,7 +123,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart ssh
 ```
 
-Lock the devops password — SSH key is the only login path from this point:
+Lock the devops password - SSH key is the only login path from this point:
 
 ```bash
 sudo passwd -l devops
@@ -138,7 +138,7 @@ ssh-keygen -t ed25519 -C "devops@lxc250" -f ~/.ssh/id_ed25519
 cat ~/.ssh/id_ed25519.pub
 ```
 
-Add the public key to GitHub: Settings → SSH and GPG keys → New SSH key.
+Add the public key to GitHub: Settings -> SSH and GPG keys -> New SSH key.
 
 Verify:
 
@@ -215,7 +215,7 @@ for the current install command.
 The safest property of this procedure is that it **builds a new container instead of repairing the
 old one**, so the rollback is simply not to switch over.
 
-- Keep the old CT250 in place, **stopped rather than destroyed**, until the new one has passed the
+- Keep the old CT250 in place, stopped rather than destroyed, until the new one has passed the
   Verification section. The constraint is thin-pool space on the boot SSD -- check it before
   starting, not after.
 - If the new container fails verification: `pct stop <new>` and `pct start 250`. Nothing outside the
@@ -226,5 +226,5 @@ old one**, so the rollback is simply not to switch over.
 **What has no rollback is the un-versioned material.** `~/.vault_pass`, the real `hosts.yml` and the
 Ansible SSH key are gitignored and exist only on this node. If they were not recovered from the old
 container or retrieved from the escrow, the rebuild produces a control node that cannot decrypt
-anything. Confirm you hold them **before creating** the new container, not after destroying the old
+anything. Confirm you hold them before creating the new container, not after destroying the old
 one.

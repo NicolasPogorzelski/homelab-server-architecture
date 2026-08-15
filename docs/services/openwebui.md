@@ -1,4 +1,4 @@
-# OpenWebUI (CT230) — Service Documentation
+# OpenWebUI (CT230) - Service Documentation
 
 ## Purpose
 
@@ -46,9 +46,9 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 | Data type | Location | Mount |
 |---|---|---|
 | DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
-| App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui → /var/lib/openwebui/data` |
+| App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui -> /var/lib/openwebui/data` |
 | Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/openwebui/containerd` + `docker-data` |
-| Uploads | MergerFS/SMB | `mp0: /mnt/smb/openwebui → /data/openwebui` |
+| Uploads | MergerFS/SMB | `mp0: /mnt/smb/openwebui -> /data/openwebui` |
 | Vector store | MergerFS/SMB | `/data/openwebui/vector` (file-based only) |
 | DB backups | MergerFS/SMB | `/data/openwebui/backups` |
 
@@ -68,7 +68,7 @@ OpenWebUI connects to Ollama inference backends via Tailnet.
 | admin workstation | `http://<tailscale-ip-admin-workstation>:11434` | `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` | Primary |
 | VM100 | `http://<tailscale-ip-vm100>:11434` | `qwen3-8b-16k` | Backup |
 
-Backend URLs are configured in OpenWebUI Admin Panel → Settings → Connections → Ollama API.
+Backend URLs are configured in OpenWebUI Admin Panel -> Settings -> Connections -> Ollama API.
 
 See: [Ollama Service](./ollama.md)
 
@@ -91,9 +91,9 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 ## Access Model (Zero Trust)
 
 - No public ingress (no router port-forwarding, no public reverse proxy)
-- No LAN exposure — Tailscale-only
+- No LAN exposure - Tailscale-only
 - Service binds to loopback (`127.0.0.1:3000`)
-- Exposed via Tailscale Serve (`https=443 → 3000`)
+- Exposed via Tailscale Serve (`https=443 -> 3000`)
 - URL: `https://ai-openwebui.<tailnet-id>.ts.net`
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON)
 - See: [Tailscale ACL model](../platform/tailscale-acl.md)

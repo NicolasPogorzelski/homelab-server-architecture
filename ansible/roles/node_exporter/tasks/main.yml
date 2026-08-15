@@ -57,7 +57,7 @@
 
 # No owner/group on purpose: on lxc260 this directory belongs to `postgres`, which
 # is the user pg-backup.sh writes its .prom file as. Asserting owner: root here
-# would silently break that backup's metric — the same class of failure this
+# would silently break that backup's metric - the same class of failure this
 # default-on collector is meant to prevent.
 - name: Ensure the textfile collector directory exists
   ansible.builtin.file:

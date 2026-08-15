@@ -6,7 +6,7 @@
 # gone stale (KE-10, root cause unconfirmed).
 #
 # The timer is MONOTONIC, not calendar-based: what matters is "every 30 minutes of
-# uptime", not "at :00 and :30". `Persistent=` is therefore deliberately absent —
+# uptime", not "at :00 and :30". `Persistent=` is therefore deliberately absent -
 # it only applies to OnCalendar timers and systemd ignores it here. Catching up a
 # missed poll after a power-off is meaningless: the container is not running either.
 

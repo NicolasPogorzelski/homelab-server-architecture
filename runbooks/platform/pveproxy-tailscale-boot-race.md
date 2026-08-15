@@ -4,7 +4,7 @@
 
 After a host reboot, SSH works but the Proxmox web UI on `:8006` is unreachable.
 `pveproxy` is configured to bind only the host Tailscale IP
-(`/etc/default/pveproxy` → `LISTEN_IP=<tailscale-ip-proxmox-host>`) and started
+(`/etc/default/pveproxy` -> `LISTEN_IP=<tailscale-ip-proxmox-host>`) and started
 before `tailscaled` assigned that IP, so it failed to bind and systemd gave up.
 
 Observed failure signature:
@@ -27,7 +27,7 @@ Background: [KE-12](../../docs/platform/known-errors.md#ke-12-pveproxy-fails-to-
   ```bash
   ip -4 addr show tailscale0
   ```
-  If `tailscale0` has no IP, fix Tailscale first — pveproxy cannot bind an address
+  If `tailscale0` has no IP, fix Tailscale first - pveproxy cannot bind an address
   that does not exist.
 
 ## Diagnosis
@@ -52,7 +52,7 @@ systemctl reset-failed pveproxy
 systemctl restart pveproxy
 ```
 
-- `reset-failed` clears the failed state **and** the start-limit counter — without
+- `reset-failed` clears the failed state and the start-limit counter - without
   it, systemd refuses to restart after "start request repeated too quickly".
 - The restart now succeeds because `tailscale0` already holds the IP.
 
@@ -90,15 +90,15 @@ systemctl cat pveproxy | grep -A4 wait-tailscale
 systemd-analyze verify pveproxy.service      # no output = OK
 ```
 
-The real test of the durable fix is a **cold boot**: after the next reboot,
+The real test of the durable fix is a cold boot: after the next reboot,
 `systemctl is-active pveproxy` should be `active` with no manual restart.
 
 ## Failure modes
 
 | Symptom | Check / fix |
 |---|---|
-| `restart` still fails with `Cannot assign requested address` | `tailscale0` has no IP — `tailscale status`, bring Tailscale up first |
-| `restart` rejected, "start request repeated too quickly" | `systemctl reset-failed pveproxy` was skipped — run it, then restart |
+| `restart` still fails with `Cannot assign requested address` | `tailscale0` has no IP - `tailscale status`, bring Tailscale up first |
+| `restart` rejected, "start request repeated too quickly" | `systemctl reset-failed pveproxy` was skipped - run it, then restart |
 | Different `pveproxy` error (cert/`pmxcfs`) | Not this race; check `pvecm updatecerts`, `/etc/pve` mounted (`pvedaemon` active) |
 | Drop-in present but cold boot still fails | The 30 s poll timed out (Tailscale slow to come up); raise the loop count or investigate `tailscaled` startup |
 

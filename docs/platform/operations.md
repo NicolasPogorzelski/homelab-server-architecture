@@ -2,7 +2,7 @@
 
 This document describes the operational model of the homelab infrastructure: monitoring, maintenance routines, dependency ordering, recovery procedures, and the security posture.
 
-The goal is **reboot-safe**, **least-privilege**, and **operationally explainable** infrastructure (runbook-friendly, deterministic recovery).
+The goal is reboot-safe, least-privilege, and operationally explainable infrastructure (runbook-friendly, deterministic recovery).
 
 See: [Runbook index](../../runbooks/README.md)
 See: [Known Errors & Workarounds](./known-errors.md)
@@ -48,7 +48,7 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - Prometheus: `127.0.0.1:9090`
 - Grafana: `127.0.0.1:3000`
 - Node Exporter: `127.0.0.1:9100`
-- Remote access via the **zero-trust overlay model (Tailscale)**
+- Remote access via the zero-trust overlay model (Tailscale)
 
 ### Monitored Layers (Current/Target)
 
@@ -72,14 +72,14 @@ See: [Known Errors & Workarounds](./known-errors.md)
 - **SMART: the collector is deployed, the useful attributes are not exported.**
   `node-exporter-smarttext.sh` has run on the Proxmox host every 60 s since 2025-12 (textfile
   collector), but emits only `smart_health_passed` and `smart_temperature_celsius`. Measured
-  2026-08-13, the failing aux-disk of [KE-13](./known-errors.md#ke-13) — 7680 unreadable sectors —
+  2026-08-13, the failing aux-disk of [KE-13](./known-errors.md#ke-13) - 7680 unreadable sectors -
   exports `smart_health_passed 1`, because `Current_Pending_Sector` normalises to `054` against
   threshold `000` and can never trip the drive's self-assessment. What is missing is
   `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count`,
   plus rules in the (currently empty) `smart` group. Disk-failure detection still rests on SnapRAID
   alerts. Blocked on the host becoming an Ansible node
 - Alerting with Alertmanager (routing via SMTP or webhook)
-- “Golden signals” dashboards per tier (Storage/Compute/Services)
+- "Golden signals" dashboards per tier (Storage/Compute/Services)
 
 ---
 
@@ -87,9 +87,9 @@ See: [Known Errors & Workarounds](./known-errors.md)
 
 ### 2.1 SnapRAID (VM102)
 
-SnapRAID provides **parity-based** protection for the MergerFS-backed data disks.
+SnapRAID provides parity-based protection for the MergerFS-backed data disks.
 
-- Protection type: **not real-time**
+- Protection type: not real-time
 - Sync model: scheduled/manual
 - Integrity model: scrub/rehash over time
 
@@ -112,7 +112,7 @@ Risk profile:
 
 ### 2.2 MergerFS (VM102)
 
-MergerFS provides a **unified namespace only**:
+MergerFS provides a unified namespace only:
 
 - No redundancy
 - No parity
@@ -145,8 +145,8 @@ It is an abstraction layer to keep service paths stable while disks are added/re
 
 Current stance:
 
-- Protects against **single disk failures** (within SnapRAID constraints)
-- Does **not** protect against:
+- Protects against single disk failures (within SnapRAID constraints)
+- Does not protect against:
   - accidental deletion if synced after deletion
   - ransomware inside RW shares
   - full-site disasters (no off-site)
@@ -188,7 +188,7 @@ Planned improvements:
 ### 3.2 Mount Strategy (Principle)
 
 - Storage VM: `/etc/fstab` (systemd-generated mount units) for ext4 + MergerFS
-- Consumers: **systemd automount** for CIFS (reboot-safe, avoids hard failure on boot if storage temporarily unavailable)
+- Consumers: systemd automount for CIFS (reboot-safe, avoids hard failure on boot if storage temporarily unavailable)
 - Services mount RO where possible (least-privilege)
 
 ### 3.3 Operational Invariant
@@ -199,7 +199,7 @@ After a reboot, the system should converge automatically to:
 - services running
 - monitoring reporting healthy states
 
-No manual “click-to-mount” steps should exist.
+No manual "click-to-mount" steps should exist.
 
 ---
 
@@ -253,7 +253,7 @@ Actions:
 Symptoms:
 
 - `/books`, `/mnt/nextcloud`, etc. missing or empty
-- services start but show “library missing” / “data dir missing”
+- services start but show "library missing" / "data dir missing"
 - `systemctl --failed` shows mount/automount unit failure
 
 Actions:
@@ -274,7 +274,7 @@ Symptoms:
 
 Actions:
 
-- Confirm mounts exist **before** debugging app-level issues
+- Confirm mounts exist before debugging app-level issues
 - Check container logs
 - Verify container user/UID/GID alignment
 - Verify loopback-only binding where intended
@@ -364,7 +364,7 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 ### Monthly
 
 - SnapRAID scrub (cadence depends on dataset churn)
-- Review disk SMART health **by hand** (`smartctl -A` per disk, identified by `by-id`) — the
+- Review disk SMART health by hand (`smartctl -A` per disk, identified by `by-id`) - the
   exported metrics cannot show degradation, see the SMART note under Planned Enhancements
 - Validate that backups can be restored (spot test)
 

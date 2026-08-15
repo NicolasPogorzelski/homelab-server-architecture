@@ -41,7 +41,7 @@ Expected: no unsynced differences reported. Exit code 0 indicates success.
 | Disk not found / missing content | Data or parity disk offline or unmounted | Check `lsblk`; verify paths in `/etc/snapraid.conf` |
 | `SYNC INTERRUPTED` / I/O error | Disk read/write error | Inspect `dmesg` and `smartctl -a <disk>` |
 | Large number of deleted files reported | Unexpected removal or wrong mount state | Confirm all mounts before proceeding; do not use `--force-deletions` unless verified |
-| `Unexpected size change at file …`, then `N file errors` with **`0 io errors`, `0 data errors`** | A file changed while the sync was reading it — a live application file inside the array. **Not** a media fault and **not** corruption; those two zeros are the discriminator | Do not simply re-run: it recurs, because the file is still live. Exclude it in `/etc/snapraid.conf` — the rule is *exclude what changes*, not what shares a suffix. See [KE-19](../../docs/platform/known-errors.md#ke-19) |
+| `Unexpected size change at file ...`, then `N file errors` with `0 io errors`, `0 data errors` | A file changed while the sync was reading it - a live application file inside the array. Not a media fault and not corruption; those two zeros are the discriminator | Do not simply re-run: it recurs, because the file is still live. Exclude it in `/etc/snapraid.conf` - the rule is *exclude what changes*, not what shares a suffix. See [KE-19](../../docs/platform/known-errors.md#ke-19) |
 | Exit code 1 although parity looks current | One unprotectable file makes the whole run non-zero, so `snapraid-maintenance.sh` never writes its success metric and `SnapRAIDSyncStale` fires for an array that is otherwise in sync | Read the error lines, not the alert. Same class as [KE-19](../../docs/platform/known-errors.md#ke-19) |
 
 ## Rollback
@@ -79,6 +79,6 @@ because in the one case where it matters, that is what it does.
 
 - Sync runs automatically via cron on VM102 (daily at 23:00). Script: `snippets/storage/snapraid-maintenance.sh sync`
 - This runbook covers manual execution (ad-hoc sync after large writes, troubleshooting).
-- SnapRAID is parity-based, not snapshot-based — sync must run before a failure to protect recent data.
+- SnapRAID is parity-based, not snapshot-based - sync must run before a failure to protect recent data.
 - See: [Storage Design](../../docs/platform/storage-design.md)
 - See: [VM102 node doc](../../docs/nodes/vm102.md)

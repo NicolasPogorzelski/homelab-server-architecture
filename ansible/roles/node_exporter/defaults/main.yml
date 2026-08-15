@@ -12,7 +12,7 @@ node_exporter_release_base: https://github.com/prometheus/node_exporter/releases
 # in host_vars did, and the first fleet-wide run of this role silently rewrote the
 # unit without it. The .prom files stayed on disk, node_exporter stopped reading
 # them, `snapraid_sync_last_success_timestamp` vanished, and the SnapRAIDSyncStale
-# rule quietly evaluated an expression with no series — an alert that can no longer
+# rule quietly evaluated an expression with no series - an alert that can no longer
 # fire, and never goes red to say so. (Introduced and caught on 2026-07-10.)
 #
 # The collector costs nothing on a node with no .prom files, so there is no reason
@@ -21,7 +21,7 @@ node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
 
 # Enables the `systemd` collector, which exports `node_systemd_unit_state`.
 # Without it a unit sitting in `failed` emits no metric at all, so no alert can
-# fire on it — which is how calibre-import.service failed every 2 minutes for a
+# fire on it - which is how calibre-import.service failed every 2 minutes for a
 # month while every dashboard stayed green (KE-15). The collector reads unit
 # state over the systemd D-Bus API; read-only property queries do not require
 # root, so it works under the unprivileged `node_exporter` user. Verified on
@@ -29,8 +29,8 @@ node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
 node_exporter_systemd_collector: true
 
 # node_exporter's own default is `.+\.(automount|device|mount|scope|slice)`, which
-# drops `.mount` units. Both mount faults found on 2026-07-10 — lxc220's `/books-rw`
-# (KE-15) and vm100's stale `media-mergerfs.mount` — are exactly that unit type, so
+# drops `.mount` units. Both mount faults found on 2026-07-10 - lxc220's `/books-rw`
+# (KE-15) and vm100's stale `media-mergerfs.mount` - are exactly that unit type, so
 # the stock exclude would filter out the failure class the collector was added for.
 # `.mount` is therefore kept; the two known-noisy mount units are masked at the
 # source by the `systemd_hygiene` role rather than filtered here.

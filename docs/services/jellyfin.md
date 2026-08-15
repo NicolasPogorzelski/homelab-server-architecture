@@ -13,8 +13,8 @@ Jellyfin is deployed via Docker Compose on VM100 with NVIDIA GPU hardware transc
 
 Media is read-only mounted from VM102 via systemd automount (SMB/autofs):
 
-- `${JF_MEDIA_FILME}` → `/media/Filme:ro`
-- `${JF_MEDIA_SERIEN}` → `/media/Serien:ro`
+- `${JF_MEDIA_FILME}` -> `/media/Filme:ro`
+- `${JF_MEDIA_SERIEN}` -> `/media/Serien:ro`
 
 Config, cache, and metadata use local persistent volumes on VM100.
 
@@ -26,7 +26,7 @@ Config, cache, and metadata use local persistent volumes on VM100.
 - LAN exposure is intentional and limited to port 8096 only.
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md) — section "Documented Exceptions"
+- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md) - section "Documented Exceptions"
 
 | Source | Port | Access |
 |---|---|---|
@@ -41,7 +41,7 @@ A watchdog script checks GPU availability every 30 minutes and restarts the cont
 
 ### Deploy on VM100
 
-Managed by the `jellyfin_watchdog` Ansible role — script, service unit and timer:
+Managed by the `jellyfin_watchdog` Ansible role - script, service unit and timer:
 
 ```bash
 ansible-playbook playbooks/jellyfin-watchdog.yml --check --diff   # preview
@@ -50,7 +50,7 @@ ansible-playbook playbooks/jellyfin-watchdog.yml                  # apply
 
 ### Schedule
 
-`jellyfin-cuda-watchdog.timer` — a **monotonic** timer, not a calendar one:
+`jellyfin-cuda-watchdog.timer` - a monotonic timer, not a calendar one:
 
 ```
 OnBootSec=5min
@@ -59,7 +59,7 @@ OnUnitActiveSec=30min
 
 The first poll waits 5 minutes after boot so Docker and the NVIDIA runtime have
 settled; restarting a half-started container is worse than checking it late.
-`Persistent=` is deliberately absent — it applies only to `OnCalendar=` timers, and
+`Persistent=` is deliberately absent - it applies only to `OnCalendar=` timers, and
 a poll missed while the host was powered off has nothing to catch up on.
 
 The role removed the previous `*/30 * * * *` root crontab entry. Do not re-add it.
@@ -85,7 +85,7 @@ Because the watchdog is a systemd unit, a failing run now raises the fleet-wide
 If VM100 becomes unavailable:
 
 - No media streaming.
-- No data loss — media is read-only from VM102 storage.
+- No data loss - media is read-only from VM102 storage.
 - Recovery: restart VM100, verify SMB automounts, confirm Docker containers are running.
 
 ## Related Documents

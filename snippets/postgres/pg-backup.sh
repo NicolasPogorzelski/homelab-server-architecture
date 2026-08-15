@@ -17,7 +17,7 @@ DUMP_FILE="${BACKUP_DIR}/pg_dumpall_${TIMESTAMP}.sql.gz"
 # The dump is written here and only renamed to DUMP_FILE once it has been read
 # back and found complete. A plain `> "$DUMP_FILE"` creates the file before
 # pg_dumpall has written a single byte, so an aborted run leaves a ruin under the
-# real name — which pg-restore-test.sh would then select as "the newest dump" and
+# real name - which pg-restore-test.sh would then select as "the newest dump" and
 # a human would mistake for a backup during recovery. Verifying an artefact that
 # is already visible under its final name is verification after the fact.
 # Same local-write-then-atomic-swap shape as calibre-import.sh uses for
@@ -29,13 +29,13 @@ TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 # === Pre-flight checks ===
 # Test the mount's identity, not merely that the path exists. /mnt/backups is a
 # bind of the host's CIFS mount of //vm102/Postgres-Backups. If that mount is
-# absent, the mountpoint directory still exists and `[ -d ]` passes — pg_dumpall
+# absent, the mountpoint directory still exists and `[ -d ]` passes - pg_dumpall
 # would then write ~42 MB per night into the container rootfs, i.e. into the thin
 # pool on the boot SSD, until it fills. That is the KE-7 failure class, and it is
 # the same mistake `mountpoint -q` made in calibre-import.sh (KE-15).
 FSTYPE="$(findmnt -no FSTYPE "$BACKUP_DIR" 2>/dev/null || true)"
 if [ "$FSTYPE" != "cifs" ]; then
-  echo "ERROR: ${BACKUP_DIR} is not a CIFS mount (fstype='${FSTYPE:-none}') — refusing to dump onto local disk" >&2
+  echo "ERROR: ${BACKUP_DIR} is not a CIFS mount (fstype='${FSTYPE:-none}') - refusing to dump onto local disk" >&2
   exit 1
 fi
 
@@ -64,7 +64,7 @@ if [ ! -s "$PARTIAL_FILE" ]; then
   exit 1
 fi
 
-# 2. The compressed stream is intact — gzip -t re-reads the file and verifies the
+# 2. The compressed stream is intact - gzip -t re-reads the file and verifies the
 #    CRC32 and the ISIZE trailer, so truncation and bit flips both fail here.
 if ! gzip -t "$PARTIAL_FILE"; then
   echo "ERROR: dump fails the gzip integrity check: ${PARTIAL_FILE}" >&2
@@ -81,7 +81,7 @@ fi
 #    `|| true` is for the exit status 1 that grep returns on zero matches.
 MARKERS="$(gzip -cd "$PARTIAL_FILE" | grep -c 'PostgreSQL database cluster dump complete' || true)"
 if [ "$MARKERS" -ne 1 ]; then
-  echo "ERROR: dump carries ${MARKERS} completion markers, expected 1 — truncated: ${PARTIAL_FILE}" >&2
+  echo "ERROR: dump carries ${MARKERS} completion markers, expected 1 - truncated: ${PARTIAL_FILE}" >&2
   exit 1
 fi
 

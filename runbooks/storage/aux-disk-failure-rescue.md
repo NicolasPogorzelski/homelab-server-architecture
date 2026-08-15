@@ -5,7 +5,7 @@
 An auxiliary disk (here: the host aux-disk, `/mnt/aux-disk`) is throwing unrecoverable
 medium errors and will not mount on boot. Services that bind-mount subdirectories
 of it (Docker data-roots, VM disk images) fail to start. The disk is failing
-**hardware**, not just a dirty filesystem — so the goal is to get the data off
+**hardware**, not just a dirty filesystem - so the goal is to get the data off
 **before** any repair attempt, then decommission.
 
 This is the procedure used on 2026-06-25; see
@@ -22,17 +22,17 @@ into data loss.
 
 - SSH access to the Proxmox host: `ssh root@<lan-ip-proxmox-host>` (or Tailscale).
 - The failing disk identified by UUID/label (not just `/dev/sdX`, which can renumber).
-- Confirmed it is a **hardware** fault, not cabling — kernel log shows medium errors:
+- Confirmed it is a hardware fault, not cabling - kernel log shows medium errors:
   ```bash
   dmesg | grep -iE 'medium error|unrecovered read error'
   smartctl -A /dev/<disk> | grep -iE 'Pending|Uncorrect|Reallocated'
   ```
   `Current_Pending_Sector` / `Offline_Uncorrectable` in the thousands = decommission.
 - A healthy rescue target with enough free space (here: the admin workstation over a
-  wired LAN path). The target must preserve Linux ownership — use `tar` archives so
+  wired LAN path). The target must preserve Linux ownership - use `tar` archives so
   it does not have to.
 - No writer holds the disk. The host fstab entry should already be `nofail` (so the
-  boot is not blocked); confirm the disk is **not** mounted read-write anywhere.
+  boot is not blocked); confirm the disk is not mounted read-write anywhere.
 
 ## Diagnosis
 
@@ -43,7 +43,7 @@ mount -o ro,noload UUID=<aux-disk-uuid> /mnt/aux-disk
 ls /mnt/aux-disk && df -h /mnt/aux-disk
 ```
 
-- `ro,noload` mounts read-only **without** replaying the journal — no writes to the
+- `ro,noload` mounts read-only without replaying the journal - no writes to the
   dying disk. If this succeeds and the tree is visible, the metadata survived and
   file-level rescue is possible.
 - If a subdirectory is itself a VM disk image, loop-mount it read-only too:
@@ -68,7 +68,7 @@ for d in postgres nextcloud calibreweb monitoring paperless; do
 done
 ```
 
-- `tar` (not file-level `rsync`): ownership/permissions are stored **inside** the
+- `tar` (not file-level `rsync`): ownership/permissions are stored inside the
   archive, so the receiver needs no root and exact UIDs are restored later.
 - `--numeric-owner`: store numeric UID/GID (container-mapped IDs do not exist as
   names on the rescue host).
@@ -97,21 +97,21 @@ the dying disk could not return.
   ```bash
   tar -tvf postgres.tar | grep 'PG_VERSION\|/main/'
   ```
-- Total rescued size matches the live (not allocated) data — sparse VM images
+- Total rescued size matches the live (not allocated) data - sparse VM images
   inflate the "allocated" figure; file-level `tar` copies only live data.
 
 ## Failure modes
 
 | Symptom | Check / fix |
 |---|---|
-| `ro,noload` mount fails | Filesystem metadata itself is damaged — escalate to `ddrescue` of the whole partition onto a healthy disk, then `fsck` the **image**, never the disk |
+| `ro,noload` mount fails | Filesystem metadata itself is damaged - escalate to `ddrescue` of the whole partition onto a healthy disk, then `fsck` the image, never the disk |
 | `tar` stalls for many seconds | Kernel retrying a bad sector; it continues after the timeout with `--ignore-failed-read`. Expect slow spots near damaged regions |
 | `*.err` shows real `Input/output error` lines | Those files are unrecoverable from this disk; record them, restore from another backup if one exists |
-| Rescue target fills up | Exclude regenerable/media data (containerd layers, model caches, ebook files) — copy only databases/configs/metadata |
+| Rescue target fills up | Exclude regenerable/media data (containerd layers, model caches, ebook files) - copy only databases/configs/metadata |
 
 ## Rollback / abort
 
-No rollback needed — the entire procedure is read-only against the failing disk.
+No rollback needed - the entire procedure is read-only against the failing disk.
 Clean up the transient mounts when done:
 
 ```bash
@@ -119,5 +119,5 @@ umount /mnt/peek 2>/dev/null
 umount /mnt/aux-disk
 ```
 
-Only **after** the rescued data is verified should a repair attempt (`fsck`) or
+Only after the rescued data is verified should a repair attempt (`fsck`) or
 decommission proceed.

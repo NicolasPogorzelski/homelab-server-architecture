@@ -17,7 +17,7 @@
 #
 # Staging, validation and cleanup carry `check_mode: false` so that a `--check` run
 # really does validate the rules. Otherwise the staged file would never be written
-# during a dry-run and promtool would check a path that does not exist — a guard
+# during a dry-run and promtool would check a path that does not exist - a guard
 # that is skipped in a dry-run guards nothing. The temporary file is removed in the
 # same run; only the promotion to the live path honours check mode.
 #

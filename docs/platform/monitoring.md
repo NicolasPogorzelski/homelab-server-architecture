@@ -11,7 +11,7 @@ See: [Runbook index](../../runbooks/README.md)
 - Node Exporter (`prom/node-exporter`)
 - Alertmanager (`prom/alertmanager`)
 - postgres_exporter (`prom/postgres-exporter`, lxc260)
-- Blackbox Exporter (`prom/blackbox-exporter`) — service-level HTTP(S) probes (KE-8 remediation)
+- Blackbox Exporter (`prom/blackbox-exporter`) - service-level HTTP(S) probes (KE-8 remediation)
 
 ## Security / Exposure
 
@@ -27,9 +27,9 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 14 active scrape jobs (19 targets) — all UP, re-verified 2026-08-13 against the Prometheus API
+- 14 active scrape jobs (19 targets) - all UP, re-verified 2026-08-13 against the Prometheus API
 - **LXC250 is not among the targets.** It sits in no inventory group, so the template renders no
-  target for it — yet it *does* run a `node_exporter` (hand-installed, binding `*:9100`, scraped
+  target for it - yet it *does* run a `node_exporter` (hand-installed, binding `*:9100`, scraped
   by nobody). See [LXC250 § Open Items](../nodes/lxc250.md#open-items-2026-07-28)
 
 | Job name | Target | Notes |
@@ -57,7 +57,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 - Notification receiver: Discord webhook
 - **17 alert rules active** in 7 groups (the `smart` group exists but is deliberately empty, see
   below). Corrected 2026-08-15: this line read "15" while the table below listed 16, and the live
-  Prometheus API reported 16 on 2026-08-13 — the prose had not been recounted when the `lvm` group
+  Prometheus API reported 16 on 2026-08-13 - the prose had not been recounted when the `lvm` group
   grew. `MariaDBBackupStale` makes 17.
 
 | Group | Rules |
@@ -69,19 +69,19 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
 | `blackbox` | `ServiceDown` |
-| `smart` | *(empty — the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
+| `smart` | *(empty - the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook).
   **It cannot see an outage in which the host is off**, because Prometheus runs on that same host:
   no scrape happens, and by the time Prometheus returns, the timer's `Persistent=true` catch-up has
-  already refreshed the timestamp. Measured 2026-08-14 — a 62-hour scrape gap (2026-08-10 21:50 to
+  already refreshed the timestamp. Measured 2026-08-14 - a 62-hour scrape gap (2026-08-10 21:50 to
   2026-08-13 11:50) with no dump written and the alert empty across the whole range. The rule means
-  "not more than 25 hours of **uptime** without a backup", not "a backup every day". Detail and
+  "not more than 25 hours of uptime without a backup", not "a backup every day". Detail and
   reasoning in [`postgresql-platform.md`](../services/postgresql-platform.md#backup-strategy).
 - `MariaDBBackupStale` requires the Node Exporter textfile collector on lxc210 (see the
   [MariaDB backup runbook](../../runbooks/database/mariadb-backup.md)). It carries the same
   host-is-off blind spot as the PostgreSQL rule above, for the same structural reason. It covers
-  Nextcloud's own database, which the nightly `pg_dumpall` never touched — a gap that existed
+  Nextcloud's own database, which the nightly `pg_dumpall` never touched - a gap that existed
   unnoticed until the 2026-08-15 data classification looked for it.
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
