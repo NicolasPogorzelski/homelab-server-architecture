@@ -12,6 +12,14 @@ This project models real-world platform engineering principles and serves as a s
 
 It is not built as a collection of services, but as a layered infrastructure platform with explicit trade-offs, documented design decisions, and clearly defined trust boundaries.
 
+## Documentation standard
+
+Any statement here that carries a number was measured against the running system rather than
+estimated, and the command that produced it is usually quoted alongside. Runbooks record the date
+of their last execution, and a procedure that has never been executed says so instead of implying
+otherwise. Where a claim later turned out to be wrong, it is corrected in place with the correction
+visible, not silently overwritten.
+
 ---
 
 ## Learning Roadmap

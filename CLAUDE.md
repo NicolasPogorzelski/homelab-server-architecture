@@ -271,6 +271,16 @@ hidden entry and which GitHub reads just as well.
   Not a clause inside a running sentence.
 - Vary the phrasing. A construction that turns up in every entry stops being writing and becomes a
   template.
+- Keep it short. A runbook is read during an incident, not at a desk. Length is a cost.
+
+**Who drafts what:**
+
+- `README.md`, the ADRs under `docs/decisions/` and `docs/platform/security-controls.md` are
+  drafted blank-file-first, the same rule this file already sets for code. Review afterwards for
+  gaps, contradictions and missing verification.
+- Operational logs (`changelog.md`, `known-errors.md`, `ansible-progress.md`) and runbook mechanics
+  can be drafted directly, then reviewed. Nothing is merged that cannot be defended in a
+  conversation about it.
 
 **Sanitization rules** (enforced by validation):
 
