@@ -16,6 +16,31 @@ name: Image vulnerability scan
 # It deliberately does **not** run on pull requests and is **not** a required status check. A CVE
 # in an upstream image is not a defect in the change being reviewed, and a permanently red gate
 # that cannot be fixed by the person facing it is the fastest way to teach people to ignore gates.
+#
+# Two severity tiers, and the reason is a measurement rather than a preference.
+#
+# The first version of this workflow uploaded every HIGH and CRITICAL finding to the Security tab.
+# Its first run produced **6928 open alerts** — 139 critical, 2162 high by GitHub's own rating, with
+# `gotenberg` alone contributing 3538. Every one of them fixable, since `ignore-unfixed` is on. That
+# is not a signal, it is a wall, and a wall is read exactly once. The workflow that warns against
+# building an unreadable gate had built an unreadable report.
+#
+# So the two outputs answer two different questions:
+#
+#   * The **run summary** carries per-image CRITICAL and HIGH counts. That is the trend metric — a
+#     number to compare week over week, the same shape as alerting on absolute free bytes rather
+#     than a percentage.
+#   * The **Security tab** receives CRITICAL only, so a new entry there is visible instead of being
+#     buried, and so the list stays small enough to triage.
+#
+# The cost is a second scan pass per image. On public repositories the runner minutes are free and
+# the vulnerability database is cached between the two steps, so this buys readability with the one
+# resource that is not scarce here.
+#
+# One trap worth recording: Trivy's severity label and GitHub's are not the same measure. Everything
+# uploaded is a Trivy HIGH or CRITICAL, but GitHub re-derives its own level from the numeric CVSS
+# score in the SARIF, which is why most of those 6928 appeared as "medium" or "low". Reading the
+# GitHub column alone understates them.
 
 on:
   schedule:
@@ -77,19 +102,38 @@ jobs:
           slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
           echo "value=${slug}" >> "$GITHUB_OUTPUT"
 
-      - name: Trivy scan
+      - name: Trivy scan — counts for the trend metric
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}
-          format: sarif
-          output: trivy.sarif
-          severity: HIGH,CRITICAL
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH
           # Report only vulnerabilities that have a fix available upstream. During the hold, the
           # number that matters is "how much is fixable and not being fixed" — that is the price
           # of the hold, expressed in findings. Unfixable CVEs would inflate the count without
           # changing any available decision.
           ignore-unfixed: true
           # Never fail the run. This workflow reports; it does not gate. See the note at the top.
+          exit-code: "0"
+
+      - name: Write the counts to the run summary
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          crit="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy.json)"
+          high="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy.json)"
+          printf -- '- `%s` — critical: **%s**, high: **%s**\n' "${IMAGE}" "${crit}" "${high}" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy scan — critical only, for the Security tab
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL
+          ignore-unfixed: true
           exit-code: "0"
 
       - name: Publish results to the Security tab
