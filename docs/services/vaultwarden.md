@@ -11,7 +11,7 @@ Vaultwarden is deployed via Docker Compose inside an unprivileged Debian LXC con
 
 Important:
 - Vaultwarden uses SQLite for its database (`db.sqlite3`).
-- The database resides at `/opt/vaultwarden`, which is a CIFS mount (`mp0` on LXC240 → `/mnt/smb/vaultwarden`).
+- The database resides at `/opt/vaultwarden`, which is a CIFS mount (`mp0` on LXC240 -> `/mnt/smb/vaultwarden`).
 - This violates the KE-1 architectural rule (no database files on CIFS/SMB). Migration to PostgreSQL (lxc260) is planned.
 - See: [KE-5](../platform/known-errors.md#ke-5-vaultwarden-sqlite-on-cifs--acknowledged-technical-debt)
 
@@ -43,7 +43,7 @@ Important:
 
 ## Failure Impact
 
-If the CIFS mount (`/opt/vaultwarden` → `/mnt/smb/vaultwarden`) becomes unavailable:
+If the CIFS mount (`/opt/vaultwarden` -> `/mnt/smb/vaultwarden`) becomes unavailable:
 
 - Vaultwarden cannot access its SQLite database.
 - Encryption keys may become inaccessible.

@@ -12,7 +12,7 @@ image store from the root disk to an aux-disk mount point. Run it on any LXC whe
 the data root has not been configured on aux-disk from the start.
 
 **Affected nodes (migrated 2026-04-30):** LXC200, LXC211, LXC220, LXC230.
-New nodes must follow the [Adding a New Service](../../CLAUDE.md) checklist instead —
+New nodes must follow the [Adding a New Service](../../CLAUDE.md) checklist instead -
 this runbook is for retroactive migration only.
 
 ## Preconditions
@@ -177,7 +177,7 @@ entire safety margin of this procedure.
 ## Notes
 
 - Docker data root is set in `/etc/docker/daemon.json` via the `data-root` key.
-  See: [Docker docs — daemon configuration](https://docs.docker.com/reference/cli/dockerd/#daemon-configuration-file)
+  See: [Docker docs - daemon configuration](https://docs.docker.com/reference/cli/dockerd/#daemon-configuration-file)
 - containerd root is set in `/etc/containerd/config.toml` via the top-level `root` key.
   See: [containerd config reference](https://github.com/containerd/containerd/blob/main/docs/man/containerd-config.toml.5.md)
 - After migration, run `fstrim -av` on the Proxmox host to reclaim freed thin-pool space.

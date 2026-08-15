@@ -3,14 +3,14 @@
 ## Problem
 
 The `local-lvm` thin-pool on the Proxmox host reaches 100% utilization. QEMU VMs enter
-`io-error` state and suspend. LXC containers continue running but all writes fail silently —
+`io-error` state and suspend. LXC containers continue running but all writes fail silently -
 including apt downloads, which results in corrupt package archives and binary corruption
 if an upgrade was in progress at the moment of overflow.
 
 Observed failure modes (2026-04-25 incident):
 
 - VM102: I/O errors on writes
-- LXC230, LXC260: corrupt packages (`tailscaled`, `bash`) — binaries partially overwritten
+- LXC230, LXC260: corrupt packages (`tailscaled`, `bash`) - binaries partially overwritten
   during an in-progress apt upgrade when the pool hit 100%
 
 ## Preconditions
@@ -28,7 +28,7 @@ Observed failure modes (2026-04-25 incident):
 lvs -o lv_name,lv_size,data_percent,pool_lv
 ```
 
-If `data_percent` shows `100.00`, the pool is full. At ≥ 95% warrants immediate action.
+If `data_percent` shows `100.00`, the pool is full. At >= 95% warrants immediate action.
 
 **Check for VMs in io-error state:**
 
@@ -75,9 +75,9 @@ file /bin/bash              # should be ELF, not "data"
 
 ## Recovery
 
-### Step 1 — Free space in the pool
+### Step 1 - Free space in the pool
 
-**On all reachable LXCs** (apt cache — largest reclaim target after interrupted upgrade):
+**On all reachable LXCs** (apt cache - largest reclaim target after interrupted upgrade):
 
 ```bash
 for ctid in 200 210 211 220 230 240 250 260; do
@@ -96,7 +96,7 @@ for ctid in 200 210 211 220 230 240 250 260; do
 done
 ```
 
-Alternatively, `fstrim -av` from the Proxmox host reaches thin-pool level directly —
+Alternatively, `fstrim -av` from the Proxmox host reaches thin-pool level directly -
 use nsenter only if the host fstrim does not reclaim space on LXC filesystems.
 
 **fstrim on VMs** (run from inside each VM via SSH, requires sudo):
@@ -114,14 +114,14 @@ lvs -o lv_name,data_percent | grep data
 
 Aim for at least 15% free before proceeding.
 
-### Step 2 — Resume frozen VMs
+### Step 2 - Resume frozen VMs
 
 ```bash
 qm resume <vmid>
 qm status <vmid>   # should return: status: running
 ```
 
-### Step 3 — Repair corrupt dpkg state on affected LXCs/VMs
+### Step 3 - Repair corrupt dpkg state on affected LXCs/VMs
 
 ```bash
 # Check for pending triggers / interrupted installs
@@ -134,7 +134,7 @@ pct exec <ctid> -- dpkg --configure -a
 pct exec <ctid> -- apt --fix-broken install -y
 ```
 
-### Step 4 — Reinstall corrupt binaries
+### Step 4 - Reinstall corrupt binaries
 
 If `file <binary>` returns `data` instead of `ELF 64-bit executable`:
 
@@ -143,11 +143,11 @@ pct exec <ctid> -- apt-get install --reinstall <package>
 ```
 
 Common victims when upgrade is interrupted mid-write:
-- `tailscale` / `tailscaled` (large binary, ~40 MB; service will be dead after reinstall — verify with `systemctl status tailscaled`)
-- `bash`, `coreutils` (reinstall immediately — shell may be broken; use `pct exec <ctid> -- /bin/sh` if bash itself is corrupt)
+- `tailscale` / `tailscaled` (large binary, ~40 MB; service will be dead after reinstall - verify with `systemctl status tailscaled`)
+- `bash`, `coreutils` (reinstall immediately - shell may be broken; use `pct exec <ctid> -- /bin/sh` if bash itself is corrupt)
 - `login`, `libpam-modules` (upgraded together)
 
-### Step 5 — Re-run the upgrade
+### Step 5 - Re-run the upgrade
 
 After pool space is restored and dpkg state is clean:
 
@@ -200,17 +200,17 @@ pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
 
 ## Prevention
 
-- **Periodic fstrim:** Automated since 2026-08-10 — `lxc-fstrim.timer` on the Proxmox host runs
+- **Periodic fstrim:** Automated since 2026-08-10 - `lxc-fstrim.timer` on the Proxmox host runs
   `snippets/scripts/lxc-fstrim.sh` daily at 10:30 with `Persistent=true`. It derives the container
   list from `pct list` rather than a hardcoded array, so a new container is covered on creation;
   the previous array omitted lxc250, which was the fullest container in the fleet. A manual run
   after a large `apt-upgrade` is still reasonable, but nothing depends on remembering it. Note the
-  units are hand-deployed — the host is not yet an Ansible node, so they would be lost on a rebuild
+  units are hand-deployed - the host is not yet an Ansible node, so they would be lost on a rebuild
   (same debt as the host's `node_exporter`).
 - **Serial upgrades:** `apt-upgrade.yml` uses `serial: 1` to prevent simultaneous downloads from spiking pool utilization. The `dpkg --verify` post-task catches binary corruption before it propagates across nodes.
 - **apt clean after upgrade:** `apt-upgrade.yml` runs `apt clean` on each node after upgrading.
 - **Monitor pool utilization:** Implemented 2026-08-10. The approach previously named here could
-  not work — a thin pool is a block-layer object with **no filesystem and no mount point**, so
+  not work - a thin pool is a block-layer object with no filesystem and no mount point, so
   `node_filesystem_*` cannot observe it and the metric that rule would have needed does not exist.
   Instead `lvm-thin-metrics.sh` runs on the Proxmox host every 60 s as a node_exporter textfile
   collector and emits `lvm_thin_pool_data_percent`, `lvm_thin_pool_metadata_percent`,
@@ -218,8 +218,8 @@ pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
   `LvmThinPoolWarning` (>85%, 1 h), `LvmThinPoolCritical` (>90%, 15 min),
   `LvmThinPoolMetadataCritical` (>80%, 15 min) and `LvmThinMetricsStale` (file older than 15 min,
   so a stopped timer cannot leave the other three evaluating a frozen value).
-  `lvm_vg_free_bytes` is exported deliberately: it is 0 on this host, which means `lvextend` — the
-  first reflex when a pool fills — is not available without shrinking `root`/`swap` or adding a PV.
+  `lvm_vg_free_bytes` is exported deliberately: it is 0 on this host, which means `lvextend` - the
+  first reflex when a pool fills - is not available without shrinking `root`/`swap` or adding a PV.
 
 ## Rollback
 
@@ -248,23 +248,23 @@ being starved produces a second corruption on top of the first.
   container's mount namespace and skips bind and read-only mountpoints). Running it inside an LXC
   fails two ways independently: the stock `fstrim.timer` carries `ConditionVirtualization=!container`
   so systemd never starts it, and the ioctl itself is refused with `FITRIM ioctl failed: Operation
-  not permitted`. Both failures are silent — `systemctl is-enabled` reports `enabled` and
+  not permitted`. Both failures are silent - `systemctl is-enabled` reports `enabled` and
   `Result=success` is the default of a unit that never ran, so no alert can see this.
 - **Proving a unit actually ran:** for `Type=oneshot` without `RemainAfterExit=yes`, systemd
   releases the unit's runtime state once it completes, so `ExecMainStartTimestamp`,
-  `InactiveExitTimestamp` and `ActiveEnterTimestamp` are all **empty whether it ran or not**. They
-  are not evidence in either direction. `journalctl -u <unit>` is — `-- No entries --` means never
+  `InactiveExitTimestamp` and `ActiveEnterTimestamp` are all empty whether it ran or not. They
+  are not evidence in either direction. `journalctl -u <unit>` is - `-- No entries --` means never
   ran. For timer-driven units, `systemctl list-timers` also keeps a persistent `LAST` column.
 - For VMs, `fstrim` runs normally via SSH since they have full kernel access.
 - See: [Storage Design](../../docs/platform/storage-design.md)
 - See: [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh),
   [lxc-fstrim.service](../../snippets/systemd/lxc-fstrim.service),
   [lxc-fstrim.timer](../../snippets/systemd/lxc-fstrim.timer)
-- See: [Proxmox host — Host Systemd Timers](../../docs/platform/proxmox-host.md#host-systemd-timers)
+- See: [Proxmox host - Host Systemd Timers](../../docs/platform/proxmox-host.md#host-systemd-timers)
 
 ---
 
 ## Related
 
-- [Hard Shutdown Recovery](./hard-shutdown-recovery.md) — thin pool overflow can cause the high I/O that precedes a forced shutdown
-- [Known Errors](../../docs/platform/known-errors.md) — KE-7 documents the binary corruption pattern
+- [Hard Shutdown Recovery](./hard-shutdown-recovery.md) - thin pool overflow can cause the high I/O that precedes a forced shutdown
+- [Known Errors](../../docs/platform/known-errors.md) - KE-7 documents the binary corruption pattern

@@ -8,7 +8,7 @@ pg_restore_test_textfile_dir: /var/lib/node_exporter/textfile_collector
 
 # 09:00 on the first of each month. The hour is load-bearing, not taste: the
 # restored cluster occupies roughly 150 MB of thin-pool blocks on the boot SSD,
-# and a container cannot return them itself — fstrim inside an LXC is refused by
+# and a container cannot return them itself - fstrim inside an LXC is refused by
 # both ConditionVirtualization and the kernel. Only the host can reclaim them,
 # and it does so via lxc-fstrim.timer at 10:30. A 09:00 slot is therefore
 # reclaimed the same morning; moving this past 10:30 leaves the blocks allocated

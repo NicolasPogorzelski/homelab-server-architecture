@@ -72,7 +72,7 @@
       ansible.builtin.copy:
         dest: "/var/log/fleet-health/report-{{ ansible_date_time.date }}.txt"
         content: |
-          Fleet Health Report — {{ ansible_date_time.iso8601 }}
+          Fleet Health Report - {{ ansible_date_time.iso8601 }}
           =========================================================
           {% for host in groups['all'] %}
           --- {{ host }} ---
@@ -81,7 +81,7 @@
           RAM total (MB):{{ hostvars[host]['ansible_memory_mb']['real']['total'] | default('N/A') }}
           Mounts:
           {% for mount in hostvars[host]['ansible_mounts'] | default([]) %}
-            {{ mount.mount }} ({{ mount.fstype }}) — free: {{ (mount.size_available / 1024 / 1024) | int }} MB
+            {{ mount.mount }} ({{ mount.fstype }}) - free: {{ (mount.size_available / 1024 / 1024) | int }} MB
           {% endfor %}
           {% endfor %}
         mode: "0644"

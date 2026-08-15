@@ -31,13 +31,13 @@ Nodes are grouped into logical tiers based on trust level and responsibility.
 | Client | `tag:client` | Trusted end-user devices | example-device |
 | Database | `tag:database` | Central PostgreSQL platform service | example-device |
 | AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
-| Untrusted | `tag:untrusted` | Household TVs — not centrally administered | example-device |
+| Untrusted | `tag:untrusted` | Household TVs - not centrally administered | example-device |
 
 **Exception:** Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2`, despite
 being an application service by the table above. Confirmed intentional (2026-07-08);
 the specific technical rationale is being re-confirmed and is not yet documented here.
 The auto-import mechanism itself (`calibre-importer` role) has no verified dependency
-on tier1 access — it only needs the SMB port (445), which tier1 and tier2 grant
+on tier1 access - it only needs the SMB port (445), which tier1 and tier2 grant
 identically. Household TVs do not need Calibre-Web access, so the loss of
 untrusted reachability (Rule 7 only grants `tag:tier2:443`) is not a regression.
 
@@ -79,7 +79,7 @@ Named aliases for nodes referenced by IP in ACL rules.
 
 ## ACL Rules (Sanitized)
 
-### Rule 1 — Admin: full infrastructure access
+### Rule 1 - Admin: full infrastructure access
 
 Admin nodes have unrestricted access to all infrastructure and service tiers.
 Admin does NOT have implicit access to client or untrusted devices.
@@ -104,10 +104,10 @@ Note: `tag:admin:*` was added to allow admin-to-admin communication
 (required when multiple admin-tagged nodes exist, e.g. admin workstation + devops LXC).
 
 Note: The admin workstation carries `tag:admin` as an operator client device, not solely as an Ollama
-inference backend. Ollama access from LXC230 (ai-stack → admin:11434) runs through this
+inference backend. Ollama access from LXC230 (ai-stack -> admin:11434) runs through this
 existing tag rather than a dedicated inference tag.
 
-### Rule 1b — Monitoring: outbound scrape access
+### Rule 1b - Monitoring: outbound scrape access
 
 Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers,
 plus postgres_exporter (port 9187) on the database tier.
@@ -133,12 +133,12 @@ See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
 }
 ```
 
-Note: Tailscale ACLs are deny-by-default. Inbound access (admin → monitoring) does not
-imply outbound access (monitoring → targets). Pre-existing WireGuard tunnels can mask
+Note: Tailscale ACLs are deny-by-default. Inbound access (admin -> monitoring) does not
+imply outbound access (monitoring -> targets). Pre-existing WireGuard tunnels can mask
 missing rules until the next connection reset (e.g. container restart). See DD#11 for
 the incident that exposed this.
 
-### Rule 1c — Monitoring: outbound service-probe access (blackbox)
+### Rule 1c - Monitoring: outbound service-probe access (blackbox)
 
 The monitoring node runs `blackbox_exporter` and probes service endpoints
 (KE-8 remediation: a node can be up while its service is dead). Beyond
@@ -159,7 +159,7 @@ node_exporter (Rule 1b), it needs the service ports: media HTTP on `tier2`
 }
 ```
 
-### Rule 2 — Tier 0 (Proxmox): workload access only
+### Rule 2 - Tier 0 (Proxmox): workload access only
 
 The hypervisor can reach all workload tiers and storage.
 No access to clients or untrusted devices.
@@ -179,7 +179,7 @@ No access to clients or untrusted devices.
 }
 ```
 
-### Rule 3 — Tier 1 (security-critical): strictly isolated
+### Rule 3 - Tier 1 (security-critical): strictly isolated
 
 Tier 1 nodes can communicate with other tier 1 nodes,
 access storage via SMB (port 445), and reach the database platform (port 5432).
@@ -198,7 +198,7 @@ No access to tier 0, tier 2, clients, or untrusted.
 }
 ```
 
-### Rule 4 — Tier 2 (application services): strictly isolated
+### Rule 4 - Tier 2 (application services): strictly isolated
 
 Same isolation model as tier 1.
 Tier 2 nodes can communicate with other tier 2 nodes
@@ -214,7 +214,7 @@ and access storage via SMB (port 445) only.
 }
 ```
 
-### Rule 5 — AI Stack: database and inference access
+### Rule 5 - AI Stack: database and inference access
 
 AI stack nodes can access the PostgreSQL platform service, storage via SMB,
 and Ollama inference backends (admin workstation + VM100).
@@ -231,7 +231,7 @@ and Ollama inference backends (admin workstation + VM100).
 }
 ```
 
-### Rule 6 — Clients: explicit service access only
+### Rule 6 - Clients: explicit service access only
 
 Trusted client devices can access specific service ports only.
 No infrastructure access, no storage access.
@@ -256,17 +256,17 @@ Allowed services:
 - Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden, Calibre-Web
 - AI stack HTTPS (port 443): OpenWebUI
 
-Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` — see the
+Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` - see the
 Tier Model table caveat below. The `tag:tier2:443` grant in this rule is
 currently unused (no tier2 node serves HTTPS).
 
-### Rule 7 — Untrusted: minimal access
+### Rule 7 - Untrusted: minimal access
 
 The `untrusted` tier is a fixed set of individually enumerated household TVs.
 "Untrusted" is a statement about *device administration*, not about the people:
 these are appliances the operator does not manage, patch, or control, so they are
 kept off every infrastructure path and get media streaming only. The tier is not a
-guest-invite mechanism — devices are tagged individually by the admin
+guest-invite mechanism - devices are tagged individually by the admin
 (`tagOwners: autogroup:admin`), and a device cannot self-assign the tag.
 ```json
 {
@@ -285,7 +285,7 @@ Allowed services:
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
 
-Note: `tag:tier2:443` is granted but currently unused — Calibre-Web is `tag:tier1`
+Note: `tag:tier2:443` is granted but currently unused - Calibre-Web is `tag:tier1`
 (see the Tier Model exception above), not tier2, and untrusted devices do not need
 access to it.
 
@@ -307,17 +307,17 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 ## Access Matrix (Summary)
 
-| Source ↓ / Destination → | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
+| Source (rows) / Destination (columns) | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | all | all | — | — |
-| **tier0** | — | all | all | all | all | all | all | all | — | — |
-| **tier1** | — | — | all | — | — | — | 5432 | 445 | — | — |
-| **tier2** | — | — | — | all | — | — | — | 445 | — | — |
-| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100, 9187 | 9100 | — | — |
-| **database** | — | — | — | — | — | — | — | — | — | — |
-| **ai-stack** | 11434 | — | — | 11434 | — | — | 5432 | 445 | — | — |
-| **client** | — | — | 443 | 443 + gpu-vm:8096,13378 | — | 443 | — | — | — | — |
-| **untrusted** | — | — | — | 443 + gpu-vm:8096,13378 | — | — | — | — | — | — |
+| **admin** | all | all | all | all | all | all | all | all | - | - |
+| **tier0** | - | all | all | all | all | all | all | all | - | - |
+| **tier1** | - | - | all | - | - | - | 5432 | 445 | - | - |
+| **tier2** | - | - | - | all | - | - | - | 445 | - | - |
+| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100, 9187 | 9100 | - | - |
+| **database** | - | - | - | - | - | - | - | - | - | - |
+| **ai-stack** | 11434 | - | - | 11434 | - | - | 5432 | 445 | - | - |
+| **client** | - | - | 443 | 443 + gpu-vm:8096,13378 | - | 443 | - | - | - | - |
+| **untrusted** | - | - | - | 443 + gpu-vm:8096,13378 | - | - | - | - | - | - |
 
 ---
 
@@ -370,18 +370,18 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
-| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (household TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged — `tagOwners: autogroup:admin` already made self-assignment impossible |
+| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (household TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
 | (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
 | 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
 | 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
 | 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (lxc260) uses dedicated platform tag (DD#12) |
-| 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack → database:5432) | First database consumer (OpenWebUI CT230) onboarding |
+| 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack -> database:5432) | First database consumer (OpenWebUI CT230) onboarding |
 | 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
 | 2026-04-02 | Extended Rule 5 (ai-stack dst): added tag:admin:11434 and tag:tier2:11434 for Ollama inference backends | OpenWebUI requires direct Ollama access (admin workstation + VM100) |
 | 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to lxc260 |
-| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443→8000, paperless_db@lxc260, E2E verified | Paperless-ngx operational and documented |
+| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443->8000, paperless_db@lxc260, E2E verified | Paperless-ngx operational and documented |
 | 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on lxc260 |
 | 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
 

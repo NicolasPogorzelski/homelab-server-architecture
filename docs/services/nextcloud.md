@@ -95,7 +95,7 @@ detect these deletions automatically (External Storage mounts are not monitored 
 A scheduled `files:scan` on LXC210 keeps the cache consistent:
 
 - Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
-- Schedule: `paperless-inbox-scan.timer` — `OnCalendar=hourly`, `Persistent=true`
+- Schedule: `paperless-inbox-scan.timer` - `OnCalendar=hourly`, `Persistent=true`
 - Log: `journalctl -u paperless-inbox-scan.service`
 - Scope: scans `<user>/files/Paperless Inbox` per Nextcloud user; silently skips users without the folder
 
@@ -106,9 +106,9 @@ previous hourly root crontab entry.
 `Persistent=true` matters here: the Proxmox host powers down overnight, so a plain
 cron entry loses every slot it sleeps through and never retries. The timer runs the
 overdue scan at the next boot instead. A failing run now raises the fleet-wide
-`SystemdUnitFailed` alert — as a cron job it failed silently.
+`SystemdUnitFailed` alert - as a cron job it failed silently.
 
-See: [Paperless-ngx Service Documentation](./paperless.md) — Nextcloud Integration section
+See: [Paperless-ngx Service Documentation](./paperless.md) - Nextcloud Integration section
 
 ## Notes / Known Issues
 

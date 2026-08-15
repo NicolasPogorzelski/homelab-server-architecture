@@ -19,5 +19,5 @@ tailscale_cert_min_validity: 720h
 tailscale_cert_reload_units: apache2
 
 # Daily. Persistent=true catches up a run missed while the host was powered down
-# overnight — the same reason pg-backup is a timer and not a cron job.
+# overnight - the same reason pg-backup is a timer and not a cron job.
 tailscale_cert_oncalendar: "*-*-* 04:30:00"

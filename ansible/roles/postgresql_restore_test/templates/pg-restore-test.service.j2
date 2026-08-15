@@ -3,7 +3,7 @@
 Description=Validate that the newest pg_dumpall backup can be restored
 # Ordering only, no Wants=: this job does not touch the live cluster and must not
 # pull it up. What it actually depends on is the CIFS backup share, and that
-# cannot be expressed as a unit dependency here — it is a Proxmox bind mount of a
+# cannot be expressed as a unit dependency here - it is a Proxmox bind mount of a
 # host automount. The script guards it by testing the mount's identity instead
 # (findmnt must report cifs), which is the only check that survives KE-15.
 After=postgresql.service

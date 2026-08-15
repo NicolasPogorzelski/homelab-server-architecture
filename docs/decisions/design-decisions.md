@@ -165,8 +165,8 @@ Monitoring stack isolated in LXC200.
 
 Performance-critical services remain reachable from the local network:
 
-- Media services (Jellyfin, Audiobookshelf on VM100) — for high-bitrate LAN streaming
-- Nextcloud (LXC210) — for high-volume LAN uploads (e.g. multi-GB file imports)
+- Media services (Jellyfin, Audiobookshelf on VM100) - for high-bitrate LAN streaming
+- Nextcloud (LXC210) - for high-volume LAN uploads (e.g. multi-GB file imports)
 
 ### Rationale
 
@@ -185,14 +185,14 @@ LAN access is therefore maintained as a performance-oriented exception.
 - LAN exposure restricted to performance-critical workloads only
 - Vaultwarden is not LAN-exposed (loopback-only + Tailscale Serve)
 - Nextcloud is LAN-exposed but protected by Apache TLS and application-level authentication
-- All LAN-exposed services still require authentication — no anonymous access
+- All LAN-exposed services still require authentication - no anonymous access
 
 This represents a deliberate trade-off between strict network isolation and practical throughput requirements.
 
 
 ---
 
-## 9. Planned Architectural Evolution (Network Hardening – Phase 2)
+## 9. Planned Architectural Evolution (Network Hardening - Phase 2)
 
 The current hybrid LAN + Tailscale access model is a documented performance trade-off influenced by upstream bandwidth limitations (~50 Mbit upload).
 
@@ -238,13 +238,13 @@ All inter-service communication in host-networked Docker stacks must use `127.0.
 
 ### Rationale
 
-In Docker's default bridge mode, an internal DNS resolver allows containers to reach each other by name (e.g., `http://prometheus:9090`). When `network_mode: host` is enabled, containers share the host's network stack directly — Docker does not create a virtual network and therefore provides no DNS resolution between containers.
+In Docker's default bridge mode, an internal DNS resolver allows containers to reach each other by name (e.g., `http://prometheus:9090`). When `network_mode: host` is enabled, containers share the host's network stack directly - Docker does not create a virtual network and therefore provides no DNS resolution between containers.
 
 This caused a concrete failure: Grafana's provisioned datasource referenced `http://prometheus:9090`, which became unresolvable after the switch to host networking. Dashboards failed silently until the URL was corrected to `http://127.0.0.1:9090`.
 
 ### Implications
 
-- Any service-to-service reference in configuration files, environment variables, or provisioning templates must use `127.0.0.1` (or the host's Tailscale IP) — never container names
+- Any service-to-service reference in configuration files, environment variables, or provisioning templates must use `127.0.0.1` (or the host's Tailscale IP) - never container names
 - This applies to all current and future Docker stacks using `network_mode: host`
 - Provisioning files (e.g., Grafana datasources) are managed as IaC templates (`.example` with placeholders) to make this explicit
 
@@ -299,8 +299,8 @@ Root cause: Tailscale evaluates ACLs when establishing new peer connections. The
 
 ### Rationale
 
-- Tailscale ACLs are deny-by-default — every direction of traffic requires an explicit rule
-- Inbound access (admin → monitoring) does not imply outbound access (monitoring → targets)
+- Tailscale ACLs are deny-by-default - every direction of traffic requires an explicit rule
+- Inbound access (admin -> monitoring) does not imply outbound access (monitoring -> targets)
 - Pre-existing tunnels can mask missing rules until the next connection reset
 - Port restriction (9100 only) enforces least-privilege: Prometheus can scrape metrics but cannot SSH or access other services
 
@@ -325,19 +325,19 @@ lxc260 runs a centralized PostgreSQL instance that serves multiple consumers acr
 
 ### Decision
 
-PostgreSQL is assigned `tag:database` — a new platform-level tag outside the tier hierarchy. Consumer access is granted per-service via explicit ACL rules restricted to port 5432.
+PostgreSQL is assigned `tag:database` - a new platform-level tag outside the tier hierarchy. Consumer access is granted per-service via explicit ACL rules restricted to port 5432.
 
 ### Rationale
 
 Placing PostgreSQL in an existing tier (e.g., `tag:tier1` or `tag:tier2`) would create a conflict: tier rules allow intra-tier communication on all ports, which would grant unrelated services in that tier full access to the database. Cross-tier consumers would require exception rules that erode the tier isolation model.
 
-A dedicated `tag:database` avoids this by decoupling the database from the application tier hierarchy entirely. Each consumer must be explicitly allowed by tag and port — no implicit access through shared tier membership.
+A dedicated `tag:database` avoids this by decoupling the database from the application tier hierarchy entirely. Each consumer must be explicitly allowed by tag and port - no implicit access through shared tier membership.
 
 This follows the same pattern established for `tag:monitoring` (DD#11): platform services that serve multiple tiers receive their own tag rather than being placed inside a tier.
 
 ### Implications
 
-- Every new database consumer requires an explicit ACL rule (`consumer-tag → tag:database:5432`)
+- Every new database consumer requires an explicit ACL rule (`consumer-tag -> tag:database:5432`)
 - `tag:database` must be added to the admin destination list for management access
 - The tier model table and access matrix in `tailscale-acl.md` must include the new tag
 - Future shared platform services (e.g., a central Redis or message broker) should follow the same pattern
@@ -356,7 +356,7 @@ This follows the same pattern established for `tag:monitoring` (DD#11): platform
 Multiple unprivileged LXCs require Tailscale for identity-based network access.
 During initial provisioning, TUN configuration was applied inconsistently:
 some containers were missing cgroup2 device rules or mount entries, and LXC200
-had AppArmor disabled and no capability restrictions — likely left over from
+had AppArmor disabled and no capability restrictions - likely left over from
 debugging sessions.
 
 ### Decision
@@ -376,12 +376,12 @@ No additional permissive overrides are acceptable:
 Without `cgroup2.devices.allow`, the kernel denies access to the TUN device
 regardless of mount visibility. Without `mount.entry`, the device does not exist
 inside the container namespace. Both lines are required for Tailscale to use
-kernel-mode WireGuard — the absence of either causes a silent fallback to
+kernel-mode WireGuard - the absence of either causes a silent fallback to
 userspace networking, which is harder to observe and debug.
 
 `apparmor: unconfined` disables the kernel's mandatory access control layer
 for all processes in the container. Combined with an empty `cap.drop`, this
-grants the container maximum kernel privileges — unnecessary for any service
+grants the container maximum kernel privileges - unnecessary for any service
 workload and inconsistent with the least-privilege principle.
 
 ### Implications

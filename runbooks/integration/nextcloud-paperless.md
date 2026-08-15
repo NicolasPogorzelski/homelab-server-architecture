@@ -1,8 +1,8 @@
-# Runbook: Nextcloud → Paperless-ngx ingestion — verify and repair
+# Runbook: Nextcloud -> Paperless-ngx ingestion - verify and repair
 
 ## Problem
 
-The Nextcloud → Paperless ingestion pipeline spans three systems (LXC210, VM102, LXC211)
+The Nextcloud -> Paperless ingestion pipeline spans three systems (LXC210, VM102, LXC211)
 and can break silently at several points:
 
 - Nextcloud External Storage mount becomes unavailable (red icon)
@@ -45,7 +45,7 @@ consumer polling, crontab shows hourly `scan-paperless-inbox.sh` entry.
 
 ## Recovery
 
-### A — Consumption subdirectories missing
+### A - Consumption subdirectories missing
 
 Paperless deletes empty subdirectories after a full import cycle. Recreate them on VM102:
 
@@ -60,14 +60,14 @@ pct exec 102 -- bash -c "
 
 Then re-verify Nextcloud mounts (step 2 above).
 
-### B — Nextcloud External Storage mount stale (red icon)
+### B - Nextcloud External Storage mount stale (red icon)
 
 ```bash
 # Re-verify mount
 pct exec 210 -- su -s /bin/bash -c \
   "php /var/www/nextcloud/occ files_external:verify <mount-id>" www-data
 
-# If still unavailable — remove and re-add user assignment
+# If still unavailable - remove and re-add user assignment
 pct exec 210 -- su -s /bin/bash -c \
   "php /var/www/nextcloud/occ files_external:applicable --remove-user <user> <mount-id>" www-data
 pct exec 210 -- su -s /bin/bash -c \
@@ -80,7 +80,7 @@ pct exec 210 -- su -s /bin/bash -c \
 
 Mount IDs: `4` = first user, `5` = second user
 
-### C — Nextcloud cache shows deleted/consumed documents
+### C - Nextcloud cache shows deleted/consumed documents
 
 The hourly cronjob resolves this automatically. To trigger immediately:
 
@@ -93,7 +93,7 @@ Check result:
 pct exec 210 -- tail -20 /var/log/nextcloud-paperless-scan.log
 ```
 
-### D — SMB mount not active on Proxmox host
+### D - SMB mount not active on Proxmox host
 
 ```bash
 # Trigger automount manually
@@ -134,8 +134,8 @@ one, and the actual fault is one layer down.
 
 ## Notes
 
-- Consumption dirs may not exist after a full import cycle — this is normal behavior.
+- Consumption dirs may not exist after a full import cycle - this is normal behavior.
 - Adding a new user requires: new SMB share on VM102, new External Storage mount in Nextcloud,
   new Paperless workflow. The cache sync cronjob picks up new users automatically.
-- See: [Paperless-ngx Service Documentation](../../docs/services/paperless.md) — Nextcloud Integration section
+- See: [Paperless-ngx Service Documentation](../../docs/services/paperless.md) - Nextcloud Integration section
 - See: [Nextcloud Service Documentation](../../docs/services/nextcloud.md)

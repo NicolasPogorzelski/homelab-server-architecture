@@ -9,7 +9,7 @@ undetected until a disk failure reveals the damage is irrecoverable.
 ## Preconditions
 
 - SSH access to VM102
-- Parity is current — run `snapraid sync` first if recent writes have occurred
+- Parity is current - run `snapraid sync` first if recent writes have occurred
 - All data and parity disks are online (`lsblk` / verify mount points in `snapraid.conf`)
 - No large writes are actively in progress
 
@@ -41,7 +41,7 @@ Expected: no errors or hash mismatches reported. Exit code 0 indicates success.
 |---|---|---|
 | Hash mismatch reported | Silent data corruption (bit rot) | Run `snapraid fix` to attempt parity-based recovery; inspect affected files |
 | `Error reading file` / I/O error | Disk read failure or early hardware fault | Check `smartctl -a <disk>`; inspect `dmesg` |
-| Scrub aborted — parity not current | Sync was skipped after recent writes | Run `snapraid sync`, then retry scrub |
+| Scrub aborted - parity not current | Sync was skipped after recent writes | Run `snapraid sync`, then retry scrub |
 | Very slow completion | Full read of all data blocks on large pool | Normal behavior; no action required |
 
 ## Rollback
@@ -62,9 +62,9 @@ one-way.
 
 - Scrub runs automatically on VM102 via `snapraid-scrub.timer` (monthly, 1st of each month at 20:00),
   which triggers `snapraid-maintenance@scrub.service`. Script: `snippets/storage/snapraid-maintenance.sh scrub`.
-  `Persistent=true` — if the host is powered off on the 1st, the scrub runs at the next boot instead of
+  `Persistent=true` - if the host is powered off on the 1st, the scrub runs at the next boot instead of
   waiting a full month. Check with `systemctl list-timers snapraid-scrub.timer`.
 - This runbook covers manual execution (ad-hoc scrub, troubleshooting).
-- A hash mismatch is a critical signal — begin disk health investigation immediately; do not defer.
+- A hash mismatch is a critical signal - begin disk health investigation immediately; do not defer.
 - See: [Storage Design](../../docs/platform/storage-design.md)
 - See: [VM102 node doc](../../docs/nodes/vm102.md)

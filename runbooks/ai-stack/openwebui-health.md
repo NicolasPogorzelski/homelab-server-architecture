@@ -11,8 +11,8 @@ remain healthy, making a structured check sequence necessary.
 ## Preconditions
 
 - Proxmox host shell or SSH session active
-- CT230 is running: `pct status 230` → `status: running`
-- CT260 is running: `pct status 260` → `status: running`
+- CT230 is running: `pct status 230` -> `status: running`
+- CT260 is running: `pct status 260` -> `status: running`
 - VM102 is running and Samba is active (required for SMB mounts)
 
 ---
@@ -24,10 +24,10 @@ remain healthy, making a structured check sequence necessary.
 Verify both host-side paths are mounted before checking inside the container.
 
 ```bash
-# mp0 — SMB (uploads, vector store, backups)
+# mp0 - SMB (uploads, vector store, backups)
 findmnt -t cifs /mnt/smb/openwebui
 
-# mp1 — local block storage (app state, logs)
+# mp1 - local block storage (app state, logs)
 findmnt /mnt/aux-disk/openwebui
 ```
 
@@ -48,10 +48,10 @@ See: [SMB autofs trigger runbook](../storage/smb-autofs-trigger.md)
 Confirm the LXC bind-mounts are visible from inside the container.
 
 ```bash
-# mp0 — should list uploads/, vector/, backups/
+# mp0 - should list uploads/, vector/, backups/
 pct exec 230 -- ls /data/openwebui
 
-# mp1 — should list OpenWebUI app state directories
+# mp1 - should list OpenWebUI app state directories
 pct exec 230 -- ls /var/lib/openwebui
 ```
 
@@ -75,7 +75,7 @@ pct exec 230 -- docker compose -f /opt/openwebui/docker-compose.yml logs --tail 
 
 ---
 
-### 4. PostgreSQL connectivity (CT230 → CT260)
+### 4. PostgreSQL connectivity (CT230 -> CT260)
 
 Verify CT230 can reach CT260 on port 5432 over Tailnet:
 
@@ -123,7 +123,7 @@ pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000
 | `ls /data/openwebui` empty inside CT230 | Host SMB mount active but LXC bind-mount not propagated | `pct stop 230 && pct start 230` |
 | Container in `exited` state | App crash or OOM | `docker compose logs --tail 50` for error; check `dmesg` for OOM |
 | Container in `restarting` loop | DB unreachable at startup or config error | Check step 4 first; then inspect logs |
-| `nc` to CT260:5432 fails | Tailscale down on CT230 or CT260, or ACL blocking | `pct exec 230 -- tailscale status`; verify tag:ai-stack → tag:database ACL rule 5 |
+| `nc` to CT260:5432 fails | Tailscale down on CT230 or CT260, or ACL blocking | `pct exec 230 -- tailscale status`; verify tag:ai-stack -> tag:database ACL rule 5 |
 | DB connection errors in app logs | Wrong credentials or DB `openwebui_db` missing | Connect to CT260 and verify: `pct exec 260 -- psql -U postgres -c '\l'` |
 | `tailscale serve status` shows no entry | Serve config lost (container restart, Tailscale restart) | Re-run serve command from step 5 |
 
@@ -140,9 +140,9 @@ look identical in a document that simply has no such section.
 ## Notes
 
 - All commands run from the Proxmox host via `pct exec`. No direct LXC shell required.
-- Ollama backends (admin workstation port 11434, VM100 port 11434) are not checked here —
+- Ollama backends (admin workstation port 11434, VM100 port 11434) are not checked here -
   they are inference-only and their absence degrades functionality without making the service
-  unavailable. Check OpenWebUI Admin → Settings → Connections if inference is broken but
+  unavailable. Check OpenWebUI Admin -> Settings -> Connections if inference is broken but
   the service is otherwise healthy.
 - See: [OpenWebUI service docs](../../docs/services/openwebui.md)
 - See: [LXC230 node docs](../../docs/nodes/lxc230.md)

@@ -14,17 +14,17 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:9090"]
 
-  # Node Exporter — LXC200 monitoring (loopback, Docker container)
+  # Node Exporter - LXC200 monitoring (loopback, Docker container)
   - job_name: "node-lxc200-monitoring"
     static_configs:
       - targets: ["127.0.0.1:9100"]
 
-  # PostgreSQL Exporter — CT260 (pg_stat_* metrics via Tailscale)
+  # PostgreSQL Exporter - CT260 (pg_stat_* metrics via Tailscale)
   - job_name: "postgres"
     static_configs:
       - targets: ["{{ hostvars['lxc260']['ansible_host'] }}:9187"]
 
-  # Node Exporter — Proxmox hypervisor host (not in Ansible inventory — bare-metal host)
+  # Node Exporter - Proxmox hypervisor host (not in Ansible inventory - bare-metal host)
   - job_name: "node-proxmox-host"
     static_configs:
       - targets: ["{{ proxmox_host_tailscale_ip }}:9100"]

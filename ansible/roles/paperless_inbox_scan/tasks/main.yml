@@ -32,7 +32,7 @@
 #
 # `sed -E '/pat/d'` rather than `grep -vE pat`: grep exits 1 when it prints no
 # lines, and on a crontab whose only entry is this one that is exactly what
-# success looks like — `set -o pipefail` would turn it into a task failure.
+# success looks like - `set -o pipefail` would turn it into a task failure.
 - name: Read the root crontab
   ansible.builtin.command:
     cmd: crontab -l -u root

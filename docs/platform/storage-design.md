@@ -33,7 +33,7 @@ The storage layer is implemented as a dedicated VM to enforce separation of conc
 ### Mount Strategy
 
 - Persistent disk mapping via /dev/disk/by-id on the hypervisor
-- Individual mount points per disk (e.g. /mnt/disk01 …)
+- Individual mount points per disk (e.g. /mnt/disk01 ...)
 - MergerFS pool mounted at /mnt/mergerfs
 - ext4 mounted with performance-aware options (e.g. noatime)
 
@@ -73,7 +73,7 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
   - `parity1` -> `/mnt/parity`
 - Auxiliary disks:
   - `aux-disk1` -> `/mnt/aux-disk1` (non-parity, local app state)
-  - `aux-disk` -> `/mnt/aux-disk` (**temporarily** part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
+  - `aux-disk` -> `/mnt/aux-disk` (temporarily part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
 
 `aux-disk1` is not part of the SnapRAID parity set. `aux-disk` is temporarily included as a 6th data disk.
 

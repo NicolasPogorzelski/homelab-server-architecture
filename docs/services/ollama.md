@@ -1,4 +1,4 @@
-# Ollama — Inference Backend
+# Ollama - Inference Backend
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Two inference nodes are operational:
 | VM100 | NVIDIA RTX 2070 (8GB VRAM) | Backup | `tag:tier2` |
 | admin workstation | AMD RX 7900 XT (20GB VRAM) | Primary | `tag:admin` |
 
-## Deployment — Current State
+## Deployment - Current State
 
 ### VM100 (Backup)
 
@@ -27,7 +27,7 @@ Two inference nodes are operational:
 
 ### Admin Workstation (Primary)
 
-- **Status: Setup pending** — the admin workstation was reinstalled (2026-06-17); the previous
+- **Status: Setup pending** - the admin workstation was reinstalled (2026-06-17); the previous
   distro-package Ollama installation (`ollama-rocm`) is no longer available. Setup must be redone.
 - Installation (previous): distro-package `ollama-rocm`
 - Installation (pending): Ollama install script (`curl -fsSL https://ollama.com/install.sh | sh`);
@@ -35,7 +35,7 @@ Two inference nodes are operational:
 - Override: `/etc/systemd/system/ollama.service.d/override.conf` (to be re-applied)
 - Bind address: Tailscale IP only (`<tailscale-ip-admin-workstation>:11434`)
 - GPU: AMD RX 7900 XT (20GB VRAM), ROCm 7.2.0, gfx1100
-- Models: `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` — Modelfiles in `snippets/ollama/`
+- Models: `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` - Modelfiles in `snippets/ollama/`
 - Model storage: `/var/lib/ollama` (default)
 - Known: rocBLAS probe-runner crashes on startup (non-blocking, GPU recovered automatically)
 - Known: ROCm inference is ~30-50% slower than CUDA on comparable hardware
@@ -61,9 +61,9 @@ Two inference nodes are operational:
 Qwen3 is selected across all nodes for consistent behavior in the inference pipeline,
 strong multilingual performance (Deutsch + English), and optimized single-GPU deployment.
 
-Context strategy: qwen3:32b fills the full 20GB VRAM leaving minimal KV-cache headroom —
+Context strategy: qwen3:32b fills the full 20GB VRAM leaving minimal KV-cache headroom -
 it is best suited for high-quality short-context tasks. For long RAG sessions and agentic
-workflows requiring 32K–64K token context, qwen3:14b is the appropriate choice.
+workflows requiring 32K-64K token context, qwen3:14b is the appropriate choice.
 qwen3:8b provides maximum context (128K) and fastest responses for interactive use.
 
 Context window note: Context is configured per model via Modelfiles.
@@ -92,12 +92,12 @@ Context window note: Context is configured per model via Modelfiles.
 ## Future Improvements
 
 - **Automatic backend selection:** Route inference requests based on admin workstation
-  availability and GPU load (<30% → admin workstation, otherwise VM100). Requires a
+  availability and GPU load (<30% -> admin workstation, otherwise VM100). Requires a
   local proxy with health-check logic (planned for Phase 2, after Bash/Python
   proficiency).
 - **Offline backend filtering:** Hide models from unavailable backends in
   OpenWebUI dropdown. Currently offline backends still appear in model selection
-  — errors only surface on first message send.
+  - errors only surface on first message send.
 
 ## Failure Impact
 
