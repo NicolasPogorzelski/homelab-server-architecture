@@ -1,11 +1,4 @@
 ---
-# node_exporter: enable the textfile collector so mariadb_backup.prom is scraped.
-# Without this the backup script writes the metric and nothing reads it, and
-# MariaDBBackupStale can never fire — an absent series produces no result, so the
-# alert would look healthy for a backup that never ran. Same trap the PostgreSQL
-# alert sat in for months before lxc260 got this line.
-node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
-
 # Units that can never succeed on this node. Masked by the systemd_hygiene role so
 # that every remaining failed unit on the fleet is a real fault worth alerting on.
 systemd_hygiene_masked_units:

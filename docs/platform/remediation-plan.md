@@ -85,7 +85,7 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 
 | # | Item | Note |
 |---|---|---|
-| 7 | Proxmox host becomes an Ansible node | **Trap:** `node_exporter_textfile_dir` must be set in `host_vars`, or the role silently drops the textfile collector — and with it both SMART and the thin-pool metrics |
+| 7 | Proxmox host becomes an Ansible node | **The trap listed here is obsolete, corrected 2026-08-15.** It read "`node_exporter_textfile_dir` must be set in `host_vars`, or the role silently drops the textfile collector". The default became fleet-wide on 2026-07-10 (`c134959`), and the host's hand-written unit uses the identical path — verified, so adoption needs no override. Left visible rather than deleted: a stale warning is its own hazard, because it deters exactly the work it was written to protect |
 | 8 | Extend the SMART collector to the attributes that matter | `smart_health_passed` reads PASSED for the disk with 7680 unreadable sectors. `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count` are not exported and the `smart` rule group is empty |
 | 9 | Fold the hand-deployed host units into roles | `node_exporter`, `wait-for-tailscale-ip.sh`, `lxc-fstrim`, `lvm-thin-metrics` — all lost on a rebuild |
 | 10 | Apply the `homelab_schedule` role | Decide cron vs. timer explicitly; cron is defensible here because the job powers the host down |
