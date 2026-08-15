@@ -1,0 +1,39 @@
+# Dependabot configuration
+#
+# Scope note — why only GitHub Actions appears here.
+#
+# Dependabot does two different things, and only one of them belongs in this file:
+#
+#   * *Version updates* (configured here) open a pull request whenever a newer version exists,
+#     regardless of whether the current one is vulnerable.
+#   * *Security updates* (a repository setting, not this file) open a pull request only when a
+#     published advisory affects a version actually in use.
+#
+# The Docker images in `docker/` are deliberately **not** listed for version updates. They are
+# pinned on purpose, and `docker-compose-update` is under a standing hold until the aux-disk is
+# replaced (see `docs/platform/known-errors.md#ke-13`) — the role writes gigabytes of new image
+# layers onto a disk with 7680 unreadable sectors. A stream of pull requests proposing upgrades
+# that must not be applied would be pure noise, and this platform has already recorded what
+# happens to a signal nobody can act on.
+#
+# The question that *is* worth answering during the hold is not "is a newer tag available" but
+# "is what we are running vulnerable, and how badly". That is answered by the Trivy scan in
+# `.github/workflows/image-scan.yml`, which reports CVEs without proposing a change. Advisory-
+# driven security updates remain enabled at the repository level for the same reason.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      # Friday matches the weekly fleet-audit ritual, so the review happens in a slot that
+      # already exists rather than in an interrupt.
+      day: "friday"
+    open-pull-requests-limit: 5
+    commit-message:
+      # This repository requires Conventional Commits with a scope (`scripts/commit-msg-lint.sh`).
+      # `include: "scope"` makes Dependabot emit `ci(deps): ...`, which satisfies that pattern.
+      prefix: "ci"
+      include: "scope"

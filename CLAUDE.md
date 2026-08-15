@@ -11,7 +11,7 @@ Terraform. The completed role/playbook catalog and per-session narratives live i
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
 notes there and keep this section short.
 
-**Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md); ordering and dependencies in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md)):
+**Open operational items** (full detail in [`docs/platform/known-errors.md`](docs/platform/known-errors.md); ordering and dependencies in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md); the same items read as security controls in [`docs/platform/security-controls.md`](docs/platform/security-controls.md), with data classification and recovery objectives in [`docs/platform/data-classification.md`](docs/platform/data-classification.md)):
 
 - **KE-13 — aux-disk media failure.** The auxiliary disk is back in service under protest pending a
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
@@ -100,6 +100,17 @@ notes there and keep this section short.
   The claim elsewhere in this file that lxc200 is the *only* node without `SystemdUnitFailed`
   coverage was corrected 2026-08-13 — lxc250 lacks it too,
   it just falls outside the definition of "node" by being absent from the inventory.
+- **Nextcloud's MariaDB has no backup, and parity is not backup (found 2026-08-15).** The nightly
+  `pg_dumpall` covers lxc260 only; Nextcloud's database runs *inside* lxc210 and no role, script,
+  unit or crontab entry dumps it. Its user files live on the archive pool, its database on the
+  KE-14 boot SSD — **the two halves of one dataset, on different disks, with different protection,
+  and the weaker half is the one that makes the other meaningful.** Losing that SSD leaves every
+  file intact and unusable. Same pass found that Vaultwarden, Paperless documents and Nextcloud
+  files rely on SnapRAID parity and nothing else: parity protects against *disk* loss, not against
+  deletion, corruption or ransomware, because the next `snapraid sync` writes the damage into the
+  parity. Tier 1 #3 was reworded — it had presumed local copies existed to be duplicated off-site.
+  **Still to verify live on the node**; the evidence so far is absence in the repository plus the
+  2026-07-10 crontab audit.
 - **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
   Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
   storage fix, and the storage-migration design discussion.
@@ -227,7 +238,10 @@ This is a **documentation and configuration repository** — no application code
 - `scripts/` — Repo tooling and Proxmox host scripts: `validate-repo.sh` (18-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling — deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown — deployed to host `/usr/local/sbin/`)
 - `ansible/` — Ansible configuration, inventory, playbooks, roles
 
-Only these top-level directories are allowed (enforced by Check 12).
+Only these top-level directories are allowed (enforced by Check 12), plus the files `README.md`,
+`CLAUDE.md`, `LICENSE` and `.gitignore`. `LICENSE` must stay in the root — GitHub's license
+detection looks nowhere else. `SECURITY.md` lives in `.github/` instead, which Check 12 skips as a
+hidden entry and which GitHub reads just as well.
 
 ## Documentation Conventions
 
