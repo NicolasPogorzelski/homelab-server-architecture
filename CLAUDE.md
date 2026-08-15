@@ -114,9 +114,12 @@ notes there and keep this section short.
   across 179 InnoDB tables — **the gap was never a cost problem.** `postgresql_backup` was built
   when lxc260 became "the platform database", and nobody checked whether that phrase covered every
   database; Nextcloud's predates the decision and fell outside a category declared complete. The
-  `mariadb_backup` role, script and runbook now exist and are **blocked on provisioning a backup
-  share** (vm102 export → host fstab with `x-systemd.automount` → `mp1` bind → `pct reboot 210`) —
-  a host-level change, therefore manual. Vaultwarden still has no consistent export.
+  `mariadb_backup` role, script and runbook now exist and are **live since 2026-08-15** — share
+  provisioned on vm102, host fstab entry, `mp1` bind, `pct reboot 210`, playbook applied, first
+  verified dump on the share (2.2 MB, one completion marker), metric scraped, `MariaDBBackupStale`
+  promoted and inactive. Nextcloud files are still parity-only, and **Vaultwarden still has no
+  consistent export** — an SQLite file copied from a live CIFS mount is a gamble on timing, not a
+  backup. That is now the last open half of Tier 1 #3 before the off-site question itself.
 - **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
   Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
   storage fix, and the storage-migration design discussion.
@@ -490,10 +493,15 @@ Do not flag these as new issues — they are documented tradeoffs or known quirk
   failed unit on the *hypervisor* reached no alert — the gap that would have made
   `smb-mounts-check.service` another silent guard) and binds `100.x:9100` instead of `*:9100`,
   which had been LAN-exposed in violation of the binding rule. Both changes were made by hand,
-  because the host is still not an Ansible node. The `node_exporter` role would own this properly
-  — but adopting the host requires `host_vars` with `node_exporter_textfile_dir` set, or the role
-  silently drops the textfile collector and with it the host's SMART metrics. Same class of trap
-  as KE-15. See the host-adoption design decision (pending).
+  because the host is still not an Ansible node. The `node_exporter` role would own this properly.
+  **The trap this entry used to name is gone, corrected 2026-08-15:** it warned that adopting the
+  host needs `host_vars` with `node_exporter_textfile_dir` set or the role silently drops the
+  textfile collector. That stopped being true on 2026-07-10 (`c134959`), when the default became
+  fleet-wide precisely because the per-host form had already cost vm102 its SnapRAID metrics once.
+  Verified 2026-08-15: the host's hand-written unit uses the identical path, so adoption needs no
+  override at all. **The general lesson is about the warning, not the flag** — a documented trap
+  outlives its fix, keeps being repeated, and quietly deters the work it was meant to protect.
+  See the host-adoption design decision (pending).
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.
