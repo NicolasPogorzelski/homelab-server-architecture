@@ -1,0 +1,10 @@
+---
+# Targets lxc210 by name rather than the `services` group: lxc211 is in that
+# group too and runs no database of its own (Paperless keeps its metadata in the
+# PostgreSQL cluster on lxc260). A group target would deploy a MariaDB backup to
+# a node with no MariaDB.
+- name: Deploy MariaDB backup infrastructure
+  hosts: lxc210
+  become: true
+  roles:
+    - mariadb_backup
