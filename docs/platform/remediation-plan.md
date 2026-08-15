@@ -42,9 +42,31 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 
 | # | Item | What is lost |
 |---|---|---|
-| 1 | Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key into Vaultwarden; demote the GitHub key to a read-only deploy key | **Unrecoverable.** One copy, gitignored, on the boot SSD with the unresolved [KE-14](known-errors.md#ke-14) faults. Losing the vault password makes every vaulted secret undecryptable — there is no restore path. See [lxc250 § Open Items](../nodes/lxc250.md) |
+| 1 | Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key **off-site** — sealed on paper outside the flat, plus a password manager somebody else operates. Demote the GitHub key to a read-only deploy key | **Unrecoverable.** One copy, gitignored, on the boot SSD with the unresolved [KE-14](known-errors.md#ke-14) faults. Losing the vault password makes every vaulted secret undecryptable — there is no restore path. See [lxc250 § Open Items](../nodes/lxc250.md). **Target corrected 2026-08-14 — this line used to say "into Vaultwarden", and that was wrong:** see the note below |
 | 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ **Done 2026-08-13.** ~~Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time~~ **Done 2026-08-14** — plus write-to-`.partial`-then-rename, so an unverified dump never appears under the real name, and verification ordered before retention deletion | Closed. A dump that cannot be read now fails the run that wrote it and raises `SystemdUnitFailed`, instead of surviving up to 31 days until the monthly restore test — by which point the 7-day retention has deleted every healthy predecessor. Note the write-time checks prove the stream is complete, not that it is durable on vm102: the read-back is served from the CIFS page cache. Durability remains the restore test's job |
 | 3 | Off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents) | All backups are local, on the same site. No protection against site loss or ransomware |
+
+**Why item 1 no longer says "into Vaultwarden" (decided 2026-08-14).** Vaultwarden's persistent data
+lives on `mp0: /mnt/smb/vaultwarden`, i.e. on vm102's MergerFS pool — so against the *predicted*
+failure, the boot SSD dying, it genuinely would have been a second failure domain. But that is the
+narrow reading. Against **site loss, theft, fire, or ransomware spreading over the SMB mounts** it
+is worth nothing: same site, same power, same network. An escrow whose whole purpose is the
+catastrophic case must not share a building with the original.
+
+The corrected target is deliberately **not a server**: sealed on paper, kept outside the flat, plus
+a copy in a password manager somebody else operates. The vault password is roughly 30 bytes of
+static text that changes approximately never — a running system is the wrong medium for it, and
+every additional machine is operational surface this fleet has already shown it does not
+consistently supervise. A self-hosted VPS was considered and rejected **for this purpose**: it
+answers "where does the secret live" with another system that itself needs credentials, which only
+moves the root-of-trust question one hop and adds a hop that can fail. It becomes the right answer
+once it carries item 3 (off-site backup target) and Terraform state as well — three purposes, not
+one.
+
+**And the same discipline as the dumps applies:** an escrow that has never been restored from is
+the same fiction as an untested backup. Once a year, retrieve the paper copy and run
+`ansible-vault view` against a vaulted file. Record the date, exactly as
+[`pg-restore.md`](../../runbooks/database/pg-restore.md) does.
 
 ## Tier 2 — Blocked on hardware
 
@@ -65,6 +87,19 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 | 11 | `is_mountpoint 1` on the `appdata_aux-disk` storage | KE-7 failure class; `mkdir 0` does not prevent it |
 
 ## Tier 4 — Ordinary backlog
+
+**External heartbeat (`Watchdog` alert → off-site receiver), added 2026-08-14.** The measurement
+behind it is in the [changelog entry for 2026-08-14](changelog.md): `PostgreSQLBackupStale` could
+not see three backup-free days, because Prometheus runs on the host that was off. That is
+structural, not a threshold to retune — **an observer sharing a failure domain with the observed
+cannot report its total failure.** The standard fix is the `Watchdog` pattern that
+`kube-prometheus` ships by default: an alert whose expression is simply `vector(1)`, firing
+permanently on purpose and routed outward. If the external receiver stops seeing it, the whole
+alerting chain is down. Cost here is one rule plus one Alertmanager route; the receiver must be a
+service somebody else operates (a free heartbeat SaaS), because a self-hosted one needs a watcher
+of its own. Note the fleet already builds absence-alerts twice — `LvmThinMetricsStale` and
+`PostgreSQLRestoreTestStale` — this extends the same idea to the alerting chain itself.
+
 
 lxc250 inventory adoption and its `preflight.yml` gate — which must **replace** that node's
 hand-written `node_exporter` binding `*:9100`, not merely add one ([lxc250 § Open
