@@ -70,10 +70,20 @@ fi
 # Check 5: Runbook contract — required sections
 # =============================================================================
 # Contract from runbooks/README.md:
-# Preconditions, Commands/steps, Verification, Failure modes
+# Preconditions, Commands/steps, Verification, Failure modes, Rollback / abort
+#
+# Rollback became mandatory on 2026-08-15. The contract had listed it as "only if applicable"
+# since the beginning, and the result was that it appeared in 2 runbooks out of 13 — present in
+# exactly the two written most recently, when the danger was fresh. An optional section is a
+# preference, not a contract.
+#
+# "Not applicable" remains a legitimate answer and must be *written down with its reason*. A
+# read-only procedure genuinely has nothing to undo, but a document with no such section cannot
+# be distinguished from one where nobody thought about it — and that difference is the whole
+# value of asking.
 echo "Check 5: runbook contract sections"
 
-RUNBOOK_SECTIONS=("Precondition" "Verification" "Failure")
+RUNBOOK_SECTIONS=("Precondition" "Verification" "Failure" "Rollback")
 
 if [[ -d "${REPO_ROOT}/runbooks" ]]; then
     while read -r file; do

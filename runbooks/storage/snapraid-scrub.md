@@ -44,6 +44,18 @@ Expected: no errors or hash mismatches reported. Exit code 0 indicates success.
 | Scrub aborted — parity not current | Sync was skipped after recent writes | Run `snapraid sync`, then retry scrub |
 | Very slow completion | Full read of all data blocks on large pool | Normal behavior; no action required |
 
+## Rollback
+
+Nothing to roll back. `snapraid scrub` reads data and parity and compares them; it writes no file
+content and does not modify parity. The only state it changes is the bookkeeping of how recently
+each block was checked, and there is no reason to want that back.
+
+**Abort criterion, and it is the important line in this runbook:** if scrub reports errors, do
+**not** run `snapraid sync` to "clean it up". Sync would write the current, damaged state into
+parity and destroy the ability to repair it. Use `snapraid fix` on the reported blocks instead --
+see the rollback section of [snapraid-sync.md](snapraid-sync.md) for why that direction is
+one-way.
+
 ---
 
 ## Notes

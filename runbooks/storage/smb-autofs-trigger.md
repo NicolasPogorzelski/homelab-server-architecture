@@ -108,6 +108,33 @@ systemctl reset-failed smb-mounts-check.service && systemctl start smb-mounts-ch
 | Check unit fails but no alert arrives | The host's `node_exporter` lacks `--collector.systemd`, so `node_systemd_unit_state` is never exported for this host | Add `--collector.systemd --collector.systemd.unit-exclude='.+\.(automount\|device\|scope\|slice)'` to its `ExecStart`, mirroring the `node_exporter` Ansible role |
 | Container still sees an empty directory although the host mount is up | The bind was created while the mount was down; it does not heal by itself | `pct reboot <ctid>` |
 
+## Rollback
+
+The procedure takes its own backup (`cp -a /etc/fstab /etc/fstab.bak-<date>`), and that copy is the
+rollback:
+
+```bash
+cp -a /etc/fstab.bak-<date> /etc/fstab
+systemctl daemon-reload
+```
+
+The unit installation is equally reversible:
+
+```bash
+systemctl disable --now smb-mounts-check.service
+rm /etc/systemd/system/smb-mounts-check.service /usr/local/sbin/check-smb-mounts.sh
+systemctl daemon-reload
+```
+
+**But rolling back `x-systemd.automount` reintroduces KE-15**, in which the mount is attempted once
+at boot against a guest the host has not started yet, fails, and is never retried -- silently, for a
+month. If the option appears to cause a problem, diagnose the mount; do not remove the retry.
+
+**Note the asymmetry:** `daemon-reload` after restoring fstab does not unmount what is already
+mounted, and a container whose bind was set up during the broken window still needs
+`pct reboot <ctid>`. Reverting a configuration does not revert the state it produced.
+
+---
 ## Related
 
 - [KE-15 — calibre-import dead for a month](../../docs/platform/known-errors.md#ke-15)

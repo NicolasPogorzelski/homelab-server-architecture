@@ -150,6 +150,28 @@ further with image pulls.
 | Container exits immediately | Named volumes not migrated | Inspect `docker volume ls`; data should be present if `rsync` was complete |
 | aux-disk not mounted at boot | `mp` entry missing in Proxmox LXC config | Verify with `pct config <ctid>`; check `mountpoint` status inside LXC |
 
+## Rollback
+
+Reversible up to step 4, and only up to step 4. Steps 1-3 copy; step 4 deletes the originals.
+
+**Before step 4** the original data root is still in place, so the reversal is to restore the daemon
+configuration and start Docker again:
+
+```bash
+# revert /etc/docker/daemon.json and /etc/containerd/config.toml to their backups
+systemctl start containerd docker
+docker compose -f /opt/<service>/docker-compose.yml up -d
+```
+
+**After step 4** the original is gone and the aux-disk copy is the only one. If that copy is
+incomplete, the way back is not a rollback but a rebuild: pull the pinned images again and recreate
+the stack from its compose file. That is survivable only because the compose files live in this
+repository with pinned versions, and because service data sits on the SMB share rather than inside
+the Docker data root.
+
+**Abort criterion:** do not run step 4 until `du -sh` on both paths agrees. That comparison is the
+entire safety margin of this procedure.
+
 ---
 
 ## Notes

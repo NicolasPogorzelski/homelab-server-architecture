@@ -153,6 +153,23 @@ pct exec 260 -- systemctl status postgresql --no-pager
   clean reboots, increase the `up` delay in the LXC config via Proxmox WebUI → LXC260 →
   Options → Start/Shutdown Order.
 
+## Rollback
+
+You are already in the failure state, so there is nothing to return to. What this procedure needs
+instead are **abort criteria** -- the points at which continuing makes things worse:
+
+- **Storage mounts are not ready (step 1 fails).** Do not start containers anyway. A container whose
+  bind mount was empty at start keeps pointing at the empty directory, and the service inside writes
+  into the container rootfs on the boot SSD. That is the KE-7 class, and it turns an outage into a
+  disk-fill.
+- **A container fails to start twice for the same reason.** Stop and diagnose. Repeating `pct start`
+  against a failing pre-start hook produces no new information.
+- **The boot SSD is reporting I/O errors in `dmesg`.** Stop starting guests. Each additional guest is
+  more writing onto a device that is currently failing reads -- see KE-14.
+
+Individual steps are reversible in the ordinary sense: a container started too early can be stopped
+with `pct stop`, and once the mounts are healthy it has to be restarted anyway.
+
 ---
 
 ## Notes

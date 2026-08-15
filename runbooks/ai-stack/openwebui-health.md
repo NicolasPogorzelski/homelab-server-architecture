@@ -127,6 +127,14 @@ pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000
 | DB connection errors in app logs | Wrong credentials or DB `openwebui_db` missing | Connect to CT260 and verify: `pct exec 260 -- psql -U postgres -c '\l'` |
 | `tailscale serve status` shows no entry | Serve config lost (container restart, Tailscale restart) | Re-run serve command from step 5 |
 
+## Rollback
+
+Nothing to roll back: every command in this runbook reads state, and none of them writes. The repair
+actions live in the failure table above, and each names its own reversal there.
+
+Written down rather than omitted, because "there is nothing to undo" and "nobody thought about it"
+look identical in a document that simply has no such section.
+
 ---
 
 ## Notes
