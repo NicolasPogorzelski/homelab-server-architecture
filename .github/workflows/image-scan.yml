@@ -1,0 +1,101 @@
+name: Image vulnerability scan
+
+# Why this workflow exists.
+#
+# Every image in `docker/` is pinned to an exact version, and `docker-compose-update` is under a
+# standing hold until the aux-disk is replaced (`docs/platform/known-errors.md#ke-13`). Pinned plus
+# frozen means known-aging images are running on purpose — a documented, accepted risk.
+#
+# ISO/IEC 27001 treats an accepted risk as something that must stay *monitored*, not something that
+# stops being tracked. This scan is that monitoring: it answers "how exposed are we right now",
+# which is a different question from Dependabot's "is a newer tag available". Dependabot version
+# updates for these images are deliberately switched off (see `.github/dependabot.yml`), because
+# pull requests proposing upgrades nobody may apply are noise, and noise is what makes a signal
+# stop being read.
+#
+# It deliberately does **not** run on pull requests and is **not** a required status check. A CVE
+# in an upstream image is not a defect in the change being reviewed, and a permanently red gate
+# that cannot be fixed by the person facing it is the fastest way to teach people to ignore gates.
+
+on:
+  schedule:
+    # Friday 06:00 UTC — results are waiting when the weekly fleet audit starts.
+    - cron: "0 6 * * 5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docker/**/docker-compose.yml"
+      - ".github/workflows/image-scan.yml"
+
+permissions:
+  contents: read
+  # Required to publish SARIF results into the repository's Security tab.
+  security-events: write
+
+jobs:
+  collect:
+    name: Collect pinned images
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build the image list from the compose files
+        id: list
+        # The compose files are the single source of truth for what runs on the fleet, so the list
+        # cannot drift from reality the way a second hand-maintained list would. `\K` drops
+        # everything matched before it, leaving only the image reference; `\S+` stops at the
+        # trailing `# pinned to ...` comment.
+        run: |
+          images="$(grep -rhoP '^\s*image:\s*\K\S+' docker/ | sort -u | jq -R . | jq -sc .)"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+          echo "Found $(echo "${images}" | jq 'length') images" >> "$GITHUB_STEP_SUMMARY"
+
+  scan:
+    name: Scan ${{ matrix.image }}
+    needs: collect
+    runs-on: ubuntu-latest
+    strategy:
+      # One vulnerable image must not hide the results for the other twelve.
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.collect.outputs.images) }}
+    steps:
+      - name: Derive a stable SARIF category
+        id: slug
+        # The image reference is passed through the environment rather than interpolated directly
+        # into the shell command. `${{ }}` interpolation is textual substitution performed before
+        # the shell sees the line, so a value containing shell metacharacters would be executed
+        # rather than quoted. These values come from our own repository, but the safe pattern costs
+        # nothing and is the one that survives a file becoming untrusted later.
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
+          echo "value=${slug}" >> "$GITHUB_OUTPUT"
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          # Report only vulnerabilities that have a fix available upstream. During the hold, the
+          # number that matters is "how much is fixable and not being fixed" — that is the price
+          # of the hold, expressed in findings. Unfixable CVEs would inflate the count without
+          # changing any available decision.
+          ignore-unfixed: true
+          # Never fail the run. This workflow reports; it does not gate. See the note at the top.
+          exit-code: "0"
+
+      - name: Publish results to the Security tab
+        uses: github/codeql-action/upload-sarif@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+        with:
+          sarif_file: trivy.sarif
+          # A distinct category per image keeps the findings separate; without it each upload would
+          # overwrite the previous one and only the last image scanned would remain visible.
+          category: trivy-${{ steps.slug.outputs.value }}
