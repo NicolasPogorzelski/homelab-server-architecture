@@ -18,3 +18,43 @@ snapraid_sync_oncalendar: "*-*-* 23:00:00"
 snapraid_scrub_oncalendar: "*-*-01 20:00:00"
 
 snapraid_legacy_cron_file: /etc/cron.d/snapraid
+
+# === Exclude rules ===
+#
+# Managed here since 2026-08-15 (KE-19). SnapRAID computes parity over the bytes
+# it reads, so a file that changes underneath a running sync cannot be protected:
+# it fails that file, finishes the rest, and exits non-zero. The script then never
+# writes its success metric, and SnapRAIDSyncStale fires for an array that is
+# current apart from a log file nobody wants protected.
+#
+# The rule is exclude what changes, not what shares a suffix. A first attempt used
+# `*.log` and silently dropped four static CD-rip logs out of the audiobook
+# archive - files that never change and were never the problem.
+#
+# What is deliberately NOT managed here is the disk, parity and content layout
+# above these lines in /etc/snapraid.conf. It carries the real device labels,
+# which the repository's sanitization rules keep out of version control
+# (validate-repo.sh Check 18), and it changes only when hardware does.
+snapraid_conf: /etc/snapraid.conf
+
+snapraid_excludes:
+  # Generic, inherited from the hand-written config.
+  - "*.tmp"
+  - "*.bak"
+  - "lost+found/"
+  - "/tmp/"
+  - "/cache/"
+  # Nextcloud's own application log, written while the array is being read.
+  - "/Nextcloud/nextcloud.log"
+  - "/Nextcloud/nextcloud.log.*"
+  # SQLite side files. Ephemeral by definition, and parity over a -shm captured at
+  # a different moment than its main database is an inconsistent set, so a
+  # reconstruction from it can be corrupt. The main db.sqlite3 stays IN the array
+  # on purpose: imperfect protection beats none while Vaultwarden has no
+  # consistent export (remediation plan Tier 1 #3).
+  - "*.sqlite3-shm"
+  - "*.sqlite3-wal"
+  - "*.db-shm"
+  - "*.db-wal"
+  # App cache, refreshed on a cycle and regenerable.
+  - "/Nextcloud/appdata_*/richdocuments/remoteData/"

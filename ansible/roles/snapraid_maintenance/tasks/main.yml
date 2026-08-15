@@ -48,3 +48,42 @@
     - snapraid-sync
     - snapraid-scrub
   when: not ansible_check_mode
+
+# The layout above the block is left alone; only the exclude rules are owned here.
+# See defaults/main.yml for why, and KE-19 for what happens without them.
+- name: Assert the snapraid config exists
+  ansible.builtin.stat:
+    path: "{{ snapraid_conf }}"
+  register: snapraid_conf_stat
+
+- name: Fail early if the snapraid config is missing
+  ansible.builtin.assert:
+    that:
+      - snapraid_conf_stat.stat.exists
+    fail_msg: >-
+      {{ snapraid_conf }} does not exist. This role manages the exclude rules
+      inside an existing config; it does not create the disk, parity and content
+      layout, which is hand-written because it carries the real device labels.
+
+- name: Manage the exclude rules
+  ansible.builtin.blockinfile:
+    path: "{{ snapraid_conf }}"
+    marker: "# {mark} ANSIBLE MANAGED - exclude rules (KE-19)"
+    block: |
+      {% for pattern in snapraid_excludes %}
+      exclude {{ pattern }}
+      {% endfor %}
+    backup: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: snapraid_excludes_written
+
+# snapraid parses the whole config to answer this and exits immediately, so it is
+# a config check rather than an array operation. Running it only after a change
+# keeps a converged run free of side effects.
+- name: Verify snapraid still parses its config
+  ansible.builtin.command:
+    cmd: "snapraid -c {{ snapraid_conf }} devices"
+  changed_when: false
+  when: snapraid_excludes_written.changed and not ansible_check_mode
