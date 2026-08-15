@@ -115,6 +115,21 @@ findmnt -t cifs | grep paperless
 | `files_external:verify` returns error | SMB share unreachable or credentials wrong | Check VM102 Samba, verify SMB user `paperless-ingest` |
 | Paperless consumer logs show permission errors | UID/GID mismatch on consumption dir | Check `force user`/`force group` in VM102 smb.conf |
 
+## Rollback
+
+Both repair paths are reversible, and neither touches a document.
+
+- **A (missing consumption subdirectories):** the directories are created empty, so removing them
+  restores the previous state exactly. Check first that Paperless has not already consumed something
+  into them -- otherwise you delete an ingest in flight.
+- **B (stale External Storage mount):** the user assignment is removed and re-added. The mount
+  definition and its credentials are untouched, so re-adding the original assignment is the
+  reversal. The removal is briefly visible to the user as a folder that disappears.
+
+**Abort criterion:** if the mount is stale because vm102 is unreachable, stop. Re-adding an
+assignment against a storage backend that is down produces a second broken mount rather than a fixed
+one, and the actual fault is one layer down.
+
 ---
 
 ## Notes
