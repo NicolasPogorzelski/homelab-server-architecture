@@ -64,7 +64,15 @@ sudo vi /etc/fstab        # copy the existing postgres-backups line and adjust s
                           # mountpoint and uid/gid — it already carries the correct
                           # option set, including x-systemd.automount
 sudo systemctl daemon-reload
-ls /mnt/smb/db-backups    # triggers the automount; must not error
+
+# daemon-reload REGENERATES the .mount/.automount units from fstab but does not START
+# a newly generated automount unit. Skipping this line leaves an empty directory that
+# every `ls` reports as fine -- which is the KE-15 shape exactly. Found by running this
+# procedure: the first attempt "succeeded" and nothing was mounted.
+sudo systemctl start "$(systemd-escape -p --suffix=automount /mnt/smb/db-backups)"
+
+# Verify with findmnt, never with ls. `ls` on an unmounted mountpoint succeeds.
+findmnt -no FSTYPE,SOURCE /mnt/smb/db-backups   # must print: cifs //<vm102>/DB-Backups
 
 # 3. On the Proxmox host: bind it into the container, then restart it.
 sudo pct set 210 -mp1 /mnt/smb/db-backups,mp=/mnt/backups
@@ -115,7 +123,7 @@ pct exec 210 -- cat /var/lib/node_exporter/textfile_collector/mariadb_backup.pro
 
 | Date | Result |
 |---|---|
-| *(pending — the role has not been applied to the live node yet)* | |
+| 2026-08-15 | **Provisioned and applied end to end. Pass.** Share `DB-Backups` created on vm102 (dedicated `mariadb-bk` account, `force user = storage`, mode 0770), host fstab entry cloned from the postgres-backups line with `uid=100000,gid=100000` — root inside an unprivileged container maps to host uid 100000 — mount confirmed `cifs` by `findmnt`, host write test produced a file owned by `100000`. Bind `mp1` added, `pct reboot 210`, mount confirmed `cifs` **inside** the container, Apache and MariaDB back `active`, no failed units. Playbook `changed=4`, second run `changed=0`. Manual run: `Result=success`, `ExecMainStatus=0`, journal line `OK: /mnt/backups/mariadb_all_20260815_124422.sql.gz (2.2M), gzip and completion marker verified`. Dump independently re-checked on the share: `gzip -t` clean, **exactly one** completion marker, 209 `CREATE TABLE` statements. Metric scraped by Prometheus under `job="node-lxc210-nextcloud"`. `MariaDBBackupStale` promoted through the role's stage → validate → promote path (17 rules loaded, up from 16) and its expression returns an empty vector, i.e. correctly inactive against a fresh dump. Timer armed for 2026-08-16 03:34:14 UTC — 03:30 plus 4 min 14 s, which is `RandomizedDelaySec=300` doing its job. **One defect found by executing this runbook:** the provisioning section above omitted `systemctl start <unit>.automount`, so the first attempt reported success with nothing mounted. Corrected in the same commit. |
 
 ## Failure Modes
 
