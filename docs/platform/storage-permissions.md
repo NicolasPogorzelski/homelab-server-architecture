@@ -65,7 +65,6 @@ cosmetic uniformity.
 | `Postgres-Backups` | storage | storage | 2770 | 0660 | yes | owner only |
 | `DB-Backups` | storage | storage | 2770 | 0660 | yes | owner only |
 | `Vaultwarden` | storage | storage | 0770 | 0660, keys 0600 | no | owner only |
-| `roms` | not pinned | roms | 2770 | 0660 | yes | roms, roms-admin, storage, via group |
 
 Two rules govern the table:
 
@@ -88,10 +87,9 @@ says, so an account owning the media library could grant itself write access to 
 declares read-only. Keeping ownership at `storage` and giving the consumer group read access
 removes that possibility.
 
-`roms` is the exception: its share has no `force user`, so files legitimately belong to whichever
-of its three accounts wrote them. The owner column is therefore not checked there. Pinning it would
-produce a violation count that never reaches zero, for the same reason `DiskSpaceCritical` was
-rewritten in July 2026.
+A share without `force user` is the exception: its files legitimately belong to whichever account
+wrote them, so the owner column is left unpinned there. Pinning it would produce a violation count
+that never reaches zero, for the same reason `DiskSpaceCritical` was rewritten in July 2026.
 
 ---
 
@@ -103,6 +101,8 @@ Owned by the [`storage_permissions`](../../ansible/roles/storage_permissions) ro
 - `/usr/local/sbin/storage-permissions.sh` - the check, from
   [`snippets/storage/storage-permissions.sh`](../../snippets/storage/storage-permissions.sh)
 - `/etc/storage-permissions.conf` - the matrix above, rendered from the role's `defaults/main.yml`
+- optionally `/etc/storage-permissions.local.conf` - additional entries kept off the repository;
+  the script reads it alongside the managed file and Ansible neither writes nor removes it
 - `storage-permissions.timer` - daily at 23:30, `Persistent=true`
 
 The branch list is not kept in the repository. The script reads it from the running MergerFS
@@ -133,7 +133,7 @@ a failed unit means the check itself could not run.
 # what the consumers can actually reach - the test that matters
 for u in media-jf media-abs books-svc; do
   printf '%-10s: ' "$u"
-  for d in Filme Serien Audiobooks Podcasts Books openwebui roms; do
+  for d in Filme Serien Audiobooks Podcasts Books openwebui; do
     runuser -u "$u" -- ls "/mnt/mergerfs/$d" >/dev/null 2>&1 && printf '%s ' "$d"
   done
   echo
@@ -167,9 +167,8 @@ A violated matrix is a weakened boundary, not an outage. Consumers keep working 
 the problem, and the reason this is monitored rather than left to be noticed.
 
 The realistic damage path is a service account reading data outside its own library. Before
-2026-08-16 that was live: Jellyfin's and Audiobookshelf's accounts could read `Books`, `openwebui`
-and the game archive, because both hold read-only shares scoped to the entire pool rather than
-to their libraries. Their containers only ever received their own directories, which limited the
+2026-08-16 that was live: Jellyfin's and Audiobookshelf's accounts could read `Books` and `openwebui`,
+because both held read-only shares scoped to the entire pool rather than to their libraries. Their containers only ever received their own directories, which limited the
 blast radius by accident rather than by design.
 
 ---
