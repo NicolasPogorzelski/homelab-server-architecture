@@ -526,6 +526,15 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   override at all. The general lesson is about the warning, not the flag - a documented trap
   outlives its fix, keeps being repeated, and quietly deters the work it was meant to protect.
   See the host-adoption design decision (pending).
+- **VM100 cannot be rolled back - no snapshot is possible (found 2026-08-16):** its `scsi1` is a
+  300 GB raw file on directory storage, a format Proxmox cannot snapshot, and that storage sits on
+  the failing KE-13 disk. The thin pool holding `scsi0` is at 84 % with **zero** free space in the
+  volume group, so growing it is not an option either. Every change to this VM is therefore more
+  expensive than it looks: there is no way back except a restore that does not exist. This became
+  concrete when a live CIFS unmount froze the guest with no evidence recorded
+  ([KE-20](docs/platform/known-errors.md#ke-20)) and only `qm stop` recovered it. Making VM100
+  snapshottable - moving that disk to snapshot-capable storage, off the KE-13 disk - is the
+  precondition for investigating KE-20 and for any non-trivial maintenance on this node.
 - **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
   protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
   Nextcloud DB, Paperless documents) have no off-site copy.
