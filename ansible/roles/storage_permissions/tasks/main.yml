@@ -1,0 +1,86 @@
+---
+- name: Assert the MergerFS pool is mounted
+  ansible.builtin.command:
+    cmd: findmnt --noheadings --output TARGET /mnt/mergerfs
+  register: storage_permissions_pool
+  changed_when: false
+  failed_when: storage_permissions_pool.rc != 0
+
+# Checked here rather than left to the first run: without the control file the
+# script cannot learn which branches exist, and it would exit 2 out of a timer at
+# 23:30 where nobody is reading. Failing during the deploy puts it in front of a
+# person.
+- name: Assert the MergerFS control file is readable
+  ansible.builtin.stat:
+    path: /mnt/mergerfs/.mergerfs
+  register: storage_permissions_ctl
+
+- name: Fail early if the control file is missing
+  ansible.builtin.assert:
+    that:
+      - storage_permissions_ctl.stat.exists
+    fail_msg: >-
+      /mnt/mergerfs/.mergerfs does not exist. The check reads the branch list
+      from it, because the repository must not carry the real disk labels
+      (validate-repo.sh Check 18). Without it the branches would have to be
+      hand-maintained, which is how the aux branch was missed in the first place.
+
+- name: Deploy the storage permission check script
+  ansible.builtin.copy:
+    src: "{{ storage_permissions_script_src }}"
+    dest: "{{ storage_permissions_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the target matrix
+  ansible.builtin.template:
+    src: storage-permissions.conf.j2
+    dest: "{{ storage_permissions_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy the check unit
+  ansible.builtin.template:
+    src: storage-permissions.service.j2
+    dest: /etc/systemd/system/storage-permissions.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the check timer
+  ansible.builtin.template:
+    src: storage-permissions.timer.j2
+    dest: /etc/systemd/system/storage-permissions.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# Same guard as snapraid_maintenance: in check mode the unit files were never
+# written, so systemd cannot see them and `enable` fails outright. Without this
+# the role cannot be dry-run at all, and dry-running it is the whole habit.
+- name: Enable and start the check timer
+  ansible.builtin.systemd_service:
+    name: storage-permissions.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+
+# Deliberately --metrics and not --check: a converged run must not report failed
+# just because the matrix found drift. The drift itself is reported by Prometheus
+# from the metric this writes. Ansible's job here is to prove the check runs.
+- name: Run the check once so the metric exists immediately
+  ansible.builtin.command:
+    cmd: "{{ storage_permissions_script_dest }} --metrics"
+  register: storage_permissions_run
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Show the result
+  ansible.builtin.debug:
+    var: storage_permissions_run.stdout_lines
+  when: not ansible_check_mode

@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily storage permission matrix check
+
+[Timer]
+OnCalendar={{ storage_permissions_oncalendar }}
+# Mandatory on this fleet: the host is powered down overnight, so a timer without
+# catch-up simply loses every run whose slot fell into the off window - the defect
+# that cost the PostgreSQL backups three months of coverage in 2026.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

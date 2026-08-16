@@ -1,0 +1,11 @@
+# ANSIBLE MANAGED - see ansible/roles/storage_permissions/defaults/main.yml
+#
+# Columns: entry <name> <owner> <group> <dir_mode> <file_mode> <setgid yes|no>
+# Modes are maxima. An object violates the matrix if it carries a bit the
+# maximum does not allow; stricter is fine. owner "-" is not checked.
+#
+# The branch list is NOT here - the script reads it from the running mergerfs
+# instance, so a disk added to the pool is covered without editing anything.
+{% for e in storage_permissions_entries %}
+entry {{ e.name }} {{ e.owner }} {{ e.group }} {{ e.dir_mode }} {{ e.file_mode }} {{ 'yes' if e.setgid else 'no' }}
+{% endfor %}

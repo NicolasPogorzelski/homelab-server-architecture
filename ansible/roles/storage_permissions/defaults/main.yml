@@ -1,0 +1,135 @@
+---
+# === storage_permissions (VM102) ===
+#
+# The target state of the filesystem underneath the Samba shares, and a check
+# that measures it.
+#
+# Why a role and not a one-off repair: on 2026-08-16 a sweep found objects
+# carrying the wrong group and directories missing their setgid bit. None of
+# it was visible, because every consumer could still read its library - through
+# the permission bits for "other" rather than through its group. The model was
+# decorative and nothing could tell.
+#
+# What made that possible was not carelessness. It was that no document anywhere
+# stated what the filesystem was supposed to look like. smb.conf describes what
+# Samba enforces when Samba is involved; directories created over SSH never pass
+# that point, and masks apply at creation only, never to what already exists.
+# This file is the missing half. See docs/platform/storage-permissions.md.
+
+storage_permissions_script_src: "{{ playbook_dir }}/../../snippets/storage/storage-permissions.sh"
+storage_permissions_script_dest: /usr/local/sbin/storage-permissions.sh
+storage_permissions_conf: /etc/storage-permissions.conf
+
+# Daily, shortly after the nightly snapraid sync would have finished. The check
+# only reads metadata, so it does not compete with the sync for disk bandwidth in
+# any meaningful way - the separation is about keeping the journal readable.
+storage_permissions_oncalendar: "*-*-* 23:30:00"
+
+# === The matrix ===
+#
+# Columns: name, owner, group, dir_mode, file_mode, setgid
+#
+# Modes are read as MAXIMA, not as exact values: an object violates the matrix if
+# it carries a bit the maximum does not allow. Stricter is always fine. This is
+# what lets Vaultwarden keep its private keys at 0600 under a 0660 allowance
+# without the check calling it drift, and it means the check answers the question
+# that matters - "can anyone reach this who should not" - instead of enforcing
+# cosmetic uniformity.
+#
+# owner "-" means deliberately unpinned; see the comment in the script.
+#
+# The read path of every media consumer is the group. That is the whole point:
+# `other` gets nothing anywhere, so a service that loses its group membership
+# loses access immediately and visibly, instead of silently falling through to a
+# second mechanism nobody knew was load-bearing.
+storage_permissions_entries:
+  # Media libraries. Consumers hold read-only shares and read via the group.
+  - name: Audiobooks
+    owner: storage
+    group: media-abs
+    dir_mode: "2750"
+    file_mode: "0640"
+    setgid: true
+  - name: Podcasts
+    owner: storage
+    group: media-abs
+    dir_mode: "2750"
+    file_mode: "0640"
+    setgid: true
+  - name: Filme
+    owner: storage
+    group: media-jf
+    dir_mode: "2750"
+    file_mode: "0640"
+    setgid: true
+  - name: Serien
+    owner: storage
+    group: media-jf
+    dir_mode: "2750"
+    file_mode: "0640"
+    setgid: true
+  # Books joined this model only on 2026-08-16. The account books-svc and the
+  # group of the same name had existed since Calibre-Web was set up; the
+  # directory was never assigned to them, so Calibre-Web read through the bits
+  # for "other" from the first day. Identity without authorisation.
+  - name: Books
+    owner: storage
+    group: books-svc
+    dir_mode: "2750"
+    file_mode: "0640"
+    setgid: true
+
+  # Service data. Every one of these shares carries `force user = storage`, so
+  # the service reaches its files as the owner and the group is not a read path
+  # but a boundary: it keeps the other twelve accounts out.
+  - name: Nextcloud
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true
+  - name: Paperless
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true
+  - name: openwebui
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true
+  - name: Postgres-Backups
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true
+  - name: DB-Backups
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true
+  # No setgid required: owner and group are both `storage` here, so there is
+  # nothing for inheritance to carry, and requiring the bit would generate churn
+  # without changing who can read anything. The keys inside sit at 0600, which
+  # the maximum-based comparison accepts.
+  - name: Vaultwarden
+    owner: storage
+    group: storage
+    dir_mode: "0770"
+    file_mode: "0660"
+    setgid: false
+
+  # Tightened on 2026-08-16. It had been the one tree left world-readable, which
+  # on a shared pool means every service account reads it. Access now rests on
+  # the group, which the share hands to all three of its accounts via
+  # `force group = roms`, including the one that is not a Unix member.
+  - name: roms
+    owner: "-"
+    group: roms
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true

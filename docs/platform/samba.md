@@ -56,6 +56,14 @@ Ownership enforcement:
 
 This ensures consistent file ownership regardless of client context.
 
+**These masks describe the write path through Samba, and nothing else.** They apply at the moment
+Samba creates an object and never afterwards, so a directory created over SSH bypasses them and a
+file predating a mask keeps its old mode indefinitely. What the objects on the disks are actually
+supposed to look like is a separate statement, kept in
+[storage-permissions.md](storage-permissions.md) and verified by a daily check. That document
+exists because the gap between these two things stayed open from the pool's creation on 2025-12-26
+until 2026-08-16 without producing a symptom.
+
 ### Ingest Shares (Cross-Service Write Path)
 
 Paperless consumption directories are exposed as separate shares per user,
