@@ -166,9 +166,21 @@ Media shares:
   - `[media-abs]` -> `/mnt/mergerfs` (valid user: `<svc-audiobookshelf>`, RO, not browseable)
   - `[Books-service]` -> `/mnt/mergerfs/Books` (valid user: `<svc-books>`, RO, not browseable)
 
-This model enforces least-privilege:
+The filesystem side of this model - which group owns which directory, which modes are permitted,
+where setgid must be set - is stated and verified separately in
+[storage-permissions.md](storage-permissions.md). The share configuration alone does not determine
+it, and until 2026-08-16 the two had drifted apart unnoticed.
+
+This model enforces least-privilege on the write side:
 - RW only where needed (Nextcloud/Vaultwarden/service admin)
 - RO for consumers (Jellyfin/Audiobookshelf/Calibre-Web)
+
+On the read side it does not, and the sentence claiming otherwise was removed on 2026-08-16 rather
+than left standing. `[media-jf]` and `[media-abs]` export the whole pool, not their libraries;
+what keeps them out of the other directories is the mode on each directory, not the share
+definition. Calibre-Web is the counter-example that shows the difference: its share is scoped to
+`Books`, so it stays inside that path regardless of how permissive the filesystem gets. Narrowing
+the two media shares is tracked in [storage-permissions.md](storage-permissions.md).
 
 
 ### Mount Persistence (fstab + systemd)
