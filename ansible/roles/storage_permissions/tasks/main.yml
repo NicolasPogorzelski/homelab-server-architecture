@@ -14,12 +14,17 @@
 # file: MergerFS answers xattr calls on that path, but it has no directory entry,
 # so stat reports ENOENT while getfattr returns the branch list. The first
 # version of this task used stat and failed on a healthy pool.
+# check_mode: false because ansible.builtin.command is skipped under --check by
+# default, which left the variable unset and made the assertion below fail on a
+# healthy pool - a dry run that cannot complete is a dry run nobody performs.
+# The command only reads an extended attribute.
 - name: Read the MergerFS branch list
   ansible.builtin.command:
     cmd: getfattr --only-values -n user.mergerfs.branches /mnt/mergerfs/.mergerfs
   register: storage_permissions_ctl
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Fail early if the branch list is unreadable
   ansible.builtin.assert:
