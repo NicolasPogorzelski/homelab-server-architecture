@@ -143,6 +143,40 @@ groups:
           summary: "MergerFS archive pool below 100 GiB free on {{ $labels.instance }}"
           description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, Vaultwarden, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
 
+      # The share model on vm102 grants each consumer access through a group. That
+      # only holds while the group is the path actually being used, and from the
+      # pool's creation on 2025-12-26 until 2026-08-16 it was not: every object
+      # also carried read permission for "other", so access worked regardless of
+      # what the groups said. The sweep that found it counted 1509 wrong groups
+      # and zero objects a service could not read.
+      #
+      # The metric behind this rule exists so that the intended mechanism is the
+      # only mechanism, and so that a return to the old state is visible.
+      #
+      # for: 1h because a repair run produces transient drift while it works, and
+      # because a weakened boundary is not an outage.
+      - alert: StoragePermissionDrift
+        expr: sum(storage_permission_violations) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Storage permission matrix violated on {{ $labels.instance }}"
+          description: "{{ $value }} objects on the MergerFS branches deviate from the target matrix in /etc/storage-permissions.conf. Run `storage-permissions.sh --check` on vm102 for the breakdown, `--apply` to repair. See docs/platform/storage-permissions.md."
+
+      # Without this, a check that stops running looks exactly like a check that
+      # keeps passing - the metric simply holds its last value forever. Every
+      # textfile collector on this platform needs its own staleness rule for that
+      # reason; LvmThinMetricsStale is the same guard one layer down.
+      - alert: StoragePermissionCheckStale
+        expr: (time() - storage_permission_check_timestamp_seconds) > 172800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Storage permission check is stale"
+          description: "The permission matrix on vm102 has not been verified for more than 48 hours. The timer runs daily with Persistent=true, so two missed days means the unit is failing, not that the host was off."
+
   - name: lvm
     rules:
       # A thin pool is a block-layer object with no filesystem and no mount point, so
