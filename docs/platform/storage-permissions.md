@@ -176,9 +176,11 @@ blast radius by accident rather than by design.
 
 ## Deliberately out of scope
 
-- **Share scope.** `[media-jf]` and `[media-abs]` still export the whole pool. Narrowing them is
-  the stronger fix and needs a remount on vm100, so it belongs in a maintenance window. Until then
-  the directory modes are what keeps those two accounts inside their libraries.
+- **Share scope - done 2026-08-16.** `[media-jf]` and `[media-abs]` exported the whole pool and
+  were replaced by four scoped shares, one per library. The change avoided unmounting anything on
+  a running VM100: new mount units on new paths, the two `.env` files repointed, containers
+  recreated, and the old automount units merely disabled so the nightly power-off retires them.
+  Removal of the superseded share definitions is pending until those mounts have cleared.
 - **`smb.conf` itself.** The four workstation shares carry `create mask = 0640` and
   `directory mask = 2750` so that new content is born compliant, but the role verifies the result
   on disk rather than the configuration that produced it. That separation is deliberate: masks

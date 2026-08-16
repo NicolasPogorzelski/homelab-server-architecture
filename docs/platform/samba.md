@@ -105,9 +105,15 @@ using a credentials file at `/etc/samba/credentials-storage`.
 
 Media services receive read-only access:
 
-- Jellyfin (`media-jf`) -> /mnt/mergerfs (full pool, RO)
-- Audiobookshelf (`media-abs`) -> /mnt/mergerfs (full pool, RO)
-- Calibre-Web (`books-svc`) -> /mnt/mergerfs/Books (scoped to Books, RO)
+- Jellyfin: `media-jf-filme` -> /mnt/mergerfs/Filme, `media-jf-serien` -> /mnt/mergerfs/Serien (RO)
+- Audiobookshelf: `media-abs-audiobooks` -> /mnt/mergerfs/Audiobooks, `media-abs-podcasts` -> /mnt/mergerfs/Podcasts (RO)
+- Calibre-Web (`books-svc`) -> /mnt/mergerfs/Books (RO)
+
+Until 2026-08-16 the two media consumers held a single share each, pointing at the whole pool.
+The directory modes kept them inside their own libraries, but the share itself did not. The
+scoped shares above are evaluated before any filesystem permission and therefore hold even if a
+directory mode is ever loosened. The superseded `[media-jf]` and `[media-abs]` definitions are
+still present and are removed once the old mounts on VM100 have cleared.
 
 These shares are:
 
