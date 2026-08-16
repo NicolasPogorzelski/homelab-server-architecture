@@ -407,12 +407,71 @@ done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
+# Check 20: bold used as a label, not as mid-sentence emphasis
+# =============================================================================
+# CLAUDE.md has required this since 2026-08-15 and nothing enforced it, so it
+# drifted immediately: on 2026-08-16 a review found bold emphasis scattered
+# through freshly written documents. Emphasis inside a running sentence is the
+# habit this repository is trying not to have - it reads as a machine deciding
+# which words matter for you, and after a few paragraphs it stops carrying any
+# signal at all.
+#
+# Legitimate uses start a line or a list item ("- **Precondition:** ..."), sit in
+# a table cell, or follow a heading marker. All of those are preceded by start of
+# line, "- ", "| " or "# ", none of which match the pattern below, which requires
+# a word character or punctuation immediately before the opening marker.
+#
+# Bold spanning a line break is not detected. That is accepted: the check is a
+# net for the common case, not a markdown parser.
+echo "Check 20: bold as label, not mid-sentence emphasis"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    case "${rel}" in CLAUDE.md) continue ;; esac
+    { grep -nE "[a-zA-Z0-9,;:)] \*\*[^*]+\*\*" "${file}" || true; } | while read -r match; do
+        echo "  Mid-sentence bold: ${rel}:${match%%:*}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f -name "*.md")
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# Check 21: repository content is English
+# =============================================================================
+# Added 2026-08-16, after a pull request description was drafted in German
+# because the conversation happened to be in German. The repository is public and
+# read by people who do not speak it, and every one of its ~17,600 lines was
+# already English - the rule simply had never been written down or checked.
+#
+# The word list is deliberately short and contains only words with no English
+# homograph, so a false positive means real German text rather than an unlucky
+# identifier. Common articles (der, die, das) are excluded for that reason.
+echo "Check 21: repository content is English"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    # This script carries the word list itself, so it would always match.
+    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
+    { grep -nwiE "nicht|wurde|wurden|werden|damit|deshalb|sondern|jedoch|bereits|zwischen" "${file}" || true; } | while read -r match; do
+        echo "  German text: ${rel}:${match%%:*}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
+              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
+                 -o -name "*.j2" \))
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
 # =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 19"
+echo "Checks run: 21"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

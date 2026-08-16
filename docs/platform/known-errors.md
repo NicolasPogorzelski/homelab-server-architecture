@@ -773,7 +773,7 @@ so `--check` skipped it. A dry-run reported the role healthy.
   must return `cifs`. A healthy bind of a CIFS mount reports `cifs` inside the container; the
   failed one reports `ext4` (pve-root). A second guard requires `metadata.db` to be present,
   covering the "right fstype, wrong share" case.
-- The script now exits **1**, not 0, when the library is absent. The previous `exit 0` was a
+- The script now exits 1, not 0, when the library is absent. The previous `exit 0` was a
   deliberate no-op ("VM102/network down") and is precisely why a month of failure stayed
   invisible. Transient absence during the boot window is absorbed by the alert rule's `for:`
   window, not by silencing the script.

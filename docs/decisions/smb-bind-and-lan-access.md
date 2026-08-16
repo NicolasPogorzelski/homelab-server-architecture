@@ -180,7 +180,7 @@ Deployed sources: [smb-guard.nft](../../snippets/storage/smb-guard.nft),
 that distinguishes "works" from "comes back":
 
 - Counters after load: 99 packets accepted (VM100 + Proxmox host, unaffected), 3 dropped
-  (the SYN retries of a deliberate probe from the admin workstation's LAN address), **0** on the
+  (the SYN retries of a deliberate probe from the admin workstation's LAN address), 0 on the
   IPv6 rule - nothing had ever tried.
 - Tailscale's `ts-input` / `ts-forward` chains intact (8 rule lines, unchanged).
 - After reboot: table loaded by the unit, all six CIFS mounts on the Proxmox host and both on
