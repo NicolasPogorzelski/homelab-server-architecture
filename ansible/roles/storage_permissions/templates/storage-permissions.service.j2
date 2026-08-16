@@ -1,0 +1,18 @@
+[Unit]
+Description=Verify the storage permission matrix and publish the result
+Documentation=file://{{ storage_permissions_conf }}
+# The check walks the branches directly, but a pool that is not mounted means the
+# branches may not be either, and a check against absent directories would report
+# a pristine matrix - the most dangerous answer it could give.
+Requires=mnt-mergerfs.mount
+After=mnt-mergerfs.mount
+
+[Service]
+Type=oneshot
+# --metrics exits 0 even when the matrix is violated: drift is Prometheus's
+# business (StoragePermissionDrift), not systemd's. A non-zero exit here means
+# the check itself could not run - missing config, unreadable branch list - and
+# that is what SystemdUnitFailed should react to.
+ExecStart={{ storage_permissions_script_dest }} --metrics
+Nice=10
+IOSchedulingClass=idle

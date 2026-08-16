@@ -1,0 +1,6 @@
+---
+- name: Verify the storage permission matrix on the storage node
+  hosts: vm102
+  become: true
+  roles:
+    - storage_permissions
