@@ -1250,3 +1250,58 @@ excludes are lost on a rebuild of vm102. Noted in the [remediation plan](remedia
 
 **References:** [runbooks/storage/snapraid-sync.md](../../runbooks/storage/snapraid-sync.md) -
 [KE-13](#ke-13); [data-classification.md](data-classification.md)
+
+<a id="ke-20"></a>
+
+## KE-20: VM100 froze during a live CIFS unmount, no evidence recorded
+
+**Affected component:** VM100 (compute node, GPU passthrough)
+
+**Symptom:**
+On 2026-08-16 at 19:20 UTC, `systemctl stop` on the two media `.mount` units wedged the guest.
+SSH over Tailscale and ICMP over the LAN both stopped answering. QEMU reported the VM as running
+with QMP responsive and memory allocated; the guest agent did not answer. ACPI shutdown timed out.
+Only `qm stop` followed by `qm start` recovered it, costing roughly 25 minutes of Jellyfin and
+Audiobookshelf.
+
+**What the evidence shows, and what it does not:**
+The journal of that boot ends at 19:20:39 UTC, inside the SSH session in which the command ran.
+The last kernel message is at 19:20:17, the teardown of the two container veth interfaces from the
+preceding `docker stop`. Nothing follows: no `CIFS VFS` error, no `task blocked for more than 120
+seconds`, no call trace, no shutdown record. systemd logs `Unmounting ...` before it stops a mount
+unit, and even that line is absent.
+
+That rules out an ordinary userspace deadlock, which would have kept logging and would have
+produced a blocked-task warning after two minutes. It points to a freeze below the logging layer.
+It does not establish the cause, because nothing was recorded.
+
+The Proxmox host logged no kernel message at all in that window, so the failing auxiliary disk
+([KE-13](#ke-13)) is not implicated. One weak signal exists: between 17:01 and 17:15 UTC the guest
+reported `perf: interrupt took too long` six times, lowering its sample rate from 78000 to 23750.
+That is two hours earlier and proves nothing on its own.
+
+**Root cause:** unknown.
+
+**Why it was not pursued further:**
+Reproducing it requires a rollback path, and VM100 has none. Its `scsi1` is a 300 GB raw file on
+directory storage, which Proxmox cannot snapshot, and it sits on the KE-13 disk. The thin pool
+holding `scsi0` is at 84 % with zero free space in the volume group. A repeat attempt would
+therefore risk an unrecoverable guest for a change whose benefit was incremental.
+
+**What was done instead:**
+The operation was avoided rather than made safe. The media shares were rescoped by creating new
+mount units on new paths, repointing the two `.env` files and recreating the containers; the old
+automount units were only disabled, which drops the boot symlink without unmounting, leaving the
+nightly power-off to retire them. Nothing was unmounted on a running system.
+
+`netconsole` now streams the guest kernel log over UDP to the Proxmox host, so a repeat would
+leave evidence even if disk writes stop. Note `console_loglevel` is 4, which filters
+`INFO: task blocked` at priority 6 - it must be raised to 7 before any repeat attempt, or the
+channel will be silent for exactly the message being sought.
+
+**Open:**
+- Cause unknown; do not schedule further live unmounts on VM100 until it can be rolled back.
+- `netconsole` and the loglevel are not persistent across a reboot.
+- VM100 cannot be snapshotted at all. That is the precondition for investigating this.
+
+---
