@@ -264,6 +264,10 @@ hidden entry and which GitHub reads just as well.
 
 **Writing style** (partly enforced by validation):
 
+- **English, always.** Documentation, code comments, commit messages, branch names, PR titles and
+  PR descriptions. This holds regardless of the language the work is being discussed in - a German
+  conversation about a change does not produce a German commit or a German pull request. The
+  repository is public and read by people who do not speak German.
 - ASCII punctuation only, enforced by Check 19. No em or en dashes, curly quotes, ellipsis
   characters, arrows, multiplication signs or emoji. Write `-`, `"`, `...`, `->`, `x`. Exceptions:
   box-drawing characters inside ASCII diagrams, and the section sign when citing a document section.
