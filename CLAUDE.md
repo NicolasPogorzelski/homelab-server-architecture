@@ -205,7 +205,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 19 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), and non-ASCII punctuation.
+This script enforces 21 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, and German text in repository content.
 
 **Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips - `actions/checkout` leaves a clean tree, so there is no diff - because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 
@@ -244,7 +244,7 @@ This is a documentation and configuration repository - no application code, no b
 - `docker/` - Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` - Operational procedures (must follow the runbook contract)
 - `snippets/` - Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (18-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
+- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (21-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
 - `ansible/` - Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12), plus the files `README.md`,
