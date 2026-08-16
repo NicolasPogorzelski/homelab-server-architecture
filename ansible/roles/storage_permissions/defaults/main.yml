@@ -36,7 +36,9 @@ storage_permissions_oncalendar: "*-*-* 23:30:00"
 # that matters - "can anyone reach this who should not" - instead of enforcing
 # cosmetic uniformity.
 #
-# owner "-" means deliberately unpinned; see the comment in the script.
+# owner "-" means deliberately unpinned; see the comment in the script. Entries
+# that are not carried in this repository live in /etc/storage-permissions.local.conf
+# on the node, which the script reads alongside this matrix and Ansible never touches.
 #
 # The read path of every media consumer is the group. That is the whole point:
 # `other` gets nothing anywhere, so a service that loses its group membership
@@ -122,14 +124,3 @@ storage_permissions_entries:
     dir_mode: "0770"
     file_mode: "0660"
     setgid: false
-
-  # Tightened on 2026-08-16. It had been the one tree left world-readable, which
-  # on a shared pool means every service account reads it. Access now rests on
-  # the group, which the share hands to all three of its accounts via
-  # `force group = roms`, including the one that is not a Unix member.
-  - name: roms
-    owner: "-"
-    group: roms
-    dir_mode: "2770"
-    file_mode: "0660"
-    setgid: true

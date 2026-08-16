@@ -41,7 +41,11 @@ while read -r keyword rest; do
     entry) entries+=("$rest") ;;
     ''|'#'*) ;;
   esac
-done < <(sed 's/#.*//' "$CONF")
+done < <(cat "$CONF" "${CONF%.conf}.local.conf" 2>/dev/null | sed 's/#.*//')
+
+# The optional .local.conf extends the matrix with entries that are deliberately
+# not carried in the public repository. Ansible never writes or removes it, so a
+# tree listed only there keeps its protection without being documented publicly.
 
 # The branch list is read from the running mergerfs instance, not from a config
 # file and not from fstab. Three reasons, in order of weight:
@@ -96,11 +100,10 @@ for branch in "${branches[@]}"; do
     [ -d "$path" ] || continue
 
     declare -A hit=()
-    # A literal "-" means the owner is deliberately not pinned. The roms share is
-    # the one case: it carries no `force user`, so files legitimately belong to
-    # whichever of its three accounts wrote them. Checking it would produce a
-    # violation count that never reaches zero, and a check that is always red is
-    # not read - the same lesson DiskSpaceCritical already cost this platform.
+    # A literal "-" means the owner is deliberately not pinned. It applies to a
+    # share without `force user`, where files legitimately belong to whichever
+    # account wrote them. Checking it would produce a violation count that never
+    # reaches zero, and a check that is always red is not read.
     if [ "$owner" = "-" ]; then
       hit[owner]=0
     else
