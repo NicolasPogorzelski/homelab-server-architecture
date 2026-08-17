@@ -479,9 +479,10 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # labels). This one guards the person, which is a different category and is why it
 # gets its own check rather than an extra pattern in Check 14.
 #
-# Bare aggregate counts of array objects (files scanned, groups corrected) are not
-# matched: they describe a repair, not a collection. If a number would let a reader
-# infer the size of a personal library, it does not belong in this repository.
+# Aggregate counts that scale with the collection - objects swept, files compared -
+# are covered by Check 23 rather than here, because they arrive in a different
+# grammatical shape. If a number would let a reader infer the size of a personal
+# library, it does not belong in this repository.
 echo "Check 22: no personal media library counts"
 
 while read -r file; do
@@ -505,11 +506,51 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 23: no measured fill level for the archive pool
+# =============================================================================
+# Added 2026-08-17, one commit after Check 22, because Check 22 did not catch the
+# next occurrence. How full the media pool is says how much content it holds, which
+# is the same disclosure as counting the files - only in a different unit, so a
+# check written around media nouns never sees it.
+#
+# The discriminator is the decimal point. A threshold is a round number somebody
+# chose ("15% free" in the DiskSpaceCritical rule); a fill level is a precise number
+# somebody measured. Requiring a fraction keeps the configured thresholds legal and
+# still catches the measurement.
+#
+# Scoped to lines that also name the archive pool, deliberately. The LVM thin pool
+# on the host carries decimal percentages throughout the documentation and they are
+# infrastructure, not content - flagging twenty of those would make this check the
+# kind of always-red signal the alert rules in this repository are written to avoid.
+#
+# The occurrence that prompted it is worth stating plainly: it was not in the
+# original documentation but in the write-up describing the removal, which quoted
+# both forms of the figure in order to explain them. A text about deleting a value
+# is one more place the value appears.
+echo "Check 23: no measured fill level for the archive pool"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
+    { grep -nE "mergerfs|MergerFS|archive pool|fill level" "${file}" \
+        | grep -E "[0-9]+\.[0-9]+[[:space:]]*%" || true; } | while read -r match; do
+        echo "  Archive fill level: ${rel}:${match%%:*}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
+              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
+                 -o -name "*.j2" \))
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 22"
+echo "Checks run: 23"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

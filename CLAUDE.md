@@ -205,14 +205,18 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 22 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, and personal media library counts.
+This script enforces 23 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, and measured fill levels for the archive pool.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
 sanitized, they get left out. An exact count of films, series or audiobooks proves nothing that
 "the library enumerates its full expected contents" does not, and describes what somebody watches,
-reads and listens to. Check 22 catches the counts; it cannot catch the category, so ask before
-writing any number that describes content rather than infrastructure.
+reads and listens to. Check 22 catches the counts and Check 23 the fill levels; neither catches the
+category, so ask before writing any number that describes content rather than infrastructure.
+
+The trap that caught this twice: a text explaining that a value was removed is one more place the
+value appears. Describe the shape of what was taken out, never the value itself - "the
+percentage-full form and its inverse", not the two figures.
 
 **Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips - `actions/checkout` leaves a clean tree, so there is no diff - because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 
