@@ -1,6 +1,9 @@
 all:
   vars:
     proxmox_host_tailscale_ip: <tailscale-ip-proxmox-host>
+    # LAN address of the host. Used only by the netconsole role: netpoll writes
+    # frames from the kernel, so the target cannot be a Tailscale address.
+    proxmox_host_lan_ip: <lan-ip-proxmox>
     # Blackbox HTTPS probe targets (services behind `tailscale serve`).
     blackbox_https_targets:
       - { name: paperless,   url: "https://paperless.<tailnet-id>" }

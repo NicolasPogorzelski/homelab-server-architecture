@@ -1,0 +1,57 @@
+# /etc/systemd/system/netconsole-receiver.service on the Proxmox host.
+#
+# Receives the kernel log that vm100 streams over UDP (see the netconsole role)
+# and writes it into the host journal, which is persistent - so the evidence
+# survives the reboot that follows the freeze it recorded.
+#
+# Hand-deployed, because the host is not yet an Ansible node. It therefore belongs
+# to the same list as node_exporter, lxc-fstrim and lvm-thin-metrics: units that a
+# rebuild would lose. See the remediation plan, Tier 3 item 9.
+#
+# Replace <lan-ip-proxmox> with the host's LAN address before installing. Binding
+# that address rather than 0.0.0.0 is deliberate and is a documented exception to
+# the platform binding rule: netconsole frames arrive on the LAN interface, and a
+# Tailscale address cannot carry them - netpoll writes from the kernel, while a
+# Tailscale address lives on a TUN device served by a userspace daemon that is
+# frozen along with everything else during the failure this captures.
+#
+# Install:
+#   install -m 0644 netconsole-receiver.service /etc/systemd/system/
+#   sed -i "s/<lan-ip-proxmox>/$(hostname -I | awk '{print $1}')/" \
+#       /etc/systemd/system/netconsole-receiver.service
+#   systemctl daemon-reload && systemctl enable --now netconsole-receiver.service
+#
+# Read what it captured:
+#   journalctl -t netconsole-vm100 --since -1h
+
+[Unit]
+Description=Receive netconsole kernel logs from vm100
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# -u is unidirectional: read from the socket, never write back. fork is omitted on
+# purpose - a datagram socket needs no child per peer, and one process keeps the
+# journal identifier stable.
+ExecStart=/usr/bin/socat -u UDP4-RECV:6666,bind=<lan-ip-proxmox>,reuseaddr -
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=netconsole-vm100
+Restart=on-failure
+RestartSec=5s
+
+# It only ever reads one UDP socket and writes to stdout.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

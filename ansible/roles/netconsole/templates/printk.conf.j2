@@ -1,0 +1,5 @@
+{{ ansible_managed | comment }}
+# console_loglevel 7, so KERN_INFO (priority 6) reaches the console and therefore
+# netconsole. The stock 4 filters "INFO: task blocked for more than 120 seconds",
+# which is the single message a hung-task investigation needs. See KE-20.
+kernel.printk = {{ netconsole_printk }}
