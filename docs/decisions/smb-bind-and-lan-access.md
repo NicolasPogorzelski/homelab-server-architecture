@@ -43,8 +43,10 @@ Established from live SMB sessions (`smbstatus -b`) and the per-client logs
 | `<lan-ip-device3>` | admin desktop | - | **no session; client log empty since 2026-06-17** |
 
 The Proxmox host mounts five shares over the LAN IP and one - `postgres-backups` - over VM102's
-Tailscale IP (changed 2026-06-12). VM100 mounts two over the LAN IP. That single Tailscale mount
-is the existence proof that the transport works.
+Tailscale IP (changed 2026-06-12). VM100 mounted two over the LAN IP; since 2026-08-16 it mounts
+four, because the two pool-wide shares were split per library. The accounts in the table above are
+unchanged - the split narrowed what each account may reach, not who connects. That single Tailscale
+mount is the existence proof that the transport works.
 
 The admin workstations do not need the LAN entry: one already mounts over the Tailscale IP,
 the other has not opened an SMB session in weeks. Both are tailnet members.
