@@ -169,6 +169,27 @@ would be lost on a rebuild, the same debt as the host's `node_exporter`.
 
 See: [LVM thin pool full](../../runbooks/platform/lvm-thin-pool-full.md).
 
+## netconsole receiver (added 2026-08-17)
+
+`netconsole-receiver.service` listens on UDP 6666 and writes what vm100's kernel sends into the
+host journal, readable with `journalctl -t netconsole-vm100`. It exists because of
+[KE-20](known-errors.md#ke-20): vm100 froze so completely that its own journal recorded nothing,
+not even the line systemd emits before stopping a mount unit. A log that has to be written to the
+frozen machine's disk is no use in that failure; one that leaves the machine as a UDP frame is.
+
+Two properties are deliberate and both are exceptions worth stating rather than discovering later:
+
+- It binds the host's LAN address, not the Tailscale one. netpoll writes frames from inside the
+  kernel, and a Tailscale address lives on a TUN device served by a userspace daemon - frozen along
+  with everything else exactly when this channel is needed. The platform binding rule does not fit
+  a transport the kernel must reach without help.
+- The sending side pins the receiver's MAC. Omitting it is legal and makes the kernel broadcast
+  every frame to the whole segment, including the untrusted televisions.
+
+Source: `snippets/systemd/netconsole-receiver.service`. Hand-deployed, so it joins the list above of
+units a rebuild would lose. The sending half is Ansible-managed (`netconsole` role on vm100), which
+is the asymmetry the host adoption would remove.
+
 ## Ansible Management
 
 The Proxmox host is not yet a fully managed Ansible node. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied - those are currently deployed manually. Full host management (package updates, SSH hardening) is not implemented.
