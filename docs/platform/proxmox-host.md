@@ -68,8 +68,11 @@ Data and parity disks for VM102 are passed through by ID from the host:
 
 Exact disk models and IDs are documented offline. See [VM102 node doc](../nodes/vm102.md) for the logical topology.
 
-All nine physical disks are attached to the host. VM102 sees six of them as virtio-SCSI devices,
-so SMART data is readable only on the host - any SMART monitoring must run here, not on VM102.
+All nine physical disks are attached to the host. VM102 sees seven of them as virtio-SCSI devices
+(five data disks, the parity disk and the pool's auxiliary disk); the host keeps the remaining two,
+the boot SSD and the application-data auxiliary disk. Corrected 2026-08-17 - this said six, as did
+`CLAUDE.md`. Either way the operative half is unchanged: a guest sees virtio devices, so SMART is
+readable only on the host and any SMART monitoring must run here, not on VM102.
 
 ## Boot SSD - Intermittent I/O Errors (KE-14)
 
@@ -200,7 +203,12 @@ To run the schedule role against the host:
 ansible-playbook playbooks/homelab-schedule.yml
 ```
 
-Requires: the `proxmox` group in `hosts.yml` to be populated with the host's Tailscale IP.
+Requires: the `proxmox` group in `hosts.yml` to be populated with the host's Tailscale IP. Note
+the failure mode if it is not, verified 2026-08-17: the real inventory has no such group, so this
+command matches no host, prints `skipping: no hosts matched` and exits 0. It reports success while
+doing nothing. `hosts.yml.example` does carry the group, which makes the example look like the
+live state and hides the gap. The same applies to `onboarding.yml`, whose `lxc-test` group has
+never existed.
 
 See: [Ansible platform](./ansible.md)
 

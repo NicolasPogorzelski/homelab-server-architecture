@@ -12,6 +12,28 @@ Note: MariaDB runs locally rather than on the centralized PostgreSQL platform (l
 Nextcloud's official documentation recommends MariaDB, and Nextcloud was deployed before
 lxc260 existed. Migration is not planned.
 - Cache/Locking: APCu (local cache) + Redis (transaction/file locking)
+- Document editing: Collabora Online (`coolwsd`), bundled by the `richdocumentscode` app, plus the
+  `onlyoffice` connector app - see below
+
+### Collabora Online, recorded 2026-08-17
+
+This component ran unrecorded for an unknown length of time. It appears in no service document, no
+data classification row and no access-model section, and it never passed the "Adding a New Service"
+checklist - it arrived as a Nextcloud app rather than as a deployment, which is exactly the gap that
+lets a component skip the process. It was found by a port sweep, not by reading anything.
+
+What is known, measured on the node:
+
+- `coolwsd` listens on `*:9983` - a dual-stack wildcard on a container with a public IPv6 address,
+  the same deviation as Apache above and with the same mitigation (the router alone).
+- The `onlyoffice` connector app is enabled alongside it.
+- vm102's `snapraid.conf` already excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`, so the
+  component was operationally known on the storage side while being absent from the documentation.
+
+Open question, not answered here: whether document editing is actually used. If it is not, removing
+the apps closes a wildcard listener and a whole attack surface for free. If it is, it needs a row in
+[`data-classification.md`](../platform/data-classification.md) - documents opened through it pass
+through this process - and the bind needs the same treatment as Apache's.
 
 ## Runtime Configuration (Sanitized)
 

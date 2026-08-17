@@ -4,7 +4,9 @@ This diagram shows the logical separation of layers, storage dependencies, and t
 
 - Remote access: Tailscale overlay for all services
 - LAN access: only media services on VM100 (performance trade-off)
-- No public ingress: no router port-forwarding / no public reverse proxy
+- No public ingress: no router port-forwarding / no public reverse proxy. Note the qualification
+  in [the exposure model](exposure-diagram.md): several services bind wildcard addresses on nodes
+  that carry a routable IPv6, so what prevents reachability is the router, not the binding.
 
 ```mermaid
 flowchart TB
@@ -34,23 +36,27 @@ flowchart TB
 
   %% Storage Internals
   Disks[(Data Disks)]
-  Parity[(Parity Disk)]
+  Parity[(Parity Disk<br/>outside the union)]
   MergerFS[/mnt/mergerfs/]
   Samba[SMB Shares - segmented]
+  HostCIFS[Proxmox CIFS mounts<br/>bind-mounted into the LXCs]
 
   Disks --> MergerFS
-  Parity --> MergerFS
+  Disks -.parity covers.-> Parity
   MergerFS --> Samba
   VM102 --> MergerFS
   VM102 --> Samba
 
   %% Storage Consumers
+  %% VM100 mounts CIFS itself; the LXCs do not - the host mounts and binds in.
   Samba --> VM100
-  Samba --> LXC210
-  Samba --> LXC211
-  Samba --> LXC220
-  Samba --> LXC230
-  Samba --> LXC240
+  Samba --> HostCIFS
+  HostCIFS --> LXC210
+  HostCIFS --> LXC211
+  HostCIFS --> LXC220
+  HostCIFS --> LXC230
+  HostCIFS --> LXC240
+  HostCIFS --> LXC260
 
   %% Database Dependency
   LXC230 --> LXC260
@@ -59,11 +65,16 @@ flowchart TB
   %% VM100 Services
   VM100 --> Jellyfin[Jellyfin]
   VM100 --> ABS[Audiobookshelf]
+  VM100 --> Ollama[Ollama]
+  LXC230 --> Ollama
 
-  %% Monitoring Targets
+  %% Monitoring Targets - LXC250 is absent on purpose: it is in no inventory group
+  %% and therefore in no scrape config. That gap is the point, not an omission.
+  LXC200 --> Host[Proxmox Host]
   LXC200 --> VM102
   LXC200 --> VM100
   LXC200 --> LXC210
+  LXC200 --> LXC211
   LXC200 --> LXC220
   LXC200 --> LXC230
   LXC200 --> LXC240

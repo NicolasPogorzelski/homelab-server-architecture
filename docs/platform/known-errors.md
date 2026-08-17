@@ -1244,9 +1244,13 @@ Ordered deliberately, because `snapraid sync` has no rollback (see the rollback 
 4. `snapraid diff` -> No differences, every file equal.
 5. Metric written, scraped, both alerts cleared. vm102 reports no failed units.
 
-**Status:** Fixed 2026-08-15. Open: `/etc/snapraid.conf` is hand-managed - the
-`snapraid_maintenance` role owns the script and the two timers but not the configuration, so these
-excludes are lost on a rebuild of vm102. Noted in the [remediation plan](remediation-plan.md).
+**Status:** Fixed 2026-08-15, and fully closed since. This entry read "Open: `/etc/snapraid.conf`
+is hand-managed ... these excludes are lost on a rebuild of vm102" until 2026-08-17, by which time
+it had stopped being true: the `snapraid_maintenance` role owns the exclude rules through a marked
+`blockinfile` block, verified live on vm102 (`# BEGIN ANSIBLE MANAGED - exclude rules (KE-19)`).
+The remediation plan had recorded the closure; this register had not. The disk, parity and content
+layout above the block stays hand-written on purpose - it carries the real device labels that
+Check 18 keeps out of version control, and it changes only when hardware does.
 
 **References:** [runbooks/storage/snapraid-sync.md](../../runbooks/storage/snapraid-sync.md) -
 [KE-13](#ke-13); [data-classification.md](data-classification.md)

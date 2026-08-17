@@ -46,6 +46,9 @@ The decision prioritizes operational predictability over theoretical performance
 - Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
 - openwebui -> /mnt/mergerfs/openwebui
 - Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
+- DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210, added
+  2026-08-15; a share of its own rather than a directory inside the Nextcloud export, so whatever
+  reaches the user data does not also reach its backup)
 
 Ownership enforcement:
 
@@ -96,8 +99,13 @@ Four shares expose the media library paths read-write to the admin workstation:
 These shares have no `create mask` / `directory mask` set (inherits filesystem defaults)
 because no other service identity writes to these paths alongside the workstation user.
 
-On the admin workstation, all five shares are mounted via `/etc/fstab` (CIFS, `vers=3`, `_netdev`, `nofail`)
-using a credentials file at `/etc/samba/credentials-storage`.
+On the admin workstation these four are mounted via `/etc/fstab` using a credentials file at
+`/etc/samba/credentials-storage`. Measured 2026-08-17: `vers=3.1.1`, `_netdev`, `soft` and
+`x-systemd.automount` - not the `nofail` this paragraph claimed. The distinction is the KE-15 one
+and worth keeping straight: `nofail` lets a failed boot-time mount pass silently and never retries,
+whereas `x-systemd.automount` defers the mount to first access and therefore survives VM102 being
+unavailable at boot. The workstation also mounts one share that is outside the scope of this
+document, which is why a count stated here would not match what `findmnt` shows.
 
 ---
 
@@ -112,8 +120,9 @@ Media services receive read-only access:
 Until 2026-08-16 the two media consumers held a single share each, pointing at the whole pool.
 The directory modes kept them inside their own libraries, but the share itself did not. The
 scoped shares above are evaluated before any filesystem permission and therefore hold even if a
-directory mode is ever loosened. The superseded `[media-jf]` and `[media-abs]` definitions are
-still present and are removed once the old mounts on VM100 have cleared.
+directory mode is ever loosened. The superseded `[media-jf]` and `[media-abs]` definitions have
+since been removed - confirmed by `testparm -s` on 2026-08-17, which no longer lists them, as the
+old mounts on VM100 had cleared with the nightly power-off.
 
 These shares are:
 

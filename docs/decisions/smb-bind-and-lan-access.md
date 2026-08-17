@@ -202,9 +202,12 @@ Proxmox host's `/mnt/smb/postgres-backups` mount points at `//<tailscale-ip-vm10
 (changed 2026-06-12) and came straight back after this node's reboot, and the admin workstation
 mounts the same way. Step 2 changes only the target address in `fstab`, nothing about binding.
 
-Move the seven CIFS mounts (five on the Proxmox host, two on VM100) from the LAN IP to VM102's
-Tailscale IP, one at a time, each with automount and `x-systemd.mount-timeout`, each verified
-across a reboot.
+Move the CIFS mounts still on the LAN IP to VM102's Tailscale IP, one at a time, each with
+automount and `x-systemd.mount-timeout`, each verified across a reboot. Measured 2026-08-17:
+six on the Proxmox host and four on VM100, so ten rather than the seven this paragraph named -
+the host's count was understated and VM100's doubled when the pool-wide shares were split on
+2026-08-16. The two mounts already on the Tailscale IP (`postgres-backups`, `db-backups`) are
+the existence proof and stay as they are.
 
 **Corrected end state.** An earlier draft of this document said the LAN address would then leave
 Samba's `interfaces` list. That is impossible - `interfaces` cannot be used at all on this node.
@@ -219,6 +222,12 @@ boot before `tailscaled` has connected - the KE-9 / KE-12 fault class, and preci
 behind KE-15, where a silently failed mount left a bind pointing at an empty directory for a
 month. Moving seven mounts into that dependency without automount and timeouts in place would
 invite a second KE-15. KE-15 must be repaired first.
+
+**That precondition is now met** (2026-08-17). KE-15 was resolved on 2026-07-14 and confirmed
+across a real host power cycle on 2026-08-13: all `/mnt/smb` entries carry `x-systemd.automount`
+and resolve to `cifs`. The stated reason for deferring step 2 has therefore expired, which is worth
+recording explicitly - a deferral whose justification has quietly lapsed looks identical to one
+that is still justified, and only re-reading the reason tells them apart.
 
 ## Consequences
 

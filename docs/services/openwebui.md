@@ -18,7 +18,10 @@ agentic workflows.
 - Unprivileged Debian LXC (CT230)
 - Docker Compose at `/opt/openwebui/`
 - `.env` at `/opt/openwebui/.env` (chmod 600, gitignored)
-- Version: OpenWebUI v0.8.10
+- Version: OpenWebUI v0.9.6 (read from `/api/version` on 2026-08-17; the entry said v0.8.10 until
+  then). Note the running container uses the floating tag `ghcr.io/open-webui/open-webui:main`,
+  not the pinned reference in `docker/openwebui/docker-compose.yml` - the version is stable only
+  because the standing `docker-compose-update` hold means nothing has pulled since 2026-06-11.
 
 ---
 

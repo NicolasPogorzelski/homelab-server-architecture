@@ -71,11 +71,18 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
   - `disk05` -> `/mnt/disk05`
 - Parity disk:
   - `parity1` -> `/mnt/parity`
-- Auxiliary disks:
-  - `aux-disk1` -> `/mnt/aux-disk1` (non-parity, local app state)
+- Auxiliary disk:
   - `aux-disk` -> `/mnt/aux-disk` (temporarily part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
 
-`aux-disk1` is not part of the SnapRAID parity set. `aux-disk` is temporarily included as a 6th data disk.
+`aux-disk` is temporarily included as a 6th data disk.
+
+**Corrected 2026-08-17.** This list also carried an `aux-disk1` mounted at `/mnt/aux-disk1` on
+VM102, described as non-parity local app state. No such mount exists on this node and none did:
+that disk is attached to the Proxmox host and is the failing [KE-13](known-errors.md#ke-13) drive,
+documented in [`proxmox-host.md`](proxmox-host.md). The error was possible because two different
+physical disks share one placeholder name across this documentation - the pool member described
+here, and the host's application-data disk. Disambiguating them is tracked separately; until then,
+read `aux-disk` in this file as the pool member only.
 
 They are used for:
 - Performance-sensitive workloads
@@ -112,13 +119,19 @@ Data disks:
 - `data disk05 /mnt/disk05`
 - `data aux-disk /mnt/aux-disk` (temporary capacity bridge, remove when disk06 added)
 
-Excludes (current state):
+Excludes (current state, read from the live config 2026-08-17). The role owns this block through a
+marked `blockinfile`; the layout above it stays hand-written because it carries real device labels:
 
 - `exclude *.tmp`
 - `exclude *.bak`
 - `exclude lost+found/`
 - `exclude /tmp/`
 - `exclude /cache/`
+- `exclude /Nextcloud/nextcloud.log` and `/Nextcloud/nextcloud.log.*`
+- `exclude *.sqlite3-shm`, `*.sqlite3-wal`, `*.db-shm`, `*.db-wal` - the
+  [KE-19](known-errors.md#ke-19) rules: a database side file captured at a different moment than
+  its main file yields a parity set from which a reconstruction can be corrupt
+- `exclude /Nextcloud/appdata_*/richdocuments/remoteData/` - Collabora scratch data
 
 Operational note:
 - `snapraid status` is typically executed with `sudo` because SnapRAID must read content/parity state files.
@@ -161,9 +174,11 @@ Owner mapping (current state for RW shares):
 
 Media shares:
 - `[Filme]`, `[Serien]`, `[Audiobooks]`, `[Books]` -> RW for `storage`
-- Read-only consumers:
-  - `[media-jf]` -> `/mnt/mergerfs` (valid user: `<svc-jellyfin>`, RO, not browseable)
-  - `[media-abs]` -> `/mnt/mergerfs` (valid user: `<svc-audiobookshelf>`, RO, not browseable)
+- Read-only consumers, one share per library since 2026-08-16:
+  - `[media-jf-filme]` -> `/mnt/mergerfs/Filme`, `[media-jf-serien]` -> `/mnt/mergerfs/Serien`
+    (valid user: `<svc-jellyfin>`, RO, not browseable)
+  - `[media-abs-audiobooks]` -> `/mnt/mergerfs/Audiobooks`, `[media-abs-podcasts]` ->
+    `/mnt/mergerfs/Podcasts` (valid user: `<svc-audiobookshelf>`, RO, not browseable)
   - `[Books-service]` -> `/mnt/mergerfs/Books` (valid user: `<svc-books>`, RO, not browseable)
 
 The filesystem side of this model - which group owns which directory, which modes are permitted,
@@ -175,12 +190,17 @@ This model enforces least-privilege on the write side:
 - RW only where needed (Nextcloud/Vaultwarden/service admin)
 - RO for consumers (Jellyfin/Audiobookshelf/Calibre-Web)
 
-On the read side it does not, and the sentence claiming otherwise was removed on 2026-08-16 rather
-than left standing. `[media-jf]` and `[media-abs]` export the whole pool, not their libraries;
-what keeps them out of the other directories is the mode on each directory, not the share
-definition. Calibre-Web is the counter-example that shows the difference: its share is scoped to
-`Books`, so it stays inside that path regardless of how permissive the filesystem gets. Narrowing
-the two media shares is tracked in [storage-permissions.md](storage-permissions.md).
+On the read side it did not until 2026-08-16. `[media-jf]` and `[media-abs]` exported the whole
+pool rather than their libraries; what kept them out of the other directories was the mode on each
+directory, not the share definition. Calibre-Web was the counter-example that showed the
+difference: its share was already scoped to `Books`, so it stayed inside that path regardless of
+how permissive the filesystem got.
+
+That gap is closed. The four scoped shares above replaced the two pool-wide ones, the boundary now
+sits where it is evaluated first, and the superseded definitions were removed from `smb.conf` once
+VM100's old mounts had cleared - confirmed absent from `testparm -s` on 2026-08-17. This section
+described the pre-2026-08-16 model until that date, while [`samba.md`](samba.md) already described
+the new one: the same fact stated in two files, corrected in one.
 
 
 ### Mount Persistence (fstab + systemd)
