@@ -1,0 +1,71 @@
+---
+- name: Assert the receiver address is defined
+  ansible.builtin.assert:
+    that:
+      - netconsole_target_ip is defined
+      - netconsole_target_ip | length > 0
+    fail_msg: >-
+      netconsole_target_ip is unset. It defaults to proxmox_host_lan_ip, which lives
+      in the gitignored inventory - a control node restored from the repository alone
+      will not have it.
+
+# The destination MAC may be omitted, in which case the kernel broadcasts every
+# frame (kernel.org: "the default target ethernet setting uses the broadcast
+# ethernet address"). On this LAN that would hand the guest's kernel log to every
+# device on the segment, including the two untrusted televisions. So it is resolved
+# and pinned instead. A ping first, because an empty neighbour table has nothing to
+# read - the kernel documentation suggests the same sequence.
+- name: Prime the neighbour entry for the receiver
+  ansible.builtin.command:
+    cmd: ping -c 1 -W 1 {{ netconsole_target_ip }}
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Resolve the receiver's MAC address
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      ip neigh show {{ netconsole_target_ip }} | awk '/lladdr/ {print $5; exit}'
+    executable: /bin/bash
+  register: netconsole_target_mac
+  changed_when: false
+  check_mode: false
+
+- name: Fail if the receiver's MAC could not be resolved
+  ansible.builtin.assert:
+    that:
+      - netconsole_target_mac.stdout | trim | length == 17
+    fail_msg: >-
+      Could not resolve a MAC for {{ netconsole_target_ip }} ("{{ netconsole_target_mac.stdout | trim }}").
+      Without it the module would fall back to broadcasting the kernel log across the
+      whole LAN, so the role stops rather than deploying that.
+
+- name: Deploy the netconsole unit
+  ansible.builtin.template:
+    src: netconsole.service.j2
+    dest: /etc/systemd/system/netconsole.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart netconsole
+
+# A sysctl drop-in rather than the running value alone: `sysctl -w` does not
+# survive a reboot, and the reboot is when the interesting kernel messages appear.
+- name: Raise console_loglevel so KERN_INFO reaches the console
+  ansible.builtin.template:
+    src: printk.conf.j2
+    dest: /etc/sysctl.d/60-netconsole-printk.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Enable and start netconsole
+  ansible.builtin.systemd_service:
+    name: netconsole.service
+    enabled: true
+    state: started
+    daemon_reload: true

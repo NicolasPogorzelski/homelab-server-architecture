@@ -1,0 +1,10 @@
+---
+# Only vm100 for now. It is the node with an unexplained freeze (KE-20) and no
+# rollback path, so it is the one where the next occurrence must leave evidence.
+# The role is node-agnostic; widening it is a decision about where kernel logs
+# should travel, not a change to the role.
+- name: Stream the kernel log to the Proxmox host
+  hosts: vm100
+  become: true
+  roles:
+    - netconsole
