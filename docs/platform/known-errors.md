@@ -1241,7 +1241,7 @@ Ordered deliberately, because `snapraid sync` has no rollback (see the rollback 
 2. Excludes added, `diff` re-run: over-broad `*.log` caught, narrowed, re-run again - 0 updated,
    7 removed, every one accounted for.
 3. `systemctl start snapraid-maintenance@sync.service` -> `Result=success`, `ExecMainStatus=0`.
-4. `snapraid diff` -> No differences, 156,460 equal.
+4. `snapraid diff` -> No differences, every file equal.
 5. Metric written, scraped, both alerts cleared. vm102 reports no failed units.
 
 **Status:** Fixed 2026-08-15. Open: `/etc/snapraid.conf` is hand-managed - the
