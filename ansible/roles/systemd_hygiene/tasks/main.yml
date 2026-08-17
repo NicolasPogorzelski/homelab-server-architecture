@@ -1,4 +1,13 @@
 ---
+# The role acts on two lists: units that can never succeed on *this* node
+# (systemd_hygiene_masked_units, per host) and units whose condition belongs to
+# the platform (systemd_hygiene_group_units, per group). They are combined once
+# here so the five tasks below have a single thing to loop over - and so adding
+# a third source later touches one line, not five.
+- name: Combine the per-host and per-group unit lists
+  ansible.builtin.set_fact:
+    systemd_hygiene_units: "{{ systemd_hygiene_group_units + systemd_hygiene_masked_units }}"
+
 # Two kinds of unit need two different treatments, and using the wrong one fails
 # loudly rather than silently:
 #
@@ -13,7 +22,7 @@
   ansible.builtin.systemd_service:
     name: "{{ item.name }}"
     masked: true
-  loop: "{{ systemd_hygiene_masked_units }}"
+  loop: "{{ systemd_hygiene_units }}"
   loop_control:
     label: "{{ item.name }} - {{ item.reason }}"
   when: (item.action | default('mask')) == 'mask'
@@ -24,7 +33,7 @@
 - name: Detect which unit files are still present
   ansible.builtin.stat:
     path: /etc/systemd/system/{{ item.name }}
-  loop: "{{ systemd_hygiene_masked_units }}"
+  loop: "{{ systemd_hygiene_units }}"
   loop_control:
     label: "{{ item.name }}"
   register: systemd_hygiene_unit_files
@@ -46,7 +55,7 @@
   ansible.builtin.file:
     path: /etc/systemd/system/{{ item.name }}
     state: absent
-  loop: "{{ systemd_hygiene_masked_units }}"
+  loop: "{{ systemd_hygiene_units }}"
   loop_control:
     label: "{{ item.name }} - {{ item.reason }}"
   when: (item.action | default('mask')) == 'remove'
@@ -68,7 +77,7 @@
 - name: Check which handled units still carry a failed state # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl is-failed {{ item.name }}
-  loop: "{{ systemd_hygiene_masked_units }}"
+  loop: "{{ systemd_hygiene_units }}"
   loop_control:
     label: "{{ item.name }}"
   register: systemd_hygiene_is_failed

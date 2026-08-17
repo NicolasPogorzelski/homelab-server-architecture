@@ -1,0 +1,23 @@
+---
+# Units masked on every Debian LXC in this fleet, because the condition is a
+# property of the platform rather than of any one node. Consumed by the
+# systemd_hygiene role, which concatenates this list with the per-host
+# systemd_hygiene_masked_units.
+systemd_hygiene_group_units:
+  - name: postfix-resolvconf.path
+    reason: >-
+      Watches /etc/resolv.conf and re-triggers postfix-resolvconf.service on every
+      change. `resolvconf` is not installed on these containers, so the script it
+      drives (/etc/resolvconf/update-libc.d/postfix) has nothing to keep in sync -
+      the whole mechanism is vestigial here. Masking the trigger is the fix; the
+      service below only inherits the damage.
+  - name: postfix-resolvconf.service
+    reason: >-
+      Fails as `start-limit-hit` even though every individual run exits 0. The
+      container's /etc/resolv.conf is rewritten several times inside the boot
+      window, the .path unit above fires once per write, and five starts within
+      ten seconds trip systemd's default rate limit - so a unit that never
+      actually failed ends up in `failed` and raises SystemdUnitFailed.
+      Observed on lxc230 (2026-08-17, 06:04:50 to 06:04:52); the remaining
+      six containers carry the identical trigger and had not yet hit the
+      timing. Listed here rather than per host for exactly that reason.
