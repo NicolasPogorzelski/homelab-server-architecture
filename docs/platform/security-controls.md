@@ -52,7 +52,7 @@ end.
 | A.5.17 Authentication information | Partial | Ansible Vault for secrets in the repository. The vault password itself exists in exactly one copy on a disk with unresolved I/O faults - the single largest irreversible-loss risk on the platform, tracked as Tier 1 #1 in the [remediation plan](remediation-plan.md). |
 | A.5.18 Access rights | Enforced | The `breakglass` role manages `authorized_keys` with `exclusive: true`, making the inventory the sole source of truth. Revocation, not just granting - the change that removed two stale keys nobody had noticed. |
 | A.5.19-A.5.22 Supplier relationships | N/A | No suppliers, no contracts, no outsourced processing. |
-| A.5.21 ICT supply chain | Partial | Container images pinned to exact versions, GitHub Actions pinned to commit SHAs rather than mutable tags (2026-08-15). Not covered: image provenance and signature verification. |
+| A.5.21 ICT supply chain | Partial | GitHub Actions pinned to commit SHAs rather than mutable tags (2026-08-15). Container images are pinned *in the repository* and not on the fleet: measured 2026-08-17, every running container uses `:latest` or `:main`, because the pinned compose files were never deployed under the `docker-compose-update` hold. What holds the versions still is the hold, not the pin. Not covered either: image provenance and signature verification. |
 | A.5.23 Security for cloud services | N/A | No cloud services in the platform path. Revisit when the Terraform track introduces AWS. |
 | A.5.24 Incident management planning | Practised | [Runbooks](../../runbooks/README.md) per failure class, plus the known-error register. |
 | A.5.25 Assessment and decision on events | Practised | Every known error carries a root-cause section and a decision - fix, accept, or defer with a stated reason. |
@@ -74,7 +74,7 @@ end.
 |---|---|---|
 | A.6.1-A.6.6 Screening, terms, disciplinary, responsibilities after termination | N/A | No employment relationship exists. |
 | A.6.3 Awareness and training | N/A | The operator is the sole user. The learning-mode discipline in `CLAUDE.md` - explain every flag, root cause before fix - is the functional analogue. |
-| A.6.7 Remote working | Practised | All administration happens remotely over Tailscale with key-only SSH; password authentication is disabled fleet-wide. This is the normal operating mode, not an exception. |
+| A.6.7 Remote working | Partial | All administration happens remotely over Tailscale. Password authentication is disabled on the nine Ansible-managed nodes - not fleet-wide, which this row claimed until it was measured on 2026-08-17. The two unmanaged nodes are the Proxmox host and lxc250, and both accept passwords. See A.8.5. |
 | A.6.8 Reporting information security events | Practised | Reporting channel published in [`SECURITY.md`](../../.github/SECURITY.md), 2026-08-15, with an explicit instruction not to report a disclosure through a public issue. |
 
 ## Physical and environmental controls (A.7)
@@ -95,10 +95,10 @@ primarily as software.
 | Control | Status | Evidence and notes |
 |---|---|---|
 | A.8.1 User endpoint devices | Partial | The admin workstation runs an immutable, image-based OS. Endpoint hardening is otherwise undocumented. |
-| A.8.2 Privileged access rights | Practised | `PermitRootLogin no` fleet-wide; the automation account is separate from the interactive one; break-glass keys are declared in the inventory. |
+| A.8.2 Privileged access rights | Partial | The automation account is separate from the interactive one and break-glass keys are declared in the inventory. `PermitRootLogin no` holds on the nine managed nodes; the Proxmox host reports `permitrootlogin yes`, measured 2026-08-17. Root SSH with a password, on the node that can read every guest's disk, is the sharpest single finding this mapping has produced. |
 | A.8.3 Information access restriction | Enforced | Tier tags decide which node may reach which port; the default is deny. |
 | A.8.4 Access to source code | Enforced | Since 2026-08-15: `main` requires a pull request, blocks force-pushes and deletion, and requires both CI checks to pass. No bypass actors are configured, including for the owner. |
-| A.8.5 Secure authentication | Enforced | `PasswordAuthentication no` deployed by role, so the setting is restored on every run rather than surviving as a manual edit. |
+| A.8.5 Secure authentication | Partial | `PasswordAuthentication no` is deployed by role, so on the nodes the role reaches the setting is restored on every run rather than surviving as a manual edit. It reaches nine of eleven. The Proxmox host and lxc250 are in no inventory group, so the role has never run against them and both report `passwordauthentication yes`. This row read *Enforced* until 2026-08-17, and the wrong status is the finding: a control described as machine-restored on every node was in fact absent from the hypervisor and from the node holding the vault password, the real inventory and the automation key. A false assurance suppresses discovery more effectively than a stated gap. |
 | A.8.6 Capacity management | Enforced | Thin-pool metrics with warning, critical and metadata thresholds, plus an absolute-bytes alert for the archive pool - percentage being the wrong measure for a multi-terabyte array. See [`monitoring.md`](monitoring.md). |
 | A.8.7 Protection against malware | N/A | Deliberate. On a Linux fleet with no interactive users and no public ingress, a scanner would add attack surface and a false sense of coverage. The real measures are pinned images, least privilege and network isolation. |
 | A.8.8 Management of technical vulnerabilities | Partial | Unattended upgrades restricted to security pockets with kernel and driver packages blacklisted, so an unattended reboot cannot break GPU passthrough. Container images are pinned and frozen while the aux-disk hold is in force; the weekly Trivy scan makes that accepted risk measurable instead of invisible. |
@@ -114,7 +114,7 @@ primarily as software.
 | A.8.18 Use of privileged utility programs | Partial | Maintenance scripts are deployed by roles into `/usr/local/sbin` with root ownership. No formal restriction beyond file permissions. |
 | A.8.19 Software on operational systems | Partial | Package installation is role-driven; container images are pinned. Ad-hoc installation is possible and has happened - the hand-deployed exporters are the evidence. |
 | A.8.20 Networks security | Enforced | No public ingress, no port forwarding, LAN treated as untrusted. |
-| A.8.21 Security of network services | Enforced | Services bind the overlay address or loopback; binding to a LAN interface is a documented violation. Three such violations have been found and fixed by measurement; two remain open with their own design decisions pending. |
+| A.8.21 Security of network services | Partial | The principle holds where it was applied: every exporter, every database and every Serve backend binds loopback or the overlay address, which is the hard part and it is done. The exceptions are the services nobody installed on purpose. A fleet-wide `ss -tlnH` sweep on 2026-08-17 found sshd on the wildcard on ten of eleven nodes (lxc250 is the only one pinning `ListenAddress`), `rpcbind` on the host and lxc210, Alertmanager's cluster port, and an undocumented Collabora listener - against the "two remain open" this row previously claimed. Every node carries a routable IPv6 address, so a wildcard bind is world-reachable unless the router blocks it. |
 | A.8.22 Segregation of networks | Enforced | Tier model, deny by default, per-tag rules. |
 | A.8.23 Web filtering | N/A | No user browsing takes place on the platform. |
 | A.8.24 Use of cryptography | Practised | WireGuard for all transport, Ansible Vault at rest for repository secrets, ACME certificates for the one service that terminates TLS itself. No key management procedure beyond that - see A.5.17. |
@@ -134,22 +134,28 @@ primarily as software.
 Ordered by consequence, not by effort. Each is tracked in the [remediation plan](remediation-plan.md);
 this list exists so the ISO reading of them is on record.
 
-1. **No off-site copy of anything** (A.8.13). Every other backup property is now good, which makes
+1. **Two nodes accept SSH passwords, and one of them permits root** (A.8.5, A.8.2, A.6.7). Found by
+   the 2026-08-17 audit. The Proxmox host and lxc250 are the only nodes outside Ansible, and they
+   are also the two most privileged: the hypervisor can read every guest disk, and the control node
+   holds the vault password, the real inventory and the automation key. The configuration-management
+   gap was already recorded - but as a rebuild risk, not as missing hardening, which is why it never
+   read as urgent. Cheap to close by hand; the durable fix is the host adoption below.
+2. **No off-site copy of anything** (A.8.13). Every other backup property is now good, which makes
    this the one that decides the outcome of a fire, a theft or ransomware reaching the SMB mounts.
-2. **One copy of the vault password** (A.5.17), on a disk with unresolved I/O faults. Loss is
+3. **One copy of the vault password** (A.5.17), on a disk with unresolved I/O faults. Loss is
    unrecoverable by construction - no restore path exists, because the restore path is encrypted
    with the thing that was lost.
-3. **Physical and environmental controls are undocumented** (A.7). One of them is an open incident:
+4. **Physical and environmental controls are undocumented** (A.7). One of them is an open incident:
    the leading hypothesis for KE-14 is power quality.
-4. **Secure disposal is unspecified while a disk replacement is scheduled** (A.7.14). This one has a
+5. **Secure disposal is unspecified while a disk replacement is scheduled** (A.7.14). This one has a
    deadline set by hardware delivery, not by choice.
-5. **No separation of development and production** (A.8.31), and **no security testing before
+6. **No separation of development and production** (A.8.31), and **no security testing before
    deployment** (A.8.29). Together these mean every change is tested by being applied.
-6. **The observer shares a failure domain with the observed** (A.8.16). Measured, not theorised: a
+7. **The observer shares a failure domain with the observed** (A.8.16). Measured, not theorised: a
    62-hour outage produced no alert because the alerting stack was inside the outage.
-7. **Logging has no defined retention and no tamper protection** (A.8.15). Records that can be
+8. **Logging has no defined retention and no tamper protection** (A.8.15). Records that can be
    silently rewritten are weak evidence.
-8. **Two nodes have no failed-unit alerting** and two nodes are outside configuration management
+9. **Two nodes have no failed-unit alerting** and two nodes are outside configuration management
    (A.8.9). The overlap between those sets is lxc250, which holds the deployment credentials.
 
 ## What the mapping itself changed

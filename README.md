@@ -1,6 +1,6 @@
 # Homelab Platform Architecture
 
-[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![MergerFS](https://img.shields.io/badge/MergerFS-Union--Filesystem-5C2D91)](https://github.com/trapexit/mergerfs) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
+[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![GitHub Actions](https://img.shields.io/badge/CI-GitHub--Actions-2088FF?logo=githubactions&logoColor=white)](https://docs.github.com/actions)
 
 ## About
 
@@ -15,10 +15,15 @@ It is not built as a collection of services, but as a layered infrastructure pla
 ## Documentation standard
 
 Any statement here that carries a number was measured against the running system rather than
-estimated, and the command that produced it is usually quoted alongside. Runbooks record the date
-of their last execution, and a procedure that has never been executed says so instead of implying
-otherwise. Where a claim later turned out to be wrong, it is corrected in place with the correction
-visible, not silently overwritten.
+estimated, and the command that produced it is usually quoted alongside. Where a claim later turned
+out to be wrong, it is corrected in place with the correction visible, not silently overwritten -
+the [changelog](docs/platform/changelog.md) and the [known-error
+register](docs/platform/known-errors.md) carry more corrections than announcements, on purpose.
+
+Runbooks that have been executed record the date and the result. Four of thirteen currently do;
+the rest have not been run against a real incident, and saying so is more useful than a claim the
+files do not support. This paragraph asserted that every runbook carried such a record until an
+audit on 2026-08-17 checked it.
 
 ---
 
@@ -47,10 +52,28 @@ Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are
 | Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
 | Compute | Docker on VM100 | GPU-enabled workloads |
 | Services | Unprivileged LXCs | Isolation and segmentation |
+| Configuration | Ansible | Declarative management of every guest; roles, inventory, vault |
 | Access | Tailscale | Identity-based remote access (Zero Trust) |
 | Monitoring | Prometheus + Grafana | Observability layer |
 
 This platform is not designed for high availability. It prioritizes deterministic recovery, explicit dependency modeling, and documented failure procedures over automatic failover.
+
+---
+
+## How to read this repository
+
+Three entry points, depending on what you came for. Each is one document that links onward.
+
+| If you want to see | Start at |
+|---|---|
+| How it is built and why the trade-offs went the way they did | [Design Decisions](docs/decisions/design-decisions.md), then the [architecture diagram](docs/architecture/diagram.md) |
+| How it is run, and what has broken | [Known Errors](docs/platform/known-errors.md) and the [Platform Changelog](docs/platform/changelog.md) |
+| How it is secured, and where it is not | [Security Controls](docs/platform/security-controls.md) and [Data Classification](docs/platform/data-classification.md) |
+
+The single best illustration of how decisions are made here is
+[SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md): a rule the platform sets for
+itself, a service that cannot follow it, three attempts measured and rejected, and the boundary
+moved one layer down instead - with the reboot that proves it.
 
 ---
 
@@ -65,7 +88,11 @@ This platform is not designed for high availability. It prioritizes deterministi
 ### Decisions
 
 - [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
+- [SMB Bind and LAN Access](docs/decisions/smb-bind-and-lan-access.md) (a rule the service cannot follow, enforced one layer down)
 - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
+- [Calibre Auto-Import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) (SQLite byte-range locking over SMB)
+- [PostgreSQL Tailscale Boot Ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) (ordering is not readiness)
+- [pveproxy Tailscale Boot Ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) (the same race on the hypervisor)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
 
@@ -102,17 +129,44 @@ This platform is not designed for high availability. It prioritizes deterministi
 - [Networking](docs/platform/networking.md) (Zero-Trust model)
 - [Tailscale ACL](docs/platform/tailscale-acl.md) (policy-as-code, tier model)
 - [Ansible](docs/platform/ansible.md) (control node, inventory, vault, roles)
-- [Operations](docs/platform/operations.md) (runbooks, recovery, maintenance)
-- [Known Errors](docs/platform/known-errors.md) (observed issues and workarounds)
+- [Proxmox Host](docs/platform/proxmox-host.md) (hypervisor-level config, boot ordering, power schedule)
+- [Storage Permissions](docs/platform/storage-permissions.md) (the filesystem side of the share model, verified daily)
+- [Operations](docs/platform/operations.md) (operational model, dependency layers, incident playbooks)
+
+### Security, risk and change
+
+- [Security Controls](docs/platform/security-controls.md) (ISO/IEC 27001 Annex A mapping - what is enforced, what is merely practised)
+- [Data Classification](docs/platform/data-classification.md) (classification, recovery objectives, data protection assessment)
+- [Remediation Plan](docs/platform/remediation-plan.md) (open work ordered by loss risk and dependency)
+- [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 20 entries with root causes)
+- [Platform Changelog](docs/platform/changelog.md) (every change with the measurement that verified it)
+
+### Incidents
+
+- [aux-disk failure and recovery](docs/platform/incidents/2026-06-25-aux-disk-failure-and-recovery.md) (2026-06-25)
+- [VM100 silent freeze](docs/platform/incidents/2026-07-11-vm100-silent-freeze.md) (2026-07-11)
 
 ### Runbooks
 
+Thirteen procedures under the same contract: every one states its preconditions, its verification
+step, its failure modes and its rollback - or records that no rollback exists and why, which for
+`snapraid sync` is the whole point. Enforced by the validator, not by habit.
+
 - [Runbook Index](runbooks/README.md)
-- [PostgreSQL Backup & Restore](runbooks/database/pg-backup.md)
+- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
+- Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
+- Platform: [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
+- Services: [OpenWebUI health](runbooks/ai-stack/openwebui-health.md) - [Nextcloud/Paperless integration](runbooks/integration/nextcloud-paperless.md)
 
 ### Automation
 
+Everything guest-side is Ansible-managed, and every scheduled job is a systemd timer with
+`Persistent=true` - the host powers down overnight, so cron silently loses every slot it sleeps
+through.
+
+- [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
+  catalogue of playbooks and roles
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 28 and 24 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
-- [Playbooks](ansible/playbooks/) (apt-upgrade, bootstrap-ansible-user, node-exporter, prometheus-config, paperless-env)
-- [Roles](ansible/roles/) (node_exporter, prometheus-config, paperless-env)
-- [Ansible Platform Doc](docs/platform/ansible.md) (control node, vault setup, conventions)
+- [Repository validator](scripts/validate-repo.sh) - 24 structural checks, run by a pre-commit
+  hook and by CI on every push
