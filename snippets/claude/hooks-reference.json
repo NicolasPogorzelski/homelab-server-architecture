@@ -1,4 +1,17 @@
 {
+  "_comment": [
+    "Sanitized reference for the project-local hooks. The live file is",
+    ".claude/settings.local.json, which is gitignored because it carries absolute",
+    "paths. Replace <repo-path> when reproducing on another machine.",
+    "",
+    "Updated 2026-08-17. On the admin notebook the live file held no hooks at all,",
+    "so the commit gate this reference describes was not in effect there; the state",
+    "on the other workstation was not checked. Because this file is gitignored,",
+    "each machine has to be verified on its own: jq '.hooks' on the live file, not",
+    "a reading of this one. The PreToolUse entry below now points at a script in",
+    "the repository rather than an inline one-liner, so it can be tested instead of",
+    "trusted."
+  ],
   "permissions": {
     "allow": [
       "Bash(./scripts/validate-repo.sh *)"
@@ -10,8 +23,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import subprocess,json; log=subprocess.check_output(['git','log','--oneline','-5'],cwd='<repo-path>').decode().strip(); branch=subprocess.check_output(['git','branch','--show-current'],cwd='<repo-path>').decode().strip(); print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'Branch: '+branch+chr(10)+'Letzte Commits:'+chr(10)+log}}))\"",
-            "statusMessage": "Repo-Stand wird geladen..."
+            "command": "python3 -c \"import subprocess,json; log=subprocess.check_output(['git','log','--oneline','-5'],cwd='<repo-path>').decode().strip(); branch=subprocess.check_output(['git','branch','--show-current'],cwd='<repo-path>').decode().strip(); print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'Branch: '+branch+chr(10)+'Recent commits:'+chr(10)+log}}))\"",
+            "statusMessage": "Loading repository state..."
           }
         ]
       }
@@ -22,9 +35,9 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit *)",
-            "command": "cd <repo-path> && branch=$(git branch --show-current) && if [ $branch = main ]; then printf '{\"continue\": false, \"stopReason\": \"Direkter Commit auf main nicht erlaubt - Branch erstellen.\"}'; else ./scripts/validate-repo.sh 2>&1 && echo '{}' || printf '{\"continue\": false, \"stopReason\": \"validate-repo.sh fehlgeschlagen - alle Fehler beheben vor dem Commit\"}'; fi",
-            "statusMessage": "Branch & Validierung wird geprueft..."
+            "command": "<repo-path>/scripts/hooks/pre-commit-guard.sh",
+            "timeout": 60,
+            "statusMessage": "Validating repository before commit"
           }
         ]
       }
@@ -34,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '{\"hookSpecificOutput\": {\"hookEventName\": \"Stop\", \"additionalContext\": \"MANDATORY: Per CLAUDE.md, before ending this session check what was learned and update ~/git/devops-til/. New concepts go in new .md files (linux/, ansible/, proxmox/ etc.), update README.md index, then: git -C ~/git/devops-til push origin main\"}}'",
+            "command": "printf '{\"hookSpecificOutput\": {\"hookEventName\": \"Stop\", \"additionalContext\": \"Per CLAUDE.md, before ending this session check what was learned and update the devops-til repository. New concepts go in new .md files, update the README index, then push.\"}}'",
             "statusMessage": "devops-til reminder active"
           }
         ]
