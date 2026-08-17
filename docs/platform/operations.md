@@ -45,19 +45,19 @@ See: [Known Errors & Workarounds](./known-errors.md)
 
 ### Exposure Model
 
-- Prometheus: `127.0.0.1:9090`
-- Grafana: `127.0.0.1:3000`
-- Node Exporter: `127.0.0.1:9100`
-- Remote access via the zero-trust overlay model (Tailscale)
+The monitoring stack binds loopback and is reached through Tailscale Serve; per-port detail is in
+[`lxc200.md`](../nodes/lxc200.md), including the one exception (Alertmanager's cluster port). Note
+that the loopback binding described there applies to this stack only - it is not a fleet-wide
+statement, and the node documents carry the per-node reality.
 
-### Monitored Layers (Current/Target)
+### Monitored Layers
 
-- Proxmox host
-- Storage VM (VM102)
-- GPU VM (VM100)
-- Service LXCs (210/211/220/240)
-- Monitoring LXC itself (200)
-- DevOps LXC (250)
+The target list lives in [`monitoring.md`](monitoring.md) and is rendered from the inventory, so it
+cannot drift from what Prometheus actually scrapes. It is not repeated here - this section carried a
+hand-maintained copy until 2026-08-17 and had inverted the two facts that matter: it listed the
+DevOps LXC, which is in no inventory group and therefore scraped by nobody, and omitted lxc230 and
+lxc260, which are scraped. A duplicated list is worse than no list when the duplicate is the one
+somebody reads.
 
 ### Key Metrics (Minimum Set)
 
@@ -78,8 +78,12 @@ See: [Known Errors & Workarounds](./known-errors.md)
   `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count`,
   plus rules in the (currently empty) `smart` group. Disk-failure detection still rests on SnapRAID
   alerts. Blocked on the host becoming an Ansible node
-- Alerting with Alertmanager (routing via SMTP or webhook)
 - "Golden signals" dashboards per tier (Storage/Compute/Services)
+- An external heartbeat, so a total outage produces an alert rather than silence - see the Tier 4
+  entry in the [remediation plan](remediation-plan.md)
+
+(Alertmanager was listed here as planned until 2026-08-17. It has been deployed on lxc200 with a
+webhook receiver since June.)
 
 ---
 
@@ -122,19 +126,30 @@ It is an abstraction layer to keep service paths stable while disks are added/re
 
 ### 2.3 Service Data (Current State)
 
-- **Vaultwarden**: SQLite (`/opt/vaultwarden/db.sqlite3*`) + RSA keys  
-  - Backup approach: filesystem-level backups (and/or scheduled copy to backup folder)  
-  - Future: verified restore tests + retention strategy
+- **Vaultwarden**: SQLite (`/opt/vaultwarden/db.sqlite3*`) + RSA keys
+  - Protection today: SnapRAID parity and nothing else. There is no export and no version history.
+    This entry read "filesystem-level backups (and/or scheduled copy to backup folder)" until
+    2026-08-17, which described an intention rather than a job that exists.
+  - Parity is not backup: it protects against losing a disk, not against deletion, corruption or
+    ransomware, because the next sync writes the damage into the parity.
+  - A consistent export is the last open half of Tier 1 #3 in the
+    [remediation plan](remediation-plan.md). See [`lxc240.md`](../nodes/lxc240.md).
 - **Nextcloud**:
   - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)
-  - DB is local MariaDB (inside container)
-  - Future improvement: automated DB dumps + integrity verification
+  - DB is local MariaDB (inside the container), dumped nightly to a dedicated share since
+    2026-08-15 by the `mariadb_backup` role, verified at write time, with `MariaDBBackupStale`
+    watching it - see the [runbook](../../runbooks/database/mariadb-backup.md)
+  - The two halves live on different disks with different protection: files on the archive pool,
+    database on the boot SSD. Restoring one without the other yields unusable data.
 - **PostgreSQL Platform (LXC260)**:
   - Dedicated infrastructure container
-  - Databases stored on local block storage (no CIFS)
-  - Backups via periodic `pg_dump`
-  - Backups stored on SMB (separate from runtime data)
-  - Restore procedure must be periodically validated
+  - Databases on local block storage (no CIFS) - on the host's aux-disk, which is the failing
+    KE-13 drive; see [`lxc260.md`](../nodes/lxc260.md)
+  - Nightly `pg_dumpall` via timer, verified at write time before the file gets its real name,
+    stored on SMB separately from the runtime data
+  - A full-cluster restore into a throwaway cluster runs monthly and is alerted on when stale
+    (`PostgreSQLRestoreTestStale`). This line said the procedure "must be periodically validated"
+    until 2026-08-17; it has been automated since 2026-08-13.
 - **Paperless-ngx (LXC211)**:
   - Document files on MergerFS/SMB (originals, archive, thumbnails)
   - Database in centralized PostgreSQL (lxc260)
@@ -173,11 +188,12 @@ Planned improvements:
 
 **Layer 2: Compute**
 - VM100 online
-- Data disk mounted at `/mnt/vm-data`
-- Media mounts available (autofs/systemd automount)
+- Media mounts available under `/srv/media/*` (systemd automount, one unit per library since
+  2026-08-16). This said `/mnt/vm-data` until 2026-08-17 - a path that no longer carries a mount.
 
 **Layer 3: Services**
-- LXCs online (200/210/211/220/240/250)
+- LXCs online (200/210/211/220/230/240/250/260 - the list here omitted 230 and 260 until
+  2026-08-17)
 - Each service has its mounts online before starting critical workloads
 - Docker containers restart via `restart: unless-stopped` (where applicable)
 
@@ -309,6 +325,15 @@ Backups reside on SMB and are isolated from runtime failure.
 - Infrastructure services bind to Tailscale only
 - LAN exposure is limited to performance-critical media workloads and explicitly justified
 
+**These are the rules, not a description of the current state.** Measured 2026-08-17, the fleet
+deviates in several places that are documented on the nodes themselves rather than summarised here:
+sshd binds the wildcard everywhere except lxc250, Apache on lxc210 binds `*:80`/`*:443`, Samba on
+vm102 binds `0.0.0.0:445` for a reason it cannot avoid, and Jellyfin and Audiobookshelf are LAN-bound
+by design. Every node carries a routable IPv6 address, so a wildcard bind is reachable from outside
+unless the router blocks it - which is what the
+[SMB bind decision](../decisions/smb-bind-and-lan-access.md) established for port 445 and answered
+with a kernel filter. The open ones are tracked in the [remediation plan](remediation-plan.md).
+
 ### 5.2 Zero-Trust Overlay (Tailscale)
 
 Remote access and service-to-service communication are enforced via an identity-based overlay network (Tailscale).
@@ -332,11 +357,14 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 
 ### 5.4 Least Privilege (Storage + Services)
 
-- RW shares only where required:
-  - Nextcloud, Vaultwarden
-- RO shares for consumers:
-  - Jellyfin, Audiobookshelf, Calibre-Web
-- Consistent UID/GID handling across boundaries to avoid permission drift
+The share model - which identity may write where, and which consumer share is scoped to which
+library - is owned by [`samba.md`](samba.md), and the filesystem side of it by
+[`storage-permissions.md`](storage-permissions.md). This section listed two RW shares out of the
+twelve that exist until 2026-08-17; it now points instead of counting.
+
+The principle it exists to state: read-only for consumers, read-write only for the service that
+owns the data, and consistent UID/GID handling across the LXC namespace boundary so permissions do
+not drift.
 
 ---
 
@@ -363,10 +391,14 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 
 ### Monthly
 
-- SnapRAID scrub (cadence depends on dataset churn)
+- SnapRAID scrub runs from a timer on the 1st. Review the *coverage*, not only the run date:
+  `snapraid status` reports how much of the array is unscrubbed and how old the oldest block is,
+  and `SnapRAIDScrubStale` can see neither - it measures when a scrub last ran
 - Review disk SMART health by hand (`smartctl -A` per disk, identified by `by-id`) - the
   exported metrics cannot show degradation, see the SMART note under Planned Enhancements
-- Validate that backups can be restored (spot test)
+- Confirm the automated restore test passed (it runs on the 1st and raises
+  `PostgreSQLRestoreTestStale` if it does not). Manual spot tests are no longer the mechanism -
+  this line said so until 2026-08-17
 
 ### After Major Changes
 
@@ -380,12 +412,15 @@ See: [Tailscale ACL model](./tailscale-acl.md)
 ## 7. Future Improvements (Roadmap)
 
 - ~~Automated SnapRAID sync + scrub schedule~~ (done: `snapraid-maintenance.sh`, Prometheus alerts)
-- SMART monitoring: extend the existing collector to the attributes that indicate degradation, and populate the empty `smart` rule group
-- Off-site backups for critical datasets (Nextcloud DB/config, Vault exports)
-- IaC-style documentation:
-  - compose files in repo (sanitized)
-  - systemd units snippets (sanitized)
-  - ACL/policy documentation for overlay network
+- ~~IaC-style documentation: sanitized compose files, systemd unit snippets, ACL documentation~~
+  (done; the `docker/`, `snippets/` and `docs/platform/tailscale-acl.md` trees are the result)
+- SMART monitoring: extend the existing collector to the attributes that indicate degradation, and
+  populate the empty `smart` rule group
+- Off-site backups for the C1 datasets defined in [`data-classification.md`](data-classification.md)
+
+This list is a summary. The ordered version, with the dependencies that decide what can start
+when, is the [remediation plan](remediation-plan.md) - which is the document to update when
+something moves.
 
 
 See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
