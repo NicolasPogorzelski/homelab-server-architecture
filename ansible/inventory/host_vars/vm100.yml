@@ -20,3 +20,28 @@ systemd_hygiene_masked_units:
       `mergerfs` tag (`virtio-fs: tag <mergerfs> not found` at every boot), and
       nothing consumes the path: Jellyfin and Audiobookshelf read their libraries
       over autofs/CIFS from vm102. Already recorded as legacy in docs/nodes/vm100.md.
+
+  # The four units below carried the two pool-wide media shares, replaced on
+  # 2026-08-16 by four scoped shares on new paths under /srv/media. They were
+  # only `systemctl disable`d that day, deliberately: disabling drops the boot
+  # symlink without unmounting, and unmounting a live CIFS mount on this node is
+  # what froze the guest in KE-20. The nightly power-off retired them, so all
+  # four have been inactive since - verified 2026-08-17 before removal.
+  - name: media-jellyfin.automount
+    action: remove
+    reason: >-
+      Superseded by srv-media-filme.automount and srv-media-serien.automount.
+      Mounted the pool-wide share [media-jf] at /media/jellyfin.
+  - name: media-jellyfin.mount
+    action: remove
+    reason: >-
+      Backing mount unit of media-jellyfin.automount, superseded with it.
+  - name: media-audiobookshelf.automount
+    action: remove
+    reason: >-
+      Superseded by srv-media-audiobooks.automount and srv-media-podcasts.automount.
+      Mounted the pool-wide share [media-abs] at /media/audiobookshelf.
+  - name: media-audiobookshelf.mount
+    action: remove
+    reason: >-
+      Backing mount unit of media-audiobookshelf.automount, superseded with it.
