@@ -467,11 +467,49 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 22: no personal media library counts
+# =============================================================================
+# Added 2026-08-17, after a verification step recorded the exact number of films
+# in the Jellyfin library - in a changelog entry and in a pull request description,
+# both public. The count proves nothing operational: "the library enumerates its
+# full expected contents" is the same evidence without describing what the owner
+# of this repository watches, reads and listens to.
+#
+# The other sanitization checks all guard infrastructure (addresses, keys, disk
+# labels). This one guards the person, which is a different category and is why it
+# gets its own check rather than an extra pattern in Check 14.
+#
+# Bare aggregate counts of array objects (files scanned, groups corrected) are not
+# matched: they describe a repair, not a collection. If a number would let a reader
+# infer the size of a personal library, it does not belong in this repository.
+echo "Check 22: no personal media library counts"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    # This script carries the pattern itself.
+    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
+    # "series" is also Prometheus vocabulary ("old expression 21 series"), so lines
+    # carrying monitoring terms are dropped rather than the word being given up -
+    # a television count is exactly the kind of hit this check exists for.
+    { grep -nEi "[0-9][0-9,.]*[[:space:]]+(films?|movies|series|seasons?|episodes?|authors?|audiobooks?|ebooks?|albums?|tracks?|titles?)\b" "${file}" \
+        | grep -viE "expression|prometheus|promql|metric|series per node|time series" || true; } | while read -r match; do
+        echo "  Media library count: ${rel}:${match%%:*}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
+              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
+                 -o -name "*.j2" \))
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 21"
+echo "Checks run: 22"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
