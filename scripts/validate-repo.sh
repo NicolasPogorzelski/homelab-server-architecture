@@ -546,11 +546,45 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 24: balanced markdown code fences
+# =============================================================================
+# Added 2026-08-17. docs/architecture/exposure-diagram.md was missing its closing
+# ``` and had been that way since 2026-04-07 - four months during which GitHub
+# rendered the Mermaid source as plain text on a page the README advertises as a
+# diagram. Nothing caught it: Check 1 sees a non-empty file, Check 2 sees valid
+# links, and no check has ever looked at markdown structure.
+#
+# The test is deliberately the crudest one that works: an opening and a closing
+# fence are the same token, so a correct file has an even number of lines
+# starting with ```. That makes the check incapable of a false negative on the
+# defect it exists for, and it needs no parser.
+#
+# Known blind spot, accepted: a fence line quoted *inside* another fenced block
+# flips the parity and would be reported. That is rare here and loud when it
+# happens - the alternative is tracking open/closed state, which turns a
+# four-line check into something that itself needs tests. Documentation about
+# markdown syntax should indent its examples rather than fence them.
+echo "Check 24: balanced markdown code fences"
+
+while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    fences="$(grep -c '^```' "${file}" || true)"
+    if (( fences % 2 != 0 )); then
+        echo "  Unbalanced code fence (${fences} found): ${rel}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f -name "*.md")
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 23"
+echo "Checks run: 24"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

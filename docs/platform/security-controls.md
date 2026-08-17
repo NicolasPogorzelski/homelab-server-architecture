@@ -65,7 +65,7 @@ end.
 | A.5.33 Protection of records | Enforced | Change records live in git. Since 2026-08-15 commits are signed with an SSH key, so authorship is cryptographically verifiable rather than a free-text field, and `main` cannot be force-pushed or deleted. |
 | A.5.34 Privacy and PII | Partial | Assessed 2026-08-15 for the first time; see [`data-classification.md`](data-classification.md). Previously not considered at all, despite the platform holding identity documents and serving two household members outside the operator. |
 | A.5.35 Independent review | Gap | Structurally unavailable. Partial compensation: the weekly fleet audit is a self-review against the documentation, and it has repeatedly found live faults - which is evidence that it is a real check and not a formality. |
-| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh), 18 checks, run by a pre-commit hook locally and by CI on every push and pull request. |
+| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh), 24 checks, run by a pre-commit hook locally and by CI on every push and pull request. |
 | A.5.37 Documented operating procedures | Enforced | Every runbook must contain `Precondition`, `Verification` and `Failure`; Check 5 fails the build otherwise. A procedure without a verification step is rejected mechanically. |
 
 ## People controls (A.6)
@@ -105,7 +105,7 @@ primarily as software.
 | A.8.9 Configuration management | Partial | Everything guest-side is Ansible-managed. The hypervisor and the control node are not, so a rebuild of either loses hand-deployed units - the single most-cited prerequisite in the remediation plan. |
 | A.8.10 Information deletion | Gap | No retention or deletion policy for anything. Relevant to A.7.14 and to the documents in Paperless. |
 | A.8.11 Data masking | N/A | No shared or exported datasets. |
-| A.8.12 Data leakage prevention | Enforced | Seven of the eighteen repository checks exist solely to stop identifying information reaching a public repository, backed by GitHub secret scanning with push protection. Honest limit, stated in [`SECURITY.md`](../../.github/SECURITY.md): pattern matching against the working tree, blind to history and to secrets that do not look like secrets. |
+| A.8.12 Data leakage prevention | Enforced | Nine of the twenty-four repository checks exist solely to stop identifying information reaching a public repository, backed by GitHub secret scanning with push protection. Honest limit, stated in [`SECURITY.md`](../../.github/SECURITY.md): pattern matching against the working tree, blind to history and to secrets that do not look like secrets. |
 | A.8.13 Information backup | Partial | Dumps are verified at write time against three failure modes before the file is given its real name, and a monthly restore test proves they are usable. The gap is categorical, not incremental: every copy is on the same site. Tier 1 #3. |
 | A.8.14 Redundancy | N/A | Deliberate architectural choice: single host, no high availability, recovery-oriented design. SnapRAID parity protects media against disk loss; it is not redundancy of processing and is not treated as such. |
 | A.8.15 Logging | Partial | journald is persistent on both VMs with months of boots retained. Weaknesses: `Storage=` is unset, so persistence is a property of a directory that happens to exist rather than of the configuration; no retention limit is pinned; there is no central aggregation and no tamper protection. |
