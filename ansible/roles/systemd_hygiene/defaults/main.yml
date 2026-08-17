@@ -14,3 +14,13 @@
 #           masking those fails, because the mask symlink and the unit file are the
 #           same path.
 systemd_hygiene_masked_units: []
+
+# Units whose condition is a property of the *platform*, not of one node - a
+# package every Debian LXC here installs, shipping a unit none of them can use.
+# Kept in a separate variable rather than repeated across host_vars, because
+# host_vars would have to restate it seven times and Ansible does not merge a
+# variable of the same name: a host that set the per-host list would silently
+# drop the fleet-wide entries.
+#
+# The two lists are concatenated in tasks/main.yml. Same entry format.
+systemd_hygiene_group_units: []
