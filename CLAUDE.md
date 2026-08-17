@@ -372,9 +372,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   this pool) will eventually hit `ENOSPC` - capacity expansion is the lever, not deletion.
   `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
   member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
-  wrong measure for a multi-terabyte archive (15% is a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
+  wrong measure for a multi-terabyte archive: 15% of one is a large absolute amount, a threshold
+  a pool designed to fill will never meet again. The rule now excludes `cifs`, `fuse.mergerfs`
   and the member disks; the new `ArchivePoolLowSpace` warns on absolute free bytes below
-  100 GiB with `for: 1h`. Currently a low absolute margin.
+  100 GiB with `for: 1h`. The current margin is small and shrinking.
 
 - **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
   (`ListenAddress` in sshd_config). SSH is unreachable for ~30-60 s after boot until

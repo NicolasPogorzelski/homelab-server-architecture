@@ -14,8 +14,9 @@ groups:
       # an archive. Before 2026-07-10 this rule fired 21 times at once, all of them
       # the same fact: the MergerFS pool, its five member disks, and the twelve CIFS
       # mounts through which other nodes see that pool, each nearly full. 15% of a
-      # multi-terabyte archive is a large absolute amount - a threshold a pool designed to fill will never
-      # meet again. An alert that is always red is not read.
+      # multi-terabyte archive is a large absolute amount - a threshold a pool
+      # designed to fill will never meet again. An alert that is always red is
+      # not read.
       #
       # Excluded here, and covered by ArchivePoolLowSpace below instead:
       #   - cifs: a remote view of storage some other node owns; that node alerts.
