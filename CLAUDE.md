@@ -315,7 +315,14 @@ hidden entry and which GitHub reads just as well.
 
 - Tailscale IPs must use placeholder `<tailscale-ip-nodename>`, never bare `100.x.y.z`
 - Tailnet IDs must use placeholder `<tailnet-id>`, never bare `*.ts.net`
-- Disk labels and device names must use generic identifiers (e.g. `disk01`-`diskN`, `aux-disk`) - never real labels that reveal size or purpose
+- Disk labels and device names must use generic identifiers - never real labels that reveal size
+  or purpose. The auxiliary disks need two distinct names, because there are two of them and one
+  placeholder for both caused a documented disk to be described on the wrong node:
+  - `disk01`-`diskN` - SnapRAID data disks on vm102
+  - `aux-pool` (`/mnt/aux-pool`) - the auxiliary disk inside vm102's MergerFS/SnapRAID pool, healthy
+  - `aux-disk` (`/mnt/aux-disk`, storage `appdata_aux-disk`) - the auxiliary disk on the Proxmox
+    host carrying five LXC Docker data-roots and vm100's second disk; this is the failing KE-13
+    drive. When a document says "the aux disk" without qualification it means this one.
 - Never commit `.env` files; only `.env.example` files belong in the repo
 - Each `docker/` subdirectory with a `docker-compose.yml` must have a `.env.example`
 

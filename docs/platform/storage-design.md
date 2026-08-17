@@ -72,17 +72,17 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
 - Parity disk:
   - `parity1` -> `/mnt/parity`
 - Auxiliary disk:
-  - `aux-disk` -> `/mnt/aux-disk` (temporarily part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
+  - `aux-pool` -> `/mnt/aux-pool` (temporarily part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
 
-`aux-disk` is temporarily included as a 6th data disk.
+`aux-pool` is temporarily included as a 6th data disk.
 
 **Corrected 2026-08-17.** This list also carried an `aux-disk1` mounted at `/mnt/aux-disk1` on
 VM102, described as non-parity local app state. No such mount exists on this node and none did:
 that disk is attached to the Proxmox host and is the failing [KE-13](known-errors.md#ke-13) drive,
 documented in [`proxmox-host.md`](proxmox-host.md). The error was possible because two different
-physical disks share one placeholder name across this documentation - the pool member described
-here, and the host's application-data disk. Disambiguating them is tracked separately; until then,
-read `aux-disk` in this file as the pool member only.
+physical disks share one placeholder name across this documentation. That is resolved as of the
+same date: the pool member described here is `aux-pool`, and the host's application-data disk keeps
+`aux-disk`. Both remain size-neutral, so Check 18 still holds.
 
 They are used for:
 - Performance-sensitive workloads
@@ -108,7 +108,7 @@ Content files (one per data disk, improves robustness and recoverability):
 - `content /mnt/disk03/snapraid.content`
 - `content /mnt/disk04/snapraid.content`
 - `content /mnt/disk05/snapraid.content`
-- `content /mnt/aux-disk/snapraid.content` (temporary, remove when disk06 added)
+- `content /mnt/aux-pool/snapraid.content` (temporary, remove when disk06 added)
 
 Data disks:
 
@@ -117,7 +117,7 @@ Data disks:
 - `data disk03 /mnt/disk03`
 - `data disk04 /mnt/disk04`
 - `data disk05 /mnt/disk05`
-- `data aux-disk /mnt/aux-disk` (temporary capacity bridge, remove when disk06 added)
+- `data aux-pool /mnt/aux-pool` (temporary capacity bridge, remove when disk06 added)
 
 Excludes (current state, read from the live config 2026-08-17). The role owns this block through a
 marked `blockinfile`; the layout above it stays hand-written because it carries real device labels:
@@ -208,7 +208,7 @@ the new one: the same fact stated in two files, corrected in one.
 MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot, systemd generates the mount unit automatically via `systemd-fstab-generator`:
 
 - Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
-- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-disk` -> `/mnt/mergerfs` (aux-disk temporary)
+- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-pool` -> `/mnt/mergerfs` (aux-pool temporary)
 - Type: `fuse.mergerfs`
 - Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
 
