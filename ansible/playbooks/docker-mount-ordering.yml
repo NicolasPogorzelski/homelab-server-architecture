@@ -1,0 +1,9 @@
+---
+# Runs against the whole docker group; the role is a no-op wherever
+# docker_mount_ordering_units is empty, so a node opts in through its host_vars
+# rather than through the playbook's host list.
+- name: Order Docker after the automount units its containers bind
+  hosts: docker
+  become: true
+  roles:
+    - docker_mount_ordering

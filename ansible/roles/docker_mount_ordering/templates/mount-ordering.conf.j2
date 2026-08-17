@@ -1,0 +1,10 @@
+{{ ansible_managed | comment }}
+#
+# Wants= rather than Requires=: if an automount unit fails to install its trigger,
+# Docker should still start. A media library that is empty is a smaller failure than
+# a node with no containers at all, and the empty library is visible in the service
+# while a dead Docker daemon takes the node's monitoring with it.
+
+[Unit]
+Wants={{ docker_mount_ordering_units | join(' ') }}
+After={{ docker_mount_ordering_units | join(' ') }}
