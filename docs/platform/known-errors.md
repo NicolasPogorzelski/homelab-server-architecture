@@ -1275,6 +1275,19 @@ That rules out an ordinary userspace deadlock, which would have kept logging and
 produced a blocked-task warning after two minutes. It points to a freeze below the logging layer.
 It does not establish the cause, because nothing was recorded.
 
+**Client-side evidence, recovered 2026-08-17.** The guest wrote nothing, but the other end of the
+SSH session recorded how it died: `Read from remote host: Connection reset by peer`, exit 255 -
+a reset, not a timeout. That is worth writing down and worth not over-reading. A reset means a RST
+segment arrived, and there are two readings: the guest's network stack answered while the process
+behind it was already gone, or - the likelier one - the RST came after `qm start`, when the
+restarted guest received packets for a connection it knew nothing about. The second reading makes
+the reset evidence of the recovery, not of the freeze. The two cannot be separated after the fact,
+because the client's message carries no timestamp of its own.
+
+The lesson is the one this file keeps relearning: an artefact recovered late is still worth
+recording, and is still only worth what its timeline can prove. Attach a timestamped client-side
+transcript to the next attempt, so this ambiguity does not repeat.
+
 The Proxmox host logged no kernel message at all in that window, so the failing auxiliary disk
 ([KE-13](#ke-13)) is not implicated. One weak signal exists: between 17:01 and 17:15 UTC the guest
 reported `perf: interrupt took too long` six times, lowering its sample rate from 78000 to 23750.
