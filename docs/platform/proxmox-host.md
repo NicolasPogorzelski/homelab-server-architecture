@@ -195,7 +195,9 @@ is the asymmetry the host adoption would remove.
 
 ## Ansible Management
 
-The Proxmox host is not yet a fully managed Ansible node. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied - those are currently deployed manually. Full host management (package updates, SSH hardening) is not implemented.
+The Proxmox host is not yet a fully managed Ansible node. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied - those are currently deployed manually. Full host management (package updates) is not implemented.
+
+SSH hardening was applied by hand on 2026-08-17 after an audit measured `permitrootlogin yes` with `passwordauthentication yes` on this node - see the section below. It is correct now and maintained by nothing, which is the same debt as the hand-deployed units above and closes with the same adoption.
 
 To run the schedule role against the host:
 
@@ -211,6 +213,63 @@ live state and hides the gap. The same applies to `onboarding.yml`, whose `lxc-t
 never existed.
 
 See: [Ansible platform](./ansible.md)
+
+## SSH access (hardened by hand 2026-08-17)
+
+Until this date the hypervisor accepted `PasswordAuthentication` and `PermitRootLogin yes`, on
+`0.0.0.0:22`. Neither had ever been set deliberately - `PermitRootLogin yes` was explicit in
+`sshd_config`, password authentication was sshd's default because the directive was commented out.
+The cause is the one recorded throughout this file: the host is in no inventory group, so
+`ssh-hardening.yml` (`hosts: all`) has never run against it.
+
+Now `/etc/ssh/sshd_config.d/00-hardening.conf` sets:
+
+| Directive | Value | Why not the fleet value |
+|---|---|---|
+| `PasswordAuthentication` | `no` | Same as the fleet |
+| `PermitRootLogin` | `prohibit-password` | The role writes `no`. Root is the only administrative account here - `media` (uid 1000) has neither sudo nor `authorized_keys` - so `no` would end SSH administration of the hypervisor |
+
+The deviation is stated in the file itself, so a later reader does not mistake it for drift.
+
+**How it was applied, because the method matters more than the change.** This host has no usable
+out-of-band console: the single GPU is passed through to vm100 with `x-vga=1`, there is no serial
+console in the kernel cmdline and no BMC. `getty@tty1` runs but writes to a framebuffer the guest
+owns. The Proxmox web shell on `:8006` works and is independent of all of that, but it was not
+verified at the time.
+
+So the change was made behind a dead-man switch: a transient
+`systemd-run --on-active=10min` unit that restores the backed-up config and *restarts* sshd, armed
+before anything was touched and cancelled only after a freshly established connection proved the
+new configuration works. Had the operator's workstation frozen mid-operation - which it had done
+once that afternoon - the host would have repaired itself without any console. `sshd -t` gated the
+reload, so a syntax error could never reach a running daemon.
+
+Verified after: fresh connection as root, `sshd -T` reporting `passwordauthentication no` and
+`permitrootlogin without-password` (sshd's normalised spelling of `prohibit-password`), and a
+counter-test with `PubkeyAuthentication=no` answered `Permission denied (publickey)` - the server
+no longer offers a password path at all. Ten guests running, zero failed units.
+
+Residual, not fixed here: root's `authorized_keys` on this host holds eight keys and nothing manages
+the set. The VMs have the `breakglass` role enforcing theirs with `exclusive: true`.
+
+## Storage definitions (cleaned 2026-08-17)
+
+A `dir` storage named `mergerfs` pointed at `/mergerfs`, a plain directory on `pve-root` with no
+filesystem mounted at it. It was registered for `images,rootdir` and marked `shared 1`, which is
+meaningless on a single node. `pvesm status` reported it with `pve-root`'s free space, so allocating
+a disk there would have written onto the KE-14 boot SSD - the KE-7 failure class, and sharper than
+the `appdata_aux-disk` case, because that storage at least has a disk that could fail to mount.
+
+Removed after verifying it was unused: three empty directories totalling 16 KB, no guest config
+referencing it, no backup job, no replication entry. `/mergerfs` itself was left on disk.
+
+In the same pass, `appdata_aux-disk` gained `is_mountpoint 1`, which had been deferred to the
+hardware window and needed nothing from it. Proxmox now refuses to treat the storage as active
+unless a filesystem is really mounted at the path. Verified immediately: storage still `active`,
+vm100's `scsi1` still resolvable, guests untouched.
+
+Noticed while applying it: `mkdir 0` is deprecated and slated for removal in PVE 9, which this host
+already runs. The replacement is `create-base-path 0`.
 
 ## Related Documents
 

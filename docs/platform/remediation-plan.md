@@ -89,7 +89,7 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 | 8 | Extend the SMART collector to the attributes that matter | `smart_health_passed` reads PASSED for the disk with 7680 unreadable sectors. `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count` are not exported and the `smart` rule group is empty |
 | 9 | Fold the hand-deployed host units into roles | `node_exporter`, `wait-for-tailscale-ip.sh`, `lxc-fstrim`, `lvm-thin-metrics`, `netconsole-receiver` (added 2026-08-17) - all lost on a rebuild. The receiver is the sharper illustration: its sending half on vm100 is a role, its listening half on the host is a file somebody typed. ~~Add `/etc/snapraid.conf` on vm102: the [KE-19](known-errors.md#ke-19) exclude rules are hand-made and would not survive a rebuild~~ Done 2026-08-15: the role owns them through a marked block. The disk, parity and content layout stays hand-written on purpose, because it carries the real device labels that Check 18 keeps out of version control and it changes only when hardware does |
 | 10 | Apply the `homelab_schedule` role | Decide cron vs. timer explicitly; cron is defensible here because the job powers the host down |
-| 11 | `is_mountpoint 1` on the `appdata_aux-disk` storage | KE-7 failure class; `mkdir 0` does not prevent it |
+| 11 | ~~`is_mountpoint 1` on the `appdata_aux-disk` storage~~ Done 2026-08-17 | Closed. Proxmox now refuses to treat the storage as active unless a filesystem is actually mounted at the path, so a failed mount can no longer be written into the empty directory on `pve-root`. Verified immediately after: storage still `active`, vm100's `scsi1` still resolvable, guests untouched. Did not need the hardware window it was waiting on. Follow-up noticed while applying it: `mkdir 0` is deprecated and slated for removal in PVE 9, which this host already runs - the replacement is `create-base-path 0` |
 
 ## Tier 4 - Ordinary backlog
 
@@ -130,12 +130,14 @@ the only hand-deployed host script with no copy under `snippets/`) -
 Every documented claim was checked against the running fleet. Most findings were documentation
 drift and are corrected in place; these are the ones that are work rather than wording.
 
-- **A `mergerfs` directory storage in `storage.cfg` points at `/mergerfs`, which is not a
-  mountpoint.** It is registered for `images,rootdir` and carries `shared 1`. `pvesm status`
-  reports it with the same free space as `local`, i.e. it would allocate straight into `pve-root`.
-  This is item 11's failure class with one aggravation: the aux-disk storage at least has a disk
-  that could fail to mount, this one has none. Delete it if nothing lives there, or give it
-  `is_mountpoint 1` in the same pass as item 11.
+- ~~**A `mergerfs` directory storage in `storage.cfg` points at `/mergerfs`, which is not a
+  mountpoint.**~~ Removed 2026-08-17. It was registered for `images,rootdir` with `shared 1`, and
+  `pvesm status` reported it with the same free space as `local` - it would have allocated straight
+  into `pve-root` on the KE-14 boot SSD. Item 11's failure class with one aggravation: the aux-disk
+  storage at least has a disk that could fail to mount, this one had none. Verified unused before
+  removal - three empty directories totalling 16 KB, no guest config referencing it, no backup job,
+  no replication entry. The definition is gone; `/mergerfs` itself was left in place, because
+  removing a config line is reversible and removing a directory is less so.
 - **Nothing on the fleet runs a pinned image.** Every compose stack runs `:latest` or `:main` while
   the repository pins exact versions, and lxc200's live compose file still carries the
   `# TODO: pin to specific version tag` the repository copy has already resolved. The repository

@@ -74,7 +74,7 @@ end.
 |---|---|---|
 | A.6.1-A.6.6 Screening, terms, disciplinary, responsibilities after termination | N/A | No employment relationship exists. |
 | A.6.3 Awareness and training | N/A | The operator is the sole user. The learning-mode discipline in `CLAUDE.md` - explain every flag, root cause before fix - is the functional analogue. |
-| A.6.7 Remote working | Partial | All administration happens remotely over Tailscale. Password authentication is disabled on the nine Ansible-managed nodes - not fleet-wide, which this row claimed until it was measured on 2026-08-17. The two unmanaged nodes are the Proxmox host and lxc250, and both accept passwords. See A.8.5. |
+| A.6.7 Remote working | Partial | All administration happens remotely over Tailscale with key-only SSH. Password authentication is now off on all eleven nodes - it was off on nine until 2026-08-17, when measuring found the Proxmox host and lxc250 accepting passwords and both were closed by hand the same day. Still *Partial* rather than *Enforced*, and the reason is the distinction this document exists to make: on nine nodes a role restores the setting on every run, on two nothing does. See A.8.5. |
 | A.6.8 Reporting information security events | Practised | Reporting channel published in [`SECURITY.md`](../../.github/SECURITY.md), 2026-08-15, with an explicit instruction not to report a disclosure through a public issue. |
 
 ## Physical and environmental controls (A.7)
@@ -95,10 +95,10 @@ primarily as software.
 | Control | Status | Evidence and notes |
 |---|---|---|
 | A.8.1 User endpoint devices | Partial | The admin workstation runs an immutable, image-based OS. Endpoint hardening is otherwise undocumented. |
-| A.8.2 Privileged access rights | Partial | The automation account is separate from the interactive one and break-glass keys are declared in the inventory. `PermitRootLogin no` holds on the nine managed nodes; the Proxmox host reports `permitrootlogin yes`, measured 2026-08-17. Root SSH with a password, on the node that can read every guest's disk, is the sharpest single finding this mapping has produced. |
+| A.8.2 Privileged access rights | Partial | The automation account is separate from the interactive one and break-glass keys are declared in the inventory. `PermitRootLogin no` holds on the nine managed nodes and on lxc250 since 2026-08-17. The Proxmox host is deliberately `prohibit-password` rather than `no`: root is the only administrative account there - `media` (uid 1000) has neither sudo nor `authorized_keys` - so `no` would end SSH administration of the hypervisor. It had been `permitrootlogin yes` with password authentication enabled until the same day, which was the sharpest single finding this mapping produced. Residual: eight keys sit in the host's root `authorized_keys`, unmanaged, where the VMs have the `breakglass` role enforcing the set with `exclusive: true`. |
 | A.8.3 Information access restriction | Enforced | Tier tags decide which node may reach which port; the default is deny. |
 | A.8.4 Access to source code | Enforced | Since 2026-08-15: `main` requires a pull request, blocks force-pushes and deletion, and requires both CI checks to pass. No bypass actors are configured, including for the owner. |
-| A.8.5 Secure authentication | Partial | `PasswordAuthentication no` is deployed by role, so on the nodes the role reaches the setting is restored on every run rather than surviving as a manual edit. It reaches nine of eleven. The Proxmox host and lxc250 are in no inventory group, so the role has never run against them and both report `passwordauthentication yes`. This row read *Enforced* until 2026-08-17, and the wrong status is the finding: a control described as machine-restored on every node was in fact absent from the hypervisor and from the node holding the vault password, the real inventory and the automation key. A false assurance suppresses discovery more effectively than a stated gap. |
+| A.8.5 Secure authentication | Partial | `PasswordAuthentication no` now holds on all eleven nodes, verified by counter-test (`Permission denied (publickey)` with pubkey auth disabled on the client). It is *enforced* on nine: the role rewrites the setting on every run. On the Proxmox host and lxc250 it is a hand-written `00-hardening.conf` that no role maintains, so it is correct today and unprotected against tomorrow. That is the whole difference between the two statuses, and it is why this row does not return to *Enforced* when the values are right. This row read *Enforced* until 2026-08-17 while both unmanaged nodes accepted passwords - the wrong status is the finding, because a false assurance suppresses discovery more effectively than a stated gap does. |
 | A.8.6 Capacity management | Enforced | Thin-pool metrics with warning, critical and metadata thresholds, plus an absolute-bytes alert for the archive pool - percentage being the wrong measure for a multi-terabyte array. See [`monitoring.md`](monitoring.md). |
 | A.8.7 Protection against malware | N/A | Deliberate. On a Linux fleet with no interactive users and no public ingress, a scanner would add attack surface and a false sense of coverage. The real measures are pinned images, least privilege and network isolation. |
 | A.8.8 Management of technical vulnerabilities | Partial | Unattended upgrades restricted to security pockets with kernel and driver packages blacklisted, so an unattended reboot cannot break GPU passthrough. Container images are pinned and frozen while the aux-disk hold is in force; the weekly Trivy scan makes that accepted risk measurable instead of invisible. |
@@ -134,12 +134,13 @@ primarily as software.
 Ordered by consequence, not by effort. Each is tracked in the [remediation plan](remediation-plan.md);
 this list exists so the ISO reading of them is on record.
 
-1. **Two nodes accept SSH passwords, and one of them permits root** (A.8.5, A.8.2, A.6.7). Found by
-   the 2026-08-17 audit. The Proxmox host and lxc250 are the only nodes outside Ansible, and they
-   are also the two most privileged: the hypervisor can read every guest disk, and the control node
-   holds the vault password, the real inventory and the automation key. The configuration-management
-   gap was already recorded - but as a rebuild risk, not as missing hardening, which is why it never
-   read as urgent. Cheap to close by hand; the durable fix is the host adoption below.
+1. **Two nodes are hardened by hand and by nothing else** (A.8.5, A.8.2, A.6.7). The 2026-08-17
+   audit found the Proxmox host accepting root logins with a password and lxc250 accepting
+   passwords; both were closed the same day and counter-tested. What remains is the reason they were
+   open: the hypervisor and the control node are the only nodes outside Ansible, and they are also
+   the two most privileged. The configuration-management gap had been recorded for months - but as a
+   rebuild risk, not as missing hardening, which is why it never read as urgent. The settings are
+   correct now and no machine keeps them that way. The durable fix is the host adoption below.
 2. **No off-site copy of anything** (A.8.13). Every other backup property is now good, which makes
    this the one that decides the outcome of a fire, a theft or ransomware reaching the SMB mounts.
 3. **One copy of the vault password** (A.5.17), on a disk with unresolved I/O faults. Loss is
