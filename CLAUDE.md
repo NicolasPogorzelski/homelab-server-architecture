@@ -205,7 +205,14 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 21 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, and German text in repository content.
+This script enforces 22 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, and personal media library counts.
+
+**Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
+gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
+sanitized, they get left out. An exact count of films, series or audiobooks proves nothing that
+"the library enumerates its full expected contents" does not, and describes what somebody watches,
+reads and listens to. Check 22 catches the counts; it cannot catch the category, so ask before
+writing any number that describes content rather than infrastructure.
 
 **Check 16 (`ansible-lint`) is a pre-commit net, not a second CI stage.** It runs only when `ansible-lint` is on `PATH` *and* the diff touches `ansible/`; otherwise it prints `SKIP` and passes. Under CI it always skips - `actions/checkout` leaves a clean tree, so there is no diff - because `.github/workflows/ansible-lint.yml` already lints every push. Install the pinned version locally so the check is not silently inert: `pipx install 'ansible-lint==26.6.0'`. A local version other than CI's would gate commits against a different rule set.
 
@@ -365,9 +372,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   this pool) will eventually hit `ENOSPC` - capacity expansion is the lever, not deletion.
   `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
   member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
-  wrong measure for a multi-terabyte archive (15% is a large absolute amount). The rule now excludes `cifs`, `fuse.mergerfs`
+  wrong measure for a multi-terabyte archive: 15% of one is a large absolute amount, a threshold
+  a pool designed to fill will never meet again. The rule now excludes `cifs`, `fuse.mergerfs`
   and the member disks; the new `ArchivePoolLowSpace` warns on absolute free bytes below
-  100 GiB with `for: 1h`. Currently a low absolute margin.
+  100 GiB with `for: 1h`. The current margin is small and shrinking.
 
 - **LXC250 SSH reachability after reboot:** sshd binds only to the Tailscale IP
   (`ListenAddress` in sshd_config). SSH is unreachable for ~30-60 s after boot until
