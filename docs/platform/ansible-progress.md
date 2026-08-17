@@ -59,6 +59,22 @@ Append new session notes to this file.
   - Verification gotcha: `calibredb list --with-library /books-rw` *also* fails the CIFS lock (returns nothing) - verify by copying `metadata.db` locally and querying that
   - End-to-end verified on the live library (import -> file on share at `/books-rw/<Author>/<Title> (id)/` + row in real `metadata.db` -> cleanup); timer `enabled`+`active`, idempotent redeploy
 
+- **`storage_permissions` role complete (2026-08-16):**
+  - `ansible/roles/storage_permissions/` - deploys `snippets/storage/storage-permissions.sh` to vm102
+    plus a daily service + timer; the script checks the live tree against the target matrix in
+    [storage-permissions.md](storage-permissions.md) and writes a node_exporter textfile metric
+  - Alerts `StoragePermissionDrift` and `StoragePermissionCheckStale` (the second because a stopped
+    timer produces no metric and no failed unit - absence has to be alerted on separately)
+  - The branch list is read from the running MergerFS instance, not from a hand-maintained list, so
+    adding a disk cannot silently drop it out of scope
+  - Local, non-repo matrix entries are read from `/etc/storage-permissions.local.conf` on the node.
+    Ansible never touches that file - it exists so entries that must not be public have somewhere to
+    live without weakening the check
+  - Bug found in its own first version: `getfattr --only-values` emits no trailing newline and
+    `while read` discards an unterminated final line, so the check silently covered five of six
+    branches. Fixed with a terminating newline plus an assertion comparing parsed entries against
+    the separator count
+
 - **Ansible Vault setup complete (2026-05-22):**
   - `inventory/group_vars/all/vault.yml` - 3 encrypted Paperless secrets (`vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key`)
   - `~/.vault_pass` on LXC250 (chmod 600, gitignored) - auto-loaded via `ansible.cfg` `vault_password_file`
