@@ -1,0 +1,20 @@
+---
+# === docker_mount_ordering ===
+#
+# Orders docker.service after the automount units whose paths its containers bind.
+# Without it, Docker may start and bind a mountpoint before autofs has installed the
+# trigger there, and the container then holds an empty directory on the local root
+# filesystem for as long as it runs. Nothing fails: the service is up, the mount
+# exists on the node, and only the library is empty.
+#
+# The ordering names the .automount units, never the .mount units. That distinction
+# is the whole point:
+#
+#   - An .automount unit installs a trigger and is up in milliseconds, whether or not
+#     the SMB server is reachable. Ordering after it is free.
+#   - A .mount unit attempts the mount. Ordering after that would tie Docker's start
+#     to a remote host being up, which is the KE-15 failure class rebuilt by hand -
+#     and on this platform the SMB server is a guest of the same hypervisor.
+#
+# Empty by default so the role is a no-op on nodes that bind nothing.
+docker_mount_ordering_units: []
