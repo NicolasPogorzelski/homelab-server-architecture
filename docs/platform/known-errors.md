@@ -1314,7 +1314,13 @@ channel will be silent for exactly the message being sought.
 
 **Open:**
 - Cause unknown; do not schedule further live unmounts on VM100 until it can be rolled back.
-- `netconsole` and the loglevel are not persistent across a reboot.
+- ~~`netconsole` and the loglevel are not persistent across a reboot.~~ Closed 2026-08-17. Both
+  were gone after the nightly power cycle, as predicted: the module was not loaded and
+  `console_loglevel` was back to 4, so the channel had been dead for a day without saying so. Now
+  owned by the `netconsole` role on vm100 plus a hand-deployed receiver unit on the host. The unit
+  is ordered `After=network-online.target` rather than listed in `/etc/modules-load.d/`, because
+  the latter runs before the interface has an address and would fail into silence - see
+  [KE-18](#ke-18).
 - VM100 cannot be snapshotted at all. That is the precondition for investigating this.
 
 ---

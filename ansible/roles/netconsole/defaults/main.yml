@@ -1,0 +1,28 @@
+---
+# === netconsole ===
+#
+# Streams this node's kernel log over UDP to a receiver on the Proxmox host, so a
+# freeze that stops disk writes still leaves evidence. Written after KE-20, where
+# the guest wedged and journald recorded nothing at all - not even the line systemd
+# emits before it stops a mount unit.
+#
+# The transport is deliberately the LAN interface, not Tailscale: netpoll writes
+# frames straight from the kernel, and a Tailscale address lives on a TUN device
+# served by a userspace daemon. During the failure this exists to capture, that
+# daemon is exactly as frozen as everything else.
+
+# Where the log goes. The port pair is arbitrary but must match the receiver unit
+# on the host (snippets/systemd/netconsole-receiver.service).
+netconsole_src_port: 6665
+netconsole_target_port: 6666
+
+# LAN address of the receiver. Defined in the (gitignored) inventory, because
+# Check 14 keeps real LAN addresses out of this repository.
+netconsole_target_ip: "{{ proxmox_host_lan_ip }}"
+
+# console_loglevel. The stock value on this fleet is 4, which filters priority 6
+# (KERN_INFO) - and `INFO: task blocked for more than 120 seconds` is priority 6.
+# A netconsole left at 4 is a channel that stays silent for precisely the message
+# it was installed to catch. The remaining three values are the kernel defaults
+# (default_message_loglevel, minimum_console_loglevel, default_console_loglevel).
+netconsole_printk: "7 4 1 7"
