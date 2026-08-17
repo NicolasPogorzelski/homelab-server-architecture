@@ -63,6 +63,10 @@
     mode: "0644"
   notify: Apply sysctl
 
+# Known check-mode limitation, the same one the chrony role carries: --check does
+# not write the unit file, so this task fails with "Could not find the requested
+# service netconsole.service". That is the dry run reporting an install->service
+# dependency it cannot simulate, not a defect. Read the diff above it instead.
 - name: Enable and start netconsole
   ansible.builtin.systemd_service:
     name: netconsole.service
