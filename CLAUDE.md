@@ -241,9 +241,23 @@ Reproduction on a new machine: see the `dotfiles` repo.
 
 | Hook | Event | Purpose |
 |---|---|---|
+| PreToolUse (Bash) | Before any command that commits | `scripts/hooks/pre-commit-guard.sh` - refuses a commit on `main`, and refuses any commit while `validate-repo.sh` reports findings |
 | SessionStart | Session opens | Injects current branch + last 5 commits into context |
-| PreToolUse (`git commit *`) | Before every commit | Runs `validate-repo.sh`, blocks commit on failure |
-| Stop | Session ends | Mandatory `devops-til` update reminder |
+| Stop | Session ends | `devops-til` update reminder |
+
+**This table states the intent; each machine satisfies it separately.** `.claude/settings.local.json`
+is gitignored and carries absolute paths, so it is per-workstation state that no commit can
+guarantee. On the admin notebook, checked 2026-08-17, the file held no `hooks` key at all: the
+commit gate was absent there and `validate-repo.sh` ran only when it was invoked by hand. What the
+other workstation holds was not checked and is not claimed here. Verify per machine with
+`jq '.hooks' .claude/settings.local.json` rather than by reading this table - a guard assumed from
+a document is the failure this repository keeps finding in its own monitoring, and configuration
+that lives outside version control is exactly where it hides.
+
+The guard matches `git ... commit` anywhere in the command string, because commits here are
+normally part of a compound command (`git add -A && git commit -F -`) that a `Bash(git commit *)`
+prefix rule never sees. It answers `permissionDecision: deny`, which blocks the one call and leaves
+the session alive, rather than `continue: false`, which ends the turn.
 
 Global hooks (e.g. 15-minute learning rule) live in `~/.claude/settings.json` - versioned in the `dotfiles` repo.
 
