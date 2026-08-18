@@ -1,6 +1,8 @@
 # Homelab Platform Architecture
 
-[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/) [![GitHub Actions](https://img.shields.io/badge/CI-GitHub--Actions-2088FF?logo=githubactions&logoColor=white)](https://docs.github.com/actions)
+[![Validate Repository](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml) [![Ansible-lint](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml) [![Image vulnerability scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
 
 ## About
 
@@ -11,6 +13,46 @@ A self-designed, security-focused platform architecture built on Proxmox.
 This project models real-world platform engineering principles and serves as a structured environment to deliberately practice architectural decision-making, operational discipline, and recovery-oriented design.
 
 It is not built as a collection of services, but as a layered infrastructure platform with explicit trade-offs, documented design decisions, and clearly defined trust boundaries.
+
+## At a glance
+
+```mermaid
+flowchart TB
+  Admin(["Admin devices"])
+  TVs(["Household TVs"])
+
+  TS["Tailscale overlay<br/>identity-based ACL, tier model<br/>no port-forwarding, no public reverse proxy"]
+
+  subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
+    VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, Ollama"]
+    LXC["7 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, Vaultwarden, PostgreSQL, Monitoring"]
+    CTRL["LXC250 - Ansible control node"]
+    VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
+  end
+
+  Admin --> TS
+  TVs -->|LAN, media ports only| VM100
+  TS --> VM100
+  TS --> LXC
+  TS --> CTRL
+  CTRL -->|SSH, 9 managed nodes| VM100
+  CTRL -->|SSH| LXC
+  VM100 -->|CIFS over Tailscale| VM102
+  LXC -->|host CIFS mounts, bind-mounted in| VM102
+
+  classDef access fill:#0b3d6b,stroke:#0b3d6b,color:#ffffff
+  classDef compute fill:#1f6f43,stroke:#1f6f43,color:#ffffff
+  classDef storage fill:#6a4a9c,stroke:#6a4a9c,color:#ffffff
+  classDef control fill:#8a5a00,stroke:#8a5a00,color:#ffffff
+  class TS,Admin,TVs access
+  class VM100,LXC compute
+  class VM102 storage
+  class CTRL control
+```
+
+Two detailed views follow from here: the [logical architecture](docs/architecture/diagram.md), split
+into access paths, storage dependencies and monitoring coverage, and the
+[exposure model](docs/architecture/exposure-diagram.md).
 
 ## Documentation standard
 
