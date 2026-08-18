@@ -315,7 +315,14 @@ hidden entry and which GitHub reads just as well.
 
 - Tailscale IPs must use placeholder `<tailscale-ip-nodename>`, never bare `100.x.y.z`
 - Tailnet IDs must use placeholder `<tailnet-id>`, never bare `*.ts.net`
-- Disk labels and device names must use generic identifiers (e.g. `disk01`-`diskN`, `aux-disk`) - never real labels that reveal size or purpose
+- Disk labels and device names must use generic identifiers - never real labels that reveal size
+  or purpose. The auxiliary disks need two distinct names, because there are two of them and one
+  placeholder for both caused a documented disk to be described on the wrong node:
+  - `disk01`-`diskN` - SnapRAID data disks on vm102
+  - `aux-pool` (`/mnt/aux-pool`) - the auxiliary disk inside vm102's MergerFS/SnapRAID pool, healthy
+  - `aux-disk` (`/mnt/aux-disk`, storage `appdata_aux-disk`) - the auxiliary disk on the Proxmox
+    host carrying five LXC Docker data-roots and vm100's second disk; this is the failing KE-13
+    drive. When a document says "the aux disk" without qualification it means this one.
 - Never commit `.env` files; only `.env.example` files belong in the repo
 - Each `docker/` subdirectory with a `docker-compose.yml` must have a `.env.example`
 
@@ -577,7 +584,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   real: metrics exist, the ones that would have caught KE-13 do not. Disk failure detection still
   relies on SnapRAID alerts. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
   returned to service without anyone seeing it still degrading.** Note: all nine disks are attached
-  to the Proxmox host; VM102 reaches six of them via `by-id` passthrough and sees only
+  to the Proxmox host; VM102 reaches seven of them via `by-id` passthrough and sees only
   virtio-SCSI devices, so SMART is readable *only on the host* - the previous wording here named
   VM102 as the target node and was wrong. Deploying this requires the host to become an
   Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.

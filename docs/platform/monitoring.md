@@ -10,7 +10,9 @@ See: [Runbook index](../../runbooks/README.md)
 - Grafana (`grafana/grafana`)
 - Node Exporter (`prom/node-exporter`)
 - Alertmanager (`prom/alertmanager`)
-- postgres_exporter (`prom/postgres-exporter`, lxc260)
+- postgres_exporter v0.19.1 on lxc260 - a systemd binary, not a container, and not a `prom/*`
+  image: upstream is `prometheuscommunity/postgres-exporter`. The entry named the wrong artefact
+  until 2026-08-17 while the target table below described it correctly.
 - Blackbox Exporter (`prom/blackbox-exporter`) - service-level HTTP(S) probes (KE-8 remediation)
 
 ## Security / Exposure
@@ -55,17 +57,20 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 - Alertmanager deployed on LXC200 (`127.0.0.1:9093`), exposed via `tailscale serve --https=9093`
 - Notification receiver: Discord webhook
-- **17 alert rules active** in 7 groups (the `smart` group exists but is deliberately empty, see
-  below). Corrected 2026-08-15: this line read "15" while the table below listed 16, and the live
-  Prometheus API reported 16 on 2026-08-13 - the prose had not been recounted when the `lvm` group
-  grew. `MariaDBBackupStale` makes 17.
+- **The table below is the count.** This line used to carry a number as well, and it was wrong
+  three times in a row: "15" while the table listed 16, then "17" while the file and the live
+  Prometheus both held 19 in 8 groups - the `storage` group had grown by two and the prose was not
+  recounted. A number in prose beside a table that already contains it has no owner and only one
+  possible future. It is gone rather than corrected. The `smart` group is present in the rules file
+  and deliberately empty, which is why the Prometheus API returns one group fewer than the file
+  defines.
 
 | Group | Rules |
 |---|---|
 | `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBBackupStale` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale` |
-| `storage` | `ArchivePoolLowSpace` |
+| `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
 | `blackbox` | `ServiceDown` |

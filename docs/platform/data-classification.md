@@ -42,7 +42,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Vaultwarden vault (all household credentials) | `/mnt/smb/vaultwarden` on the archive pool | C1 | Yes | Parity only. No export, no versions. |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
-| Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | None today. Dump role, script and runbook built 2026-08-15; waiting on the backup share being provisioned. |
+| Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |
 | Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Nightly verified dump, ~8-day retention, monthly restore test. |
 | Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump. |
 | Platform configuration and documentation | This repository - GitHub plus two workstations | C2 | No | Git. Distributed by nature, and the only dataset here with a genuine off-site copy. |
@@ -59,7 +59,8 @@ ransomware, because those are legitimate writes as far as the array is concerned
 after a sync there is none. Vaultwarden, Paperless documents and Nextcloud files currently have
 that and only that.
 
-**The Nextcloud database has no backup at all.** The remediation plan's Tier 1 #3 says "off-site
+**The Nextcloud database had no backup at all** - closed 2026-08-15, and the finding is kept below
+rather than deleted, because the reason it existed outlives the fix. The remediation plan's Tier 1 #3 says "off-site
 copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which reads
 as though local copies exist and merely need to be duplicated elsewhere. For the Nextcloud MariaDB
 that is not the case: no dump job exists in any role, script or unit in this repository, and the
@@ -98,7 +99,7 @@ availability.
 | Vaultwarden vault | Undefined | 24 h | 4 h | Everything else depends on being able to authenticate. |
 | Paperless documents | Undefined | 24 h | 24 h | Originals are also held on paper for a subset. |
 | Nextcloud files | Undefined | 24 h | 24 h | |
-| Nextcloud MariaDB | Unbounded - no backup | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
+| Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
 | PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The distinction is measured, not theoretical: the staleness alert cannot see a period in which the host is off, because Prometheus is on that host. |
 | Platform configuration | Minutes | Keep | 1 h | Already met by git. |
 | Media library | Not applicable | - | Best effort | Reacquisition, not restoration. |
@@ -148,10 +149,12 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    are explicitly excluded - copying a media archive off-site would dominate the cost of the whole
    exercise and protect nothing that matters.
 2. **Two of those rows need a local backup before an off-site copy is even meaningful.** The
-   Nextcloud database had none - addressed 2026-08-15 by the `mariadb_backup` role and
-   [its runbook](../../runbooks/database/mariadb-backup.md), pending the share being provisioned.
-   Vaultwarden still has no consistent export: an SQLite file copied from a live CIFS mount is not a
-   backup, it is a gamble on timing.
+   Nextcloud database had none - closed 2026-08-15 by the `mariadb_backup` role and
+   [its runbook](../../runbooks/database/mariadb-backup.md). Verified live on 2026-08-17: the share
+   is provisioned, `mp1` is bound, the timer has produced a dump on each of the three days since,
+   and the metric is scraped. Vaultwarden still has no consistent export: an SQLite file copied from
+   a live CIFS mount is not a backup, it is a gamble on timing. That is now the single open half of
+   Tier 1 #3 before the off-site question itself.
 3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
    C1 set. One row is now measured - the Nextcloud database at 38.3 MB, which compresses to a
    rounding error and tells us the databases are not what drives the decision. The documents are:

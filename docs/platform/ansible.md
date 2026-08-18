@@ -126,8 +126,17 @@ See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
 | `snapraid-maintenance.yml` | `vm102` | Deploy `snapraid-maintenance.sh` + sync/scrub timers; remove `/etc/cron.d/snapraid` |
 | `paperless-inbox-scan.yml` | `lxc210` | Deploy `scan-paperless-inbox.sh` + hourly timer; remove the legacy root crontab entry |
 | `jellyfin-watchdog.yml` | `vm100` | Deploy `jellyfin-cuda-watchdog.sh` + monotonic 30-min timer; remove the legacy root crontab entry |
+| `docker-mount-ordering.yml` | `docker` | Order `docker.service` after the automount units its containers bind, so a container cannot start onto a directory autofs has not yet claimed |
+| `netconsole.yml` | `vm100` | Stream the kernel log over UDP to a receiver on the Proxmox host, and raise `console_loglevel` so hung-task messages are not filtered out (KE-20) |
+| `pg-restore-test.yml` | `database` | Deploy the monthly restore validation: dump integrity, restore into a throwaway cluster on port 5433, non-empty key tables, teardown |
+| `storage-permissions.yml` | `vm102` | Verify the storage permission matrix and export the result as metrics (`StoragePermissionDrift`, `StoragePermissionCheckStale`) |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
+
+The two tables above were four playbooks and five roles behind the repository until 2026-08-17.
+They are also not the only catalogue - [`ansible-progress.md`](ansible-progress.md) keeps a second
+one. Two lists of the same thing drift by construction, so treat this table as the reference and
+that file as the session narrative it is named for.
 
 ## Roles
 
@@ -152,6 +161,11 @@ Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restar
 | `snapraid_maintenance` | VM102 | Deploys `snapraid-maintenance.sh` and schedules it via the template unit `snapraid-maintenance@.service` (`ExecStart=... %i`, so one unit file serves both instances) driven by `snapraid-sync.timer` (daily 23:00) and `snapraid-scrub.timer` (monthly, 1st at 20:00), both `Persistent=true`. Deletes `/etc/cron.d/snapraid`, whose 23:00 sync was skipped without a trace on every night the host powered down first |
 | `paperless_inbox_scan` | LXC210 | Deploys `scan-paperless-inbox.sh` + `paperless-inbox-scan.timer` (`OnCalendar=hourly`, `Persistent=true`) and removes the hand-written root crontab entry |
 | `jellyfin_watchdog` | VM100 | Deploys `jellyfin-cuda-watchdog.sh` + a monotonic timer (`OnBootSec=5min`, `OnUnitActiveSec=30min`). No `Persistent=` - it applies only to `OnCalendar=` timers, and a poll missed while the host was off has nothing to catch up on. Removes the hand-written `*/30 * * * *` root crontab entry |
+| `docker_mount_ordering` | `docker` group | Drop-in ordering `docker.service` `After=`/`Wants=` the `.automount` units named in `docker_mount_ordering_units` (host var). Names the `.automount` units and never the `.mount` units: an automount is up in milliseconds whether or not the SMB server answers, whereas ordering after the mount ties the node's Docker daemon to a remote host being up - KE-15 rebuilt by hand. `Wants=`, not `Requires=`, for the same reason. Deliberately does not restart Docker: the ordering only matters at boot, and bouncing it would stop Jellyfin to apply a change that takes effect on its own |
+| `mariadb_backup` | LXC210 | Deploys `mariadb-backup.sh` + `mariadb-backup.timer` (`03:30`, `Persistent=true`, `RandomizedDelaySec=300`) for Nextcloud's own database, which the `pg_dumpall` on lxc260 never touched. `assert`s that `/mnt/backups` is a CIFS mount and refuses to deploy otherwise - the same write-time defence as `postgresql_backup`, whose original defect was testing that the directory merely existed |
+| `netconsole` | VM100 | Loads the `netconsole` module from a unit ordered `After=network-online.target` rather than from `/etc/modules-load.d/`, which runs before the interface has an address and would fail silently; a failed unit raises `SystemdUnitFailed` instead. Targets the host's LAN address, because netpoll writes frames from inside the kernel and a Tailscale address lives on a TUN device whose daemon is frozen exactly when the channel matters. Pins the receiver MAC - omitting it makes the kernel broadcast the guest's log to the whole segment |
+| `postgresql_restore_test` | LXC260 (`database`) | Monthly (`*-*-01 09:00`, `Persistent=true`) full-cluster restore into a throwaway cluster on port 5433, asserting dump integrity, restore success and non-empty key tables, then tearing it down. Nothing live is touched. The 09:00 slot is load-bearing: the restored cluster holds thin-pool blocks a container cannot `fstrim` itself, so it depends on the host's `lxc-fstrim.timer` at 10:30 reclaiming them the same morning. `PostgreSQLRestoreTestStale` alerts at 40 days |
+| `storage_permissions` | VM102 | Verifies the filesystem side of the share model - group ownership, permitted modes, setgid - on a timer, and exports violations as metrics. Exists because share masks apply only at the moment Samba creates an object, so what is on disk and what the share config implies had drifted apart unnoticed from the pool's creation until 2026-08-16 |
 
 **Two conventions that these roles share, both learned the hard way on 2026-07-10:**
 

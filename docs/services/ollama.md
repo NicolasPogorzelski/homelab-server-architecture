@@ -27,7 +27,13 @@ Two inference nodes are operational:
 
 ### Admin Workstation (Primary)
 
-- **Status: Setup pending** - the admin workstation was reinstalled (2026-06-17); the previous
+- **Status: still pending, re-verified 2026-08-17** (no `ollama` binary and no active unit on the
+  workstation). Two months on, this is worth reading as a decision rather than a to-do: ACL Rule 5
+  grants `tag:ai-stack` reach to `tag:admin:11434` for a backend that does not exist, and
+  `tag:admin` has since grown to include more devices than it did when the rule was written. Either
+  install it or drop the grant - a standing allow to a port nothing listens on is the kind of rule
+  that survives every later review because it never breaks anything. The admin workstation was
+  reinstalled (2026-06-17); the previous
   distro-package Ollama installation (`ollama-rocm`) is no longer available. Setup must be redone.
 - Installation (previous): distro-package `ollama-rocm`
 - Installation (pending): Ollama install script (`curl -fsSL https://ollama.com/install.sh | sh`);
