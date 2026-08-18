@@ -26,7 +26,7 @@ flowchart TB
   subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
     VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, Ollama"]
     LXC["7 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, Vaultwarden, PostgreSQL, Monitoring"]
-    CTRL["LXC250 - Ansible control node"]
+    CTRL["LXC250 - Ansible control node<br/>manages 9 nodes, itself in no inventory"]
     VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
   end
 
@@ -35,10 +35,11 @@ flowchart TB
   TS --> VM100
   TS --> LXC
   TS --> CTRL
-  CTRL -->|SSH, 9 managed nodes| VM100
+  CTRL -->|SSH| VM100
   CTRL -->|SSH| LXC
-  VM100 -->|CIFS over Tailscale| VM102
-  LXC -->|host CIFS mounts, bind-mounted in| VM102
+  CTRL -->|SSH| VM102
+  VM102 -->|SMB, mounted by VM100 itself| VM100
+  VM102 -->|SMB, mounted by the host, bound into the LXCs| LXC
 
   classDef access fill:#0b3d6b,stroke:#0b3d6b,color:#ffffff
   classDef compute fill:#1f6f43,stroke:#1f6f43,color:#ffffff
@@ -49,6 +50,10 @@ flowchart TB
   class VM102 storage
   class CTRL control
 ```
+
+Arrows point at whoever uses the thing: requests arrive from the left, configuration from the
+control node, storage from VM102. Worth reading for what is missing - no configuration arrow points
+into LXC250. It configures the nine other nodes and belongs to no inventory group itself.
 
 Two detailed views follow from here: the [logical architecture](docs/architecture/diagram.md), split
 into access paths, storage dependencies and monitoring coverage, and the

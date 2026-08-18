@@ -10,9 +10,14 @@ to follow. The three below hold the same relationships, separated by the questio
   in [the exposure model](exposure-diagram.md): several services bind wildcard addresses on nodes
   that carry a routable IPv6, so what prevents reachability is the router, not the binding.
 
-**Reading the arrows:** a solid arrow is a path that carries traffic or a dependency that must hold
-for the target to work. A dotted arrow is a relationship that is not a data path - parity coverage,
-or an ingress that is deliberately absent.
+**Reading the arrows.** A solid arrow points at whoever uses the thing: a request at the service it
+reaches, a share at the node that mounts it, a database at the application it serves. A dotted arrow
+is a relationship that is not a data path - parity protection, or an ingress that is deliberately
+absent. View 3 is the deliberate exception and says so on the spot: Prometheus pulls, so there the
+arrow runs from the scraper to what it scrapes.
+
+Containment carries meaning too. Where a component runs inside another, it is drawn inside its box
+rather than connected by an arrow, so that no arrow has to mean "is part of" as well.
 
 ## View 1 - Access paths
 
@@ -84,16 +89,17 @@ flowchart TB
 
   Disks[(Data Disks)]
   Parity[(Parity Disk<br/>outside the union)]
-  MergerFS["/mnt/mergerfs union"]
-  Samba[SMB Shares - segmented]
+
+  subgraph vm102[VM102 - Storage]
+    MergerFS["/mnt/mergerfs union"]
+    Samba[SMB Shares - segmented]
+  end
+
   HostCIFS[Proxmox CIFS mounts<br/>bind-mounted into the LXCs]
-  VM102[VM102 - Storage]
 
   Disks --> MergerFS
-  Disks -.parity covers.-> Parity
-  VM102 --> MergerFS
+  Disks -.protected by.-> Parity
   MergerFS --> Samba
-  VM102 --> Samba
 
   Samba --> VM100[VM100 - GPU / Compute]
   Samba --> HostCIFS
@@ -105,20 +111,22 @@ flowchart TB
   HostCIFS --> LXC240[LXC240 - Vaultwarden]
   HostCIFS --> LXC260[LXC260 - PostgreSQL]
 
-  LXC211 --> LXC260
-  LXC230 --> LXC260
-  LXC230 --> Ollama[Ollama on VM100]
-  VM100 --> Ollama
+  LXC260 -->|database| LXC211
+  LXC260 -->|database| LXC230
+  Ollama[Ollama on VM100] -->|inference API| LXC230
 
   classDef storage fill:#6a4a9c,stroke:#6a4a9c,color:#ffffff
   classDef db fill:#1a4f7a,stroke:#1a4f7a,color:#ffffff
-  class Disks,Parity,MergerFS,Samba,HostCIFS,VM102 storage
+  class Disks,Parity,MergerFS,Samba,HostCIFS storage
   class LXC260 db
 ```
 
 ## View 3 - Monitoring coverage
 
-What LXC200 scrapes, and what it does not. LXC250 is drawn as an explicit gap rather than left out:
+What LXC200 scrapes, and what it does not. The arrows run the other way here than in the two views
+above, and that is the mechanism rather than an inconsistency: Prometheus pulls, so the connection
+is opened by the monitoring node and the metrics come back along it. LXC250 is drawn as an explicit
+gap rather than left out:
 it belongs to no inventory group, so it appears in no scrape config, and a diagram that simply
 omitted it would show a complete picture the platform does not have. Tracked in the
 [remediation plan](../platform/remediation-plan.md).
