@@ -50,7 +50,8 @@ Groups:
 | `vms` | VM100, VM102 |
 | `docker` | LXC200, LXC211, LXC220, LXC230, LXC240, VM100 |
 | `database` | LXC260 |
-| `all` | All 9 nodes |
+| `proxmox` | The Proxmox host - present in `hosts.yml.example`, not yet in the real inventory |
+| `all` | All 9 managed nodes; the hypervisor and lxc250 are outside it |
 
 The `docker` group holds the nodes running Docker Compose stacks (excludes LXC210 Nextcloud - native Apache/PHP, LXC260 PostgreSQL - native systemd, and VM102 storage). It is the target of `docker-compose-update.yml`.
 
@@ -145,7 +146,7 @@ that file as the session narrative it is named for.
 | `node_exporter` | all nodes except LXC200 | Downloads binary (guarded by a `--version` probe, so a converged node skips the download entirely), creates systemd unit via Jinja2 template, handler restarts on unit change. Enables the textfile collector fleet-wide (`node_exporter_textfile_dir`, default-on - it used to default to `""`, which silently dropped vm102's SnapRAID metrics on first rollout) and the systemd collector (`node_systemd_unit_state`, feeding `SystemdUnitFailed`). `.mount` units are deliberately *not* excluded, unlike node_exporter's stock exclude list - mount faults are the failure class the collector was added for. Backslashes in the exclude regex are doubled in the template because systemd applies escape processing to `ExecStart=` arguments |
 | `prometheus_config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, handler restarts Prometheus container (`docker compose restart`) to avoid bind-mount inode staleness on atomic writes |
 | `paperless_env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
-| `ssh_hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
+| `ssh_hardening` | all 9 nodes | Sets `PasswordAuthentication` and `PermitRootLogin` in a `00-hardening.conf` drop-in and in `sshd_config`; handler reloads sshd. Both directives are variables since 2026-08-19, defaulting to `no`, because the hypervisor cannot take the strict value - see the `proxmox` group vars. An `assert` refuses a value sshd would reject, since this role reloads the daemon it just reconfigured |
 | `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
 | `breakglass` | VMs (vm100, vm102) | Enforces the admin break-glass pubkeys (`breakglass_pubkeys`, group var) on each host's native user (`breakglass_user`, host var). One `authorized_key` call with `exclusive: true` and the keys joined by a newline - *not* a `loop`, which with `exclusive: true` would leave only the last key, and *not* an inline `join("\n")`, which yields a literal `\n` and would have written both keys onto one line. The pre-existing file is preserved once as `authorized_keys.pre-ansible`. Safe empty default (a `when:` guard, so an empty list cannot wipe access) |
 | `calibre_importer` | LXC220 | Installs `calibre`, deploys `calibre-import.sh` + a systemd oneshot service & 2-min timer that auto-imports ebooks dropped into `/books-rw/_import` |
@@ -186,6 +187,18 @@ All 9 managed nodes are hardened via the `ssh_hardening` role:
 |---|---|---|
 | `PasswordAuthentication` | `no` | Eliminates brute-force attack vector; SSH keys are already deployed fleet-wide |
 | `PermitRootLogin` | `no` | Root SSH access is unnecessary - `ansible` user has NOPASSWD sudo |
+
+**The Proxmox host and lxc250 carry the same values by hand, applied 2026-08-17, maintained by
+nothing.** That is the difference this document keeps making between a control and an intention, and
+it is why [`security-controls.md`](security-controls.md) rates A.8.5 *Partial* rather than *Enforced*
+while the values are correct on all eleven nodes.
+
+The host cannot take `PermitRootLogin no`: root is its only administrative account and it has no
+usable out-of-band console. Since 2026-08-19 the role expresses that as an override in
+`group_vars/proxmox.yml` - `prohibit-password`, key authentication for root without a password path -
+so adopting the host changes who maintains the setting, not the setting. A run against a correctly
+configured host must therefore report `changed=0`; a change means the live config drifted, and that
+is the finding rather than a side effect.
 
 **Implementation:** `ansible.builtin.lineinfile` sets each directive directly in `/etc/ssh/sshd_config`. The handler reloads sshd (`state: reloaded`) without dropping active sessions.
 

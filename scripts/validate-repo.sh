@@ -870,7 +870,12 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # subject, so the rule is enforced rather than followed.
 #
 # A key whose name suggests a secret must carry an encrypted value, a variable
-# reference, or nothing. A literal is an error. `postgres_exporter` still keeps
+# reference, or nothing. A literal is an error.
+#
+# The name has to *end* in the secret word, not merely contain it. Substring
+# matching flagged `ssh_hardening_password_authentication: "no"` on its first run -
+# an sshd directive, not a credential - and a rule that needs an exception for a
+# correctly named variable is a rule that will need more of them. `postgres_exporter` still keeps
 # its DATA_SOURCE_NAME unencrypted in an env file on lxc260 - outside this
 # repository, and tracked in the remediation plan - which is exactly the kind of
 # addition this check exists to stop from spreading.
@@ -887,7 +892,7 @@ while read -r yamlfile; do
         key="$(echo "${line}" | sed -E 's/[[:space:]]*([^:]+):.*/\1/')"
         echo "  Literal value for a secret-looking key: ${rel} -> ${key}"
         echo "x" >> "${ERROR_LOG}"
-    done < <({ grep -nE '^[[:space:]]*[a-z_]*(password|passwd|secret|token|api_key)[a-z_]*[[:space:]]*:' "${yamlfile}" | sed 's/^[0-9]*://' || true; })
+    done < <({ grep -nE '^[[:space:]]*[a-z_]*(password|passwd|secret|token|api_key|secret_key|private_key)[[:space:]]*:' "${yamlfile}" | sed 's/^[0-9]*://' || true; })
 done < <(find "${REPO_ROOT}/ansible" -type f \( -name "*.yml" -o -name "*.yaml" \))
 
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))

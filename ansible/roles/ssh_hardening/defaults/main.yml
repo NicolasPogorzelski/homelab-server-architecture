@@ -1,0 +1,16 @@
+---
+# === ssh_hardening ===
+#
+# Both values are sshd directives, passed through as written. They are variables
+# rather than literals because one node cannot take the strict value: the Proxmox
+# host's only administrative account is root, and that host has no usable
+# out-of-band console - the single GPU is passed through to vm100 with `x-vga=1`,
+# there is no serial console and no BMC, and `getty@tty1` writes to a framebuffer
+# the guest owns. `PermitRootLogin no` there does not harden the hypervisor, it
+# ends administration of it.
+#
+# The override lives in `group_vars/proxmox.yml` with its reasoning. Everywhere
+# else the strict default applies, and a node that needs an exception has to state
+# it in inventory rather than have it applied silently.
+ssh_hardening_password_authentication: "no"
+ssh_hardening_permit_root_login: "no"

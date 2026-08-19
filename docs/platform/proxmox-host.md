@@ -195,22 +195,41 @@ is the asymmetry the host adoption would remove.
 
 ## Ansible Management
 
-The Proxmox host is not yet a fully managed Ansible node. A `homelab_schedule` role exists to manage the power-schedule scripts and cron file, but it has not yet been applied - those are currently deployed manually. Full host management (package updates) is not implemented.
+The Proxmox host is not a managed Ansible node yet, and since 2026-08-19 the reason is a single
+missing step rather than missing work.
 
-SSH hardening was applied by hand on 2026-08-17 after an audit measured `permitrootlogin yes` with `passwordauthentication yes` on this node - see the section below. It is correct now and maintained by nothing, which is the same debt as the hand-deployed units above and closes with the same adoption.
+**What exists.** A `proxmox` group in `hosts.yml.example`, connecting as root because no `ansible`
+user is bootstrapped here. `group_vars/proxmox.yml`, which overrides `ssh_hardening_permit_root_login`
+to `prohibit-password` with the reasoning recorded next to it. The `ssh_hardening` role itself, whose
+two directives became variables for exactly this node. `homelab_schedule` for the power-schedule
+scripts. And `node_exporter`, whose defaults were verified on 2026-08-15 to match the hand-written
+unit already running here, including the textfile-collector path - adoption needs no override.
 
-To run the schedule role against the host:
+**What is missing.** The `proxmox` group in the *real* `hosts.yml` on lxc250, which is gitignored and
+therefore cannot be added by a commit. Until it is there, three playbooks that target `hosts: all`
+skip this node silently, which is how it stayed unhardened until an audit looked.
+
+**The failure mode if the group is absent**, verified 2026-08-17: `ansible-playbook
+playbooks/homelab-schedule.yml` matches no host, prints `skipping: no hosts matched` and exits 0. It
+reports success while doing nothing. The example inventory carries the group, which makes the example
+look like the live state. The same trap applies to `onboarding.yml`, whose `lxc-test` group has never
+existed.
+
+**What the first run must be.** `--check --diff` against `ssh-hardening.yml`, and the expected result
+is `changed=0`: the values are already correct on this node, set by hand on 2026-08-17. A reported
+change means the live configuration drifted, and that is the finding. Only after that should
+`systemd-hygiene.yml` and `node-exporter.yml` follow - the first is harmless here because its unit
+lists default to empty, the second replaces a hand-written unit with an identical generated one.
+
+**Deliberately still out of scope:** package updates. `apt-upgrade.yml` targets `lxcs` and `vms`, and
+a Proxmox host upgrade is not an ordinary `apt upgrade` - it touches the kernel, the enterprise
+repository and the guest stack, and belongs in a window somebody is watching.
+
+To run the schedule role against the host, once the group exists:
 
 ```bash
-ansible-playbook playbooks/homelab-schedule.yml
+ansible-playbook playbooks/homelab-schedule.yml --check --diff
 ```
-
-Requires: the `proxmox` group in `hosts.yml` to be populated with the host's Tailscale IP. Note
-the failure mode if it is not, verified 2026-08-17: the real inventory has no such group, so this
-command matches no host, prints `skipping: no hosts matched` and exits 0. It reports success while
-doing nothing. `hosts.yml.example` does carry the group, which makes the example look like the
-live state and hides the gap. The same applies to `onboarding.yml`, whose `lxc-test` group has
-never existed.
 
 See: [Ansible platform](./ansible.md)
 
