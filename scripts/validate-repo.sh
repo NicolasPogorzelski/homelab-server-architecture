@@ -23,9 +23,15 @@ done < <(find "${REPO_ROOT}" -name "*.md" -empty)
 # =============================================================================
 # Check 2: broken internal markdown links
 # =============================================================================
+# Gitignored files are skipped, the same way Check 24 skips them. A scratch file
+# under .claude/ is not repository content, and its links are written for
+# somewhere else - a pull-request body renders on github.com, not from that
+# directory. Before 2026-08-19 such a file could fail the whole validation.
 echo "Check 2: broken internal links"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     dir="$(dirname "${mdfile}")"
     { grep -oP '\]\(\K[^)]+' "${mdfile}" || true; } | while read -r link; do
         [[ "${link}" =~ ^https?:// ]] && continue
@@ -38,7 +44,11 @@ while read -r mdfile; do
     done
 done < <(find "${REPO_ROOT}" -name "*.md" -type f)
 
+# Truncate, or Check 7 counts these same entries a second time. Missing until
+# 2026-08-19, and invisible until Check 2 actually found something: two broken
+# links were reported as four errors.
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
 
 # =============================================================================
 # Check 3: committed .env files
@@ -580,11 +590,248 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 25: counted claims in the README match what is countable
+# =============================================================================
+# Added 2026-08-19, after the README had said "Thirteen procedures" for four
+# days while runbooks/ held fourteen - mariadb-backup.md arrived on 2026-08-15
+# and the prose was never recounted. Same class as the seven hand-counted
+# numbers the 2026-08-17 audit found across the documentation: a number written
+# into prose has no owner, and only one possible future.
+#
+# The repository's usual answer is to delete such a number where a table already
+# carries it. These four are kept because they tell a reader the size of the
+# thing, so they are machine-checked instead. Nothing is hardcoded: both sides
+# are computed at run time, so adding a runbook or a role fails this check until
+# the sentence is updated. That is the intended cost.
+#
+# Deliberately not covered: the node counts in the opening line ("ten guests",
+# "nine of eleven nodes"). They cannot be derived from this repository at all -
+# the real inventory is gitignored - so a check could only compare prose against
+# hosts.yml.example, a file that can drift from the fleet just as easily.
+#
+# A missing claim is an error, not a pass. Deleting the sentence therefore fails
+# this check until its entry below is removed as well. That friction is the
+# point: a guard whose pattern silently stops matching is the failure class this
+# platform keeps finding in its own monitoring, and it costs one deliberate edit
+# to retire a claim on purpose.
+#
+# Verified both ways when written: a wrong count, a wrong role number and a
+# deleted claim each produce a named failure, and the clean tree passes.
+echo "Check 25: counted claims match the repository"
+
+README_FILE="${REPO_ROOT}/README.md"
+SELF="${REPO_ROOT}/scripts/validate-repo.sh"
+
+word_to_number() {
+    case "${1,,}" in
+        ten) echo 10 ;;      eleven) echo 11 ;;    twelve) echo 12 ;;
+        thirteen) echo 13 ;; fourteen) echo 14 ;;  fifteen) echo 15 ;;
+        sixteen) echo 16 ;;  seventeen) echo 17 ;; eighteen) echo 18 ;;
+        nineteen) echo 19 ;; twenty) echo 20 ;;
+        *) echo "${1}" ;;
+    esac
+}
+
+compare_claim() {
+    local label="$1" claimed="$2" actual="$3"
+    if [[ -z "${claimed}" ]]; then
+        echo "  Claim not found in README: ${label}"
+        echo "x" >> "${ERROR_LOG}"
+    elif [[ "${claimed}" != "${actual}" ]]; then
+        echo "  ${label}: README says ${claimed}, repository has ${actual}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+}
+
+runbooks_actual="$(find "${REPO_ROOT}/runbooks" -name "*.md" ! -name "README.md" | wc -l)"
+roles_actual="$(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+playbooks_actual="$(find "${REPO_ROOT}/ansible/playbooks" -maxdepth 1 -name "*.yml" | wc -l)"
+checks_actual="$(grep -cE '^echo "Check [0-9]+' "${SELF}" || true)"
+
+runbooks_prose="$(word_to_number "$({ grep -oP '^\K\w+(?= procedures under the same contract)' "${README_FILE}" || true; })")"
+runbooks_list="$(word_to_number "$({ grep -oP '<summary>All \K\w+(?= runbooks</summary>)' "${README_FILE}" || true; })")"
+playbooks_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - \K[0-9]+' "${README_FILE}" || true; })"
+roles_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - [0-9]+ and \K[0-9]+' "${README_FILE}" || true; })"
+checks_claim="$({ grep -oP 'validate-repo\.sh\) - \K[0-9]+(?= structural checks)' "${README_FILE}" || true; })"
+
+compare_claim "runbook count (section intro)" "${runbooks_prose}" "${runbooks_actual}"
+compare_claim "runbook count (list summary)" "${runbooks_list}" "${runbooks_actual}"
+compare_claim "playbook count" "${playbooks_claim}" "${playbooks_actual}"
+compare_claim "role count" "${roles_claim}" "${roles_actual}"
+compare_claim "validator check count" "${checks_claim}" "${checks_actual}"
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 26: every document is reachable from an index
+# =============================================================================
+# Added 2026-08-19. The 2026-08-17 audit found 26 documents that no index linked
+# to, including the ISO mapping, the data classification, the remediation plan,
+# both incident write-ups, four of eight decision records and twelve of the
+# runbooks. They were found by hand, one at a time. For a repository whose
+# stated purpose is to be read, its strongest evidence was invisible from the
+# front page - and nothing would have reported that.
+#
+# Reachability is defined narrowly on purpose: a document counts as reachable if
+# README.md or runbooks/README.md links it directly. Transitive reachability
+# would be truer to how a reader navigates and would also make the check pass on
+# a chain nobody can find, which is the condition this exists to prevent.
+#
+# Exceptions are listed with a reason and are themselves checked for existence,
+# so an exception cannot outlive the file it excuses. An unjustified exception is
+# how a control catalogue turns into decoration.
+echo "Check 26: every document is reachable from an index"
+
+INDEX_FILES=("README.md" "runbooks/README.md")
+
+# Deliberately not indexed:
+#   docs/platform/ansible-progress.md - per-session learning narrative, written
+#   for the operator rather than for a reader of the platform. Linked from
+#   CLAUDE.md, which is where the learning track is steered from.
+INDEX_EXCEPTIONS=("docs/platform/ansible-progress.md")
+
+LINKED_LIST="$(mktemp)"
+
+for idx in "${INDEX_FILES[@]}"; do
+    idx_dir="$(dirname "${REPO_ROOT}/${idx}")"
+    while read -r link; do
+        [[ "${link}" =~ ^https?:// ]] && continue
+        link="${link%%#*}"
+        [[ -z "${link}" ]] && continue
+        target="$(realpath -m --relative-to="${REPO_ROOT}" "${idx_dir}/${link}" 2>/dev/null || true)"
+        [[ -n "${target}" ]] && echo "${target}" >> "${LINKED_LIST}"
+    done < <({ grep -oP '\]\(\K[^)]+' "${REPO_ROOT}/${idx}" || true; })
+done
+
+for ex in "${INDEX_EXCEPTIONS[@]}"; do
+    if [[ ! -f "${REPO_ROOT}/${ex}" ]]; then
+        echo "  Exception names a file that no longer exists: ${ex}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+done
+
+while read -r doc; do
+    rel="${doc#${REPO_ROOT}/}"
+    skip=0
+    for ex in "${INDEX_EXCEPTIONS[@]}"; do
+        [[ "${rel}" == "${ex}" ]] && skip=1
+    done
+    (( skip )) && continue
+    if ! grep -qxF "${rel}" "${LINKED_LIST}"; then
+        echo "  Not linked from any index: ${rel}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
+
+rm -f "${LINKED_LIST}"
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 27: backticked repository paths in the docs must exist
+# =============================================================================
+# Added 2026-08-19. Check 2 validates markdown links; nothing validated a path
+# written as prose in backticks, which is how most operational references are
+# written - "the script in `snippets/scripts/lxc-fstrim.sh`". Those rot silently
+# on a rename, and a runbook that names a path which no longer exists fails at
+# the only moment it is ever read.
+#
+# A reference passes if the path exists, or if git deliberately ignores it. The
+# second case is the real inventory, the .env files and the deployed Prometheus
+# config: named on purpose, absent on purpose, and asking git rather than
+# maintaining a second list means the exemption cannot drift from .gitignore.
+#
+# Historical records are excluded. changelog.md and ansible-progress.md describe
+# what was true on a date; a path that was correct in July stays correct in a
+# July entry, and rewriting it to match today would falsify the record.
+echo "Check 27: backticked repository paths exist"
+
+PATH_HISTORY_EXCLUDED=("docs/platform/changelog.md" "docs/platform/ansible-progress.md")
+
+while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    skip=0
+    for ex in "${PATH_HISTORY_EXCLUDED[@]}"; do
+        [[ "${rel}" == "${ex}" ]] && skip=1
+    done
+    (( skip )) && continue
+    while read -r ref; do
+        [[ -z "${ref}" ]] && continue
+        [[ -e "${REPO_ROOT}/${ref}" ]] && continue
+        git -C "${REPO_ROOT}" check-ignore -q "${ref}" 2>/dev/null && continue
+        echo "  Path does not exist: ${rel} -> ${ref}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <({ grep -oP '`\K(snippets|ansible|scripts|docker|docs|runbooks)/[A-Za-z0-9_./-]+(?=`)' "${mdfile}" || true; } | sort -u)
+done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 28: every Ansible role appears in the platform documentation
+# =============================================================================
+# Added 2026-08-19. The role catalogue in docs/platform/ansible.md is the only
+# place a reader can see what the automation actually does. A role that exists
+# and is undocumented is invisible work, and the failure mode is quiet: the
+# mariadb_backup role was written on 2026-08-15 to close a gap that had itself
+# gone unnoticed because a category had been declared complete.
+echo "Check 28: every Ansible role is documented"
+
+if [[ -d "${REPO_ROOT}/ansible/roles" ]]; then
+    while read -r roledir; do
+        role="$(basename "${roledir}")"
+        if ! grep -q "${role}" "${REPO_ROOT}/docs/platform/ansible.md"; then
+            echo "  Role not documented in docs/platform/ansible.md: ${role}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d)
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 29: every node document declares a tag the ACL model knows
+# =============================================================================
+# Added 2026-08-19. Access on this platform is decided by the Tailscale tag a
+# node carries, so a node document without one describes a machine whose reach
+# nobody can look up. A tag that the ACL model does not define is worse: it reads
+# as policy and grants nothing, because Tailscale ACLs are deny-by-default.
+#
+# This is the lxc250 shape one layer up. That node fell outside `hosts: all`
+# because it was in no inventory group, and `all` excludes silently rather than
+# failing. Two lists that are never held against each other produce exactly this.
+echo "Check 29: node documents declare a known Tailscale tag"
+
+ACL_DOC="${REPO_ROOT}/docs/platform/tailscale-acl.md"
+
+if [[ -d "${REPO_ROOT}/docs/nodes" && -f "${ACL_DOC}" ]]; then
+    while read -r nodedoc; do
+        rel="${nodedoc#${REPO_ROOT}/}"
+        tag="$({ grep -oP '^- Tag: `\Ktag:[a-z0-9-]+' "${nodedoc}" || true; } | head -1)"
+        if [[ -z "${tag}" ]]; then
+            echo "  No '- Tag: \`tag:...\`' line: ${rel}"
+            echo "x" >> "${ERROR_LOG}"
+            continue
+        fi
+        if ! grep -q "\"${tag}\":" "${ACL_DOC}"; then
+            echo "  Tag not defined in tailscale-acl.md tagOwners: ${rel} -> ${tag}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(find "${REPO_ROOT}/docs/nodes" -type f -name "*.md")
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 24"
+echo "Checks run: 29"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

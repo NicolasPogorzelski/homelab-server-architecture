@@ -1037,6 +1037,83 @@ The second, quieter half is systemd's restart rate limiter. `Restart=on-failure`
 unit stays dead until someone intervenes. A rapid-restart loop is not a retry strategy - it is a
 way to convert a two-second race into a permanent outage.
 
+### The race, drawn
+
+Both halves are timing, which is why a flowchart cannot show them. What fails is the order of events
+inside the first seconds of a boot.
+
+**How to read these two.** Time runs downward. The boxes along the top are the participants, the
+vertical lines are their lifetimes, and every horizontal arrow is one event in the order it happens.
+The example is the host's `node_exporter`, which is the instance that failed at every boot for two
+weeks; the shape is identical for the other three.
+
+The whole fault sits in the shaded band: the service gives up before the thing it is waiting for
+arrives.
+
+```mermaid
+sequenceDiagram
+  accTitle: The Tailscale readiness race without a gate
+  accDescr: systemd starts the unit after tailscaled is alive but before an address exists, the bind fails with EADDRNOTAVAIL, and the restart limiter exhausts itself before the address arrives.
+  autonumber
+  participant S as systemd
+  participant T as tailscaled
+  participant K as kernel
+  participant U as node_exporter.service
+
+  S->>T: start
+  T-->>S: process alive
+  Note over S,T: Type=simple - "started" means the process exists,<br/>not that it has joined the tailnet
+  Note over S,U: node_exporter.service carries After=tailscaled.service,<br/>so systemd now considers the condition met
+  S->>U: start
+  U->>K: bind tailscale-ip:9100
+  K-->>U: EADDRNOTAVAIL - no such address on any interface
+  rect rgb(255, 228, 228)
+    Note over S,U: Restart=on-failure, RestartSec=100ms<br/>five attempts inside about 24 ms
+    S->>U: restart x5
+    S--xU: StartLimitBurst exhausted, systemd gives up
+    T->>K: address assigned - seconds too late
+  end
+  Note over K,U: The address now exists and the bind would succeed.<br/>Nothing is left running to try it.
+```
+
+The gate turns the assumption into a measurement. The unit stops trusting the ordering and waits for
+the thing it actually needs, and the restart interval is widened so that a retry outlives the race
+instead of consuming it.
+
+```mermaid
+sequenceDiagram
+  accTitle: The same boot with the readiness gate in place
+  accDescr: ExecStartPre polls for the Tailscale address until it exists, then the bind succeeds on the first attempt.
+  autonumber
+  participant S as systemd
+  participant T as tailscaled
+  participant K as kernel
+  participant P as ExecStartPre wait-for-tailscale-ip.sh 90
+  participant U as node_exporter.service
+
+  S->>T: start
+  S->>P: run before the service starts
+  rect rgb(228, 245, 232)
+    loop until an address exists, up to 90 s
+      P->>T: tailscale ip -4
+      T-->>P: not yet
+    end
+    T->>K: address assigned
+    P->>T: tailscale ip -4
+    T-->>P: the node's address
+  end
+  P-->>S: exit 0
+  S->>U: start
+  U->>K: bind tailscale-ip:9100
+  K-->>U: bound on the first attempt
+  Note over S,U: RestartSec=5, so a retry outlasts the race<br/>instead of exhausting the limiter inside it
+```
+
+The query variant on lxc210 is the same shape one layer up: the script asked for `Self.DNSName`
+rather than for an address, received an empty answer and failed. Its fix polls for the name the same
+way. On the cold-boot confirmation of 2026-08-13 the catch-up run fired 82 s into the boot window and
+the poll waited 11 s before the name resolved - inside the window the gate exists for.
+
 ### Instances
 
 | Node / unit | Variant | Status |

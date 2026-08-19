@@ -21,21 +21,48 @@ what is at stake in each item's language rather than in this repository's.
 
 Four items unblock most of the rest. Everything else is ordinary backlog.
 
-```
-secrets escrow ──────> lxc250 inventory adoption ──────> control node is inside
-(~/.vault_pass)         (monitoring + patching)           the system it manages
-                                                                    │
-                                                          Terraform state can
-                                                          safely live there
+```mermaid
+flowchart LR
+  accTitle: Dependency chain of the open work
+  accDescr: Three chains - secrets escrow before lxc250 adoption, host adoption which needs no hardware, and the aux-disk replacement which does.
 
-aux-disk replacement ──> Proxmox host becomes an Ansible node
-(needs hardware)                        │
-                          ┌─────────────┼──────────────┬─────────────────┐
-                    SMART attributes  homelab_schedule  hand-deployed units
-                    that matter       role applied      folded into roles
+  ESCROW["escrow ~/.vault_pass,<br/>hosts.yml, the Ansible SSH key"]
+  L250["lxc250 inventory adoption<br/>+ preflight gate"]
+  INSIDE["control node sits inside<br/>the system it manages"]
+  TF["Terraform state can<br/>safely live there"]
+
+  HOSTADOPT["Proxmox host becomes an Ansible node<br/>needs a proxmox group in the inventory"]
+  SMART["SMART attributes<br/>that actually fail"]
+  SCHED["homelab_schedule<br/>role applied"]
+  UNITS["five hand-deployed host units<br/>folded into roles"]
+  HOSTSSH["host SSH hardening<br/>enforced instead of hand-set"]
+
+  AUX["aux-disk replacement"]
+  HOLD["standing hold on<br/>docker-compose-update lifted"]
+  PINS["pinned images actually deployed"]
+
+  ESCROW --> L250 --> INSIDE --> TF
+  HOSTADOPT --> SMART
+  HOSTADOPT --> SCHED
+  HOSTADOPT --> UNITS
+  HOSTADOPT --> HOSTSSH
+  AUX --> HOLD --> PINS
+
+  classDef hw fill:#8a5a00,stroke:#5f3e00,color:#ffffff
+  classDef lever fill:#1f6f43,stroke:#14512f,color:#ffffff
+  classDef risk fill:#7a1f1f,stroke:#571414,color:#ffffff
+  class AUX,HOLD,PINS hw
+  class HOSTADOPT,L250 lever
+  class ESCROW risk
 ```
 
-The right-hand branch is the important one: **four separate technical-debt entries in `CLAUDE.md`
+**One edge was removed from this diagram on 2026-08-19, and its absence is the point.** The earlier
+version drew `aux-disk replacement -> Proxmox host becomes an Ansible node`, which made the whole
+right-hand branch look hardware-blocked and parked it behind a delivery date. The 2026-08-17 audit
+measured that the coupling does not exist: the adoption needs a `proxmox` group in the inventory,
+not a new disk. Only the amber chain waits on hardware.
+
+The host-adoption chain is the important one: **four separate technical-debt entries in `CLAUDE.md`
 all name "the host must become an Ansible node" as their prerequisite**, and none of them says what
 else is waiting on it. That is the single highest-leverage move on this list.
 
