@@ -827,11 +827,108 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 30: container images carry an explicit version tag
+# =============================================================================
+# Added 2026-08-19. The repository pins every image; nothing made that a rule.
+# An unpinned tag has two costs that only appear later: there is no rollback
+# point, because "the version that worked" has no name, and the weekly Trivy
+# scan then measures whatever `:latest` resolved to at scan time rather than
+# what runs.
+#
+# Note what this cannot see. The 2026-08-17 audit measured that no stack on the
+# fleet runs a pinned image - the deployed compose files differ from these. This
+# check guards the repository, and closing the gap on the fleet waits on the
+# aux-disk replacement that the standing hold on docker-compose-update depends on.
+echo "Check 30: container images carry an explicit tag"
+
+while read -r composefile; do
+    rel="${composefile#${REPO_ROOT}/}"
+    while read -r line; do
+        image="$(echo "${line}" | sed -E 's/.*image:[[:space:]]*//; s/[[:space:]]*$//' | tr -d '"'"'"'')"
+        [[ -z "${image}" ]] && continue
+        [[ "${image}" == *'${'* ]] && continue
+        if [[ "${image}" != *:* ]]; then
+            echo "  Image without a tag: ${rel} -> ${image}"
+            echo "x" >> "${ERROR_LOG}"
+        elif [[ "${image}" == *:latest || "${image}" == *:main || "${image}" == *:master || "${image}" == *:stable ]]; then
+            echo "  Image not pinned: ${rel} -> ${image}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <({ grep -E '^\s*image:' "${composefile}" || true; })
+done < <(find "${REPO_ROOT}/docker" -name "docker-compose.yml" -type f 2>/dev/null)
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 31: secrets in Ansible variables are vaulted or referenced
+# =============================================================================
+# Added 2026-08-19. Every secret in this repository is currently either an inline
+# `!vault` value in group_vars/all/vault.yml or a `{{ }}` reference to one. That
+# is a practice, and a practice survives only as long as somebody remembers it -
+# this file makes the distinction between a control and an intention its whole
+# subject, so the rule is enforced rather than followed.
+#
+# A key whose name suggests a secret must carry an encrypted value, a variable
+# reference, or nothing. A literal is an error. `postgres_exporter` still keeps
+# its DATA_SOURCE_NAME unencrypted in an env file on lxc260 - outside this
+# repository, and tracked in the remediation plan - which is exactly the kind of
+# addition this check exists to stop from spreading.
+echo "Check 31: secret-looking variables are not literals"
+
+while read -r yamlfile; do
+    rel="${yamlfile#${REPO_ROOT}/}"
+    while read -r line; do
+        value="$(echo "${line}" | sed -E 's/^[^:]*:[[:space:]]*//; s/[[:space:]]*$//')"
+        [[ -z "${value}" ]] && continue
+        [[ "${value}" == '!vault'* ]] && continue
+        [[ "${value}" == *'{{'* ]] && continue
+        [[ "${value}" == '|' || "${value}" == '>' ]] && continue
+        key="$(echo "${line}" | sed -E 's/[[:space:]]*([^:]+):.*/\1/')"
+        echo "  Literal value for a secret-looking key: ${rel} -> ${key}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <({ grep -nE '^[[:space:]]*[a-z_]*(password|passwd|secret|token|api_key)[a-z_]*[[:space:]]*:' "${yamlfile}" | sed 's/^[0-9]*://' || true; })
+done < <(find "${REPO_ROOT}/ansible" -type f \( -name "*.yml" -o -name "*.yaml" \))
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 32: an Enforced control names what enforces it
+# =============================================================================
+# Added 2026-08-19. security-controls.md defines Enforced as "a machine refuses
+# the wrong outcome". A row claiming that without naming the machine is the
+# strongest sentence in the document backed by nothing, and this repository has
+# already paid for it: three rows read Enforced until 2026-08-17 while two nodes
+# accepted password authentication. The audit's own conclusion was that a false
+# assurance suppresses discovery more effectively than a stated gap.
+#
+# The test is deliberately shallow - a link or a backticked identifier - because
+# it cannot judge whether the evidence is good. It can only insist that some
+# evidence is offered, which is the difference between a claim and an assertion.
+echo "Check 32: Enforced controls cite their evidence"
+
+SEC_DOC="${REPO_ROOT}/docs/platform/security-controls.md"
+
+if [[ -f "${SEC_DOC}" ]]; then
+    while read -r row; do
+        if ! echo "${row}" | grep -qE '\[[^]]+\]\(|`'; then
+            control="$(echo "${row}" | sed -E 's/^\|[[:space:]]*([^|]+)\|.*/\1/' | sed 's/[[:space:]]*$//')"
+            echo "  Enforced without evidence: ${control}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <({ grep -E '^\|[[:space:]]*A\.[0-9.]+ .*\|[[:space:]]*Enforced[[:space:]]*\|' "${SEC_DOC}" || true; })
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 29"
+echo "Checks run: 32"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
