@@ -7,9 +7,10 @@
 A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
 managed by Ansible - and a written record of the two that are not.
 
-Built and operated by Nicolas Pogorzelski. Every figure in this repository was measured against the
-running system, and the gaps that remain are listed in the
-[remediation plan](docs/platform/remediation-plan.md).
+Built and operated by Nicolas Pogorzelski. Claims here are checked against the running system, and
+the repository carries an [ISO/IEC 27001 Annex A control mapping](docs/platform/security-controls.md),
+a [root-caused incident register](docs/platform/known-errors.md) and a
+[ranked plan of what is still open](docs/platform/remediation-plan.md).
 
 ## At a glance
 
@@ -78,9 +79,9 @@ procedures, and a runbook for each of them.
 ## Why this exists
 
 A deliberate learning environment for a career transition into DevOps and platform engineering. It
-runs the household's actual services, so an outage has consequences beyond the exercise. Incidents
-are documented, post-mortems written, and every failure turned into a runbook or a known-error
-entry.
+holds live data with defined recovery objectives, classified per dataset in
+[data classification](docs/platform/data-classification.md). Incidents are documented, post-mortems
+written, and every failure turned into a runbook or a known-error entry.
 
 The emphasis throughout is on cost-aware, risk-conscious engineering. Every component here has a
 stated reason for being present, the trust boundaries between them are defined in the ACL, and the
@@ -113,10 +114,10 @@ out to be wrong, it is corrected in place with the correction visible, not silen
 the [changelog](docs/platform/changelog.md) and the [known-error
 register](docs/platform/known-errors.md) carry more corrections than announcements, on purpose.
 
-Runbooks that have been executed record the date and the result. Four of thirteen currently do;
-the rest have not been run against a real incident, and saying so is more useful than a claim the
-files do not support. This paragraph asserted that every runbook carried such a record until an
-audit on 2026-08-17 checked it.
+Runbooks that have been executed record the date and the result in the document itself. Most have
+not been run against a real incident, and saying so is more useful than a claim the files do not
+support. This paragraph asserted that every runbook carried such a record until an audit on
+2026-08-17 checked it, and carried a count of its own until that count drifted too.
 
 ---
 
@@ -201,12 +202,12 @@ through.
 
 ### Runbooks
 
-Thirteen procedures under the same contract: every one states its preconditions, its verification
+Fourteen procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All thirteen runbooks</summary>
+<summary>All fourteen runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
 - Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
