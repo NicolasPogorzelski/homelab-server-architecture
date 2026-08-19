@@ -51,12 +51,15 @@ flowchart TB
   class CTRL control
 ```
 
-Arrows point at whoever uses the thing: requests arrive from the left, configuration from the
-control node, storage from VM102. Worth reading for what is missing - no configuration arrow points
-into LXC250. It configures the nine other nodes and belongs to no inventory group itself.
+Every arrow follows what is delivered - a request to the service it reaches, storage to the node
+that mounts it, configuration to the node it configures. The same rule holds across all the detailed
+views. Worth reading for what is missing: no configuration arrow points into LXC250. It configures
+the nine other nodes and belongs to no inventory group itself.
 
-Two detailed views follow from here: the [logical architecture](docs/architecture/diagram.md), split
-into access paths, storage dependencies and monitoring coverage, and the
+Four detailed views follow from here: the [logical architecture](docs/architecture/diagram.md) -
+access policy by Tailscale tag, the three storage layers, and monitoring coverage by exporter class
+- plus [failure domains](docs/architecture/failure-domains.md),
+[backup and recovery](docs/architecture/backup-flow.md) and the
 [exposure model](docs/architecture/exposure-diagram.md).
 
 ## Documentation standard
@@ -129,7 +132,9 @@ moved one layer down instead - with the reboot that proves it.
 ### Architecture
 
 - [Architecture Overview](docs/architecture/overview.md)
-- [Logical Architecture Diagram](docs/architecture/diagram.md) (Mermaid)
+- [Logical Architecture Diagram](docs/architecture/diagram.md) (Mermaid - access policy, storage, monitoring coverage)
+- [Failure Domains](docs/architecture/failure-domains.md) (Mermaid - what dies with which disk)
+- [Backup and Recovery Flow](docs/architecture/backup-flow.md) (Mermaid - what is copied, and what is not)
 - [Exposure Model Diagram](docs/architecture/exposure-diagram.md) (Mermaid)
 
 ### Decisions
