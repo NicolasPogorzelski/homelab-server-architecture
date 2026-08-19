@@ -580,11 +580,85 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 25: counted claims in the README match what is countable
+# =============================================================================
+# Added 2026-08-19, after the README had said "Thirteen procedures" for four
+# days while runbooks/ held fourteen - mariadb-backup.md arrived on 2026-08-15
+# and the prose was never recounted. Same class as the seven hand-counted
+# numbers the 2026-08-17 audit found across the documentation: a number written
+# into prose has no owner, and only one possible future.
+#
+# The repository's usual answer is to delete such a number where a table already
+# carries it. These four are kept because they tell a reader the size of the
+# thing, so they are machine-checked instead. Nothing is hardcoded: both sides
+# are computed at run time, so adding a runbook or a role fails this check until
+# the sentence is updated. That is the intended cost.
+#
+# Deliberately not covered: the node counts in the opening line ("ten guests",
+# "nine of eleven nodes"). They cannot be derived from this repository at all -
+# the real inventory is gitignored - so a check could only compare prose against
+# hosts.yml.example, a file that can drift from the fleet just as easily.
+#
+# A missing claim is an error, not a pass. Deleting the sentence therefore fails
+# this check until its entry below is removed as well. That friction is the
+# point: a guard whose pattern silently stops matching is the failure class this
+# platform keeps finding in its own monitoring, and it costs one deliberate edit
+# to retire a claim on purpose.
+#
+# Verified both ways when written: a wrong count, a wrong role number and a
+# deleted claim each produce a named failure, and the clean tree passes.
+echo "Check 25: counted claims match the repository"
+
+README_FILE="${REPO_ROOT}/README.md"
+SELF="${REPO_ROOT}/scripts/validate-repo.sh"
+
+word_to_number() {
+    case "${1,,}" in
+        ten) echo 10 ;;      eleven) echo 11 ;;    twelve) echo 12 ;;
+        thirteen) echo 13 ;; fourteen) echo 14 ;;  fifteen) echo 15 ;;
+        sixteen) echo 16 ;;  seventeen) echo 17 ;; eighteen) echo 18 ;;
+        nineteen) echo 19 ;; twenty) echo 20 ;;
+        *) echo "${1}" ;;
+    esac
+}
+
+compare_claim() {
+    local label="$1" claimed="$2" actual="$3"
+    if [[ -z "${claimed}" ]]; then
+        echo "  Claim not found in README: ${label}"
+        echo "x" >> "${ERROR_LOG}"
+    elif [[ "${claimed}" != "${actual}" ]]; then
+        echo "  ${label}: README says ${claimed}, repository has ${actual}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+}
+
+runbooks_actual="$(find "${REPO_ROOT}/runbooks" -name "*.md" ! -name "README.md" | wc -l)"
+roles_actual="$(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+playbooks_actual="$(find "${REPO_ROOT}/ansible/playbooks" -maxdepth 1 -name "*.yml" | wc -l)"
+checks_actual="$(grep -cE '^echo "Check [0-9]+' "${SELF}" || true)"
+
+runbooks_prose="$(word_to_number "$({ grep -oP '^\K\w+(?= procedures under the same contract)' "${README_FILE}" || true; })")"
+runbooks_list="$(word_to_number "$({ grep -oP '<summary>All \K\w+(?= runbooks</summary>)' "${README_FILE}" || true; })")"
+playbooks_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - \K[0-9]+' "${README_FILE}" || true; })"
+roles_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - [0-9]+ and \K[0-9]+' "${README_FILE}" || true; })"
+checks_claim="$({ grep -oP 'validate-repo\.sh\) - \K[0-9]+(?= structural checks)' "${README_FILE}" || true; })"
+
+compare_claim "runbook count (section intro)" "${runbooks_prose}" "${runbooks_actual}"
+compare_claim "runbook count (list summary)" "${runbooks_list}" "${runbooks_actual}"
+compare_claim "playbook count" "${playbooks_claim}" "${playbooks_actual}"
+compare_claim "role count" "${roles_claim}" "${roles_actual}"
+compare_claim "validator check count" "${checks_claim}" "${checks_actual}"
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 24"
+echo "Checks run: 25"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

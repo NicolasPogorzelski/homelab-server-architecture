@@ -205,7 +205,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 24 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, and unbalanced markdown code fences.
+This script enforces 25 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, and counted claims in the README that no longer match the repository.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -269,7 +269,7 @@ This is a documentation and configuration repository - no application code, no b
 - `docker/` - Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` - Operational procedures (must follow the runbook contract)
 - `snippets/` - Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (24-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
+- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (25-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
 - `ansible/` - Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12), plus the files `README.md`,
