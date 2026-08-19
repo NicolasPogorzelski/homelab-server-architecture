@@ -5,6 +5,8 @@ managed by Ansible - and a written record of the two that are not.
 
 [![Validate Repository](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml) [![Ansible-lint](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml) [![Image vulnerability scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
+[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
+
 ## At a glance
 
 ```mermaid
@@ -93,8 +95,6 @@ failure procedures over automatic failover.
 | Configuration | Ansible | Declarative management of every guest; roles, inventory, vault |
 | Access | Tailscale | Identity-based remote access (Zero Trust) |
 | Monitoring | Prometheus + Grafana | Observability layer |
-
-[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
 
 ---
 
