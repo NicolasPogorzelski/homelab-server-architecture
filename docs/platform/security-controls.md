@@ -65,7 +65,7 @@ end.
 | A.5.33 Protection of records | Enforced | Change records live in git. Since 2026-08-15 commits are signed with an SSH key, so authorship is cryptographically verifiable rather than a free-text field, and `main` cannot be force-pushed or deleted. |
 | A.5.34 Privacy and PII | Partial | Assessed 2026-08-15 for the first time; see [`data-classification.md`](data-classification.md). Previously not considered at all, despite the platform holding identity documents and serving two household members outside the operator. |
 | A.5.35 Independent review | Gap | Structurally unavailable. Partial compensation: the weekly fleet audit is a self-review against the documentation, and it has repeatedly found live faults - which is evidence that it is a real check and not a formality. |
-| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh), 32 checks, run by a pre-commit hook locally and by CI on every push and pull request. |
+| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh), 33 checks, run by a pre-commit hook locally and by CI on every push and pull request. |
 | A.5.37 Documented operating procedures | Enforced | Every runbook must contain `Precondition`, `Verification` and `Failure`; Check 5 fails the build otherwise. A procedure without a verification step is rejected mechanically. |
 
 ## People controls (A.6)
