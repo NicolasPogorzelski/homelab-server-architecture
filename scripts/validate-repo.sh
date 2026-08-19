@@ -654,11 +654,77 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 26: every document is reachable from an index
+# =============================================================================
+# Added 2026-08-19. The 2026-08-17 audit found 26 documents that no index linked
+# to, including the ISO mapping, the data classification, the remediation plan,
+# both incident write-ups, four of eight decision records and twelve of the
+# runbooks. They were found by hand, one at a time. For a repository whose
+# stated purpose is to be read, its strongest evidence was invisible from the
+# front page - and nothing would have reported that.
+#
+# Reachability is defined narrowly on purpose: a document counts as reachable if
+# README.md or runbooks/README.md links it directly. Transitive reachability
+# would be truer to how a reader navigates and would also make the check pass on
+# a chain nobody can find, which is the condition this exists to prevent.
+#
+# Exceptions are listed with a reason and are themselves checked for existence,
+# so an exception cannot outlive the file it excuses. An unjustified exception is
+# how a control catalogue turns into decoration.
+echo "Check 26: every document is reachable from an index"
+
+INDEX_FILES=("README.md" "runbooks/README.md")
+
+# Deliberately not indexed:
+#   docs/platform/ansible-progress.md - per-session learning narrative, written
+#   for the operator rather than for a reader of the platform. Linked from
+#   CLAUDE.md, which is where the learning track is steered from.
+INDEX_EXCEPTIONS=("docs/platform/ansible-progress.md")
+
+LINKED_LIST="$(mktemp)"
+
+for idx in "${INDEX_FILES[@]}"; do
+    idx_dir="$(dirname "${REPO_ROOT}/${idx}")"
+    while read -r link; do
+        [[ "${link}" =~ ^https?:// ]] && continue
+        link="${link%%#*}"
+        [[ -z "${link}" ]] && continue
+        target="$(realpath -m --relative-to="${REPO_ROOT}" "${idx_dir}/${link}" 2>/dev/null || true)"
+        [[ -n "${target}" ]] && echo "${target}" >> "${LINKED_LIST}"
+    done < <({ grep -oP '\]\(\K[^)]+' "${REPO_ROOT}/${idx}" || true; })
+done
+
+for ex in "${INDEX_EXCEPTIONS[@]}"; do
+    if [[ ! -f "${REPO_ROOT}/${ex}" ]]; then
+        echo "  Exception names a file that no longer exists: ${ex}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+done
+
+while read -r doc; do
+    rel="${doc#${REPO_ROOT}/}"
+    skip=0
+    for ex in "${INDEX_EXCEPTIONS[@]}"; do
+        [[ "${rel}" == "${ex}" ]] && skip=1
+    done
+    (( skip )) && continue
+    if ! grep -qxF "${rel}" "${LINKED_LIST}"; then
+        echo "  Not linked from any index: ${rel}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
+
+rm -f "${LINKED_LIST}"
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 25"
+echo "Checks run: 26"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
