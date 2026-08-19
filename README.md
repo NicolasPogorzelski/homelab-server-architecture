@@ -7,6 +7,9 @@
 A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
 managed by Ansible - and a written record of the two that are not.
 
+Built and operated by Nicolas Pogorzelski, and documented to the standard of a system somebody has
+to recover at 02:00 - including the parts that are still missing.
+
 ## At a glance
 
 ```mermaid
@@ -75,10 +78,9 @@ failure procedures, and a runbook for each of them.
 
 ## Why this exists
 
-Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into
-DevOps and platform engineering, and kept to the standard of a system somebody has to recover at
-02:00 rather than one that only has to look complete. Incidents are documented, post-mortems
-written, and every failure turned into a runbook or a known-error entry.
+A deliberate learning environment for a career transition into DevOps and platform engineering,
+built to be operated rather than demonstrated. Incidents are documented, post-mortems written, and
+every failure turned into a runbook or a known-error entry.
 
 The emphasis throughout is on cost-aware, risk-conscious engineering: explicit trade-offs instead of
 imported complexity, and defined trust boundaries instead of a collection of services that happen to
