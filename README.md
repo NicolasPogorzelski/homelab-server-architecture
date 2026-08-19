@@ -8,8 +8,9 @@ A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, ni
 managed by Ansible - and a written record of the two that are not.
 
 Built and operated by Nicolas Pogorzelski. Claims here are checked against the running system, and
-the repository carries an [ISO/IEC 27001 Annex A control mapping](docs/platform/security-controls.md),
-a [root-caused incident register](docs/platform/known-errors.md) and a
+the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/security-controls.md)
+- a mapping against the control catalogue, not a compliance claim - a
+[root-caused incident register](docs/platform/known-errors.md) and a
 [ranked plan of what is still open](docs/platform/remediation-plan.md).
 
 ## At a glance
