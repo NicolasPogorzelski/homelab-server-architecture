@@ -1,11 +1,11 @@
 # Homelab Platform Architecture
 
-A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
-managed by Ansible - and a written record of the two that are not.
-
 [![Validate Repository](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml) [![Ansible-lint](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml) [![Image vulnerability scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
+[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
+
+A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
+managed by Ansible - and a written record of the two that are not.
 
 ## At a glance
 
@@ -55,6 +55,35 @@ access policy by Tailscale tag, the three storage layers, and monitoring coverag
 [backup and recovery](docs/architecture/backup-flow.md) and the
 [exposure model](docs/architecture/exposure-diagram.md).
 
+The same layers as text, which is also what a screen reader gets:
+
+| Layer | Component | Purpose |
+|---|---|---|
+| Hypervisor | Proxmox | Virtualization platform |
+| Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
+| Compute | Docker on VM100 | GPU-enabled workloads |
+| Services | Unprivileged LXCs | Isolation and segmentation |
+| Configuration | Ansible | Declarative management of every guest; roles, inventory, vault |
+| Access | Tailscale | Identity-based remote access (Zero Trust) |
+| Monitoring | Prometheus + Grafana | Observability layer |
+
+There is no high availability here, by decision rather than by omission. One host cannot fail over,
+so the effort goes into deterministic recovery instead: explicit dependency modelling, documented
+failure procedures, and a runbook for each of them.
+
+---
+
+## Why this exists
+
+Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into
+DevOps and platform engineering, and kept to the standard of a system somebody has to recover at
+02:00 rather than one that only has to look complete. Incidents are documented, post-mortems
+written, and every failure turned into a runbook or a known-error entry.
+
+The emphasis throughout is on cost-aware, risk-conscious engineering: explicit trade-offs instead of
+imported complexity, and defined trust boundaries instead of a collection of services that happen to
+share a machine.
+
 ---
 
 ## How to read this repository
@@ -71,30 +100,6 @@ The single best illustration of how decisions are made here is
 [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md): a rule the platform sets for
 itself, a service that cannot follow it, three attempts measured and rejected, and the boundary
 moved one layer down instead - with the reboot that proves it.
-
----
-
-## What this is
-
-Built by Nicolas Pogorzelski as a deliberate learning environment for a career transition into
-DevOps and platform engineering. The emphasis is on cost-aware, risk-conscious engineering - explicit
-trade-offs over cargo-culted complexity. Incidents are documented, post-mortems written, and every
-failure turned into a runbook or known-error entry.
-
-It is not a collection of services on one machine. It is a layered platform with explicit trade-offs,
-documented design decisions and defined trust boundaries, and it is not designed for high
-availability: it prioritises deterministic recovery, explicit dependency modelling and written
-failure procedures over automatic failover.
-
-| Layer | Component | Purpose |
-|---|---|---|
-| Hypervisor | Proxmox | Virtualization platform |
-| Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
-| Compute | Docker on VM100 | GPU-enabled workloads |
-| Services | Unprivileged LXCs | Isolation and segmentation |
-| Configuration | Ansible | Declarative management of every guest; roles, inventory, vault |
-| Access | Tailscale | Identity-based remote access (Zero Trust) |
-| Monitoring | Prometheus + Grafana | Observability layer |
 
 ---
 
@@ -127,6 +132,10 @@ audit on 2026-08-17 checked it.
 | 8 | Cloud depth (AWS) + Python | Planned |
 
 Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
+
+What is open at the moment, ranked by what it would cost to lose rather than by what is interesting,
+is in the [remediation plan](docs/platform/remediation-plan.md). It is the honest counterpart to the
+table above.
 
 ---
 
