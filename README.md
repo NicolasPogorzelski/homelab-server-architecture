@@ -198,7 +198,7 @@ through.
   catalogue of playbooks and roles
 - [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 28 and 24 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
-- [Repository validator](scripts/validate-repo.sh) - 26 structural checks, run by a pre-commit
+- [Repository validator](scripts/validate-repo.sh) - 29 structural checks, run by a pre-commit
   hook and by CI on every push
 
 ### Runbooks

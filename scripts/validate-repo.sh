@@ -720,11 +720,108 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 27: backticked repository paths in the docs must exist
+# =============================================================================
+# Added 2026-08-19. Check 2 validates markdown links; nothing validated a path
+# written as prose in backticks, which is how most operational references are
+# written - "the script in `snippets/scripts/lxc-fstrim.sh`". Those rot silently
+# on a rename, and a runbook that names a path which no longer exists fails at
+# the only moment it is ever read.
+#
+# A reference passes if the path exists, or if git deliberately ignores it. The
+# second case is the real inventory, the .env files and the deployed Prometheus
+# config: named on purpose, absent on purpose, and asking git rather than
+# maintaining a second list means the exemption cannot drift from .gitignore.
+#
+# Historical records are excluded. changelog.md and ansible-progress.md describe
+# what was true on a date; a path that was correct in July stays correct in a
+# July entry, and rewriting it to match today would falsify the record.
+echo "Check 27: backticked repository paths exist"
+
+PATH_HISTORY_EXCLUDED=("docs/platform/changelog.md" "docs/platform/ansible-progress.md")
+
+while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    skip=0
+    for ex in "${PATH_HISTORY_EXCLUDED[@]}"; do
+        [[ "${rel}" == "${ex}" ]] && skip=1
+    done
+    (( skip )) && continue
+    while read -r ref; do
+        [[ -z "${ref}" ]] && continue
+        [[ -e "${REPO_ROOT}/${ref}" ]] && continue
+        git -C "${REPO_ROOT}" check-ignore -q "${ref}" 2>/dev/null && continue
+        echo "  Path does not exist: ${rel} -> ${ref}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <({ grep -oP '`\K(snippets|ansible|scripts|docker|docs|runbooks)/[A-Za-z0-9_./-]+(?=`)' "${mdfile}" || true; } | sort -u)
+done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 28: every Ansible role appears in the platform documentation
+# =============================================================================
+# Added 2026-08-19. The role catalogue in docs/platform/ansible.md is the only
+# place a reader can see what the automation actually does. A role that exists
+# and is undocumented is invisible work, and the failure mode is quiet: the
+# mariadb_backup role was written on 2026-08-15 to close a gap that had itself
+# gone unnoticed because a category had been declared complete.
+echo "Check 28: every Ansible role is documented"
+
+if [[ -d "${REPO_ROOT}/ansible/roles" ]]; then
+    while read -r roledir; do
+        role="$(basename "${roledir}")"
+        if ! grep -q "${role}" "${REPO_ROOT}/docs/platform/ansible.md"; then
+            echo "  Role not documented in docs/platform/ansible.md: ${role}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d)
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 29: every node document declares a tag the ACL model knows
+# =============================================================================
+# Added 2026-08-19. Access on this platform is decided by the Tailscale tag a
+# node carries, so a node document without one describes a machine whose reach
+# nobody can look up. A tag that the ACL model does not define is worse: it reads
+# as policy and grants nothing, because Tailscale ACLs are deny-by-default.
+#
+# This is the lxc250 shape one layer up. That node fell outside `hosts: all`
+# because it was in no inventory group, and `all` excludes silently rather than
+# failing. Two lists that are never held against each other produce exactly this.
+echo "Check 29: node documents declare a known Tailscale tag"
+
+ACL_DOC="${REPO_ROOT}/docs/platform/tailscale-acl.md"
+
+if [[ -d "${REPO_ROOT}/docs/nodes" && -f "${ACL_DOC}" ]]; then
+    while read -r nodedoc; do
+        rel="${nodedoc#${REPO_ROOT}/}"
+        tag="$({ grep -oP '^- Tag: `\Ktag:[a-z0-9-]+' "${nodedoc}" || true; } | head -1)"
+        if [[ -z "${tag}" ]]; then
+            echo "  No '- Tag: \`tag:...\`' line: ${rel}"
+            echo "x" >> "${ERROR_LOG}"
+            continue
+        fi
+        if ! grep -q "\"${tag}\":" "${ACL_DOC}"; then
+            echo "  Tag not defined in tailscale-acl.md tagOwners: ${rel} -> ${tag}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(find "${REPO_ROOT}/docs/nodes" -type f -name "*.md")
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 26"
+echo "Checks run: 29"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
