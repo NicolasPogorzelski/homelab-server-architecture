@@ -924,11 +924,49 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 33: service documents name a node that has a node document
+# =============================================================================
+# Added 2026-08-19. A service document that names no node describes software
+# without a machine, and one that names a node with no document points at a
+# machine nobody has to describe. Both are the same defect as lxc250: an entity
+# that exists in one list and not in the other, where nothing holds the two
+# lists against each other.
+#
+# The rule is deliberately weak - at least one node identifier, and every
+# identifier it does use must resolve to docs/nodes/<node>.md. It does not try
+# to decide which node is the primary one, because several services legitimately
+# name three: the node they run on, lxc260 for their database and vm102 for
+# their files.
+echo "Check 33: service documents name a documented node"
+
+if [[ -d "${REPO_ROOT}/docs/services" ]]; then
+    while read -r svc; do
+        rel="${svc#${REPO_ROOT}/}"
+        nodes="$({ grep -ohE '\b(vm[0-9]{3}|lxc[0-9]{3})\b' "${svc}" || true; } | sort -u)"
+        if [[ -z "${nodes}" ]]; then
+            echo "  Service document names no node: ${rel}"
+            echo "x" >> "${ERROR_LOG}"
+            continue
+        fi
+        while read -r node; do
+            [[ -z "${node}" ]] && continue
+            if [[ ! -f "${REPO_ROOT}/docs/nodes/${node}.md" ]]; then
+                echo "  Names a node with no node document: ${rel} -> ${node}"
+                echo "x" >> "${ERROR_LOG}"
+            fi
+        done <<< "${nodes}"
+    done < <(find "${REPO_ROOT}/docs/services" -type f -name "*.md")
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 32"
+echo "Checks run: 33"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
