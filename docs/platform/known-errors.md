@@ -1042,6 +1042,14 @@ way to convert a two-second race into a permanent outage.
 Both halves are timing, which is why a flowchart cannot show them. What fails is the order of events
 inside the first seconds of a boot.
 
+**How to read these two.** Time runs downward. The boxes along the top are the participants, the
+vertical lines are their lifetimes, and every horizontal arrow is one event in the order it happens.
+The example is the host's `node_exporter`, which is the instance that failed at every boot for two
+weeks; the shape is identical for the other three.
+
+The whole fault sits in the shaded band: the service gives up before the thing it is waiting for
+arrives.
+
 ```mermaid
 sequenceDiagram
   accTitle: The Tailscale readiness race without a gate
@@ -1050,19 +1058,22 @@ sequenceDiagram
   participant S as systemd
   participant T as tailscaled
   participant K as kernel
-  participant U as unit with After=tailscaled.service
+  participant U as node_exporter.service
 
   S->>T: start
   T-->>S: process alive
   Note over S,T: Type=simple - "started" means the process exists,<br/>not that it has joined the tailnet
-  S->>U: start, ordering satisfied
+  Note over S,U: node_exporter.service carries After=tailscaled.service,<br/>so systemd now considers the condition met
+  S->>U: start
   U->>K: bind tailscale-ip:9100
-  K-->>U: EADDRNOTAVAIL - address not assigned
-  Note over S,U: Restart=on-failure, RestartSec=100ms<br/>five attempts inside about 24 ms
-  S->>U: restart x5
-  S--xU: StartLimitBurst exhausted, unit stays dead
-  T->>K: address assigned
-  Note over K,U: The resource now exists.<br/>Nothing is left running to notice.
+  K-->>U: EADDRNOTAVAIL - no such address on any interface
+  rect rgb(255, 228, 228)
+    Note over S,U: Restart=on-failure, RestartSec=100ms<br/>five attempts inside about 24 ms
+    S->>U: restart x5
+    S--xU: StartLimitBurst exhausted, systemd gives up
+    T->>K: address assigned - seconds too late
+  end
+  Note over K,U: The address now exists and the bind would succeed.<br/>Nothing is left running to try it.
 ```
 
 The gate turns the assumption into a measurement. The unit stops trusting the ordering and waits for
@@ -1078,21 +1089,23 @@ sequenceDiagram
   participant T as tailscaled
   participant K as kernel
   participant P as ExecStartPre wait-for-tailscale-ip.sh 90
-  participant U as unit
+  participant U as node_exporter.service
 
   S->>T: start
-  S->>P: run before the service
-  loop until an address exists, up to 90 s
+  S->>P: run before the service starts
+  rect rgb(228, 245, 232)
+    loop until an address exists, up to 90 s
+      P->>T: tailscale ip -4
+      T-->>P: not yet
+    end
+    T->>K: address assigned
     P->>T: tailscale ip -4
-    T-->>P: not yet
+    T-->>P: the node's address
   end
-  T->>K: address assigned
-  P->>T: tailscale ip -4
-  T-->>P: the node's address
   P-->>S: exit 0
   S->>U: start
   U->>K: bind tailscale-ip:9100
-  K-->>U: bound
+  K-->>U: bound on the first attempt
   Note over S,U: RestartSec=5, so a retry outlasts the race<br/>instead of exhausting the limiter inside it
 ```
 

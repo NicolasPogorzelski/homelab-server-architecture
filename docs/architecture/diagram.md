@@ -94,7 +94,7 @@ flowchart LR
   ADMIN_D["tag:admin"]
   T1_D["tag:tier1"]
   AI_D["tag:ai-stack"]
-  EVERY["every tag<br/>node_exporter"]
+  EVERY["every tag except<br/>client and untrusted"]
 
   T1_S -->|"445"| ST_D
   T1_S -->|"5432"| DB_D
@@ -116,8 +116,17 @@ flowchart LR
   class ST_D,DB_D,T2_D,ADMIN_D,T1_D,AI_D,EVERY dst
 ```
 
+Three grants are left out because drawing them would cost more clarity than they carry. `tag:tier1`,
+`tag:tier2` and `tag:admin` may each reach themselves on all ports, which is what lets the operator
+workstation talk to lxc250 and the tier1 services talk among themselves. As self-loops they would
+add three arrows and no insight.
+
+Two tags never appear as a source anywhere in the policy: `tag:database` and `tag:storage`. lxc260
+and vm102 answer, they never initiate, and since Tailscale ACLs are deny-by-default that is enforced
+rather than merely observed.
+
 The two monitoring rules are drawn separately on purpose. Port 9100 is node_exporter and reaches
-every tag; the 443, 8096 and 13378 grants are the blackbox probes, added after
+every tag except the two device tags; the 443, 8096 and 13378 grants are the blackbox probes, added after
 [KE-8](../platform/known-errors.md#ke-8) showed that a node can answer while the service on it is
 dead. One rule measures that the machine is alive, the other that the thing people use is.
 
@@ -161,7 +170,7 @@ flowchart TB
     SAMBA["Samba - segmented shares"]
   end
 
-  THIN -->|"every VM and LXC root disk"| GUESTS["11 guests<br/>including lxc210's MariaDB and lxc250's vault password"]
+  THIN -->|"every VM and LXC root disk"| GUESTS["10 guests<br/>including lxc210's MariaDB and lxc250's vault password"]
   DISKS --> MERGER
   DISKS -.->|"parity covers the data disks"| PARITY
   MERGER --> SAMBA

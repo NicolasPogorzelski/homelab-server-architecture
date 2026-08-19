@@ -22,11 +22,11 @@ flowchart TB
     PVEROOT["pve-root and /boot/efi"]
     SECRETS["lxc250: vault password, real inventory,<br/>automation SSH key - one copy"]
     NCDB["lxc210: Nextcloud MariaDB"]
-    PROMDB["lxc200: Prometheus history"]
   end
 
   subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, 7680 unreadable sectors"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260"]
+    MONDATA["lxc200 mp0: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
     JELLY["vm100 scsi1 - jellyfin-data, 300 GB raw"]
   end
 
@@ -36,7 +36,7 @@ flowchart TB
   end
 
   boot --> L1["Total platform loss.<br/>No guest starts. Vault password gone,<br/>so every vaulted secret is undecryptable."]
-  auxd --> L2["Five containers lose their Docker state,<br/>vm100 loses its second disk.<br/>Rebuildable from compose files."]
+  auxd --> L2["Five containers lose their Docker state,<br/>vm100 loses its second disk,<br/>and the monitoring history goes with them.<br/>Rebuildable from compose files - the history is not."]
   storagevm --> L3["All persistent service data unreachable.<br/>Parity does not survive VM loss,<br/>deletion, corruption or ransomware."]
 
   classDef sick fill:#7a1f1f,stroke:#571414,color:#ffffff
@@ -44,7 +44,7 @@ flowchart TB
   classDef content fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   class L1,L3 sick
   class L2 warn
-  class ROOTS,PVEROOT,SECRETS,NCDB,PROMDB,DROOTS,JELLY,ARCHIVE,PARITY content
+  class ROOTS,PVEROOT,SECRETS,NCDB,DROOTS,MONDATA,JELLY,ARCHIVE,PARITY content
 ```
 
 ## What each domain means in practice
@@ -70,8 +70,14 @@ sectors still hold data that cannot be read, and `smartctl -H` reports PASSED re
 `Current_Pending_Sector` normalises to 054 against a threshold of 000 and can never trip the
 self-assessment.
 
-Its contents are the least valuable on the platform - container images and Docker state, class C3,
-rebuildable from the compose files - with one exception that is not about data at all. vm100's
+Most of its contents are the least valuable on the platform - container images and Docker state,
+class C3, rebuildable from the compose files. Two things on it are not. The first is the monitoring
+history: lxc200 binds `/mnt/aux-disk/monitoring` to `/data`, so the Prometheus time series, the
+Grafana state and the Alertmanager state all live here. That is C3 by classification and has no
+backup at all, which is defensible right up to the moment somebody wants to know whether a metric
+was already drifting last month.
+
+The second is not about data at all. vm100's
 `scsi1` is a raw file on directory storage, and a raw file on directory storage cannot be
 snapshotted, so vm100 has no rollback path at all. That is the reason a live CIFS unmount on that node
 in [KE-20](../platform/known-errors.md#ke-20) could only be ended with `qm stop`, and the reason
