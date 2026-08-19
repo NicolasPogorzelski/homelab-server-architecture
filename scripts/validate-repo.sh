@@ -23,9 +23,15 @@ done < <(find "${REPO_ROOT}" -name "*.md" -empty)
 # =============================================================================
 # Check 2: broken internal markdown links
 # =============================================================================
+# Gitignored files are skipped, the same way Check 24 skips them. A scratch file
+# under .claude/ is not repository content, and its links are written for
+# somewhere else - a pull-request body renders on github.com, not from that
+# directory. Before 2026-08-19 such a file could fail the whole validation.
 echo "Check 2: broken internal links"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     dir="$(dirname "${mdfile}")"
     { grep -oP '\]\(\K[^)]+' "${mdfile}" || true; } | while read -r link; do
         [[ "${link}" =~ ^https?:// ]] && continue
@@ -38,7 +44,11 @@ while read -r mdfile; do
     done
 done < <(find "${REPO_ROOT}" -name "*.md" -type f)
 
+# Truncate, or Check 7 counts these same entries a second time. Missing until
+# 2026-08-19, and invisible until Check 2 actually found something: two broken
+# links were reported as four errors.
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
 
 # =============================================================================
 # Check 3: committed .env files
