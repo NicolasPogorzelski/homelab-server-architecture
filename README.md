@@ -7,8 +7,9 @@
 A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
 managed by Ansible - and a written record of the two that are not.
 
-Built and operated by Nicolas Pogorzelski, and documented to the standard of a system somebody has
-to recover at 02:00 - including the parts that are still missing.
+Built and operated by Nicolas Pogorzelski. Every figure in this repository was measured against the
+running system, and the gaps that remain are listed in the
+[remediation plan](docs/platform/remediation-plan.md).
 
 ## At a glance
 
@@ -58,8 +59,6 @@ access policy by Tailscale tag, the three storage layers, and monitoring coverag
 [backup and recovery](docs/architecture/backup-flow.md) and the
 [exposure model](docs/architecture/exposure-diagram.md).
 
-The same layers as text, which is also what a screen reader gets:
-
 | Layer | Component | Purpose |
 |---|---|---|
 | Hypervisor | Proxmox | Virtualization platform |
@@ -70,21 +69,22 @@ The same layers as text, which is also what a screen reader gets:
 | Access | Tailscale | Identity-based remote access (Zero Trust) |
 | Monitoring | Prometheus + Grafana | Observability layer |
 
-There is no high availability here, by decision rather than by omission. One host cannot fail over,
-so the effort goes into deterministic recovery instead: explicit dependency modelling, documented
-failure procedures, and a runbook for each of them.
+High availability is not implemented, and not intended. A single host cannot fail over, so the
+effort goes into deterministic recovery: explicit dependency modelling, documented failure
+procedures, and a runbook for each of them.
 
 ---
 
 ## Why this exists
 
-A deliberate learning environment for a career transition into DevOps and platform engineering,
-built to be operated rather than demonstrated. Incidents are documented, post-mortems written, and
-every failure turned into a runbook or a known-error entry.
+A deliberate learning environment for a career transition into DevOps and platform engineering. It
+runs the household's actual services, so an outage has consequences beyond the exercise. Incidents
+are documented, post-mortems written, and every failure turned into a runbook or a known-error
+entry.
 
-The emphasis throughout is on cost-aware, risk-conscious engineering: explicit trade-offs instead of
-imported complexity, and defined trust boundaries instead of a collection of services that happen to
-share a machine.
+The emphasis throughout is on cost-aware, risk-conscious engineering. Every component here has a
+stated reason for being present, the trust boundaries between them are defined in the ACL, and the
+trade-offs behind both are written down in the design decisions.
 
 ---
 
@@ -135,9 +135,8 @@ audit on 2026-08-17 checked it.
 
 Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
 
-What is open at the moment, ranked by what it would cost to lose rather than by what is interesting,
-is in the [remediation plan](docs/platform/remediation-plan.md). It is the honest counterpart to the
-table above.
+What is currently open, ranked by what its loss would cost, is in the
+[remediation plan](docs/platform/remediation-plan.md).
 
 ---
 
