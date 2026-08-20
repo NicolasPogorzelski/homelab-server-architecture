@@ -81,7 +81,14 @@ docker/monitoring/alertmanager/alertmanager.yml
 # Ansible - real inventory (contains Tailscale IPs)
 # =====================================================
 
-ansible/inventory/hosts.yml
+# The pattern is deliberately wider than the file. On 2026-08-20 a pre-change
+# backup written as hosts.yml.bak-20260820 sat untracked in the working tree on
+# the control node, holding every Tailscale address and the LAN address, because
+# the rule below used to name the exact filename. Nothing on that node runs the
+# pre-commit gate, so `git add -A` there was the whole distance to publishing it.
+# The example file is excluded from the exclusion - it is the sanitized one.
+ansible/inventory/hosts.yml*
+!ansible/inventory/hosts.yml.example
 
 # =====================================================
 # AI coding assistant artifacts
