@@ -154,6 +154,13 @@ This repo is a learning vehicle and portfolio piece for a DevOps career transiti
 When working on tasks here:
 
 - Explain every CLI flag and every config value - no copy-paste answers.
+- **Check every term against the glossary before writing an explanation.** The register lives at
+  `~/git/devops-til/glossary.md`. A term that is in it may be used and linked; a term that is not in
+  it requires a full explanation on the spot - what it is, where it appears in this setup, why it
+  matters - and is then added to the register in the same pass. Abbreviations are the main offender:
+  `HA`, `LRM`, `PSI`, `MCE` and `mux` were all used here as if self-evident. This is a mechanical
+  gate rather than a matter of judgement, because whether a word is obvious is the reader's call and
+  the writer cannot see the gap they leave.
 - For new tools or configs: link to official documentation first, identify
   relevant sections, then implement.
 - Root cause before fix: symptom -> verification command -> diagnosis -> fix.
