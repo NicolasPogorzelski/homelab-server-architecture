@@ -25,7 +25,7 @@ flowchart TB
   subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
     VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, Ollama"]
     LXC["7 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, Vaultwarden, PostgreSQL, Monitoring"]
-    CTRL["LXC250 - Ansible control node<br/>manages 9 nodes, itself in no inventory"]
+    CTRL["LXC250 - Ansible control node<br/>manages the fleet, in the inventory since 2026-08-20"]
     VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
   end
 
@@ -196,7 +196,7 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 29 and 25 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 30 and 26 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 34 structural checks, run by a pre-commit
   hook and by CI on every push

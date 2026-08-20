@@ -1,0 +1,13 @@
+---
+# Runs against every guest, but the role is a no-op on hosts that declare no
+# units - so the target list stays honest and a new node needs a host var, not a
+# playbook edit.
+#
+# The hypervisor is absent on purpose. Its `pveproxy` gate is hand-deployed and
+# predates this role; folding it in belongs to the host adoption, where the other
+# hand-written host units are adopted in one pass rather than one at a time.
+- name: Gate Tailscale-bound units on the address existing
+  hosts: guests
+  become: true
+  roles:
+    - tailscale_boot_gate

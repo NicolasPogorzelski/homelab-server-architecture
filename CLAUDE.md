@@ -32,8 +32,12 @@ notes there and keep this section short.
   host exporter is precisely what stops the host from reporting. **All four cold-boot confirmed
   2026-08-13**, including the lxc210 query-time instance, whose fix only a boot could exercise:
   its `Persistent=true` catch-up fired 82 s into the boot window and the poll waited 11 s for
-  `Self.DNSName`. A fifth instance is still open - lxc250's hand-written sshd drop-in, which
-  retries rather than waits.
+  `Self.DNSName`. The fifth instance - lxc250's hand-written sshd drop-in, which
+  retried rather than waited - is owned by the `tailscale_boot_gate` role since
+  2026-08-20. Note what the hand-written version got right and a naive replacement
+  would have lost: Debian's `ssh.service` sets `RestartPreventExitStatus=255`, and
+  sshd exits 255 on a failed bind, so the retry only worked because the drop-in
+  cleared that list. Cold-boot verification is still outstanding.
 - **KE-6 recurrence on lxc220 - RESOLVED 2026-07-28.** The node had been running a second,
   hand-written `tailscaled-userspace.service` alongside the packaged unit, so two daemons started
   every boot and its `node_exporter` had, as far as can be established, never been scraped. KE-6 had
@@ -92,14 +96,17 @@ notes there and keep this section short.
   exporter exists. Rejected on purpose: auto-pull (trades awareness for convenience), ephemeral
   per-run clones (right answer, revisit for Terraform where state raises the stakes), and
   Actions-triggered deploys (needs a self-hosted runner plus fleet secrets in GitHub, and "on
-  merge" means nothing on a host that sleeps at night). **Measured 2026-08-13: the node is not
-  missing an exporter, it runs a wrong one** - a hand-written unit from 2026-04-22 starts
-  `node_exporter` with no arguments, so it binds `*:9100` (LAN-exposed, the third instance of the
-  defect fixed on lxc260 and the host) and is scraped by nobody. `systemctl is-active` says
-  `active`, which reads as coverage. Step (2) is therefore a replacement, not an addition.
-  The claim elsewhere in this file that lxc200 is the *only* node without `SystemdUnitFailed`
-  coverage was corrected 2026-08-13 - lxc250 lacks it too,
-  it just falls outside the definition of "node" by being absent from the inventory.
+  merge" means nothing on a host that sleeps at night). Measured 2026-08-13, the node was not
+  missing an exporter but running a wrong one: a hand-written unit from 2026-04-22 started
+  `node_exporter` with no arguments, so it bound `*:9100` (LAN-exposed, the third instance of the
+  defect fixed on lxc260 and the host) and was scraped by nobody, while `systemctl is-active`
+  said `active` and read as coverage. Step (2) was therefore a replacement, not an addition.
+  **Status 2026-08-20:** steps (1) and (2) are done. The account exists, the node is in the real
+  inventory as part of `lxcs` and `guests`, the exporter is the role's and binds the Tailscale
+  address, Prometheus scrapes it (`node-lxc250-devops`, `up`), and 850 `node_systemd_unit_state`
+  series mean `SystemdUnitFailed` finally covers it. The sshd drop-in is adopted into the
+  `tailscale_boot_gate` role, pending a cold boot to verify. Step (3), `preflight.yml`, is
+  untouched.
 - **Nextcloud's MariaDB has no backup, and parity is not backup (found 2026-08-15).** The nightly
   `pg_dumpall` covers lxc260 only; Nextcloud's database runs *inside* lxc210 and no role, script,
   unit or crontab entry dumps it. Its user files live on the archive pool, its database on the
@@ -548,8 +555,9 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
 
 - **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
   because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
-  lxc200 and lxc250 are the two nodes without `SystemdUnitFailed` coverage, for different
-  reasons: lxc200's exporter cannot see systemd, lxc250's is never scraped. The Proxmox host was the
+  lxc200 is now the only node without `SystemdUnitFailed` coverage: its exporter cannot see
+  systemd. lxc250 was the second until 2026-08-20, for the different reason that nothing
+  scraped it; it is in the inventory and scraped since. The Proxmox host was the
   second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
   container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
 - **The Proxmox host's `node_exporter` is hand-managed and would be lost on a rebuild

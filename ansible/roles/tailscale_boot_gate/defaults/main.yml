@@ -1,0 +1,32 @@
+---
+# The script has one copy in the repository and one owner. `postgresql_boot_order`
+# deploys the same file to lxc260 by the same path; migrating that role onto this
+# one is a separate item, because it works and is cold-boot verified, and changing
+# a proven boot path without an incident to justify it is its own risk.
+tailscale_boot_gate_script_src: "{{ playbook_dir }}/../../snippets/scripts/wait-for-tailscale-ip.sh"
+tailscale_boot_gate_script: /usr/local/bin/wait-for-tailscale-ip.sh
+
+# Seconds the gate waits for the address before giving up. The script is
+# fail-open: on timeout it logs a warning and exits 0, so a gated unit starts late
+# rather than not at all. That property is what makes this safe to put in front of
+# sshd, whose only fallback is `pct exec` from the hypervisor.
+tailscale_boot_gate_timeout: 90
+
+# Units to gate, as systemd unit names. Empty by default, so the role is a no-op
+# on every host that does not ask for it - including the script deployment.
+tailscale_boot_gate_units: []
+
+# Emit `RestartPreventExitStatus=` (an empty assignment, which clears the list).
+# Needed only where the packaged unit sets it and the exit code it names is the
+# one a failed bind produces. Debian's ssh.service sets 255, and sshd exits 255
+# when it cannot bind - so without this the restart backstop never fires.
+# Off by default: clearing the list on an arbitrary unit re-enables restarts on
+# exit codes its packager deliberately excluded.
+tailscale_boot_gate_clear_restart_prevent: false
+
+# Hand-written drop-ins this role supersedes. They must be removed rather than
+# left alongside: systemd reads drop-ins in filename-sort order, and
+# `override.conf` sorts after `10-wait-tailscale.conf`, so the hand-written file
+# would win every conflicting directive.
+tailscale_boot_gate_obsolete_dropins:
+  - override.conf

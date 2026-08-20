@@ -1207,10 +1207,16 @@ Two loose ends, neither a readiness fault:
 
 - The host's `pveproxy` drop-in still hard-codes its Tailscale IP inline rather than calling the
   shared script - harmless today, worth folding into the same pattern on the next host pass.
-- **A fifth instance remains unfixed:** lxc250's hand-written `ssh.service.d/override.conf` uses
-  `After=` plus a `RestartSec=15s` retry loop instead of a readiness gate. It survives because the
-  retry loop is slow enough to outlast the race, which is luck rather than design. See
-  [lxc250 § Open Items](../nodes/lxc250.md#open-items-2026-07-28).
+- **The fifth instance was fixed on 2026-08-20, and reading it first changed the fix.**
+  lxc250's hand-written `ssh.service.d/override.conf` used `After=` plus a `RestartSec=15s` retry
+  loop instead of a readiness gate. It is now owned by the `tailscale_boot_gate` role, which puts
+  `wait-for-tailscale-ip.sh` in front of sshd as `ExecStartPre=` and keeps the retry as a backstop.
+  The detail worth carrying forward: Debian's packaged `ssh.service` sets
+  `RestartPreventExitStatus=255`, and sshd exits 255 when it cannot bind - so the retry loop only
+  ever worked because the hand-written drop-in cleared that list with an empty assignment. A
+  replacement that had reproduced the visible half and dropped that line would have removed the
+  backstop while appearing to improve it. **Cold-boot confirmation is outstanding**, and only a
+  boot can give it - the same condition that made the lxc210 instance provable.
 
 **References:**
 - [KE-6 - userspace-networking](#ke-6-tailscale-userspace-networking-prevents-node_exporter-from-binding-to-tailscale-ip) - produces the *same* `EADDRNOTAVAIL` message from an unrelated cause; a restart fixes this class and does nothing for that one

@@ -63,8 +63,10 @@ claim about how the individual services bind, and the 2026-08-17 audit measured 
 
 Several services listen on wildcard addresses on nodes that carry a routable IPv6: Apache on lxc210
 (`*:80`, `*:443`), sshd on ten of eleven nodes, `rpcbind` on lxc210 (`0.0.0.0:111` and `[::]:111`),
-`coolwsd` on `*:9983`, and lxc250's node_exporter on `*:9100`. So for those, what prevents
-reachability from outside is the absence of a forwarding rule on the router, not the binding itself.
+and `coolwsd` on `*:9983`. So for those, what prevents reachability from outside is the absence of
+a forwarding rule on the router, not the binding itself. One entry left this list on 2026-08-20:
+lxc250's node_exporter bound `*:9100` until the role took the unit over and pinned it to the
+Tailscale address.
 The platform's own binding rule - bind the Tailscale address, or bind loopback and publish through
 `tailscale serve` - holds for every service that was installed deliberately, and not for the ones the
 distribution brought along.
