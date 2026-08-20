@@ -319,6 +319,49 @@ groups:
     # stopped the host from reporting it. The general fix is the external
     # heartbeat in remediation-plan.md Tier 4, not a different threshold here.
 
+  - name: kernel
+    rules:
+      # Added 2026-08-20 after a kernel oops cascade wedged the hypervisor for
+      # two hours. node_exporter sets this label whenever a filesystem stops
+      # answering `statfs` within its mount timeout - it is the only collector
+      # with such a timeout, which is why it kept reporting while everything
+      # else on the host blocked.
+      #
+      # During the incident the value read 1 for /var/lib/lxcfs from the first
+      # minute, in every single scrape, and nothing looked at it. Same class as
+      # `smart_health_passed` reading PASSED on a disk with 7680 unreadable
+      # sectors: the measurement existed, the guard did not.
+      #
+      # Five minutes, not fifteen: a wedged FUSE mount is repairable by
+      # restarting its daemon only while sessions can still be created. Past
+      # that point systemd itself is caught and the only way out is a reset.
+      - alert: FilesystemMountTimeout
+        expr: node_filesystem_device_error > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.mountpoint }} on {{ $labels.instance }} is not answering"
+          description: "node_exporter cannot stat {{ $labels.mountpoint }} ({{ $labels.fstype }}). If this is a FUSE mount, restart its daemon NOW - once systemd is caught, only a hard reset remains. See runbooks/platform/hard-shutdown-recovery.md."
+
+      # SystemdUnitFailed cannot express this, and the difference is structural
+      # rather than a matter of thresholds. A unit that hangs stays `activating`
+      # forever and never becomes `failed`, because it never reaches a timeout.
+      # Three units sat in `activating` for two hours on 2026-08-20 while the
+      # failed-unit rule read green - correctly, by its own definition.
+      #
+      # Thirty minutes tolerates the slow-but-legitimate cases (a Type=notify
+      # service waiting on a network dependency, a long fsck) without tolerating
+      # a hang.
+      - alert: SystemdUnitStuckActivating
+        expr: node_systemd_unit_state{state="activating"} == 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} stuck activating on {{ $labels.instance }}"
+          description: "Unit {{ $labels.name }} has been activating for over 30 minutes. A hung unit never becomes `failed`, so SystemdUnitFailed cannot see it."
+
   - name: smart
     rules: []
     # Deliberately empty. A collector IS deployed -- node-exporter-smarttext.sh has run
