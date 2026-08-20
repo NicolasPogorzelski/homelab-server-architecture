@@ -1,0 +1,7 @@
+---
+# Only a daemon-reload. The gated unit is deliberately not restarted: the drop-in
+# changes what happens at the next boot, and restarting sshd from a play that
+# arrived over sshd is a way to lose the connection that is applying the fix.
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

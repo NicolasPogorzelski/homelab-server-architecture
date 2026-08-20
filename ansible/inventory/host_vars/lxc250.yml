@@ -1,0 +1,18 @@
+---
+# sshd on this node binds the Tailscale address only (`ListenAddress` in
+# sshd_config), which is why SSH is unreachable for the first half minute after a
+# boot. Until 2026-08-20 that was handled by a hand-written drop-in doing nothing
+# but retrying every 15 s - the fifth instance of KE-18, and the one that survived
+# the sweep because it worked well enough to look intentional.
+#
+# It is gated rather than merely ordered because of what a failure costs here.
+# This node is the Ansible control node: it holds the only copy of the vault
+# password, the real inventory and the deployment key, and when its sshd does not
+# come up the only remaining way in is `pct exec` from the hypervisor.
+tailscale_boot_gate_units:
+  - ssh.service
+
+# Debian's ssh.service sets RestartPreventExitStatus=255 and sshd exits 255 on a
+# failed bind, so the restart backstop is inert unless that list is cleared. The
+# hand-written drop-in had this right; it is carried over deliberately.
+tailscale_boot_gate_clear_restart_prevent: true

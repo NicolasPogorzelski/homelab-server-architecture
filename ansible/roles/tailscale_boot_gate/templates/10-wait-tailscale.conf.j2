@@ -1,0 +1,29 @@
+# Managed by the tailscale_boot_gate Ansible role. Do not edit on the node.
+#
+# {{ item }} binds this node's Tailscale address. That address does not exist at
+# boot until tailscaled has connected and configured the interface, and bind()
+# fails with EADDRNOTAVAIL against an address that is not on a local interface.
+#
+# Ordering alone does not fix it. systemd treats a unit as started when its
+# process is running, not when it is ready, so tailscaled counts as up while it is
+# still negotiating. That is the KE-18 class: ordering is not readiness. The
+# ExecStartPre below is the readiness half - it polls until the address is
+# actually assigned, then returns.
+[Unit]
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+ExecStartPre={{ tailscale_boot_gate_script }} {{ tailscale_boot_gate_timeout }}
+# Backstop for the case the gate times out (it is fail-open) and the bind still
+# fails. Spaced at 15 s because systemd gives up after StartLimitBurst=5 starts
+# within StartLimitIntervalSec=10s - at the stock 100 ms delay the limit trips in
+# half a second and the unit stays dead.
+Restart=on-failure
+RestartSec=15s
+{% if tailscale_boot_gate_clear_restart_prevent %}
+# Clears the packaged RestartPreventExitStatus list. Debian's ssh.service names
+# 255, which is the code sshd exits with on a failed bind - exactly the case the
+# backstop exists for.
+RestartPreventExitStatus=
+{% endif %}

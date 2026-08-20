@@ -226,7 +226,7 @@ flowchart LR
   LXC200SELF["lxc200 node_exporter<br/>Docker container on loopback<br/>cannot see the host's systemd units"]
   PGEXP["postgres_exporter on lxc260<br/>pg_stat via loopback"]
   BLACKBOX["blackbox_exporter probes<br/>2 HTTP + 5 Serve-HTTPS endpoints"]
-  LXC250["lxc250<br/>runs node_exporter on *:9100<br/>in no inventory group, scraped by nobody"]
+  LXC250["lxc250<br/>node_exporter on the Tailscale address<br/>in the inventory and scraped since 2026-08-20"]
 
   PROM["Prometheus + Alertmanager on lxc200"]
 
@@ -245,12 +245,13 @@ flowchart LR
   class PROM ok
 ```
 
-The two gaps are different in kind, which is why they are drawn differently. lxc200 is scraped -
-its own exporter runs as a Docker container on loopback - but a container cannot see the host's
-systemd units, so `SystemdUnitFailed` covers everything on that node except the node itself. lxc250
-is not scraped at all: it belongs to no inventory group, the template renders no target for it, and
-the exporter it does run binds `*:9100` and is read by nobody. Both are tracked in the
-[remediation plan](../platform/remediation-plan.md).
+One gap remains, and the second one closed on 2026-08-20. lxc200 is scraped - its own exporter
+runs as a Docker container on loopback - but a container cannot see the host's systemd units, so
+`SystemdUnitFailed` covers everything on that node except the node itself. lxc250 used to be the
+other case, and a different one: it belonged to no inventory group, the template rendered no target
+for it, and the exporter it did run bound `*:9100` and was read by nobody. It is in `lxcs` and
+`guests` now, the role owns its unit, and the target reports `up`. The remaining gap is tracked in
+the [remediation plan](../platform/remediation-plan.md).
 
 Note also what the blackbox probes add. `NodeDown` says a node answers; a probe says the service on
 it answers. The first run of these probes found Paperless and OpenWebUI returning 502 behind a

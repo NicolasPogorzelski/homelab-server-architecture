@@ -142,10 +142,10 @@ open incident whose suspected cause is exactly the control nobody documented. Ch
 paper, and the paper is what makes the KE-14 verification a planned step instead of a recurring
 intention.
 
-lxc250 inventory adoption and its `preflight.yml` gate - which must replace that node's
-hand-written `node_exporter` binding `*:9100`, not merely add one ([lxc250 § Open
-Items](../nodes/lxc250.md#open-items-2026-07-28)); the lxc250 sshd drop-in as the fifth
-[KE-18](known-errors.md#ke-18) instance; `DATA_SOURCE_NAME` into Vault; delete the disabled
+the lxc250 `preflight.yml` gate, asserting a clean `main` in sync with `origin` before a run
+that changes live state (the inventory adoption and the exporter replacement it was bundled with
+are done since 2026-08-20, as is the sshd drop-in, the fifth
+[KE-18](known-errors.md#ke-18) instance - that one still needs a cold boot to confirm); `DATA_SOURCE_NAME` into Vault; delete the disabled
 `tailscaled-userspace.service` file on lxc220; pin journald `Storage=persistent` on vm100/vm102 -
 `pveproxy` drop-in onto the shared wait script; the missing `SystemdUnitFailed` coverage on
 lxc200 and lxc250; clean up the eleven orphaned `smart.prom.*` temp files in the host's textfile
@@ -218,7 +218,7 @@ item 4 above; these are the rest.
   date. SnapRAID scrub coverage has degraded from 123 to 126 days on the oldest block with 74 % of
   the array unscrubbed and `SnapRAIDScrubStale` green; no compose stack on the fleet runs a pinned
   image; eleven orphaned `smart.prom.*` temp files remain; lxc220 still holds the disabled
-  `tailscaled-userspace.service` file; lxc250's `node_exporter` still runs argument-free on `*:9100`
+  `tailscaled-userspace.service` file; lxc250's `node_exporter` ran argument-free on `*:9100` until 2026-08-20
   and is scraped by nobody, its sshd drop-in still retries rather than waits, and its root
   filesystem is at 73 % with no alert; `journald` `Storage=` is unset on vm100 and vm102; the
   deprecated `mkdir 0` remains in `storage.cfg` on a host already running PVE 9; the archive pool

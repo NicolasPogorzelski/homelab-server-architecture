@@ -1,0 +1,40 @@
+---
+# Everything here is guarded on the unit list being non-empty, so the role can be
+# run against a whole group and touch only the hosts that declare units.
+
+- name: Deploy the wait-for-tailscale-ip script
+  ansible.builtin.copy:
+    src: "{{ tailscale_boot_gate_script_src }}"
+    dest: "{{ tailscale_boot_gate_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: tailscale_boot_gate_units | length > 0
+
+- name: Create the drop-in directory for each gated unit
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item }}.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ tailscale_boot_gate_units }}"
+
+# Written before the hand-written drop-in is removed, so an interrupted run never
+# leaves the unit with neither file.
+- name: Deploy the boot-gate drop-in
+  ansible.builtin.template:
+    src: 10-wait-tailscale.conf.j2
+    dest: /etc/systemd/system/{{ item }}.d/10-wait-tailscale.conf
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ tailscale_boot_gate_units }}"
+  notify: Reload systemd
+
+- name: Remove hand-written drop-ins this role supersedes
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item.0 }}.d/{{ item.1 }}
+    state: absent
+  loop: "{{ tailscale_boot_gate_units | product(tailscale_boot_gate_obsolete_dropins) | list }}"
+  notify: Reload systemd
