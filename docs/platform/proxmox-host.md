@@ -290,8 +290,64 @@ vm100's `scsi1` still resolvable, guests untouched.
 Noticed while applying it: `mkdir 0` is deprecated and slated for removal in PVE 9, which this host
 already runs. The replacement is `create-base-path 0`.
 
+## Guest Backup (added 2026-08-20)
+
+Weekly `vzdump --mode snapshot` of eight guests, deployed by the
+[`guest_backup`](../../ansible/roles/guest_backup/) role and documented in
+[`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md).
+
+Before this there was none. Measured 2026-08-20: no `/etc/pve/jobs.cfg`, an empty `vzdump` cron
+file, and two log files from February as the only trace anything had ever run. The reason it went
+unnoticed for so long is worth keeping: two backup jobs *did* run nightly and *were* alerted on, so
+the question "are there backups" had a confident answer. Both dump databases. Neither produces a
+machine.
+
+VM100 is excluded - reproducible from its compose stack, and roughly triples a run.
+
+The target is `/mnt/vzdump`, a generic mountpoint the host binds to whichever disk currently
+holds the role. Changing disks is therefore an fstab edit. The role refuses to deploy unless that
+path is a mountpoint and its backing device differs from root, because an unmounted target is
+still a writable directory on `pve-root` and the job would then fill the boot SSD in order to back
+up the guests living on it.
+
+## Failure Impact
+
+This section exists because Check 6 requires one of every document under `docs/nodes/`, this
+document is not there, and the omission left the platform's single point of failure as the one node
+whose failure was never written down.
+
+**Everything stops.** There is no second node and no HA; the design is recovery-oriented by
+choice. All ten guests, every service, all monitoring and all alerting run on this machine. The
+observer shares the failure domain with the observed, so a host failure is not reported by anything
+belonging to the platform - it is noticed by a person.
+
+| Layer | What its loss takes with it |
+|---|---|
+| Host OS on `pve-root` | Guest configs in `/etc/pve`, the eight hand-deployed host artefacts, the schedule that powers the machine down and wakes it |
+| `pve/data` thin pool | Every VM and LXC root disk. One 62.5 GB pool, at 82.78 % on 2026-08-20, with `lvm_vg_free_bytes` at zero - so `lvextend` is not an available remedy |
+| Boot SSD ([KE-14](known-errors.md#ke-14)) | Both of the above at once. It is a single consumer drive with 58,540 power-on hours, behind the HBA whose boot-window I/O errors remain unexplained |
+| Auxiliary disk ([KE-13](known-errors.md#ke-13)) | Docker engine state for five containers and vm100's second disk. Degraded, in service under protest, with 7680 unreadable sectors |
+| Tailscale identity | Every service address. Nodes are reached by MagicDNS name, not by LAN address, and the LAN path is deliberately not a fallback |
+
+What survives a total loss of the machine, and what does not:
+
+- **Survives:** the media archive and everything else on vm102's disks, since those are physical
+  drives passed through by ID and readable in another machine; the PostgreSQL and MariaDB dumps,
+  which are written to that same pool; this repository, which reproduces configuration for every
+  node.
+- **Does not survive:** guest state that is neither in a dump nor in a role - the Paperless
+  document index, Grafana's dashboards and admin password, Nextcloud's application configuration.
+  That is the gap the guest backup above closes, and it was open until 2026-08-20.
+
+Recovery is a rebuild of the host followed by a restore of the guests, in that order. The rebuild
+has no runbook. `pveproxy`, `node_exporter` and the SMB mount checks would come back only as far as
+somebody remembers to redeploy them by hand, which is the argument for the host adoption stated as
+a consequence rather than as a principle.
+
 ## Related Documents
 
 - [Operations](./operations.md) - boot ordering and maintenance routines
 - [VM102 - Storage](../nodes/vm102.md) - SnapRAID cron schedule on VM102
 - [ansible/roles/homelab_schedule/](../../ansible/roles/homelab_schedule/) - role that deploys scripts + cron file
+- [Guest backup and restore](../../runbooks/platform/guest-backup-restore.md) - the vzdump job and its restore procedure
+- [Remediation plan](./remediation-plan.md) - what the host adoption unblocks, and in which order

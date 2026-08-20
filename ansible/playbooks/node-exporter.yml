@@ -1,7 +1,32 @@
 ---
-- name: Deploy  node_exporter
-  hosts: all:!lxc200
+# lxc200 is excluded because its node_exporter is a Docker container, which
+# cannot see the host's systemd units - so the role would deploy a native
+# exporter alongside a containerised one. That gap is recorded rather than
+# papered over: lxc200 is one of the two nodes without `SystemdUnitFailed`
+# coverage.
+- name: Deploy node_exporter to the fleet
+  hosts: guests:!lxc200
   become: true
   serial: 1
+  roles:
+    - node_exporter
+
+# The hypervisor named separately rather than swept in by `all`. See
+# ssh-hardening.yml for why sweeps stop at `guests`.
+#
+# This play adopts a unit that already exists: the host has run a hand-written
+# node_exporter since 2026-04, and since 2026-07-14 it binds the Tailscale
+# address and carries `--collector.systemd`. The role's defaults match it,
+# textfile-collector path included - verified 2026-08-20 - so adoption replaces
+# a typed unit with a generated one of the same content, and the first run should
+# report a change for the file and no change in behaviour.
+#
+# The obsolete warning that used to sit here is worth naming so it is not
+# reintroduced: `node_exporter_textfile_dir` needing a `host_vars` override
+# stopped being true on 2026-07-10, when the default became fleet-wide. A stale
+# trap outlives its fix and deters the work it was written to protect.
+- name: Deploy node_exporter to the Proxmox host
+  hosts: proxmox
+  become: false # the inventory connects as root; there is no ansible user here
   roles:
     - node_exporter

@@ -74,9 +74,10 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 
 | # | Item | What is lost |
 |---|---|---|
-| 1 | Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key off-site - sealed on paper outside the flat, plus a password manager somebody else operates. Demote the GitHub key to a read-only deploy key | Unrecoverable. One copy, gitignored, on the boot SSD with the unresolved [KE-14](known-errors.md#ke-14) faults. Losing the vault password makes every vaulted secret undecryptable - there is no restore path. See [lxc250 § Open Items](../nodes/lxc250.md). Target corrected 2026-08-14 - this line used to say "into Vaultwarden", and that was wrong: see the note below |
+| 1 | ~~Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key off-site~~ Reported done 2026-08-20: credentials are held in an external password manager operated by a third party, with the most important ones written on paper off-site. Demoting the GitHub key to a read-only deploy key is still open | Substantially closed, with one thing left to confirm and one discipline left to start. **Confirm:** the item names three artefacts and only one of them is a password. `hosts.yml` and the Ansible SSH key are *files*, and a password manager holding "all passwords" does not necessarily hold them - check explicitly rather than by inference, because the failure mode is discovering the gap on the day the control node is gone. **Start:** an escrow that has never been restored from is the same fiction as an untested backup. Once a year, retrieve the paper copy and run `ansible-vault view` against a vaulted file, recording the date as [`pg-restore.md`](../../runbooks/database/pg-restore.md) does |
 | 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ Done 2026-08-13. ~~Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time~~ Done 2026-08-14 - plus write-to-`.partial`-then-rename, so an unverified dump never appears under the real name, and verification ordered before retention deletion | Closed. A dump that cannot be read now fails the run that wrote it and raises `SystemdUnitFailed`, instead of surviving up to 31 days until the monthly restore test - by which point the 7-day retention has deleted every healthy predecessor. Note the write-time checks prove the stream is complete, not that it is durable on vm102: the read-back is served from the CIFS page cache. Durability remains the restore test's job |
 | 3 | Off-site copy of the C1 datasets defined in [`data-classification.md`](data-classification.md) | All backups are local, on the same site. No protection against site loss or ransomware. Scope defined 2026-08-15 - and this line's earlier wording was wrong. It read "off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which presumes local copies exist that merely need duplicating elsewhere. Two of them do not exist: the Nextcloud MariaDB has no backup at all, and Vaultwarden has no consistent export. Those must be created first - an off-site copy of nothing is nothing. Status 2026-08-15: the MariaDB half is done and live - share provisioned on vm102, `mp1` bind, first verified dump on the share, metric scraped, `MariaDBBackupStale` inactive (`mariadb_backup` role + [runbook](../../runbooks/database/mariadb-backup.md)). The Vaultwarden export is the last open half: an SQLite file copied from a live CIFS mount is a gamble on timing, not a backup |
+| 4 | Guest backup - a restorable copy of the machines, not only of their data. Role and runbook exist since 2026-08-20; the first live run is not yet recorded | Every VM and LXC root disk lives in one thin pool on one six-year-old SSD behind the HBA of [KE-14](known-errors.md#ke-14). The two database dumps restore *data* and Ansible restores *configuration*; neither restores a machine, and state that lives in neither - the Paperless index, Grafana's dashboards, Nextcloud's app config - is simply gone. That [`lxc250-rebuild.md`](../../runbooks/platform/lxc250-rebuild.md) exists is the measure of the gap: a rebuild runbook written because there is no restore. Blocked on nothing except the host adoption, since `vzdump` runs on the hypervisor. See [`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md) |
 
 **Why item 1 no longer says "into Vaultwarden" (decided 2026-08-14).** Vaultwarden's persistent data
 lives on `mp0: /mnt/smb/vaultwarden`, i.e. on vm102's MergerFS pool - so against the *predicted*
@@ -151,6 +152,78 @@ lxc200 and lxc250; clean up the eleven orphaned `smart.prom.*` temp files in the
 directory (re-counted 2026-08-17; the collector leaks one per failed run, and the script itself is
 the only hand-deployed host script with no copy under `snippets/`) -
 [KE-5](known-errors.md#ke-5) Vaultwarden migration off CIFS.
+
+## Added by the 2026-08-20 repository and fleet audit
+
+A full sweep of both sides before the Terraform track. The repository passed all 33 checks; the
+fleet held no failed unit, no firing alert and no dead scrape target, and both database dumps were
+current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
+item 4 above; these are the rest.
+
+- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** Measured: `*:22` on
+  lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
+  host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name
+  vm100 as the exception to a rule the fleet otherwise follows; it is the other way round, and the
+  design decision those documents defer is therefore a fleet decision rather than a node one. The
+  acute risk stays closed - password authentication is off everywhere - so this is a correctness and
+  honesty problem, not an urgent one.
+- **The host runs `rpcbind` on `0.0.0.0:111` and `[::]:111`.** Same finding as the one recorded for
+  lxc210 on 2026-08-17, on the hypervisor, unmentioned. Neither node has a use for it.
+- **Alertmanager on lxc200 binds `*:9094`.** The cluster port, LAN-exposed, on the monitoring node.
+  Single-instance Alertmanager has no cluster to form.
+- **`pve-firewall` is disabled.** Defensible on a host whose exposure is governed by Tailscale ACLs
+  and by the nftables guard on vm102, but it is a security posture nothing states, and an undocumented
+  deliberate choice is indistinguishable from an oversight at review time.
+- **The boot SSD is a consumer drive with 58,540 power-on hours.** `Wear_Leveling_Count` normalises
+  to 047 at 633 program-erase cycles, and `Used_Rsvd_Blk_Cnt_Tot` carries `WHEN_FAILED=In_the_past`
+  with a worst value of 001 against a threshold of 010 - it has been below its threshold at some
+  point, though the raw value reads 0 and the current value 100, which is consistent with a known
+  firmware artefact on this drive family. [KE-14](known-errors.md#ke-14) excludes media and HBA
+  firmware as causes and never mentions the drive's age. It carries every guest root disk.
+- **The package that closes item 8 was already installed and then removed.**
+  `prometheus-node-exporter-collectors` sits in dpkg state `rc` on the host, leaving eight inactive
+  `prometheus-node-exporter-*.timer` units behind. That package ships `smartmon.sh`, which exports
+  exactly the per-attribute metrics item 8 describes as missing. The work is a reinstall plus wiring
+  it to the existing textfile directory, not a script to write.
+- **The SMART collector exports drive serial numbers as a Prometheus label.** Nine of them, in the
+  time series database and in every panel built on it.
+- **VM100's unsnapshottable disk holds 18 GB.** Its `scsi1` is a 300 GB raw file on directory
+  storage, and `/mnt/vm-data` inside the guest is 7 % used. The constraint recorded in `CLAUDE.md`
+  is real; the migration it blocks is an order of magnitude smaller than the disk's nominal size
+  suggests.
+- **A second copy of the real inventory sits on lxc250.** `backup-hsa-20260709-premerge-abort/`,
+  8.4 MB, from the mid-merge abort of 2026-07-09, containing `ansible/inventory/hosts.yml`. Beside
+  it, `backup-hsa-pre-sanitization-20260710/`, `homelab-docs.zip` and a stray clone whose directory
+  name is the repository's with a trailing dash. The gitignored inventory is treated as a single
+  copy everywhere in these documents; it is not.
+- **The `pveproxy` drop-in carries a non-English comment and an inline Tailscale address.** It
+  predates the shared `wait-for-tailscale-ip.sh` and was never folded into it, so the host holds two
+  spellings of one readiness gate - one of which hard-codes an address that `tailscale ip -4` would
+  supply.
+- **Item 9 undercounts.** There are eight hand-deployed host artefacts, not five: the five listed,
+  plus `check-smb-mounts.sh` with `smb-mounts-check.service`, the `node-exporter-smarttext.sh` timer
+  pair, and the `pveproxy` drop-in above.
+- **The Proxmox host document has no `## Failure Impact` section.** Check 6 requires one of every
+  document under `docs/nodes/`, and the host lives in `docs/platform/`, so the single point of
+  failure for the entire platform is the one node whose failure is not written down. Added in the
+  same pass as this entry.
+- **An off-site copy exists and is documented nowhere.** A rescue of the auxiliary disk's contents
+  was taken to an administrator workstation on 2026-06-25 and is still there, on encrypted storage,
+  in a different building from the server. It is a point-in-time copy roughly eight weeks old, not a
+  running backup, and its error logs contain only `socket ignored` lines from container runtime
+  sockets, so the copy itself is complete. A second mirror on removable media is reported to exist
+  from May, likewise unrecorded. Neither changes the plan, but "no off-site copy of anything" was
+  not accurate.
+- **The rest is confirmation rather than discovery**, and is listed only so the measurements have a
+  date. SnapRAID scrub coverage has degraded from 123 to 126 days on the oldest block with 74 % of
+  the array unscrubbed and `SnapRAIDScrubStale` green; no compose stack on the fleet runs a pinned
+  image; eleven orphaned `smart.prom.*` temp files remain; lxc220 still holds the disabled
+  `tailscaled-userspace.service` file; lxc250's `node_exporter` still runs argument-free on `*:9100`
+  and is scraped by nobody, its sshd drop-in still retries rather than waits, and its root
+  filesystem is at 73 % with no alert; `journald` `Storage=` is unset on vm100 and vm102; the
+  deprecated `mkdir 0` remains in `storage.cfg` on a host already running PVE 9; the archive pool
+  holds 198 GB; and the KE-13 auxiliary disk reads 21 and 7680 unchanged since 2026-07-09 - forty-two
+  days in service with no new uncorrectable error.
 
 ## Added by the 2026-08-17 repository audit
 

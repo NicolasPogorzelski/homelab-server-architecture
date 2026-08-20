@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Weekly guest backup at {{ guest_backup_oncalendar }}
+
+[Timer]
+OnCalendar={{ guest_backup_oncalendar }}
+
+# The host powers down at 01:00 and is woken by RTC in the morning, so a weekly
+# slot is missed outright whenever the machine is down when it comes round.
+# Persistent=true records the last run under /var/lib/systemd/timers/ and fires
+# the overdue one at the next boot.
+#
+# Note the difference from lvm-thin-metrics, which deliberately does NOT set
+# this: catch-up is right for a job that must happen and wrong for one that
+# samples a gauge, where replaying a missed run writes a stale value under a
+# fresh timestamp. A backup is the first kind.
+Persistent={{ guest_backup_persistent | lower }}
+
+Unit=guest-backup.service
+
+[Install]
+WantedBy=timers.target

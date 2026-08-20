@@ -1,0 +1,15 @@
+---
+# Targets the `proxmox` group, because vzdump is a host-level tool: it reaches
+# the guests through the hypervisor's storage layer, not through anything running
+# inside them. There is deliberately no per-guest counterpart.
+#
+# This playbook therefore cannot run until the Proxmox host is in the real
+# inventory. Until the `proxmox` group exists there, Ansible prints
+# "skipping: no hosts matched" and exits 0 - success, having done nothing. That
+# silence is the reason the host adoption is sequenced before this role rather
+# than after it.
+- name: Deploy guest backup infrastructure on the Proxmox host
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
+  roles:
+    - guest_backup

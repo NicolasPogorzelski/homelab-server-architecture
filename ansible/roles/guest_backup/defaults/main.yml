@@ -1,0 +1,42 @@
+---
+# Single source of truth lives in snippets/scripts/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+guest_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/guest-backup.sh"
+guest_backup_script_dest: /usr/local/sbin/guest-backup.sh
+
+# Mirrors BACKUP_DIR in the script. A generic mountpoint, never the physical
+# disk: the host binds whichever disk currently holds this role onto the path, so
+# moving from the interim target to the replacement hardware is an fstab change
+# and nothing else. It also keeps the real disk label out of a public repository.
+#
+# The role asserts this is a mountpoint on a device other than root, and refuses
+# to deploy otherwise - see tasks/main.yml.
+guest_backup_dir: /mnt/vzdump
+
+guest_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# Weekly, not nightly, and the reason is arithmetic rather than taste. A full run
+# is roughly 10 GB; nightly runs would exhaust any target this platform currently
+# has within weeks. The state that genuinely changes every day - the two
+# databases - already has its own nightly dump, alerted on separately. What this
+# job protects is the machine around that state, and machines change slowly.
+#
+# 11:00 on Sunday sits inside the host's waking hours. It powers down at 01:00
+# and wakes by RTC in the morning (homelab_schedule), so any slot before roughly
+# 10:00 is a slot that does not exist.
+guest_backup_oncalendar: "Sun *-*-* 11:00:00"
+
+# The host is asleep for two thirds of the day, so a weekly calendar slot is
+# missed outright whenever the machine happens to be down on a Sunday morning.
+# Persistent=true records the last run and fires the overdue one at the next
+# boot. This is the same defect that silently stopped the PostgreSQL dumps for
+# two months while they were still a cron job, and the rule it produced: any
+# scheduled job on this fleet is a timer with Persistent=true.
+guest_backup_persistent: true
+
+# vzdump reads and writes at disk speed for several minutes per guest. Nice and
+# ionice keep that off the critical path of whatever the host is doing, at the
+# cost of a longer run - a trade that only makes sense because nothing waits on
+# this job finishing.
+guest_backup_nice: 10
+guest_backup_ionice: 7

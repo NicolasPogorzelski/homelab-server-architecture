@@ -28,6 +28,7 @@ Related operational model:
 - Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
 - LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
 - Docker data root migration to aux-disk: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
+- Guest backup and restore: [platform/guest-backup-restore.md](platform/guest-backup-restore.md)
 - LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
 - pveproxy down after boot (Tailscale-IP bind race): [platform/pveproxy-tailscale-boot-race.md](platform/pveproxy-tailscale-boot-race.md)
 
