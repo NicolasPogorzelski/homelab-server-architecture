@@ -34,10 +34,19 @@ notes there and keep this section short.
   its `Persistent=true` catch-up fired 82 s into the boot window and the poll waited 11 s for
   `Self.DNSName`. The fifth instance - lxc250's hand-written sshd drop-in, which
   retried rather than waited - is owned by the `tailscale_boot_gate` role since
-  2026-08-20. Note what the hand-written version got right and a naive replacement
-  would have lost: Debian's `ssh.service` sets `RestartPreventExitStatus=255`, and
-  sshd exits 255 on a failed bind, so the retry only worked because the drop-in
-  cleared that list. Cold-boot verification is still outstanding.
+  2026-08-20 and cold-boot confirmed the same day (gate returned after 2 s,
+  `NRestarts=0`). Note what the hand-written version got right and a naive
+  replacement would have lost: Debian's `ssh.service` sets
+  `RestartPreventExitStatus=255`, and sshd exits 255 on a failed bind, so the retry
+  only worked because the drop-in cleared that list. **That reboot also found nine
+  more instances.** The `node_exporter` on every guest binds the Tailscale address
+  with ordering and a retry but no gate, and all nine failed once at that boot with
+  `EADDRNOTAVAIL` (`NRestarts=1`); the hypervisor read 0, having carried a
+  hand-written gate since 2026-07-28. Nothing reported it: the retry makes the end
+  state correct, `SystemdUnitFailed` has `for: 15m` and cannot see a 15-second
+  failure, and the exporter that would report the fault is the one that is down.
+  The gate is in the role's unit template since 2026-08-20 - fleet cold-boot
+  verification rides on the next nightly power cycle.
 - **KE-6 recurrence on lxc220 - RESOLVED 2026-07-28.** The node had been running a second,
   hand-written `tailscaled-userspace.service` alongside the packaged unit, so two daemons started
   every boot and its `node_exporter` had, as far as can be established, never been scraped. KE-6 had

@@ -1198,15 +1198,37 @@ own `$`-expansion to `ExecStartPre=`, so an inline `for i in $(seq 1 30)` can si
 zero-iteration loop that exits 0 without ever waiting - a gate that reports success while doing
 nothing.
 
-**Status:** Class documented 2026-07-28; all four known instances fixed and **all four cold-boot
-confirmed on 2026-08-13** against a real host power cycle - including the lxc210 query-time
-instance, whose retry path only a boot could exercise. Fleet state at that boot: no failed unit on
-any node, 19/19 Prometheus targets up, no alert firing.
+**Status:** Class documented 2026-07-28. Four instances fixed and cold-boot confirmed on
+2026-08-13, a fifth on 2026-08-20 - and the same evening the class turned out to be nine instances
+larger than anyone had counted.
 
-Two loose ends, neither a readiness fault:
+**The count was wrong because the evidence destroyed itself (measured 2026-08-20).** Verifying the
+lxc250 sshd gate against a container reboot produced a control case nobody had asked for: the
+`node_exporter` on the same node, binding the same address, ordered after tailscaled but with no
+gate. It failed with `listen tcp <addr>:9100: bind: cannot assign requested address`, sat in
+`failed`, and came back 15 s later on its restart. Swept across the fleet immediately: **nine of
+nine guests, `NRestarts=1`, every one of them.** The hypervisor read `NRestarts=0` - it has carried
+the gate as a hand-written drop-in since 2026-07-28.
 
-- The host's `pveproxy` drop-in still hard-codes its Tailscale IP inline rather than calling the
-  shared script - harmless today, worth folding into the same pattern on the next host pass.
+Three mechanisms hid it, and they are worth more than the fault:
+
+- The retry loop makes the end state correct, so the node converges and the failure leaves no
+  trace anyone looks at.
+- `SystemdUnitFailed` carries `for: 15m`. A fifteen-second failure cannot reach that rule by
+  construction - the guard is not blind by accident but by threshold.
+- The exporter that would have exported the fault is the one that is down, which is the same
+  self-concealing shape as the host exporter whose failure stopped the host from reporting.
+
+And the fix already existed. The host's drop-in says in its own comment that ordering after
+tailscaled is not sufficient. It was applied where it was found and never swept - the lesson KE-6
+was supposed to have taught. The gate now lives in the `node_exporter` role's unit template rather
+than in a drop-in, because the role generates that unit and a drop-in is for overriding a file you
+do not own.
+
+One loose end, not a readiness fault: the host's `pveproxy` drop-in still hard-codes its Tailscale
+IP inline rather than calling the shared script - harmless today, worth folding into the same
+pattern on the next host pass.
+
 - **The fifth instance was fixed on 2026-08-20, and reading it first changed the fix.**
   lxc250's hand-written `ssh.service.d/override.conf` used `After=` plus a `RestartSec=15s` retry
   loop instead of a readiness gate. It is now owned by the `tailscale_boot_gate` role, which puts
@@ -1215,8 +1237,11 @@ Two loose ends, neither a readiness fault:
   `RestartPreventExitStatus=255`, and sshd exits 255 when it cannot bind - so the retry loop only
   ever worked because the hand-written drop-in cleared that list with an empty assignment. A
   replacement that had reproduced the visible half and dropped that line would have removed the
-  backstop while appearing to improve it. **Cold-boot confirmation is outstanding**, and only a
-  boot can give it - the same condition that made the lxc210 instance provable.
+  backstop while appearing to improve it. **Cold-boot confirmed the same day** against
+  `pct reboot 250`: `wait-for-tailscale-ip: <address> present after 2s`, sshd listening 25 ms
+  later, `NRestarts=0`, no failed unit. The ungated exporter on the same node bound 13 s later
+  than the gated sshd beside it - the gate is not only cleaner than the retry loop, it is
+  faster.
 
 **References:**
 - [KE-6 - userspace-networking](#ke-6-tailscale-userspace-networking-prevents-node_exporter-from-binding-to-tailscale-ip) - produces the *same* `EADDRNOTAVAIL` message from an unrelated cause; a restart fixes this class and does nothing for that one

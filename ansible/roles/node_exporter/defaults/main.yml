@@ -35,3 +35,32 @@ node_exporter_systemd_collector: true
 # `.mount` is therefore kept; the two known-noisy mount units are masked at the
 # source by the `systemd_hygiene` role rather than filtered here.
 node_exporter_systemd_unit_exclude: '.+\.(automount|device|scope|slice)'
+
+# Gate the exporter on its bind address actually existing, rather than merely on
+# tailscaled having been started. Measured 2026-08-20 across a real container
+# boot: without it, every one of the nine guests failed once with
+# `listen tcp <addr>:9100: bind: cannot assign requested address`, sat in
+# `failed`, and came back 15 s later on the restart below. Nine nodes, nine
+# identical failures, at every boot since the bind was pinned.
+#
+# Nothing reported it, and that is the more useful half of the finding.
+# `SystemdUnitFailed` carries `for: 15m`, so a fifteen-second failure cannot
+# reach it by construction; `systemctl is-active` answers `active` once the
+# restart has landed; and the exporter that would have exported the fault is the
+# one that is down. The gate turns a caught failure into no failure: measured on
+# lxc250, the gated sshd bound 13 s earlier than the ungated exporter beside it.
+#
+# The Proxmox host has had this since 2026-07-28, as a hand-written drop-in whose
+# own comment says ordering is not sufficient. It was applied where it was found
+# and never swept across the fleet - the failure KE-6 already taught this
+# platform once.
+node_exporter_tailscale_gate: true
+node_exporter_wait_script_src: "{{ playbook_dir }}/../../snippets/scripts/wait-for-tailscale-ip.sh"
+node_exporter_wait_script: /usr/local/bin/wait-for-tailscale-ip.sh
+node_exporter_wait_timeout: 90
+
+# The gate lives in the unit, not in a drop-in, because this role generates the
+# unit - a drop-in exists to override a file you do not own. The hypervisor's
+# hand-written drop-in predates that and would append a second, redundant
+# ExecStartPre once the host is adopted, so the role removes it.
+node_exporter_obsolete_dropin: /etc/systemd/system/node_exporter.service.d/wait-tailscale.conf
