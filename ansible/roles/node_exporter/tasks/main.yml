@@ -55,6 +55,15 @@
         - /tmp/{{ node_exporter_dist }}.tar.gz
         - /tmp/{{ node_exporter_dist }}
 
+- name: Deploy the wait-for-tailscale-ip script
+  ansible.builtin.copy:
+    src: "{{ node_exporter_wait_script_src }}"
+    dest: "{{ node_exporter_wait_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: node_exporter_tailscale_gate
+
 # No owner/group on purpose: on lxc260 this directory belongs to `postgres`, which
 # is the user pg-backup.sh writes its .prom file as. Asserting owner: root here
 # would silently break that backup's metric - the same class of failure this
@@ -73,6 +82,15 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart node_exporter
+
+# Removed after the unit carrying the gate is in place, so an interrupted run
+# never leaves the node with neither.
+- name: Remove the superseded boot-gate drop-in
+  ansible.builtin.file:
+    path: "{{ node_exporter_obsolete_dropin }}"
+    state: absent
+  when: node_exporter_tailscale_gate
   notify: Restart node_exporter
 
 - name: Enable Systemd

@@ -21,7 +21,22 @@ User=node_exporter
 #}
 {% set _ = flags.append('--collector.systemd.unit-exclude=' ~ (node_exporter_systemd_unit_exclude | replace('\\', '\\\\'))) %}
 {% endif %}
+{% if node_exporter_tailscale_gate %}
+{#
+  Ordering after tailscaled is not readiness: systemd calls a unit started when
+  its process is running, not when it is ready, so tailscaled counts as up while
+  it is still negotiating and the address is still absent. This polls until the
+  address is actually assigned to a local interface. It is fail-open - on timeout
+  it warns and exits 0 - so the exporter starts late rather than not at all.
+#}
+ExecStartPre={{ node_exporter_wait_script }} {{ node_exporter_wait_timeout }}
+{% endif %}
 ExecStart=/usr/local/bin/node_exporter {{ flags | join(' ') }}
+# Backstop for the case the gate times out and the bind still fails. Spaced at
+# 15 s because systemd gives up after StartLimitBurst=5 starts inside
+# StartLimitIntervalSec=10s, and at the stock 100 ms delay that limit trips in
+# half a second - which is exactly how the hypervisor's exporter used to end up
+# dead for the rest of the boot.
 Restart=on-failure
 RestartSec=15s
 
