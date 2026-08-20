@@ -433,12 +433,15 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 #
 # Bold spanning a line break is not detected. That is accepted: the check is a
 # net for the common case, not a markdown parser.
+#
+# CLAUDE.md was exempt from this check until 2026-08-20, which left the file that
+# states the rule as the only one never measured against it. It held two
+# violations at the time the exemption was removed.
 echo "Check 20: bold as label, not mid-sentence emphasis"
 
 while read -r file; do
     rel="${file#${REPO_ROOT}/}"
     git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    case "${rel}" in CLAUDE.md) continue ;; esac
     { grep -nE "[a-zA-Z0-9,;:)] \*\*[^*]+\*\*" "${file}" || true; } | while read -r match; do
         echo "  Mid-sentence bold: ${rel}:${match%%:*}"
         echo "x" >> "${ERROR_LOG}"
@@ -465,7 +468,7 @@ while read -r file; do
     git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     # This script carries the word list itself, so it would always match.
     case "${rel}" in scripts/validate-repo.sh) continue ;; esac
-    { grep -nwiE "nicht|wurde|wurden|werden|damit|deshalb|sondern|jedoch|bereits|zwischen" "${file}" || true; } | while read -r match; do
+    { grep -nwiE "nicht|wurde|wurden|werden|damit|deshalb|sondern|jedoch|bereits|zwischen|Lernprojekt|Rechner|Beispiel" "${file}" || true; } | while read -r match; do
         echo "  German text: ${rel}:${match%%:*}"
         echo "x" >> "${ERROR_LOG}"
     done
@@ -967,11 +970,46 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 34: no refs outside the standard namespaces
+# =============================================================================
+# Added 2026-08-20. A ref outside refs/heads is invisible to every habit this
+# repository has for reviewing its own history. `git log`, `git branch` and the
+# publishing commands all work from branches, so a commit that no branch reaches
+# is never read and never reviewed - while a mirror transfer moves every ref
+# there is. "On no branch" is not the same as "not part of this repository", and
+# the distance between those two is where an unreviewed commit can sit for weeks.
+#
+# Tooling leaves refs behind as a matter of course. `git filter-branch` writes
+# refs/original, and this repository still carries an empty one from its history
+# rewrite; editors and sync helpers keep namespaces of their own. Three such refs
+# were found and removed on the day this check was written.
+#
+# refs/stash and refs/notes are legitimate local state and stay allowed. The
+# check reports rather than deletes: removing a ref is the operator's call, and
+# it may still be the only pointer to unfinished work.
+echo "Check 34: no refs outside the standard namespaces"
+
+if git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+    while read -r ref; do
+        [[ -z "${ref}" ]] && continue
+        case "${ref}" in
+            refs/heads/*|refs/tags/*|refs/remotes/*|refs/stash|refs/notes/*) continue ;;
+        esac
+        echo "  Ref outside standard namespaces: ${ref}"
+        echo "  (remove it with: git update-ref -d ${ref})"
+        echo "x" >> "${ERROR_LOG}"
+    done < <(git -C "${REPO_ROOT}" for-each-ref --format='%(refname)')
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 33"
+echo "Checks run: 34"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

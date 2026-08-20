@@ -212,7 +212,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 33 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, and service documents naming a node that has no node document.
+This script enforces 34 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, and git refs outside the standard namespaces.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -276,7 +276,7 @@ This is a documentation and configuration repository - no application code, no b
 - `docker/` - Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` - Operational procedures (must follow the runbook contract)
 - `snippets/` - Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
-- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (33-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
+- `scripts/` - Repo tooling and Proxmox host scripts: `validate-repo.sh` (34-check repo validator), `commit-msg-lint.sh` (git hook, conventional commits), `homelab-setwake.sh` (RTC wakeup scheduling - deployed to host `/usr/local/sbin/`), `homelab-shutdown.sh` (scheduled shutdown - deployed to host `/usr/local/sbin/`)
 - `ansible/` - Ansible configuration, inventory, playbooks, roles
 
 Only these top-level directories are allowed (enforced by Check 12), plus the files `README.md`,
@@ -568,7 +568,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   See the host-adoption design decision (pending).
 - **VM100 cannot be rolled back - no snapshot is possible (found 2026-08-16):** its `scsi1` is a
   300 GB raw file on directory storage, a format Proxmox cannot snapshot, and that storage sits on
-  the failing KE-13 disk. The thin pool holding `scsi0` is at 84 % with **zero** free space in the
+  the failing KE-13 disk. The thin pool holding `scsi0` is at 84 % with no free space at all in the
   volume group, so growing it is not an option either. Every change to this VM is therefore more
   expensive than it looks: there is no way back except a restore that does not exist. This became
   concrete when a live CIFS unmount froze the guest with no evidence recorded
@@ -633,7 +633,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `MetadataCritical` / `LvmThinMetricsStale`. Reclaimed to 81.20 % by `pct fstrim` and kept there by
   `lxc-fstrim.timer` - containers cannot trim themselves: the stock `fstrim.timer` carries
   `ConditionVirtualization=!container` and the ioctl is refused anyway, both silently. Note
-  `lvm_vg_free_bytes` is **0**: the VG is fully allocated, so `lvextend` is not an available remedy
+  `lvm_vg_free_bytes` reads 0: the VG is fully allocated, so `lvextend` is not an available remedy
   without shrinking `root`/`swap` or adding a PV. Units are hand-deployed; folding them into a role
   still waits on the host becoming an Ansible node.
 - **`tailscaled-userspace.service` on lxc220 is disabled, not deleted (2026-07-28):** the KE-6
