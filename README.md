@@ -196,24 +196,24 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 28 and 24 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 29 and 25 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
-- [Repository validator](scripts/validate-repo.sh) - 33 structural checks, run by a pre-commit
+- [Repository validator](scripts/validate-repo.sh) - 34 structural checks, run by a pre-commit
   hook and by CI on every push
 
 ### Runbooks
 
-Fourteen procedures under the same contract: every one states its preconditions, its verification
+Fifteen procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All fourteen runbooks</summary>
+<summary>All fifteen runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
 - Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
 - Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
-- Platform: [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
+- Platform: [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
 - Services: [OpenWebUI health](runbooks/ai-stack/openwebui-health.md) - [Nextcloud/Paperless integration](runbooks/integration/nextcloud-paperless.md)
 
 </details>

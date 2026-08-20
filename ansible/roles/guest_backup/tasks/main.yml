@@ -1,0 +1,101 @@
+---
+# The target has to exist before anything is deployed, and the role asserts it
+# rather than creating it.
+#
+# Creating it would be actively harmful here. `file: state=directory` on an
+# unmounted path produces an empty directory on pve-root that looks exactly like
+# the mount and is not, and vzdump would then write gigabytes per run into the
+# thin pool on the boot SSD - filling the disk that carries every guest, in order
+# to back up those guests. That is the KE-7 failure class, and it is the same
+# reason mariadb_backup asserts its CIFS mount instead of creating /mnt/backups.
+#
+# Two conditions, not one. A bind mount of a local directory satisfies
+# `mountpoint` while still living on the root device, which would put the backup
+# in the failure domain it exists to survive.
+- name: Assert the backup target is a mountpoint on a device other than root
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.mounts
+        | selectattr('mount', 'equalto', guest_backup_dir)
+        | list | length == 1
+      - >-
+        (ansible_facts.mounts
+         | selectattr('mount', 'equalto', guest_backup_dir)
+         | map(attribute='device') | first | default(''))
+        !=
+        (ansible_facts.mounts
+         | selectattr('mount', 'equalto', '/')
+         | map(attribute='device') | first | default('root'))
+    fail_msg: >-
+      {{ guest_backup_dir }} is not a mountpoint, or resolves to the root device.
+      Bind the current backup disk onto that path first - see
+      runbooks/platform/guest-backup-restore.md. Deploying the timer now would
+      install a job that writes ten gigabytes a week onto the boot SSD.
+    success_msg: "{{ guest_backup_dir }} is a mountpoint on its own device - safe to deploy."
+
+# Read-only probe, so it must run under --check as well; without this the
+# registered value would not exist and the assert below would fail on a dry run
+# for a reason unrelated to the host's actual state.
+- name: Measure free space on the backup target
+  ansible.builtin.command:
+    cmd: "df --output=avail -BG {{ guest_backup_dir }}"
+  register: guest_backup_avail
+  changed_when: false
+  check_mode: false
+
+# A guard against the quiet version of this job failing: the target filling up.
+# vzdump prunes only after a successful write, so a target with no room produces
+# a failed run rather than a rotated one, and the newest backup stays whatever it
+# was. Two full runs of headroom is the smallest margin that survives one bad
+# week.
+- name: Assert the target has room for at least two full runs
+  ansible.builtin.assert:
+    that:
+      - guest_backup_avail.stdout_lines[1] | regex_replace('G$', '') | int >= 25
+    fail_msg: >-
+      {{ guest_backup_dir }} has {{ guest_backup_avail.stdout_lines[1] | default('unknown') }}
+      free. A full run is roughly 10 GB and the pruner only runs after a
+      successful write, so a target this small fails instead of rotating.
+    success_msg: "{{ guest_backup_avail.stdout_lines[1] | default('') }} free - room for at least two runs."
+
+- name: Deploy guest-backup script
+  ansible.builtin.copy:
+    src: "{{ guest_backup_script_src }}"
+    dest: "{{ guest_backup_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ guest_backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy guest-backup service unit
+  ansible.builtin.template:
+    src: guest-backup.service.j2
+    dest: /etc/systemd/system/guest-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy guest-backup timer unit
+  ansible.builtin.template:
+    src: guest-backup.timer.j2
+    dest: /etc/systemd/system/guest-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd_service:
+    name: guest-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

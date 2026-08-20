@@ -1,6 +1,16 @@
 ---
+# `guests`, not `all` - see ssh-hardening.yml for the convention and why it is a
+# group definition rather than a habit of checking.
+#
+# The Proxmox host is deliberately absent for now. The role is a no-op on a node
+# with no entries (`systemd_hygiene_masked_units` and `_group_units` both default
+# to empty), so including it would change nothing today and would silently start
+# masking units on the hypervisor the day somebody adds a fleet-wide entry to
+# `group_vars`. It has no permanently failed unit as of 2026-08-20. Add a
+# `proxmox` play when it does, with the unit named and a reason recorded, which
+# is what this role asks of every other node.
 - name: Mask systemd units that can never succeed on their node
-  hosts: all
+  hosts: guests
   become: true
   roles:
     - systemd_hygiene

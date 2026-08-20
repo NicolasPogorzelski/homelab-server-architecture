@@ -1405,3 +1405,152 @@ channel will be silent for exactly the message being sought.
 - VM100 cannot be snapshotted at all. That is the precondition for investigating this.
 
 ---
+
+## KE-21: A kernel oops cascade wedged the hypervisor, and nothing could report it
+
+**Affected component:** Proxmox host (hypervisor)
+
+**Symptom:**
+On 2026-08-20 from roughly 12:39 the host stopped accepting new SSH sessions - TCP connected, the
+banner never arrived, at 60 seconds as at 20. The web interface served its login page and then
+refused authentication with `401 invalid PVE ticket`. Every guest showed as `unknown` in the
+interface. A shutdown requested through the interface produced neither confirmation nor effect.
+Meanwhile the machine pinged in 2 to 4 ms, all ten guests kept running, and both VMs answered SSH
+normally with a load average of 0.00. Recovery required a hard reset; the outage lasted about two
+and a half hours.
+
+**What was measured while it was happening:**
+The host's `node_exporter` kept answering for most of the incident, which is the only reason any of
+this is quantified rather than reconstructed. It reported load 22 with `node_procs_running` between
+1 and 3, `node_procs_blocked` at 0, 7.4 GB memory available, 25 GB free on `/`, every
+`node_disk_io_now` at 0, and no failed unit. Pressure-stall figures over three samples ten seconds
+apart put I/O stall at about 1 % and CPU pressure at 0.2 %.
+
+Load 22 with neither CPU nor I/O pressure is not a busy machine. It is twenty-two tasks blocked on
+a lock. The discriminating measurement was one label:
+
+```
+node_filesystem_device_error{device="lxcfs", fstype="fuse.lxcfs",
+                             mountpoint="/var/lib/lxcfs",
+                             device_error="mountpoint timeout"} 1
+```
+
+**Root cause, from the kernel log of the previous boot:**
+
+The journal is persistent on this host, so the whole sequence survived the reset.
+
+*12:38:25 - the first fault, and the only one that is a cause rather than a consequence:*
+
+```
+BUG: unable to handle page fault for address: ffff8adf00000051
+CPU: 3  PID: 140185  Comm: lxc-info   Tainted: P O
+RIP: anon_vma_interval_tree_insert+0x4b/0xe0
+RDX: ffff8adf00000001
+Call Trace: __anon_vma_prepare -> __vmf_anon_prepare -> do_fault
+            -> __handle_mm_fault -> handle_mm_fault -> do_user_addr_fault
+```
+
+The taint field reads `P O` and not yet `D`, which is what identifies this as the first oops. A
+process took an ordinary userspace page fault; the kernel walked the anonymous-mapping interval
+tree to prepare it and found a node pointer of `ffff8adf00000001` - a plausible kernel prefix with
+a garbage low half. A kernel data structure was already corrupt at that moment.
+
+*12:38:34 onwards - six further oopses, all identical in shape:*
+
+```
+general protection fault, probably for non-canonical address 0xcfb9e3d45bba8275
+RIP: kmem_cache_alloc_noprof+0x203/0x3e0
+```
+
+That is the slab allocator, and the poisoned pointer is the same value in every one of them. A
+freelist had been corrupted, so every subsequent allocation from that cache faulted. Victims in
+order: `pve-firewall`, `apache2`, `proxmox-firewall`, `bash`, `bash`, `cron`, and at 12:39:06
+`fuse_worker`.
+
+**Why one dead thread cost the whole host:**
+
+`fuse_worker` is the worker thread of `lxcfs`, the FUSE filesystem that gives every container its
+own view of `/proc/meminfo`, `/proc/stat` and `/proc/cpuinfo`. With it gone, lxcfs stopped
+answering, and everything that reads those files blocked:
+
+| What blocked | Why |
+|---|---|
+| Any login into any container | PAM reads `/proc/meminfo` |
+| `pvestatd` | polls container usage through lxcfs - **this is why every guest showed `unknown`** |
+| systemd, PID 1 | caught with them, so timers stopped and no session could be created |
+| Host `sshd` | accepts the connection, then hangs building the session |
+| Web authentication | same PAM path, hence the 401 |
+| Shutdown via the API | the request never returns, hence no confirmation and no effect |
+
+**The absence of a hung-task warning is evidence, not a gap.** `kernel.hung_task_timeout_secs` was
+120 and the detector was active, yet it never fired across two hours. FUSE waits are deliberately
+*killable*, so a dead FUSE daemon does not leave unkillable processes - and the detector skips
+killable waits by construction. A genuine disk or kernel lock would have reported after two
+minutes. `node_exporter` outlasted everything else because it is the one collector with a mount
+timeout; eventually its forty request slots filled too, and it answered
+`Limit of concurrent requests reached (40)`.
+
+**Hardware or software:**
+The poisoned pointer `0xcfb9e3d45bba8275` is byte-for-byte identical in all six follow-on oopses.
+Sporadic memory faults produce different garbage each time; one value repeating is a single
+corruption event being re-read deterministically. That points at software, and the kernel was
+`6.17.4-1-pve` with `6.17.13-21` sitting unapplied - nine point releases behind on a young series.
+No MCE and no EDAC error was logged.
+
+Hardware cannot be excluded, and the reason is worth stating plainly rather than filing under
+"unlikely": the memory has no error correction (`Error Correction Type: None`, DDR4 on a
+consumer AM4 board). Silent corruption on such a machine is undetectable by design, so the absence
+of a machine-check exception proves nothing at all.
+
+The first oops occurred in `lxc-info`, which `pct exec` invokes and which `pvestatd` also runs every
+few seconds. Manual `pct exec` calls were being issued at the time. That is a correlation and it is
+recorded as one; it is not established as the trigger.
+
+**Damage:** none that survived the reset. All ten guests returned, no failed unit on the host or in
+any container, both databases recovered from their logs - MariaDB replayed 215 InnoDB pages from
+checkpoint LSN 3556122373 and reported ready for connections - and every backup on the share was
+intact. The auxiliary disk read `Reported_Uncorrect=21` and `Current_Pending_Sector=7680` after the
+cut, unchanged. `Dirty bit is set` and a journal recovery on the auxiliary filesystem were the
+expected traces of an unclean stop and nothing more.
+
+**Incidental confirmation of an existing rule:** the kernel letters moved again across this reboot.
+The boot SSD went from `sdc` to `sda` and the auxiliary disk from `sdb` to `sdi`. A SMART sweep
+written against the old letters reported all zeroes for the failing disk, which would have read as
+a recovery. Identify by `9:0:0:0` or by `by-id`, never by letter - see [KE-14](#ke-14).
+
+**What made it a two-hour outage instead of a thirty-second reboot:**
+
+Kernels oops occasionally. What turned this one into a total loss of control was that
+`kernel.panic_on_oops` was `0`. With it set, the machine would have panicked at 12:38:25 and, with
+`kernel.panic` set to a delay, rebooted itself before the slab corruption could spread. Instead it
+degraded for two hours into a state with no way in at all, because the single GPU is passed through
+with `x-vga=1` and there is no serial console and no BMC. **On a single host with no out-of-band
+access, an immediate reboot is strictly better than a machine that is alive and unreachable.**
+
+**Monitoring gaps this exposed:**
+
+1. No rule watched `node_filesystem_device_error`. The value read 1 from the first minute, in every
+   scrape, for two hours. Same class as `smart_health_passed` reporting PASSED for a disk with 7680
+   unreadable sectors: the measurement existed and no guard read it. Closed by
+   `FilesystemMountTimeout`.
+2. `SystemdUnitFailed` could not see this, and not because of a threshold. A unit that hangs stays
+   `activating` and never becomes `failed`, because it never reaches a timeout. Three units sat in
+   `activating` for two hours while that rule read green - correctly, by its own definition. Closed
+   by `SystemdUnitStuckActivating`.
+3. `softdog` is loaded but not armed, because arming it requires the HA stack. A watchdog that a
+   blocked systemd stops feeding is exactly the missing exit from this incident.
+
+**Remediation:**
+
+- `FilesystemMountTimeout` and `SystemdUnitStuckActivating` added to the `kernel` rule group,
+  verified against live series (71 and 1810 respectively) and confirmed to return empty on a
+  healthy fleet.
+- `kernel.panic_on_oops=1` with `kernel.panic=10` - **pending.**
+- Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **pending.**
+- `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
+  window and physical presence.
+- Arm `softdog` - **open for decision.**
+
+**Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
+[KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete
+kernel trace), [hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).

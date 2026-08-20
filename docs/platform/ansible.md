@@ -39,18 +39,40 @@ commits were already pushed to `origin`, so nothing was lost) and checking out `
 
 - **File:** `ansible/inventory/hosts.yml` (gitignored - contains real Tailscale IPs)
 - **Example:** `ansible/inventory/hosts.yml.example` (sanitized, committed)
-- **9 managed nodes:** VM100, VM102, LXC200, LXC210, LXC211, LXC220, LXC230, LXC240, LXC260
-- **LXC250 excluded** from inventory (control node does not manage itself)
+- **10 managed nodes:** VM100, VM102, LXC200, LXC210, LXC211, LXC220, LXC230, LXC240, LXC250, LXC260
+- **LXC250 included since 2026-08-20.** It had been left out on the reasoning that a control node
+  does not manage itself, and the cost of that reasoning was measured rather than argued: no
+  `node_exporter` scrape, no `NodeDown`, no disk alert on a root filesystem at 73 %, no patching of
+  any kind, and no `SystemdUnitFailed` - on the node that holds the only copy of the vault password,
+  the real inventory and the Ansible SSH key. `hosts: all` excluded it and said nothing.
 
 Groups:
 
 | Group | Members |
 |---|---|
-| `lxcs` | LXC200, LXC210, LXC211, LXC220, LXC230, LXC240, LXC260 |
+| `lxcs` | LXC200, LXC210, LXC211, LXC220, LXC230, LXC240, LXC250, LXC260 |
 | `vms` | VM100, VM102 |
+| `guests` | `lxcs` + `vms` - every node that is not the hypervisor. **The target of every sweeping playbook** |
 | `docker` | LXC200, LXC211, LXC220, LXC230, LXC240, VM100 |
 | `database` | LXC260 |
-| `all` | All 9 nodes |
+| `proxmox` | The Proxmox host |
+| `all` | `guests` + `proxmox`. Read-only playbooks may use it; state-changing ones must not |
+
+### Why sweeps target `guests` and not `all`
+
+Because this platform has already had the failure in both directions. `all` excluded lxc250 for
+months and reported nothing, since absence is silent. Once the hypervisor is in the inventory the
+same mechanism runs the other way: a playbook written with `hosts: all` reaches the machine that
+runs all ten guests, and nothing reports that either.
+
+Three state-changing playbooks were converted on 2026-08-20 - `ssh-hardening.yml`,
+`node-exporter.yml` and `systemd-hygiene.yml`. The first two gained an explicit second play for
+`proxmox`, so the hypervisor is reached by being named. `fleet-health-check.yml` keeps `all`
+deliberately: it reads and does not write, and the host belongs in a health report.
+
+The distinction that matters is not which hosts are reached today - `ssh_hardening` was made safe
+for the hypervisor on 2026-08-19 and reaches it either way. It is that the next role will not have
+been checked, and a group definition survives being forgotten where a habit of checking does not.
 
 The `docker` group holds the nodes running Docker Compose stacks (excludes LXC210 Nextcloud - native Apache/PHP, LXC260 PostgreSQL - native systemd, and VM102 storage). It is the target of `docker-compose-update.yml`.
 
@@ -104,10 +126,10 @@ See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
 |---|---|---|
 | `apt-upgrade.yml` | `lxcs`, `vms` | Rolling apt upgrade, `serial: 1`, `dpkg --verify` post-task |
 | `bootstrap-ansible-user.yml` | `all` | One-time: create `ansible` user, deploy SSH key, configure sudoers |
-| `node-exporter.yml` | `all:!lxc200` | Deploy `node_exporter` binary + systemd unit |
+| `node-exporter.yml` | `guests:!lxc200`, plus a named `proxmox` play | Deploy `node_exporter` binary + systemd unit. lxc200 is excluded because its exporter is a container that cannot see the host's systemd units. The `proxmox` play adopts a unit that already exists and whose content the role's defaults match, textfile path included |
 | `prometheus-config.yml` | `lxc200` | Deploy Prometheus config via Jinja2 template |
 | `paperless-env.yml` | `lxc211` | Deploy Paperless `.env` with Vault-managed secrets |
-| `ssh-hardening.yml` | `all` | Set `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`, reload sshd |
+| `ssh-hardening.yml` | `guests`, plus a named `proxmox` play | Set `PasswordAuthentication` and `PermitRootLogin` via `lineinfile`, reload sshd. The host play runs last, because a failure there reloads sshd on the one node with no other way in, and it must report `changed=0` |
 | `chrony.yml` | `vms` | Install `chrony`, ensure started + enabled (time sync on VMs) |
 | `breakglass.yml` | `vms` | Deploy break-glass admin SSH key(s) to each VM's native user (`gpu`/`storage`) |
 | `docker-compose-update.yml` | `docker` | `docker compose pull` + `up` per stack via `docker_compose_v2` (`pull: always`), `serial: 1` |
@@ -120,7 +142,7 @@ See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
 | `postgresql-boot-order.yml` | `database` | Deploy Tailscale boot-ordering fix to LXC260 via `postgresql_boot_order` role |
 | `homelab-schedule.yml` | `proxmox` | Deploy power-schedule scripts + cron file to Proxmox host via `homelab_schedule` role |
 | `postgres-exporter.yml` | `database` | Own `postgres_exporter.service` so it binds the Tailscale IP instead of `*:9187` |
-| `systemd-hygiene.yml` | `all` | Mask or remove per-host units that sit permanently in `failed`, so `SystemdUnitFailed` stays actionable |
+| `systemd-hygiene.yml` | `guests` | Mask or remove per-host units that sit permanently in `failed`, so `SystemdUnitFailed` stays actionable. The hypervisor is deliberately absent: the role is a no-op with no entries, so including it would change nothing today and would silently start masking units there the day a fleet-wide entry is added |
 | `tailscale-cert.yml` | `tailscale_cert_ondisk` | Renew the on-disk Tailscale cert and reload the consuming service only when the cert actually changed (KE-16) |
 | `unattended-upgrades.yml` | `vm100` | Restrict `unattended-upgrades` to security pockets; blacklist kernel + NVIDIA packages |
 | `snapraid-maintenance.yml` | `vm102` | Deploy `snapraid-maintenance.sh` + sync/scrub timers; remove `/etc/cron.d/snapraid` |
@@ -129,6 +151,7 @@ See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
 | `docker-mount-ordering.yml` | `docker` | Order `docker.service` after the automount units its containers bind, so a container cannot start onto a directory autofs has not yet claimed |
 | `netconsole.yml` | `vm100` | Stream the kernel log over UDP to a receiver on the Proxmox host, and raise `console_loglevel` so hung-task messages are not filtered out (KE-20) |
 | `pg-restore-test.yml` | `database` | Deploy the monthly restore validation: dump integrity, restore into a throwaway cluster on port 5433, non-empty key tables, teardown |
+| `guest-backup.yml` | `proxmox` | Deploy the weekly `vzdump` of eight guests to `/mnt/vzdump`: script, `guest-backup.service` + `.timer` (`Sun 11:00`, `Persistent=true`), textfile metrics. Asserts the target is a mountpoint on a device other than root and holds room for two runs. Excludes vm100 |
 | `storage-permissions.yml` | `vm102` | Verify the storage permission matrix and export the result as metrics (`StoragePermissionDrift`, `StoragePermissionCheckStale`) |
 
 Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
@@ -145,7 +168,7 @@ that file as the session narrative it is named for.
 | `node_exporter` | all nodes except LXC200 | Downloads binary (guarded by a `--version` probe, so a converged node skips the download entirely), creates systemd unit via Jinja2 template, handler restarts on unit change. Enables the textfile collector fleet-wide (`node_exporter_textfile_dir`, default-on - it used to default to `""`, which silently dropped vm102's SnapRAID metrics on first rollout) and the systemd collector (`node_systemd_unit_state`, feeding `SystemdUnitFailed`). `.mount` units are deliberately *not* excluded, unlike node_exporter's stock exclude list - mount faults are the failure class the collector was added for. Backslashes in the exclude regex are doubled in the template because systemd applies escape processing to `ExecStart=` arguments |
 | `prometheus_config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, handler restarts Prometheus container (`docker compose restart`) to avoid bind-mount inode staleness on atomic writes |
 | `paperless_env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d` |
-| `ssh_hardening` | all 9 nodes | Sets `PasswordAuthentication no` + `PermitRootLogin no` via `lineinfile`; handler reloads sshd |
+| `ssh_hardening` | all 9 nodes | Sets `PasswordAuthentication` and `PermitRootLogin` in a `00-hardening.conf` drop-in and in `sshd_config`; handler reloads sshd. Both directives are variables since 2026-08-19, defaulting to `no`, because the hypervisor cannot take the strict value - see the `proxmox` group vars. An `assert` refuses a value sshd would reject, since this role reloads the daemon it just reconfigured |
 | `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
 | `breakglass` | VMs (vm100, vm102) | Enforces the admin break-glass pubkeys (`breakglass_pubkeys`, group var) on each host's native user (`breakglass_user`, host var). One `authorized_key` call with `exclusive: true` and the keys joined by a newline - *not* a `loop`, which with `exclusive: true` would leave only the last key, and *not* an inline `join("\n")`, which yields a literal `\n` and would have written both keys onto one line. The pre-existing file is preserved once as `authorized_keys.pre-ansible`. Safe empty default (a `when:` guard, so an empty list cannot wipe access) |
 | `calibre_importer` | LXC220 | Installs `calibre`, deploys `calibre-import.sh` + a systemd oneshot service & 2-min timer that auto-imports ebooks dropped into `/books-rw/_import` |
@@ -165,6 +188,7 @@ that file as the session narrative it is named for.
 | `mariadb_backup` | LXC210 | Deploys `mariadb-backup.sh` + `mariadb-backup.timer` (`03:30`, `Persistent=true`, `RandomizedDelaySec=300`) for Nextcloud's own database, which the `pg_dumpall` on lxc260 never touched. `assert`s that `/mnt/backups` is a CIFS mount and refuses to deploy otherwise - the same write-time defence as `postgresql_backup`, whose original defect was testing that the directory merely existed |
 | `netconsole` | VM100 | Loads the `netconsole` module from a unit ordered `After=network-online.target` rather than from `/etc/modules-load.d/`, which runs before the interface has an address and would fail silently; a failed unit raises `SystemdUnitFailed` instead. Targets the host's LAN address, because netpoll writes frames from inside the kernel and a Tailscale address lives on a TUN device whose daemon is frozen exactly when the channel matters. Pins the receiver MAC - omitting it makes the kernel broadcast the guest's log to the whole segment |
 | `postgresql_restore_test` | LXC260 (`database`) | Monthly (`*-*-01 09:00`, `Persistent=true`) full-cluster restore into a throwaway cluster on port 5433, asserting dump integrity, restore success and non-empty key tables, then tearing it down. Nothing live is touched. The 09:00 slot is load-bearing: the restored cluster holds thin-pool blocks a container cannot `fstrim` itself, so it depends on the host's `lxc-fstrim.timer` at 10:30 reclaiming them the same morning. `PostgreSQLRestoreTestStale` alerts at 40 days |
+| `guest_backup` | Proxmox host (`proxmox`) | Weekly full `vzdump --mode snapshot` of lxc250, 260, 210, 211, 200, 220, 230 and vm102, ordered by value so a run aborted halfway still leaves the irreplaceable guests done. Retention through `--prune-backups` in time classes, not a file count - the `-mtime +7` lesson from `postgresql_backup`. Target is the generic `/mnt/vzdump`, which the host binds to whichever disk currently holds the role, so a disk change is an fstab edit rather than a code change. Two asserts before anything is written: the path is a mountpoint, and its backing device is not root - a bind of a local directory satisfies the first and would put ten gigabytes a week into the thin pool on the boot SSD, which is the KE-7 class. vm100 excluded: reproducible from its compose stack, and including it roughly triples a run |
 | `storage_permissions` | VM102 | Verifies the filesystem side of the share model - group ownership, permitted modes, setgid - on a timer, and exports violations as metrics. Exists because share masks apply only at the moment Samba creates an object, so what is on disk and what the share config implies had drifted apart unnoticed from the pool's creation until 2026-08-16 |
 
 **Two conventions that these roles share, both learned the hard way on 2026-07-10:**
@@ -186,6 +210,18 @@ All 9 managed nodes are hardened via the `ssh_hardening` role:
 |---|---|---|
 | `PasswordAuthentication` | `no` | Eliminates brute-force attack vector; SSH keys are already deployed fleet-wide |
 | `PermitRootLogin` | `no` | Root SSH access is unnecessary - `ansible` user has NOPASSWD sudo |
+
+**The Proxmox host and lxc250 carry the same values by hand, applied 2026-08-17, maintained by
+nothing.** That is the difference this document keeps making between a control and an intention, and
+it is why [`security-controls.md`](security-controls.md) rates A.8.5 *Partial* rather than *Enforced*
+while the values are correct on all eleven nodes.
+
+The host cannot take `PermitRootLogin no`: root is its only administrative account and it has no
+usable out-of-band console. Since 2026-08-19 the role expresses that as an override in
+`group_vars/proxmox.yml` - `prohibit-password`, key authentication for root without a password path -
+so adopting the host changes who maintains the setting, not the setting. A run against a correctly
+configured host must therefore report `changed=0`; a change means the live config drifted, and that
+is the finding rather than a side effect.
 
 **Implementation:** `ansible.builtin.lineinfile` sets each directive directly in `/etc/ssh/sshd_config`. The handler reloads sshd (`state: reloaded`) without dropping active sessions.
 

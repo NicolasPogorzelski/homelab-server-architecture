@@ -88,9 +88,36 @@ all:
         lxc240:
           ansible_host: <tailscale-ip-vaultwarden>
           prometheus_label: vaultwarden
+        # The control node, in the inventory since 2026-08-20. It was absent for
+        # months, which meant `hosts: all` excluded it silently: no node_exporter
+        # scrape, no NodeDown, no disk alert on its 8 GB root, and no patching.
+        # It is also the node holding the only copy of the vault password, the
+        # real inventory and the Ansible SSH key. An entity present in one list
+        # and missing from another, with nothing comparing the two.
+        lxc250:
+          ansible_host: <tailscale-ip-devops>
+          prometheus_label: devops
         lxc260:
           ansible_host: <tailscale-ip-postgres>
           prometheus_label: postgres
+
+    # Every node that is NOT the hypervisor. Sweeping playbooks target this
+    # group, never `all`.
+    #
+    # The reason is a failure this platform has already had in both directions.
+    # `all` excluded lxc250 for months because it belonged to no group, and
+    # nothing reported it - absence is silent. The moment the hypervisor joins
+    # the inventory, the same mechanism runs the other way: a play written with
+    # `hosts: all` reaches the machine that runs all ten guests, and nothing
+    # reports that either. Making inclusion explicit turns a habit of checking
+    # into a group definition, and only one of those survives being forgotten.
+    #
+    # Read-only playbooks may still use `all` - fleet-health-check.yml does, and
+    # should, because the host belongs in a health report.
+    guests:
+      children:
+        lxcs:
+        vms:
 
     proxmox:
       hosts:

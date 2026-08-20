@@ -1,4 +1,16 @@
 ---
+- name: Refuse a value sshd would reject
+  ansible.builtin.assert:
+    that:
+      - ssh_hardening_permit_root_login in ["yes", "no", "prohibit-password", "forced-commands-only"]
+      - ssh_hardening_password_authentication in ["yes", "no"]
+    fail_msg: >-
+      ssh_hardening_permit_root_login={{ ssh_hardening_permit_root_login }},
+      ssh_hardening_password_authentication={{ ssh_hardening_password_authentication }}.
+      sshd refuses to start on an invalid directive value, and this role reloads it -
+      a typo here takes SSH down on the node it was meant to harden.
+    quiet: true
+
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/00-hardening.conf
@@ -12,20 +24,20 @@
       # 00-prefixed file here wins over e.g. cloud-init's 50-cloud-init.conf
       # without editing or removing that distro/cloud-init-owned file (which
       # cloud-init can regenerate on a future run).
-      PasswordAuthentication no
-      PermitRootLogin no
+      PasswordAuthentication {{ ssh_hardening_password_authentication }}
+      PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config
 
-- name: Password authentication = no
+- name: Password authentication
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: ^#?PasswordAuthentication
-    line: PasswordAuthentication no
+    line: PasswordAuthentication {{ ssh_hardening_password_authentication }}
   notify: Reload ssh_config
 
-- name: Permit root login = no
+- name: Permit root login
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: ^#?PermitRootLogin
-    line: PermitRootLogin no
+    line: PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config

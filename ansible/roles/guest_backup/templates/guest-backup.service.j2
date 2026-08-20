@@ -1,0 +1,48 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Full guest backup of every VM and LXC (vzdump)
+
+# RequiresMountsFor, not a hand-built After=/Wants= pair on the .mount unit.
+#
+# systemd derives the mount unit from the path itself here, which removes the
+# escaping question instead of answering it. The first draft of this template
+# answered it, and answered it wrongly: it built the unit name from the path with
+# a Jinja replace, turning a hyphen in the path into a hyphen in the unit name.
+# systemd encodes a literal hyphen as \x2d, because the hyphen is the path
+# separator in a unit name - so `/mnt/a-b` is `mnt-a\x2db.mount`, and the
+# generated `mnt-a-b.mount` meant `/mnt/a/b` instead.
+#
+# What makes that worth a comment is how it would have failed. An After= naming a
+# unit that does not exist is not an error; it is simply no ordering. The backup
+# would have run before the mount on some boots, the script's own mountpoint
+# guard would have caught it, and the symptom would have been an occasional
+# failed unit reporting that the target was not mounted - pointing at the disk,
+# which was fine. Verify a generated unit name with `systemd-escape -p` rather
+# than deriving it by hand.
+#
+# The path was renamed to a hyphen-free one in the same pass, so today two
+# independent things would have to regress before this could bite. That is
+# belt and braces on purpose: the escaping is invisible when it is wrong.
+#
+# Requires= semantics come with this directive: if the mount cannot be activated
+# the job fails rather than running against the wrong directory. That is the
+# outcome we want, and it reaches SystemdUnitFailed either way.
+RequiresMountsFor={{ guest_backup_dir }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+
+# vzdump saturates the disk for minutes at a time. The host is awake and in use
+# during the run - it is not a night job, because at night the machine is off -
+# so the backup yields to interactive work rather than the other way round.
+Nice={{ guest_backup_nice }}
+IOSchedulingClass=idle
+IOSchedulingPriority={{ guest_backup_ionice }}
+
+ExecStart={{ guest_backup_script_dest }}
+
+# No TimeoutStartSec override: a full run is minutes, and systemd's default for
+# oneshot units is infinity. Setting a timeout here would risk killing a run
+# mid-archive, which leaves a truncated file that the pruner will happily keep.

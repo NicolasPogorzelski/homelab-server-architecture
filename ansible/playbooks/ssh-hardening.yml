@@ -1,7 +1,35 @@
 ---
-- name: Deploy ssh-hardening
-  hosts: all
+# Two plays where one `hosts: all` would do, and the split is the point.
+#
+# `all` reaches the hypervisor the moment it enters the inventory, and it does so
+# silently - the same mechanism that silently *excluded* lxc250 for months, run
+# in the other direction. Sweeps target `guests` here, so a play written by
+# reflex covers the fleet and stops there; reaching the host takes typing its
+# group name, which is a decision somebody made rather than one nobody noticed.
+#
+# The role itself is safe for the host since 2026-08-19 - `PermitRootLogin` and
+# `PasswordAuthentication` are variables, and `group_vars/proxmox.yml` overrides
+# root login to `prohibit-password` because root is the hypervisor's only
+# administrative account and it has no usable out-of-band console. That fix is
+# what makes this second play possible at all. It is not what makes it safe to
+# write `all`: the next role will not have been checked.
+- name: Deploy ssh-hardening to the fleet
+  hosts: guests
   become: true
   serial: 1
+  roles:
+    - ssh_hardening
+
+# Listed separately, and last. A failure here reloads sshd on a node that cannot
+# be reached any other way, so it runs after the fleet has already proved the
+# role works in this state rather than at the same time as it.
+#
+# A correctly configured host must report `changed=0`. Measured 2026-08-20: it
+# reports `permitrootlogin without-password` and `passwordauthentication no`,
+# which is exactly what the group vars set. A change therefore means the live
+# configuration drifted, and that is the finding rather than a side effect.
+- name: Deploy ssh-hardening to the Proxmox host
+  hosts: proxmox
+  become: false # the inventory connects as root; there is no ansible user here
   roles:
     - ssh_hardening

@@ -1,0 +1,25 @@
+---
+# === group_vars for the Proxmox host ===
+#
+# One override, and it is a deliberate deviation from the fleet-wide default
+# rather than an oversight.
+#
+# `PermitRootLogin no` is correct on every other node, because each has an
+# `ansible` user with key-only access and an admin account for break-glass. The
+# hypervisor has neither: root is its only administrative account, `media` has no
+# sudo and no keys, and the inventory connects as root for exactly that reason.
+#
+# It also has no usable out-of-band console. The single GPU is passed through to
+# vm100 with `x-vga=1`, there is no serial console and no BMC, and `getty@tty1`
+# writes to a framebuffer the guest owns. If an SSH change locks this node out,
+# the recovery path is physical access with a monitor moved to onboard graphics
+# that are not available while the passthrough is configured.
+#
+# So the setting is `prohibit-password`: key authentication for root stays,
+# password authentication does not. That is the value applied by hand on
+# 2026-08-17 after an audit found `PermitRootLogin yes` with
+# `PasswordAuthentication yes` on this node; adopting the host into Ansible turns
+# that hand-set value into a maintained one, which is the whole point of the
+# adoption. A run must therefore produce `changed=0` on a correctly configured
+# host - if it reports a change, the live config drifted and that is the finding.
+ssh_hardening_permit_root_login: prohibit-password

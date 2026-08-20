@@ -1,6 +1,13 @@
 ---
+# lxc250 is excluded deliberately. It is in the `lxcs` group since 2026-08-20,
+# but this play connects as root over SSH and lxc250 refuses root logins under
+# ssh_hardening - and the account `become` would use is the one being created.
+# A play with `connection: local` does not solve it either, because a rebuilt
+# control node has neither Ansible nor a checkout to run it from. That node is
+# bootstrapped by `snippets/scripts/bootstrap-ansible-user-lxc250.sh`, pushed in
+# with `pct push` and run as root through `pct exec`.
 - name: Bootstrap ansible user on LXCs
-  hosts: lxcs
+  hosts: lxcs:!lxc250
   remote_user: root
 
   tasks:
