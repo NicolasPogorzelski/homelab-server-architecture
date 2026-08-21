@@ -150,16 +150,27 @@ guest untouched, so a failed restore costs nothing.
 # List what is available
 ls -la /mnt/vzdump/
 
-# Restore container 260 into a throwaway ID 999
+# Restore container 260 into a throwaway ID 999.
+# NOT --storage local-lvm: that is the thin pool this backup exists to survive,
+# it sits above 82 % with vg_free at zero, and a restore of a single guest
+# crosses both LvmThinPoolWarning (85 %) and Critical (90 %). The directory
+# storage on the auxiliary disk has hundreds of gigabytes free and no bearing
+# on the pool.
 pct restore 999 /mnt/vzdump/vzdump-lxc-260-<timestamp>.tar.zst \
-  --storage local-lvm --unprivileged 1
+  --storage appdata_aux-disk --unprivileged 1
 
-# Inspect without starting it on the network
+# A restored guest is a byte-identical clone, including its Tailscale node key
+# and its hostname. Starting it on the network makes two nodes claim one
+# identity, which is a live outage on the original - and for the control node
+# that is the machine running this restore. Break the link before the first
+# start, then inspect through pct exec, which needs no network.
+pct set 999 --net0 name=eth0,bridge=vmbr0,link_down=1
 pct start 999
 pct exec 999 -- systemctl --failed
 pct exec 999 -- ls -la /var/lib/postgresql
 
-# Tear down
+# Tear down. destroy releases the space immediately; nothing waits on fstrim
+# because the volume itself is removed.
 pct stop 999 && pct destroy 999
 ```
 
@@ -182,6 +193,7 @@ pct start 260
 
 | Symptom | Cause | Action |
 |---|---|---|
+| `400 Parameter verification failed. storage: missing property required by 'notes-template'` | `--notes-template` was passed alongside `--dumpdir` | Remove it. The option is declared `requires => 'storage'` in `PVE/VZDump/Common.pm`, so it fails verification before any guest is touched - every guest, deterministically. `protected` carries the same requirement |
 | `is not a mountpoint - refusing` | Backup disk did not mount | `findmnt /mnt/vzdump`; check the fstab entry resolves by-id, not by kernel letter |
 | `resolves to the root device` | The bind source is on `pve-root` | The target must be a different physical disk; a backup sharing the failure domain is not one |
 | `vzdump <id> exited 255`, others fine | One guest failed; the run continued by design | `journalctl -u guest-backup.service`; usually a snapshot that could not be taken because the storage is full |
