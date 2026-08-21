@@ -45,8 +45,13 @@ notes there and keep this section short.
   hand-written gate since 2026-07-28. Nothing reported it: the retry makes the end
   state correct, `SystemdUnitFailed` has `for: 15m` and cannot see a 15-second
   failure, and the exporter that would report the fault is the one that is down.
-  The gate is in the role's unit template since 2026-08-20 - fleet cold-boot
-  verification rides on the next nightly power cycle.
+  The gate is in the role's unit template since 2026-08-20 and **fleet cold-boot
+  confirmed 2026-08-21**: nine of nine `NRestarts=0`, no failed unit, and eight of
+  the nine gates measurably waited (2-12 s; only vm100 already held its address).
+  Read the two together or not at all - `NRestarts=0` is also what a node that never
+  rebooted reports, so the proof is each unit's `ActiveEnterTimestamp` falling after
+  that node's `uptime -s`. Every known instance in this class is now proven by a boot
+  rather than a restart.
 - **KE-6 recurrence on lxc220 - RESOLVED 2026-07-28.** The node had been running a second,
   hand-written `tailscaled-userspace.service` alongside the packaged unit, so two daemons started
   every boot and its `node_exporter` had, as far as can be established, never been scraped. KE-6 had
