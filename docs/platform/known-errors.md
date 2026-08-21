@@ -1122,6 +1122,7 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | host `pveproxy` | bind | Fixed 2026-06-25 - [KE-12](#ke-12), `wait-tailscale.conf` drop-in |
 | host `node_exporter` | bind | Fixed 2026-07-28 (below) |
 | lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
+| nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
 
 **What makes this platform unusually exposed:** `homelab-schedule` powers the host down at 01:00 and
 wakes it by RTC in the morning, so every day is a cold boot. Timers that carry `Persistent=true`
@@ -1200,7 +1201,9 @@ nothing.
 
 **Status:** Class documented 2026-07-28. Four instances fixed and cold-boot confirmed on
 2026-08-13, a fifth on 2026-08-20 - and the same evening the class turned out to be nine instances
-larger than anyone had counted.
+larger than anyone had counted. Those nine were fixed in the `node_exporter` role's unit template
+and confirmed across the whole fleet by the cold boot of 2026-08-21 (below). Every known instance
+in this class is now fixed and proven by a boot rather than by a restart.
 
 **The count was wrong because the evidence destroyed itself (measured 2026-08-20).** Verifying the
 lxc250 sshd gate against a container reboot produced a control case nobody had asked for: the
@@ -1228,6 +1231,38 @@ do not own.
 One loose end, not a readiness fault: the host's `pveproxy` drop-in still hard-codes its Tailscale
 IP inline rather than calling the shared script - harmless today, worth folding into the same
 pattern on the next host pass.
+
+### Fleet cold-boot confirmation (2026-08-21)
+
+The nightly power cycle is the test this platform gets for free, and it exercised all nine gated
+units at once. Every guest booted between 07:05:54 and 07:09:20 UTC, every `node_exporter` reached
+`active` 3 to 13 seconds later, and all nine reported `NRestarts=0` with no failed unit anywhere.
+The previous day the same command over the same nine nodes had read `NRestarts=1` on every one.
+
+`NRestarts=0` on its own proves nothing. The counter also reads 0 on a node that never rebooted,
+and the role had been applied by hand the evening before, which resets it just as effectively. What
+makes this a measurement is the timestamp beside it: each unit's `ActiveEnterTimestamp` falls after
+that node's `uptime -s`, so all nine values were produced by a cold boot rather than by the rollout.
+Verify both or neither.
+
+The gate's own log line gives the width of the race per node:
+
+| Wait reported by `wait-for-tailscale-ip.sh` | Nodes |
+|---|---|
+| 0 s | vm100 |
+| 2 s | lxc211, lxc230, lxc240, lxc250, lxc260 |
+| 6 s | vm102 |
+| 12 s | lxc210, lxc220 |
+
+Eight of the nine waited; only vm100 already held its address when the unit started. On lxc210 and
+lxc220 an ungated unit attempts its bind twelve seconds before the address exists. That is a wide
+race rather than a narrow one, and the retry loop had been absorbing it every morning without
+recording anything.
+
+**The interval from boot to active is not the gate's wait, and reading it that way is wrong.**
+vm100 carries both numbers: twelve seconds from boot to active, of which the gate accounts for
+zero. The remainder is systemd reaching the unit at all, which has nothing to do with Tailscale.
+Only the `present after Ns` line measures the gate; the boot-to-active delta measures the boot.
 
 - **The fifth instance was fixed on 2026-08-20, and reading it first changed the fix.**
   lxc250's hand-written `ssh.service.d/override.conf` used `After=` plus a `RestartSec=15s` retry
