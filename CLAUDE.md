@@ -619,9 +619,21 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   ([KE-20](docs/platform/known-errors.md#ke-20)) and only `qm stop` recovered it. Making VM100
   snapshottable - moving that disk to snapshot-capable storage, off the KE-13 disk - is the
   precondition for investigating KE-20 and for any non-trivial maintenance on this node.
-- **Off-site backups not implemented:** current backups are local only (SMB on VM102). No
-  protection against full-site loss or ransomware. Critical subsets (Vaultwarden export,
-  Nextcloud DB, Paperless documents) have no off-site copy.
+- **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
+  hypervisor, weekly (Sun 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
+  a generic path bound onto whichever disk currently holds the role. Seven of ten guests: vm100 is
+  excluded on purpose, lxc220 fails on a path outside its UID map, and lxc240 has never been in the
+  hardcoded list - the same defect class as the fstrim array that once omitted lxc250. Two
+  preconditions the role cannot assert and the runbook therefore carries: a VM's passthrough disks
+  need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
+  storage accepting a container rootfs is the thin pool, so a restore test uses the *smallest*
+  archive. Restore verified 2026-08-21 via `pct mount` without starting the clone - it carries the
+  original's Tailscale node key. **The target is the KE-13 disk and there is no off-site copy.**
+- **Off-site backups not implemented:** every copy is local - PostgreSQL and MariaDB dumps on
+  vm102's SMB share, guest backups on the auxiliary disk. No protection against full-site loss or
+  ransomware, and note the sharper form of that: any credential able to write these backups can
+  delete them, and since 2026-08-21 the control node holds hypervisor root. Critical subsets
+  (Vaultwarden export, Nextcloud DB, Paperless documents) have no off-site copy.
 - **SMART monitoring is partly deployed, and the deployed part cannot detect the failure it exists
   for (entry corrected 2026-08-10 after measuring the host).**
   `/usr/local/sbin/node-exporter-smarttext.sh` has been running on the host every 60 s since
