@@ -133,7 +133,10 @@ journalctl -u guest-backup.service -b | tail -40
 ls -la /mnt/vzdump/
 
 # 3. The archives are internally readable (structure, not content)
-for f in /mnt/vzdump/vzdump-*.tar.zst; do echo -n "$f: "; zstd -t "$f" && echo OK; done
+# Both extensions, and this is not pedantry: containers produce .tar.zst and VMs
+# produce .vma.zst. A loop over *.tar.zst alone walks every container, reports OK,
+# and silently covers no VM at all.
+for f in /mnt/vzdump/*.zst; do echo -n "$(basename $f): "; zstd -t "$f" 2>/dev/null && echo OK || echo FAILED; done
 
 # 4. The metric reaches Prometheus
 curl -s "http://<lxc200>:9090/api/v1/query?query=guest_backup_last_run_timestamp_seconds"
@@ -150,7 +153,7 @@ guest into a throwaway ID once a quarter and record the date here, exactly as
 
 | Date | Guest restored | Result | Notes |
 |---|---|---|---|
-| | | | |
+| 2026-08-21 | lxc260 into ID 999 | Pass | Restore 10 s, 1.4 GiB, pool 82.85 -> 85.14 % and back on teardown. Never started: verified through `pct mount`. Debian 12 present, PostgreSQL 15 cluster with `global/pg_control`, 26,721 files, `postgresql.conf` / `pg_hba.conf` / `node_exporter.service` byte-identical to the live node. All seven archives passed `zstd -t` beforehand, and lxc250's passed a full `tar -tf` walk (154,159 entries, rc=0) holding `hosts.yml`, `.vault_pass` and `id_ed25519`. lxc260 was chosen over lxc250 because the thin pool is the only storage that accepts a container rootfs and the smaller archive keeps the excursion below the critical threshold. |
 
 ## Restore
 
@@ -161,29 +164,44 @@ guest untouched, so a failed restore costs nothing.
 # List what is available
 ls -la /mnt/vzdump/
 
-# Restore container 260 into a throwaway ID 999.
-# NOT --storage local-lvm: that is the thin pool this backup exists to survive,
-# it sits above 82 % with vg_free at zero, and a restore of a single guest
-# crosses both LvmThinPoolWarning (85 %) and Critical (90 %). The directory
-# storage on the auxiliary disk has hundreds of gigabytes free and no bearing
-# on the pool.
+# local-lvm is the only option, and that constrains which guest to test.
+# `pvesm status --content rootdir` returns the thin pool alone: `local` does not
+# carry the rootdir content type and `appdata_aux-disk` is images-only, so a
+# restore there is refused with "storage does not support container directories".
+# The pool sits above 82 % with vg_free at zero, so pick the SMALLEST archive
+# rather than the most important one - restoring lxc260 (1.4 GiB) reaches 85.1 %,
+# restoring lxc250 (5.25 GiB) reaches 91 % and crosses the critical threshold.
+# The mechanism is generic; the guest is a sample, not the subject.
 pct restore 999 /mnt/vzdump/vzdump-lxc-260-<timestamp>.tar.zst \
-  --storage appdata_aux-disk --unprivileged 1
+  --storage local-lvm --unprivileged 1
 
-# A restored guest is a byte-identical clone, including its Tailscale node key
-# and its hostname. Starting it on the network makes two nodes claim one
-# identity, which is a live outage on the original - and for the control node
-# that is the machine running this restore. Break the link before the first
-# start, then inspect through pct exec, which needs no network.
-pct set 999 --net0 name=eth0,bridge=vmbr0,link_down=1
-pct start 999
-pct exec 999 -- systemctl --failed
-pct exec 999 -- ls -la /var/lib/postgresql
+# Do NOT start it. A restored guest is a byte-identical clone down to its
+# Tailscale node key and hostname, so booting it on the network makes two nodes
+# claim one identity - a live outage on the original. `pct mount` gives the
+# filesystem without running a single process inside the container, which is
+# enough to answer the question the test asks.
+pct mount 999
+R=/var/lib/lxc/999/rootfs
+grep PRETTY_NAME $R/etc/os-release
+ls $R/var/lib/postgresql/15/main/global/pg_control
 
-# Tear down. destroy releases the space immediately; nothing waits on fstrim
-# because the volume itself is removed.
-pct stop 999 && pct destroy 999
+# Fidelity, not just presence: compare bytes against the live node. Config files
+# do not change between the backup and the test, so a mismatch is a real fault.
+for f in /etc/postgresql/15/main/postgresql.conf /etc/systemd/system/node_exporter.service; do
+  a=$(md5sum "$R$f" | cut -d' ' -f1)
+  b=$(pct exec 260 -- md5sum "$f" | cut -d' ' -f1)
+  [ "$a" = "$b" ] && echo "MATCH $f" || echo "DIFFER $f"
+done
+
+# Tear down. destroy releases the thin-pool space immediately; nothing waits on
+# fstrim because the volume itself is removed.
+pct unmount 999 && pct destroy 999
 ```
+
+Booting the clone is a separate question with its own risk, and it is not what
+this test is for. If it is ever asked, break the link first
+(`pct set 999 --net0 name=eth0,bridge=vmbr0,link_down=1`) and reach it through
+`pct exec`, which needs no network.
 
 **Check thin-pool headroom before restoring.** `pve/data` was at 82.78 % on 2026-08-20 with
 `lvm_vg_free_bytes` at zero, so a restore consumes space that cannot be replaced by `lvextend`.
