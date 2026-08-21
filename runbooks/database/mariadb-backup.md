@@ -42,8 +42,9 @@ broken backup rather than as an unfinished installation.
 
 ### Provisioning the share (one time, before the first run)
 
-Steps 1-3 above touch vm102 and the Proxmox host. The host is not an Ansible node, so these are
-manual and belong here rather than in a role.
+Steps 1-3 above touch vm102 and the Proxmox host. The host was not an Ansible node when this
+was written, so these are manual and belong here rather than in a role. It became reachable as one
+on 2026-08-21 and these steps have not been converted.
 
 ```bash
 # 1. On vm102: create the directory and export it.

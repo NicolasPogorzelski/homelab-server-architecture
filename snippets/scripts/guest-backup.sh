@@ -98,13 +98,21 @@ for id in "${GUESTS[@]}"; do
   # A failing guest must not abort the loop: the guests are ordered by value, and
   # stopping at the first error would sacrifice every guest after it to a fault
   # in one. `set -e` is suspended for the call and the failure recorded instead.
+  #
+  # No --notes-template here, and it must not be re-added while the destination
+  # is a dumpdir. PVE/VZDump/Common.pm declares that option with
+  # `requires => 'storage'`, so passing it alongside --dumpdir fails parameter
+  # verification before any guest is touched: "400 Parameter verification
+  # failed. storage: missing property required by 'notes-template'". The notes
+  # are written next to the archive by the storage layer, which a dumpdir does
+  # not go through, so the option could never have done anything here anyway.
+  # `protected` carries the same requirement.
   set +e
   vzdump "$id" \
     --mode snapshot \
     --compress "$COMPRESS" \
     --dumpdir "$BACKUP_DIR" \
-    --prune-backups "$PRUNE" \
-    --notes-template '{{guestname}} {{node}}'
+    --prune-backups "$PRUNE"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
