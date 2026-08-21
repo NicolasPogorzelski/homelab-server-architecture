@@ -10,11 +10,30 @@
     "each machine has to be verified on its own: jq '.hooks' on the live file, not",
     "a reading of this one. The PreToolUse entry below now points at a script in",
     "the repository rather than an inline one-liner, so it can be tested instead of",
-    "trusted."
+    "trusted.",
+    "",
+    "The deny list added 2026-08-21 mirrors the one in ~/.claude/settings.json, set",
+    "2026-08-17. Publishing stays with the operator: every push, pull request and",
+    "release is issued by hand from a terminal outside the session. Deny beats allow",
+    "regardless of which file is more specific, so a project-level allow rule cannot",
+    "reopen it - which is why the contradictory wildcard that used to sit in the live",
+    "allow list was removed rather than left as decoration."
   ],
   "permissions": {
     "allow": [
       "Bash(./scripts/validate-repo.sh *)"
+    ],
+    "deny": [
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr edit *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr comment *)",
+      "Bash(gh pr review *)",
+      "Bash(gh pr close *)",
+      "Bash(gh pr reopen *)",
+      "Bash(gh release *)"
     ]
   },
   "hooks": {

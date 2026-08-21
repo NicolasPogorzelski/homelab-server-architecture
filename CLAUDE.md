@@ -207,6 +207,27 @@ behavior differs.
 - Never add `Co-Authored-By` or any AI attribution trailer to commit messages.
 - Never reference AI tools, Claude, or Anthropic in commit messages or documentation.
 
+## Publishing Is the Operator's
+
+Pushing, opening a pull request, merging and releasing are done by hand, from a terminal outside
+the session. This is enforced by a deny list in `~/.claude/settings.json` (set 2026-08-17) and
+mirrored in the project settings; `snippets/claude/hooks-reference.json` carries the sanitized
+copy, because the live file is gitignored and therefore per-machine. Deny beats allow, so a
+project-level allow rule cannot reopen it.
+
+**Every branch gets a full review in the conversation before it is pushed.** The repository is
+public; a pull request is the moment the work becomes readable by anyone, and reviewing it there
+is already too late. The review is presented in chat and covers:
+
+- the complete diff, shown rather than summarized, so nothing reaches GitHub unseen;
+- one line per commit: what it changes and why;
+- what is newly public - added files, addresses, paths, anything the sanitization rules govern;
+- the result of `./scripts/validate-repo.sh`, quoted, not asserted;
+- the exact commands to run, ready to paste.
+
+A diffstat is not a review. If a diff is long, it is shown in parts, not compressed. The
+operator's confirmation comes after reading it, not after a promise about it.
+
 ## Commit Message Format
 
 Conventional Commits with scope required.
