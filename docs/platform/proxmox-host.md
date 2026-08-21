@@ -167,8 +167,9 @@ day. On those two days the host is still off at 10:30 and the overdue run fires 
 cost the PostgreSQL backups two months.
 
 Source: `snippets/scripts/lxc-fstrim.sh`, `snippets/systemd/lxc-fstrim.service`,
-`snippets/systemd/lxc-fstrim.timer`. Hand-deployed - the host is not an Ansible node, so these
-would be lost on a rebuild, the same debt as the host's `node_exporter`.
+`snippets/systemd/lxc-fstrim.timer`. Hand-deployed, so these would be lost on a rebuild - the
+same debt as the host's `node_exporter`. The host became reachable as an Ansible node on
+2026-08-21, which removes the reason the debt stood, not the debt.
 
 See: [LVM thin pool full](../../runbooks/platform/lvm-thin-pool-full.md).
 

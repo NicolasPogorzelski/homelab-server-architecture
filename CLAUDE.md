@@ -579,7 +579,8 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   failed unit on the *hypervisor* reached no alert - the gap that would have made
   `smb-mounts-check.service` another silent guard) and binds `100.x:9100` instead of `*:9100`,
   which had been LAN-exposed in violation of the binding rule. Both changes were made by hand,
-  because the host is still not an Ansible node. The `node_exporter` role would own this properly.
+  at a time when the host was not an Ansible node. It became reachable as one on 2026-08-21, so
+  the `node_exporter` role can now own this properly - the debt is unblocked, not yet paid.
   **The trap this entry used to name is gone, corrected 2026-08-15:** it warned that adopting the
   host needs `host_vars` with `node_exporter_textfile_dir` set or the role silently drops the
   textfile collector. That stopped being true on 2026-07-10 (`c134959`), when the default became
@@ -657,7 +658,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `ConditionVirtualization=!container` and the ioctl is refused anyway, both silently. Note
   `lvm_vg_free_bytes` reads 0: the VG is fully allocated, so `lvextend` is not an available remedy
   without shrinking `root`/`swap` or adding a PV. Units are hand-deployed; folding them into a role
-  still waits on the host becoming an Ansible node.
+  waited on the host becoming an Ansible node, which happened on 2026-08-21.
 - **`tailscaled-userspace.service` on lxc220 is disabled, not deleted (2026-07-28):** the KE-6
   recurrence was closed by `systemctl disable --now`, which stops it returning at boot but leaves
   the unit file in `/etc/systemd/system/`. A future `systemctl enable` or a rebuild from this

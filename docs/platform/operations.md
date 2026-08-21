@@ -77,7 +77,8 @@ somebody reads.
   threshold `000` and can never trip the drive's self-assessment. What is missing is
   `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count`,
   plus rules in the (currently empty) `smart` group. Disk-failure detection still rests on SnapRAID
-  alerts. Blocked on the host becoming an Ansible node
+  alerts. The blocker - the host not being an Ansible node - was removed on 2026-08-21; the
+  work itself is still undone
 - "Golden signals" dashboards per tier (Storage/Compute/Services)
 - An external heartbeat, so a total outage produces an alert rather than silence - see the Tier 4
   entry in the [remediation plan](remediation-plan.md)

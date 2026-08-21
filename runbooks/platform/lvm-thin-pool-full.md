@@ -205,8 +205,9 @@ pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
   list from `pct list` rather than a hardcoded array, so a new container is covered on creation;
   the previous array omitted lxc250, which was the fullest container in the fleet. A manual run
   after a large `apt-upgrade` is still reasonable, but nothing depends on remembering it. Note the
-  units are hand-deployed - the host is not yet an Ansible node, so they would be lost on a rebuild
-  (same debt as the host's `node_exporter`).
+  units are hand-deployed, so they would be lost on a rebuild (same debt as the host's
+  `node_exporter`). The host became an Ansible-reachable node on 2026-08-21; these units have not
+  been folded into a role yet.
 - **Serial upgrades:** `apt-upgrade.yml` uses `serial: 1` to prevent simultaneous downloads from spiking pool utilization. The `dpkg --verify` post-task catches binary corruption before it propagates across nodes.
 - **apt clean after upgrade:** `apt-upgrade.yml` runs `apt clean` on each node after upgrading.
 - **Monitor pool utilization:** Implemented 2026-08-10. The approach previously named here could
