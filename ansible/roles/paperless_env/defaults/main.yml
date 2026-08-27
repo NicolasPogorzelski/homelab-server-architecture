@@ -27,8 +27,13 @@ paperless_time_zone: Europe/Berlin
 
 # === network ===
 
-paperless_url: https://paperless.<tailnet-id>.ts.net
-paperless_csrf_trusted_origins: https://paperless.<tailnet-id>.ts.net
+# No URL is declared here on purpose. The two values that belong here -
+# PAPERLESS_URL and PAPERLESS_CSRF_TRUSTED_ORIGINS - are read from the node's own
+# Tailscale daemon at deploy time by tasks/main.yml. They used to be literals, and
+# the literal was this repository's `<tailnet-id>` sanitization placeholder: a
+# value that is correct in a public file and wrong on a live host, with nothing
+# able to tell the two apart. Deriving it removes the placeholder rather than
+# moving it into the vault.
 
 # === consumer ===
 

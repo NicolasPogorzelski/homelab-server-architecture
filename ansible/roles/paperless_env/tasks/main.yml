@@ -1,4 +1,38 @@
 ---
+# The Serve URL is read from the node rather than declared. Paperless needs it
+# twice - as PAPERLESS_URL and in PAPERLESS_CSRF_TRUSTED_ORIGINS, Django's
+# allowlist of origins permitted to submit a form. Both used to be literals in
+# defaults/main.yml holding the `<tailnet-id>` placeholder, which shipped verbatim
+# and made every browser login fail with 403 while the API kept working, because
+# a token request carries no Origin header for Django to check.
+#
+# Tailscale is the only authority for this name, so it is asked directly. That is
+# also why there is no fallback value: a fallback here is a second place for the
+# name to be wrong, and the wrong value is the one that looks plausible.
+- name: Read the node's Tailscale status
+  ansible.builtin.command:
+    cmd: tailscale status --json
+  register: paperless_tailscale_status
+  changed_when: false
+  check_mode: false
+
+# Self.DNSName is fully qualified and ends in a dot ("paperless.<tailnet>.ts.net."),
+# which is correct in DNS and invalid in an origin - Django compares the origin
+# string byte for byte, so the trailing dot would fail the check as surely as the
+# placeholder did.
+- name: Derive the Tailscale Serve URL
+  ansible.builtin.set_fact:
+    paperless_serve_url: 'https://{{ (paperless_tailscale_status.stdout | from_json).Self.DNSName | regex_replace("\.$", "") }}'
+
+- name: Assert the derived Serve URL is a Tailscale host name
+  ansible.builtin.assert:
+    that:
+      - paperless_serve_url is match('^https://[a-z0-9][a-z0-9.-]*\.ts\.net$')
+    fail_msg: >-
+      Derived Serve URL "{{ paperless_serve_url }}" is not a Tailscale host name.
+      Refusing to write an .env that would break CSRF origin checking.
+    success_msg: 'Serve URL derived from tailscaled: {{ paperless_serve_url }}'
+
 - name: Deploy paperless .env
   ansible.builtin.template:
     src: paperless.env.j2
