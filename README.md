@@ -163,6 +163,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service, and what closing an error by removal does not prove)
+- [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (an append-only VPS, and what it gives up against object storage)
 
 ### Security, risk and change
 

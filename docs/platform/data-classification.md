@@ -97,8 +97,8 @@ availability.
 |---|---|---|---|---|
 | Vault password and automation credentials | Unbounded - a single copy | Effectively zero | Immediate | The content changes approximately never; the objective is availability, not freshness. |
 | Vaultwarden vault | Not applicable since 2026-09-01 | - | - | Withdrawn. Authentication now rests on the external password manager and the paper escrow alone, which is what makes the annual retrieval drill in Tier 1 #1 the only evidence that it works. |
-| Paperless documents | Undefined | 24 h | 24 h | Originals are also held on paper for a subset. |
-| Nextcloud files | Undefined | 24 h | 24 h | |
+| Paperless documents | 1 month off site, until the object store exists | 24 h | 24 h | Originals are also held on paper for a subset. The interim figure is the cadence of the manual copy in the [off-site decision](../decisions/offsite-backup-target.md). |
+| Nextcloud files | 1 month off site, until the object store exists | 24 h | 24 h | On site it is a week, from the guest backup. |
 | Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
 | PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The distinction is measured, not theoretical: the staleness alert cannot see a period in which the host is off, because Prometheus is on that host. |
 | Platform configuration | Minutes | Keep | 1 h | Already met by git. |
@@ -157,11 +157,11 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    Tier 1 #3 by removing its subject, which is not the same as having solved it.
 3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
    C1 set. One row is now measured - the Nextcloud database at 38.3 MB, which compresses to a
-   rounding error and tells us the databases are not what drives the decision. The documents are:
-   Paperless originals and Nextcloud files are still unmeasured, and until they are, the choice
-   between an encrypted object store, a rotated external disk kept elsewhere, and a self-hosted
-   target is unanswerable. The Vaultwarden vault left this list by being retired; at 677 KB it would
-   not have changed the answer.
+   rounding error. The documents were measured on 2026-09-01 and turned out not to drive the choice
+   either: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets 340 MB
+   together, about 41 GB in total. At that size any of the candidate targets is affordable, so the
+   [off-site decision](../decisions/offsite-backup-target.md) turned on deletion resistance and on
+   what the operator will actually keep running.
 
 ## Review
 
@@ -169,3 +169,17 @@ Revisited with the weekly fleet audit, and whenever a new service is added - ste
 new-service procedure in `CLAUDE.md` should be read as including a row in the table above.
 Classification is stable; the protection and RPO columns are what change, and they change most
 often by something being switched off.
+
+## Off-site copies that exist today
+
+Recorded on 2026-09-01. Both were found in the 2026-08-20 audit and had been written down nowhere.
+
+| Copy | Location | Taken | What it is |
+|---|---|---|---|
+| Auxiliary disk rescue | Encrypted storage on the admin workstation, a different building from the server | 2026-06-25 | Point-in-time copy of the failing disk's contents. Its error log holds only `socket ignored` lines from container runtime sockets, so the copy itself is complete |
+| Disk at a family member's home | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror, contents unverified. Refreshed when the operator visits, which is irregular, so its age between visits is unknown and it cannot be planned around |
+
+Neither is a running backup and neither has been restored from. They are the reason "no off-site copy
+of anything" was inaccurate; they are not a reason to consider the item closed. The disk is the
+stronger of the two and the one that cannot be given a cadence, which is most of the argument in the
+[off-site decision](../decisions/offsite-backup-target.md).
