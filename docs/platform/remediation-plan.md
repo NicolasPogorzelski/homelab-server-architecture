@@ -76,7 +76,7 @@ Cheap in hours, catastrophic if left. Nothing here waits on hardware.
 |---|---|---|
 | 1 | ~~Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key off-site~~ Reported done 2026-08-20: credentials are held in an external password manager operated by a third party, with the most important ones written on paper off-site. Demoting the GitHub key to a read-only deploy key is still open | Substantially closed, with one thing left to confirm and one discipline left to start. **Confirm:** the item names three artefacts and only one of them is a password. `hosts.yml` and the Ansible SSH key are *files*, and a password manager holding "all passwords" does not necessarily hold them - check explicitly rather than by inference, because the failure mode is discovering the gap on the day the control node is gone. **Start:** an escrow that has never been restored from is the same fiction as an untested backup. Once a year, retrieve the paper copy and run `ansible-vault view` against a vaulted file, recording the date as [`pg-restore.md`](../../runbooks/database/pg-restore.md) does |
 | 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ Done 2026-08-13. ~~Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time~~ Done 2026-08-14 - plus write-to-`.partial`-then-rename, so an unverified dump never appears under the real name, and verification ordered before retention deletion | Closed. A dump that cannot be read now fails the run that wrote it and raises `SystemdUnitFailed`, instead of surviving up to 31 days until the monthly restore test - by which point the 7-day retention has deleted every healthy predecessor. Note the write-time checks prove the stream is complete, not that it is durable on vm102: the read-back is served from the CIFS page cache. Durability remains the restore test's job |
-| 3 | Off-site copy of the C1 datasets defined in [`data-classification.md`](data-classification.md) | All backups are local, on the same site. No protection against site loss or ransomware. Scope defined 2026-08-15 - and this line's earlier wording was wrong. It read "off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which presumes local copies exist that merely need duplicating elsewhere. Two of them do not exist: the Nextcloud MariaDB has no backup at all, and Vaultwarden has no consistent export. Those must be created first - an off-site copy of nothing is nothing. Status 2026-08-15: the MariaDB half is done and live - share provisioned on vm102, `mp1` bind, first verified dump on the share, metric scraped, `MariaDBBackupStale` inactive (`mariadb_backup` role + [runbook](../../runbooks/database/mariadb-backup.md)). The Vaultwarden export is the last open half: an SQLite file copied from a live CIFS mount is a gamble on timing, not a backup |
+| 3 | Off-site copy of the C1 datasets defined in [`data-classification.md`](data-classification.md) | All backups are local, on the same site. No protection against site loss or ransomware. Scope defined 2026-08-15 - and this line's earlier wording was wrong. It read "off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which presumes local copies exist that merely need duplicating elsewhere. Two of them do not exist: the Nextcloud MariaDB has no backup at all, and Vaultwarden has no consistent export. Those must be created first - an off-site copy of nothing is nothing. Status 2026-08-15: the MariaDB half is done and live - share provisioned on vm102, `mp1` bind, first verified dump on the share, metric scraped, `MariaDBBackupStale` inactive (`mariadb_backup` role + [runbook](../../runbooks/database/mariadb-backup.md)). The Vaultwarden half closed on 2026-09-01 by withdrawing the service rather than repairing it ([decision](../decisions/vaultwarden-decommission.md)): unused since February, four open items against it, and an unattended secrets store is worse than none. What remains under this item is the off-site copy of the data that does exist |
 | 4 | Guest backup - a restorable copy of the machines, not only of their data. Role and runbook exist since 2026-08-20; the first live run is not yet recorded | Every VM and LXC root disk lives in one thin pool on one six-year-old SSD behind the HBA of [KE-14](known-errors.md#ke-14). The two database dumps restore *data* and Ansible restores *configuration*; neither restores a machine, and state that lives in neither - the Paperless index, Grafana's dashboards, Nextcloud's app config - is simply gone. That [`lxc250-rebuild.md`](../../runbooks/platform/lxc250-rebuild.md) exists is the measure of the gap: a rebuild runbook written because there is no restore. Blocked on nothing except the host adoption, since `vzdump` runs on the hypervisor. See [`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md) |
 
 **Why item 1 no longer says "into Vaultwarden" (decided 2026-08-14).** Vaultwarden's persistent data
@@ -142,16 +142,28 @@ open incident whose suspected cause is exactly the control nobody documented. Ch
 paper, and the paper is what makes the KE-14 verification a planned step instead of a recurring
 intention.
 
-the lxc250 `preflight.yml` gate, asserting a clean `main` in sync with `origin` before a run
-that changes live state (the inventory adoption and the exporter replacement it was bundled with
-are done since 2026-08-20, as is the sshd drop-in, the fifth
-[KE-18](known-errors.md#ke-18) instance - that one still needs a cold boot to confirm); `DATA_SOURCE_NAME` into Vault; delete the disabled
-`tailscaled-userspace.service` file on lxc220; pin journald `Storage=persistent` on vm100/vm102 -
-`pveproxy` drop-in onto the shared wait script; the missing `SystemdUnitFailed` coverage on
-lxc200 and lxc250; clean up the eleven orphaned `smart.prom.*` temp files in the host's textfile
-directory (re-counted 2026-08-17; the collector leaks one per failed run, and the script itself is
-the only hand-deployed host script with no copy under `snippets/`) -
-[KE-5](known-errors.md#ke-5) Vaultwarden migration off CIFS.
+**Small open items.** A few lines each, collected because none of them blocks anything else.
+
+- The lxc250 `preflight.yml` gate, asserting a clean `main` in sync with `origin` before any run
+  that changes live state. The inventory adoption and exporter replacement it was once bundled with
+  are done since 2026-08-20, as is the sshd drop-in, the fifth
+  [KE-18](known-errors.md#ke-18) instance.
+- `DATA_SOURCE_NAME` for `postgres_exporter` into the vault. Still an unmanaged literal in
+  `/etc/postgres_exporter.env`.
+- Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102, where
+  persistence currently depends on a directory existing rather than on configuration.
+- Fold the `pveproxy` drop-in onto the shared `wait-for-tailscale-ip.sh`. The host carries two
+  spellings of one readiness gate, one of which hardcodes an address.
+- `SystemdUnitFailed` coverage for lxc200, the last node without it; its exporter is a container
+  that cannot see the host's systemd. lxc250 was the second until 2026-08-20.
+- Clear the orphaned `smart.prom.*` temporary files from the host's textfile directory. The
+  collector leaks one per failed run because its `mktemp` has no cleanup trap, and the script is the
+  only hand-deployed host script with no copy under `snippets/`.
+
+**Closed on 2026-09-01.** The disabled `tailscaled-userspace.service` file on lxc220 is deleted,
+with two further orphans on that node ([KE-22](known-errors.md#ke-22)).
+[KE-5](known-errors.md#ke-5), the Vaultwarden migration off CIFS, is closed by decommissioning the
+service ([decision](../decisions/vaultwarden-decommission.md)).
 
 ## Added by the 2026-08-20 repository and fleet audit
 

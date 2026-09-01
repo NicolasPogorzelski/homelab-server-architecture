@@ -144,7 +144,7 @@ The monitoring node runs `blackbox_exporter` and probes service endpoints
 (KE-8 remediation: a node can be up while its service is dead). Beyond
 node_exporter (Rule 1b), it needs the service ports: media HTTP on `tier2`
 (Jellyfin 8096, Audiobookshelf 13378) and Tailscale-Serve HTTPS (443) on
-`tier1` (Paperless, Vaultwarden, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI).
+`tier1` (Paperless, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI). Vaultwarden held a `tier1` tag until its node was stopped on 2026-09-01. The tag definition stays until the node itself is removed in phase 2.
 
 ```json
 {
@@ -253,7 +253,7 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden, Calibre-Web
+- Tier 1 HTTPS (port 443): Nextcloud, Calibre-Web
 - AI stack HTTPS (port 443): OpenWebUI
 
 Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` - see the

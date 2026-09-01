@@ -130,14 +130,32 @@ the "no database files on CIFS" rule. The `/opt/vaultwarden` bind-mount was conf
 service data directory without isolating the database to local storage.
 
 **Fix:**
-Not yet applied. Migration to PostgreSQL (lxc260) is planned. Until migration, the risk is
-accepted: Vaultwarden is a single-user deployment with low write frequency, reducing the
-probability of POSIX locking failures relative to the multi-user OpenWebUI case (KE-1).
+The planned migration to PostgreSQL never happened. The service was decommissioned on 2026-09-01
+instead, which takes the database off CIFS by deleting it
+([decision](../decisions/vaultwarden-decommission.md)).
 
-**Status:** Known, unresolved (planned migration to lxc260)
+That closes the entry without solving the problem behind it. The rule KE-1 set is no longer violated
+on this node; SQLite over CIFS is unchanged as a constraint, and the Calibre library still lives with
+it under its own workaround. Anyone reaching this entry looking for the solution should read the
+PostgreSQL route in the decision record.
+
+The shutdown produced one measurement worth keeping, which corrected the assumption it was expected
+to confirm. `db.sqlite3` carried an mtime of 2026-02-16 beside a 57712-byte `db.sqlite3-wal` written
+2026-06-11, reading like months of committed transactions stranded outside the database.
+`PRAGMA wal_checkpoint(TRUNCATE)` returned zero frames and `PRAGMA integrity_check` returned `ok`.
+The log was empty and the file had simply never been truncated. A write-ahead log's size and
+timestamp say nothing about whether it holds data.
+
+Left unexplained: a clean SQLite close deletes `-wal` and `-shm`, and both survived a graceful
+`pct shutdown`. That fits a container being stopped by the nightly host power cycle rather than
+closing in order. Not pursued, since the service is gone.
+
+**Status:** Closed 2026-09-01 by decommissioning. Data retained until 2026-11-30.
 
 **References:**
 - [KE-1: SQLite on CIFS - "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)
+- [KE-19: a file that changes during a sync](#ke-19)
+- [Decommissioning decision](../decisions/vaultwarden-decommission.md)
 - [Vaultwarden service documentation](../services/vaultwarden.md)
 - [PostgreSQL platform service](../services/postgresql-platform.md)
 

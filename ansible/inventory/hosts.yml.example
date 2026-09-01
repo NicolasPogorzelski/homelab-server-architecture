@@ -10,7 +10,6 @@ all:
       - { name: openwebui,   url: "https://ai-openwebui.<tailnet-id>" }
       - { name: nextcloud,   url: "https://nextcloud.<tailnet-id>" }
       - { name: calibreweb,  url: "https://calibreweb.<tailnet-id>" }
-      - { name: vaultwarden, url: "https://vaultwarden.<tailnet-id>" }
   children:
     media:
       hosts:
@@ -48,10 +47,8 @@ all:
         lxc260:  # PostgreSQL platform
           ansible_host: <tailscale-ip-postgres>
 
-    security:
-      hosts:
-        lxc240:  # Vaultwarden
-          ansible_host: <tailscale-ip-vaultwarden>
+    # The `security` group held lxc240 alone and went with it on 2026-09-01.
+    # No playbook ever targeted it. See docs/decisions/vaultwarden-decommission.md.
 
     docker:  # Nodes running Docker Compose stacks (Item #9 update workflow)
       hosts:
@@ -63,8 +60,6 @@ all:
           ansible_host: <tailscale-ip-calibreweb>
         lxc230:  # openwebui
           ansible_host: <tailscale-ip-ai-openwebui>
-        lxc240:  # vaultwarden
-          ansible_host: <tailscale-ip-vaultwarden>
         vm100:  # jellyfin + audiobookshelf
           ansible_host: <tailscale-ip-gpu-vm>
 
@@ -85,9 +80,6 @@ all:
         lxc230:
           ansible_host: <tailscale-ip-ai-openwebui>
           prometheus_label: openwebui
-        lxc240:
-          ansible_host: <tailscale-ip-vaultwarden>
-          prometheus_label: vaultwarden
         # The control node, in the inventory since 2026-08-20. It was absent for
         # months, which meant `hosts: all` excluded it silently: no node_exporter
         # scrape, no NodeDown, no disk alert on its 8 GB root, and no patching.

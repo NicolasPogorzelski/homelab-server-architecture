@@ -162,6 +162,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [pveproxy Tailscale Boot Ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) (the same race on the hypervisor)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
+- [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service, and what closing an error by removal does not prove)
 
 ### Security, risk and change
 

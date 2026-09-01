@@ -39,7 +39,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
 | Ansible vault password, real inventory, automation SSH key | lxc250 home directory, on the boot SSD | C1 | No | None. One copy. |
-| Vaultwarden vault (all household credentials) | `/mnt/smb/vaultwarden` on the archive pool | C1 | Yes | Parity only. No export, no versions. |
+| Vaultwarden vault - withdrawn 2026-09-01, retained until 2026-11-30 | `/mnt/smb/vaultwarden`, 677 KB | C1 while retained | Yes | Cold archive taken at shutdown, checksummed, held in two locations. The service that wrote it is gone ([decision](../decisions/vaultwarden-decommission.md)) |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
 | Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |
@@ -96,7 +96,7 @@ availability.
 | Dataset | RPO today | RPO target | RTO target | Note |
 |---|---|---|---|---|
 | Vault password and automation credentials | Unbounded - a single copy | Effectively zero | Immediate | The content changes approximately never; the objective is availability, not freshness. |
-| Vaultwarden vault | Undefined | 24 h | 4 h | Everything else depends on being able to authenticate. |
+| Vaultwarden vault | Not applicable since 2026-09-01 | - | - | Withdrawn. Authentication now rests on the external password manager and the paper escrow alone, which is what makes the annual retrieval drill in Tier 1 #1 the only evidence that it works. |
 | Paperless documents | Undefined | 24 h | 24 h | Originals are also held on paper for a subset. |
 | Nextcloud files | Undefined | 24 h | 24 h | |
 | Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
@@ -152,15 +152,16 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    Nextcloud database had none - closed 2026-08-15 by the `mariadb_backup` role and
    [its runbook](../../runbooks/database/mariadb-backup.md). Verified live on 2026-08-17: the share
    is provisioned, `mp1` is bound, the timer has produced a dump on each of the three days since,
-   and the metric is scraped. Vaultwarden still has no consistent export: an SQLite file copied from
-   a live CIFS mount is not a backup, it is a gamble on timing. That is now the single open half of
-   Tier 1 #3 before the off-site question itself.
+   and the metric is scraped. Vaultwarden never got its consistent export and no longer needs one:
+   the service was decommissioned on 2026-09-01 rather than repaired. That closes the half of
+   Tier 1 #3 by removing its subject, which is not the same as having solved it.
 3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
    C1 set. One row is now measured - the Nextcloud database at 38.3 MB, which compresses to a
    rounding error and tells us the databases are not what drives the decision. The documents are:
-   Paperless originals, Nextcloud files and the Vaultwarden vault are still unmeasured, and until
-   they are, the choice between an encrypted object store, a rotated external disk kept elsewhere,
-   and a self-hosted target is unanswerable.
+   Paperless originals and Nextcloud files are still unmeasured, and until they are, the choice
+   between an encrypted object store, a rotated external disk kept elsewhere, and a self-hosted
+   target is unanswerable. The Vaultwarden vault left this list by being retired; at 677 KB it would
+   not have changed the answer.
 
 ## Review
 
