@@ -42,7 +42,15 @@ BACKUP_DIR="/mnt/vzdump"
 # Jellyfin metadata and transcoding cache, all of it reproducible from the compose
 # stack in minutes, and its media lives on vm102. Including it would roughly
 # triple the size of a run to protect the one guest that needs it least.
-GUESTS=(250 260 210 211 200 220 230 102)
+#
+# lxc240 was missing from this array from the first version until 2026-09-01.
+# Unlike VM100 above, that was not a decision - nobody noticed. `pct list` is
+# the authority on which guests exist; this line is a copy of it maintained by
+# hand, and no check compares the two. The same shape once left lxc250 out of
+# the fstrim array and out of `hosts: all`.
+#
+# Recheck this line against `pct list` when the fleet changes.
+GUESTS=(250 240 260 210 211 200 220 230 102)
 
 # Retention is expressed in time, not in a number of files. The distinction is
 # not pedantic: the PostgreSQL retention reads `-mtime +7`, which means seven

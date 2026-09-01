@@ -1620,3 +1620,81 @@ access, an immediate reboot is strictly better than a machine that is alive and 
 **Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
 [KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete
 kernel trace), [hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
+
+---
+
+<a id="ke-22"></a>
+
+## KE-22: A retired deployment stayed on disk and broke the backup seven months later
+
+**Affected component:** LXC220 (Calibre-Web)
+
+**Symptom:**
+The first full guest-backup run, on 2026-08-21, failed for one guest:
+
+```
+tar: ./opt/calibreweb: Cannot open: Permission denied
+```
+
+`vzdump 220` exited non-zero, `guest_backup_failed_guests` read 1, and the unit ended in `failed`.
+The other seven guests completed. lxc220 then had no archive for eleven days.
+
+**First diagnosis, and why it was wrong:**
+It was recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error reads
+like a permission problem, and that reading went into the runbook's failure table without anyone
+testing it.
+
+The mapping was never the problem. `pct config 220` shows the Proxmox default, and every other path
+on the node behaves correctly under it. One directory was wrong.
+
+**Root cause (measured 2026-09-01):**
+`/opt/calibreweb` is the Calibre-Web deployment that `/srv/calibreweb` replaced. Its log ends with a
+clean `webserver stop` on 2026-02-14 and the new compose file is dated 2026-02-20. The old directory
+was left in place.
+
+It is owned by host `1000:1000`. The container maps host UIDs 100000 to 165535, so that owner falls
+outside the map, with two effects:
+
+- The kernel cannot translate the owner and substitutes `/proc/sys/kernel/overflowuid`, so `ls`
+  inside the container reports `65534`.
+- Container root also gets `EACCES`. Capabilities are scoped to the user namespace, so
+  `CAP_DAC_OVERRIDE` reaches only owners the namespace maps.
+
+`vzdump` archives an unprivileged container through `lxc-usernsexec -m u:0:100000:65536`. That is
+deliberate - the archive has to carry container-relative ownership, or restoring it onto a host with
+a different range rewrites every file wrongly. The consequence is that the backup can read what the
+container can read.
+
+Who wrote the directory from the host side is not recorded. The January file dates fit the original
+deployment, before the stack moved to `/srv`, and nothing else on the node accounts for it.
+
+**What it held:** 220 KB. The retired compose file, and a `config/` tree with `app.db`, a 44-byte
+Flask key, `gdrive.db`, a log, and a `client_secrets.json` containing `{}`. Three accounts in
+`app.db`, all three present in the live database under `/srv`, which carries a fourth added after
+the move.
+
+**Fix:**
+Archived to a cold copy held in two places off the node, compared against live, then deleted. Two
+other orphans on the same node went in the same pass:
+
+- `/etc/systemd/system/tailscaled-userspace.service`, disabled at the KE-6 recurrence on 2026-07-28
+  and never removed.
+- `/opt/homelab-server-architecture`, a clone of this repository last updated 2026-03-05. No unit,
+  timer or crontab referenced it.
+
+**The class: superseded is not removed.**
+Three artefacts on one node, each left behind by a change that worked. Replacing something and
+retiring what it replaced are two separate jobs, and only the first has an obvious end, so the
+second gets dropped. The cost then appears somewhere unrelated and much later: a January directory
+as an August backup fault, a disabled unit as a second `tailscaled` at every boot. Other instances
+here are [KE-6](#ke-6), [KE-4](#ke-4), and the orphaned `smart.prom.*` files in the host's textfile
+directory.
+
+Give the old location a removal step in the change that creates its replacement.
+
+**Status:** Resolved 2026-09-01. Orphans removed, Calibre-Web unaffected. `vzdump 220` then wrote
+1.03 GB in 33 s and exited 0. The scheduled job ran in full afterwards: `status=0/SUCCESS`,
+`guest_backup_failed_guests` 0, 268 s. That is the unit's first clean finish since 2026-08-21.
+
+**Related:** [KE-6](#ke-6), [KE-4](#ke-4),
+[guest backup and restore](../../runbooks/platform/guest-backup-restore.md).
