@@ -1,4 +1,9 @@
 ---
+# Playbooks run from the control node's working tree, so an unpublished
+# tree is an unpublished deployment. preflight.yml refuses that.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Config chrony
   hosts: vms
   serial: 1

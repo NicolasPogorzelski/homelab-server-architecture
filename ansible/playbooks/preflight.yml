@@ -1,0 +1,117 @@
+---
+# Refuse to run against live infrastructure from a working tree that matches no commit.
+#
+# Playbooks here execute from lxc250's working tree, not from a checked-out
+# commit. A node on a feature branch, mid-merge, or behind origin deploys code
+# that exists nowhere in the history, and nothing reports it.
+#
+# It has happened twice. The control node was found mid-merge on 2026-07-09, and
+# two commits behind origin/main on 2026-07-28. In the second case a
+# tailscale-cert.yml run would have put the pre-fix refresh script back over the
+# live KE-18 fix, and the symptom would have appeared about two months later as
+# an expired certificate.
+#
+# Imported at the top of every playbook that changes live state. The read-only
+# fleet-health-check.yml does not import it, so diagnosis during an incident is
+# never blocked by this.
+- name: Preflight - the control node's working tree must match a published commit
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    # Repository root, two levels up from ansible/playbooks/.
+    preflight_repo: "{{ playbook_dir }}/../.."
+    preflight_required_branch: main
+    # Takes a reason, not a boolean, and prints it into the run's output. Without
+    # any way past it, this gate would be removed the first time it blocked an
+    # incident.
+    preflight_override: ""
+
+  tasks:
+    # noqa: command-instead-of-module - ansible.builtin.git clones and checks out.
+    # It has no query mode, so none of the checks below has a module form. Waived
+    # inline rather than in skip_list, so the rule stays armed repo-wide.
+    - name: Read the working tree state
+      ansible.builtin.command:  # noqa: command-instead-of-module
+        cmd: git status --porcelain
+        chdir: "{{ preflight_repo }}"
+      register: preflight_status
+      changed_when: false
+      check_mode: false
+
+    - name: Read the current branch
+      ansible.builtin.command:  # noqa: command-instead-of-module
+        cmd: git rev-parse --abbrev-ref HEAD
+        chdir: "{{ preflight_repo }}"
+      register: preflight_branch
+      changed_when: false
+      check_mode: false
+
+    # Fetch before comparing. `git status` answers against the remote-tracking
+    # ref as of the last fetch, so a node that has not fetched for a week still
+    # reports itself up to date.
+    - name: Refresh the remote ref
+      ansible.builtin.command:  # noqa: command-instead-of-module
+        cmd: "git fetch --quiet origin {{ preflight_required_branch }}"
+        chdir: "{{ preflight_repo }}"
+      register: preflight_fetch
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Compare local and remote
+      ansible.builtin.command:  # noqa: command-instead-of-module
+        cmd: "git rev-list --left-right --count HEAD...origin/{{ preflight_required_branch }}"
+        chdir: "{{ preflight_repo }}"
+      register: preflight_divergence
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # validate-repo.sh Check 15 catches conflict markers that reach a commit.
+    # This catches the ones that never will, which is the case that matters here:
+    # an unresolved merge in the working tree is what gets deployed.
+    - name: Look for merge conflict markers under ansible/
+      ansible.builtin.command:
+        cmd: "grep -rlE '^(<<<<<<<|=======|>>>>>>>)' {{ preflight_repo }}/ansible"
+      register: preflight_markers
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Report what was found
+      ansible.builtin.debug:
+        msg:
+          - "branch:           {{ preflight_branch.stdout }}"
+          - "working tree:     {{ 'clean' if preflight_status.stdout == '' else preflight_status.stdout_lines | length | string + ' modified path(s)' }}"
+          - "fetch:            {{ 'ok' if preflight_fetch.rc == 0 else 'FAILED (' ~ preflight_fetch.stderr | trim ~ ')' }}"
+          - "ahead/behind:     {{ preflight_divergence.stdout | default('unknown') | trim }}"
+          - "conflict markers: {{ 'none' if preflight_markers.rc != 0 else preflight_markers.stdout_lines | join(', ') }}"
+
+    - name: Print the override reason into the run output
+      ansible.builtin.debug:
+        msg: >-
+          PREFLIGHT OVERRIDDEN: {{ preflight_override }}
+          The checks below are reported but not enforced for this run.
+      when: preflight_override | length > 0
+
+    - name: Refuse the run if the control node does not match a published commit
+      ansible.builtin.assert:
+        that:
+          - preflight_branch.stdout == preflight_required_branch
+          - preflight_status.stdout == ""
+          - preflight_fetch.rc == 0
+          - preflight_divergence.stdout | trim == "0\t0"
+          - preflight_markers.rc != 0
+        fail_msg: >-
+          The control node's tree does not match origin/{{ preflight_required_branch }}.
+          Playbooks here run from the working tree, so this run would deploy code that
+          exists in no commit. Check with `git status --short --branch`, then
+          `git pull --ff-only`. To proceed anyway, state a reason:
+          -e preflight_override="why this run must go ahead".
+        success_msg: >-
+          Control node is on a clean {{ preflight_required_branch }},
+          in sync with origin. Proceeding.
+      when: preflight_override | length == 0

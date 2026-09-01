@@ -3,6 +3,11 @@
 # group too and runs no database of its own (Paperless keeps its metadata in the
 # PostgreSQL cluster on lxc260). A group target would deploy a MariaDB backup to
 # a node with no MariaDB.
+# Playbooks run from the control node's working tree, so an unpublished
+# tree is an unpublished deployment. preflight.yml refuses that.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Deploy MariaDB backup infrastructure
   hosts: lxc210
   become: true

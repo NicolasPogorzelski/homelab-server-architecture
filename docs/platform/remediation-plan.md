@@ -144,10 +144,12 @@ intention.
 
 **Small open items.** A few lines each, collected because none of them blocks anything else.
 
-- The lxc250 `preflight.yml` gate, asserting a clean `main` in sync with `origin` before any run
-  that changes live state. The inventory adoption and exporter replacement it was once bundled with
-  are done since 2026-08-20, as is the sshd drop-in, the fifth
-  [KE-18](known-errors.md#ke-18) instance.
+- ~~The lxc250 `preflight.yml` gate~~ Done 2026-09-01, imported by every playbook that changes live
+  state. The drift *metric* the original plan bundled with it is not part of this and is not
+  scheduled yet. A metric written only when a playbook runs cannot see a control node drifting
+  because nobody runs playbooks on it, so it would read healthy in the one state it exists to
+  catch - the same shape as `PostgreSQLBackupStale` during an outage. It needs a timer independent
+  of the runs.
 - `DATA_SOURCE_NAME` for `postgres_exporter` into the vault. Still an unmanaged literal in
   `/etc/postgres_exporter.env`.
 - Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102, where

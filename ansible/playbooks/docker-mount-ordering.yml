@@ -2,6 +2,11 @@
 # Runs against the whole docker group; the role is a no-op wherever
 # docker_mount_ordering_units is empty, so a node opts in through its host_vars
 # rather than through the playbook's host list.
+# Playbooks run from the control node's working tree, so an unpublished
+# tree is an unpublished deployment. preflight.yml refuses that.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Order Docker after the automount units its containers bind
   hosts: docker
   become: true

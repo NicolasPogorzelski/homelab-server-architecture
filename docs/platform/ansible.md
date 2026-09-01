@@ -124,6 +124,7 @@ See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
 
 | Playbook | Target | Purpose |
 |---|---|---|
+| `preflight.yml` | `localhost` | Refuses the run when the control node's tree is not a clean `main` in sync with `origin`, or when a merge conflict marker survives under `ansible/`. Imported as the first entry of every playbook that changes live state. It fetches before comparing: `git status` answers against the remote-tracking ref as of the last fetch, so an unfetched node reports itself current. `fleet-health-check.yml` does not import it, which keeps diagnosis available during an incident. The override takes a reason string and prints it |
 | `apt-upgrade.yml` | `lxcs`, `vms` | Rolling apt upgrade, `serial: 1`, `dpkg --verify` post-task |
 | `bootstrap-ansible-user.yml` | `all` | One-time: create `ansible` user, deploy SSH key, configure sudoers |
 | `node-exporter.yml` | `guests:!lxc200`, plus a named `proxmox` play | Deploy `node_exporter` binary + systemd unit. lxc200 is excluded because its exporter is a container that cannot see the host's systemd units. The `proxmox` play adopts a unit that already exists and whose content the role's defaults match, textfile path included |

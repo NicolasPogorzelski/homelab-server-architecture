@@ -4,6 +4,11 @@
 # exporter alongside a containerised one. That gap is recorded rather than
 # papered over: lxc200 is one of the two nodes without `SystemdUnitFailed`
 # coverage.
+# Playbooks run from the control node's working tree, so an unpublished
+# tree is an unpublished deployment. preflight.yml refuses that.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Deploy node_exporter to the fleet
   hosts: guests:!lxc200
   become: true
