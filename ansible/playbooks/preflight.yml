@@ -14,6 +14,14 @@
 # Imported at the top of every playbook that changes live state. The read-only
 # fleet-health-check.yml does not import it, so diagnosis during an incident is
 # never blocked by this.
+#
+# One way past this gate exists and does not announce itself: --limit applies to
+# every play in a run, including this one. `ansible-playbook pg-backup.yml
+# --limit lxc260` removes the gate from the run and prints only
+# "skipping: no hosts matched". Any --limit must therefore name localhost as
+# well, e.g. --limit 'lxc260,localhost'. That is the same shape as the guards
+# this platform keeps finding in its own monitoring - one the condition it
+# protects against can switch off - and it cannot be closed from inside a play.
 - name: Preflight - the control node's working tree must match a published commit
   hosts: localhost
   connection: local
@@ -73,6 +81,10 @@
     # validate-repo.sh Check 15 catches conflict markers that reach a commit.
     # This catches the ones that never will, which is the case that matters here:
     # an unresolved merge in the working tree is what gets deployed.
+    #
+    # grep exits 1 for "found nothing" and 2 for "could not look" - a missing
+    # directory, an unreadable file. Only 1 means clean, which is why the
+    # assertion below tests for 1 and not for "not 0".
     - name: Look for merge conflict markers under ansible/
       ansible.builtin.command:
         cmd: "grep -rlE '^(<<<<<<<|=======|>>>>>>>)' {{ preflight_repo }}/ansible"
@@ -81,6 +93,17 @@
       failed_when: false
       check_mode: false
 
+    # grep's three exit codes turned into one readable word, so the report line
+    # below stays inside the line-length limit and says what rc=2 means.
+    - name: Name the marker check's outcome
+      ansible.builtin.set_fact:
+        preflight_marker_state: "{{ preflight_marker_states[preflight_markers.rc] | default(preflight_marker_broken) }}"
+      vars:
+        preflight_marker_states:
+          0: "{{ preflight_markers.stdout_lines | join(', ') }}"
+          1: none
+        preflight_marker_broken: "CHECK FAILED, rc={{ preflight_markers.rc }}"
+
     - name: Report what was found
       ansible.builtin.debug:
         msg:
@@ -88,7 +111,7 @@
           - "working tree:     {{ 'clean' if preflight_status.stdout == '' else preflight_status.stdout_lines | length | string + ' modified path(s)' }}"
           - "fetch:            {{ 'ok' if preflight_fetch.rc == 0 else 'FAILED (' ~ preflight_fetch.stderr | trim ~ ')' }}"
           - "ahead/behind:     {{ preflight_divergence.stdout | default('unknown') | trim }}"
-          - "conflict markers: {{ 'none' if preflight_markers.rc != 0 else preflight_markers.stdout_lines | join(', ') }}"
+          - "conflict markers: {{ preflight_marker_state }}"
 
     - name: Print the override reason into the run output
       ansible.builtin.debug:
@@ -104,7 +127,7 @@
           - preflight_status.stdout == ""
           - preflight_fetch.rc == 0
           - preflight_divergence.stdout | trim == "0\t0"
-          - preflight_markers.rc != 0
+          - preflight_markers.rc == 1
         fail_msg: >-
           The control node's tree does not match origin/{{ preflight_required_branch }}.
           Playbooks here run from the working tree, so this run would deploy code that
