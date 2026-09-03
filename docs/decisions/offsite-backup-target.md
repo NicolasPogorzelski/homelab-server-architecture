@@ -115,9 +115,9 @@ Two copies are held away from the server and were recorded nowhere until now.
 
 - **A rescue of the auxiliary disk's contents**, taken to an administrator workstation on
   2026-06-25, still there on encrypted storage. A point-in-time copy, roughly ten weeks old.
-- **A disk at a family member's home**, holding a mirror taken in May 2026. Genuinely off site and
-  genuinely air-gapped. It is refreshed when the operator visits, which is irregular and not a
-  schedule, so its age is unknown between visits and it cannot be planned around.
+- **A disk at a second residential site**, holding a mirror taken in May 2026. Genuinely off site
+  and genuinely air-gapped. It is refreshed only when the operator is physically there, which is
+  irregular and not a schedule, so its age is unknown in between and it cannot be planned around.
 
 Neither is a running backup and neither has been restored from. They are the reason "no off-site
 copy of anything" was inaccurate. The second one is also the clearest argument for this decision: it

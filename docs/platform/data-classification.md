@@ -177,7 +177,7 @@ Recorded on 2026-09-01. Both were found in the 2026-08-20 audit and had been wri
 | Copy | Location | Taken | What it is |
 |---|---|---|---|
 | Auxiliary disk rescue | Encrypted storage on the admin workstation, a different building from the server | 2026-06-25 | Point-in-time copy of the failing disk's contents. Its error log holds only `socket ignored` lines from container runtime sockets, so the copy itself is complete |
-| Disk at a family member's home | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror, contents unverified. Refreshed when the operator visits, which is irregular, so its age between visits is unknown and it cannot be planned around |
+| Disk at a second residential site | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror, contents unverified. Refreshed only when the operator is physically there, which is irregular, so its age between visits is unknown and it cannot be planned around |
 
 Neither is a running backup and neither has been restored from. They are the reason "no off-site copy
 of anything" was inaccurate; they are not a reason to consider the item closed. The disk is the
