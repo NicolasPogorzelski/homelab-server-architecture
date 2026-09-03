@@ -72,7 +72,9 @@ Container definition, root disk and the data on the share stay.
 
 **Phase 2, on or after 2026-11-30.** Destroy the data on the share, remove the container, and clear
 what it leaves in configuration: the `snapraid_maintenance` exclude rules for its side files, the
-`storage_permissions` entry for its directory. Ninety days is long enough to cover a quarterly task
+`storage_permissions` entry for its directory, and `240` from the `GUESTS` array in
+`guest-backup.sh`, which is the line that put it there on the same day this decision was
+written. Left in, the weekly job runs against a CTID that no longer exists. Ninety days is long enough to cover a quarterly task
 nobody remembered and short enough that the archive does not become permanent by neglect.
 
 ## What could not be exported, and why it did not matter here
