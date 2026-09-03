@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The Ansible learning track (roadmap items #1-#13) is complete and merged to `main`: everything
 guest-side is Ansible-managed and every scheduled job is a systemd timer. The next learning track is
-Terraform. The completed role/playbook catalog and per-session narratives live in
+Terraform, and it is deferred - the platform runs in maintenance mode until it starts, see below.
+The completed role/playbook catalog and per-session narratives live in
 [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md); platform changes and their
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
 notes there and keep this section short.
@@ -161,11 +162,13 @@ notes there and keep this section short.
   13. ~~CI/CD + ansible-lint (lightweight) - GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal - no elaborate matrix or multi-stage pipeline.~~ (2026-06-12, `.github/workflows/ansible-lint.yml`)
   14. ~~Molecule - unit testing for Ansible roles~~ Deferred - out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
 
-  **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, which follows as the next learning track after Ansible.
+  **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, the next learning track, which is deferred.
 
-**Next learning track (after Ansible):** Terraform - primarily on AWS (free tier) to learn HCL/state/modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff: `terraform apply` -> LXC exists -> `onboarding.yml` configures it.
+**Next learning track: Terraform - deferred, not cancelled (decided 2026-09-02).** The content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). What changed is the timing. A track that carries its own notion of state does not survive being picked up and put down in short sessions, and short sessions are what the foreseeable period offers. Do not propose starting it - the date is decided outside this repository.
 
-**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications, and career milestones live in the private global instructions, not in this repo.
+**Operating mode until then: maintenance, not expansion.** Work is cut into small self-contained units: one thing, under an hour or two, ending in one commit with one changelog line and a clean stopping point. Anything that changes live state - applies against the fleet, restore tests, hardware - is scheduled deliberately into a block that has a rollback path, never begun opportunistically because it came up. The standing backlog of small units is the "Small open items" list in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md), and the recurring fleet audit feeds it. New services and new tracks wait.
+
+**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 
 **PR Cadence:** Learning-path branches (`feat/ansible-setup`, `feat/terraform-setup`, etc.) are merged to `main` as a whole when the topic is complete - not after individual items. The items within a topic build on each other and form a single coherent arc. Exception: self-contained platform changes unrelated to the learning topic (e.g. runbooks, hotfixes) are split off to their own branch and PRed independently.
 
