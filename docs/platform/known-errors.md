@@ -1831,8 +1831,10 @@ sshd[192]: error: Bind to port 22 on 0.0.0.0 failed: Address already in use.
 failed for a second, unrelated reason and hid the first.
 
 Nothing was unreachable at any point, and the fault repairs itself: the socket starts the service
-again on the next connection. All six were back to `active` within the hour, without intervention.
-A defect that heals before anyone looks is one that gets rediscovered rather than fixed.
+again on the next connection. All six were back to `active` within the hour, with nothing done to
+them. That is the reason this entry exists at all - without it the next `ssh-hardening.yml` run
+would have produced the same failure and the same quiet repair, and the third or fourth time round
+somebody would still be starting the diagnosis from nothing.
 
 **Fix:**
 In the role, not on the nodes. `ssh_hardening` now reads `systemctl is-active ssh.socket` and picks
@@ -1870,11 +1872,11 @@ exist yet at boot, which is [KE-18](#ke-18) one layer down.
 **Status:** Resolved 2026-09-04 in the role. No node was changed; the six repaired themselves and
 the fleet reports `changed=0`.
 
-**The class: a reload is not a re-read.** The word suggests a process picking up a new file, and
-for sshd it means the process replacing itself. Everything that was true of its environment has to
-be true again afterwards, and under socket activation one thing is not. The same gap between a
-word and its mechanism as "ordering is not readiness" ([KE-18](#ke-18)) and "free is not
-deallocated" (thin-pool discard).
+**The class: read what a signal does to the process, not what the verb promises.** `reload` names
+an intention. The mechanism sshd implements for it is `execve()` on itself, so the new process has
+to obtain everything the old one held, and under socket activation the listening socket is not
+obtainable that way. [KE-18](#ke-18) is the same kind of mismatch one layer up, where `After=` was
+read as a readiness guarantee rather than an ordering constraint.
 
 **Related:** [KE-23](#ke-23), [KE-18](#ke-18), [KE-15](#ke-15),
 [hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
