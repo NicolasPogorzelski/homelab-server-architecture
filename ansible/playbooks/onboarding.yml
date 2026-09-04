@@ -1,4 +1,11 @@
 ---
+# `lxc-test` is a placeholder, not a host. It is in no inventory group, so every
+# play here reports `skipping: no hosts matched` and the playbook has never been
+# run against a real node - roadmap item 8 records the structure as complete and
+# the live test as skipped, for want of a spare container. Replace the three
+# `hosts:` values with the new node before using this, and expect the bootstrap
+# play to need `-u root` because the ansible user does not exist yet.
+#
 # Playbooks run from the working tree on lxc250, not from a commit.
 # preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit

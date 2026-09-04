@@ -85,7 +85,7 @@ fi
 ROOT_SRC="$(findmnt -no SOURCE / || true)"
 DEST_SRC="$(findmnt -no SOURCE "$BACKUP_DIR" || true)"
 if [ -z "$DEST_SRC" ] || [ "$DEST_SRC" = "$ROOT_SRC" ]; then
-  echo "ERROR: ${BACKUP_DIR} resolves to the root device (${DEST_SRC:-none}) - a backup there shares the failure domain it exists to survive" >&2
+  echo "ERROR: ${BACKUP_DIR} resolves to the root device (${DEST_SRC:-none}) - refusing to write guest backups onto the disk that carries the guests" >&2
   exit 1
 fi
 

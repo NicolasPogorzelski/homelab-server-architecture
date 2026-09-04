@@ -690,7 +690,7 @@ INDEX_FILES=("README.md" "runbooks/README.md")
 
 # Deliberately not indexed:
 #   docs/platform/ansible-progress.md - per-session learning narrative, written
-#   for the operator rather than for a reader of the platform. Linked from
+#   for whoever runs the platform rather than for a reader of it. Linked from
 #   CLAUDE.md, which is where the learning track is steered from.
 INDEX_EXCEPTIONS=("docs/platform/ansible-progress.md")
 
@@ -985,7 +985,7 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # were found and removed on the day this check was written.
 #
 # refs/stash and refs/notes are legitimate local state and stay allowed. The
-# check reports rather than deletes: removing a ref is the operator's call, and
+# check reports rather than deletes: removing a ref is a judgement call, and
 # it may still be the only pointer to unfinished work.
 echo "Check 34: no refs outside the standard namespaces"
 
@@ -1005,11 +1005,75 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 35: state-changing playbooks import the preflight gate
+# =============================================================================
+# Added 2026-09-04. preflight.yml refuses a run from a working tree that matches
+# no commit, and it protects only the playbooks that import it. The import is
+# four identical lines repeated in every playbook - a hand-maintained list with
+# nothing comparing it to the directory, which is the shape that once left lxc240
+# out of the guest backup and lxc250 out of `hosts: all`.
+#
+# Two files are exempt by design. preflight.yml is the gate. fleet-health-check
+# only reads, and a gate that blocks diagnosis during an incident gets removed.
+echo "Check 35: state-changing playbooks import the preflight gate"
+
+PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
+if [[ -d "${PLAYBOOK_DIR}" ]]; then
+    for pb in "${PLAYBOOK_DIR}"/*.yml; do
+        [[ -e "${pb}" ]] || continue
+        base="$(basename "${pb}")"
+        case "${base}" in
+            preflight.yml|fleet-health-check.yml) continue ;;
+        esac
+        if ! grep -q '^  import_playbook: preflight.yml$' "${pb}"; then
+            echo "  Missing preflight import: ansible/playbooks/${base}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 36: markdown table rows stay on one line
+# =============================================================================
+# Added 2026-09-04. A table row in markdown ends at the newline. A row written
+# across several lines still renders - the remainder falls out of the table and
+# sits underneath it as a paragraph, which looks deliberate enough that nobody
+# questions it. The changelog carried one for eleven days, and the text that fell
+# out of the table held the first note that lxc240 was missing from the guest
+# backup. It was found by reading, not by any check.
+#
+# The rule is mechanical: a line that opens a table row must also close one.
+# Fenced code blocks are skipped, because a shell pipeline is not a table.
+echo "Check 36: markdown table rows stay on one line"
+
+while IFS= read -r md; do
+    awk -v file="${md#"${REPO_ROOT}/"}" '
+        /^```/ { fence = !fence; next }
+        fence  { next }
+        /^\|/ {
+            line = $0
+            sub(/[ \t]+$/, "", line)
+            if (line !~ /\|$/) {
+                printf "  Table row broken across lines: %s:%d\n", file, NR
+                found = 1
+            }
+        }
+        END { exit found ? 1 : 0 }
+    ' "${md}" || echo "x" >> "${ERROR_LOG}"
+done < <(find "${REPO_ROOT}" -name '*.md' -not -path '*/.git/*')
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 34"
+echo "Checks run: 36"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
