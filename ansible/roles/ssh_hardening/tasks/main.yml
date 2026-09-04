@@ -11,6 +11,41 @@
       a typo here takes SSH down on the node it was meant to harden.
     quiet: true
 
+# Socket activation and the long-running daemon both claim port 22. Where both
+# units are enabled the node survives until something reloads sshd: sshd re-execs
+# on SIGHUP, finds systemd already holding the port, and exits 255. The unit ends
+# `failed`, /run/sshd is cleaned up with it, and SSH keeps working only because
+# the socket answers - which makes the fault easy to miss. Measured on six
+# containers 2026-09-04, triggered by this role's own handler ([KE-24]).
+#
+# The role refuses rather than repairs. Which unit owns port 22 is service
+# topology, not sshd configuration, and a role that quietly disables a unit on
+# the only remote access path is worse than one that stops and says why.
+#
+# noqa: command-instead-of-module - service_facts sees .service units only, and
+# systemd_service has no query-only mode. A node without the unit returns a
+# non-zero rc and empty stdout, which passes the assertion below.
+- name: Read whether socket activation is enabled for sshd
+  ansible.builtin.command:  # noqa: command-instead-of-module
+    cmd: systemctl is-enabled ssh.socket
+  register: ssh_hardening_socket_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Refuse to touch sshd while both units are enabled
+  ansible.builtin.assert:
+    that:
+      - ssh_hardening_socket_state.stdout | trim != "enabled"
+    fail_msg: >-
+      ssh.socket is enabled on this node alongside ssh.service. Reloading sshd
+      here leaves the service dead and the socket serving, which reads as working
+      SSH with a failed unit. Resolve the topology first, one node at a time:
+      `systemctl disable --now ssh.socket && systemctl start ssh.service`,
+      with `pct exec <ctid> -- systemctl start ssh` from the hypervisor as the
+      way back. See docs/platform/known-errors.md#ke-24.
+    quiet: true
+
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/00-hardening.conf

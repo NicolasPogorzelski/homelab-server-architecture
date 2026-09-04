@@ -1756,11 +1756,23 @@ apply and the result is right; the moment anything writes into that directory, t
 the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting before `50-` is the
 whole reason the fix worked.
 
-**Status:** Open, scheduled as a maintenance unit. Not an exposure - no node accepts passwords
-today. Plan: `ansible-playbook ssh-hardening.yml --check --diff` with the expectation written down
-first (seven nodes `changed=1`, three `changed=0`), then apply, then re-read `sshd -T` on all ten
-and require it to match the table above exactly. A changed value would be the failure case.
-The host play runs last by design: a bad reload there locks out the one node with no second path in.
+**Status:** Resolved on the nine guests 2026-09-04, open on the Proxmox host.
+
+The dry run did not match the expectation, which is why the expectation was written down first.
+Nine of ten showed `changed=2` rather than seven: vm100 differed by one character, an em dash the
+role lost in `cd24328` ("use ASCII punctuation") and never redeployed, and the Proxmox host would
+have had its hand-written comment block replaced by the role's. Neither is a value change. Applied
+to the guests afterwards; `sshd -T` across all ten is byte-identical to the table above, which is
+the pass condition. The drop-in is now present on every node.
+
+Applying it also set off [KE-24](#ke-24): six containers had `ssh.socket` enabled beside
+`ssh.service`, and the handler's reload left the service dead while the socket kept serving SSH.
+
+The host is deliberately held back. Its delta is a comment block, its value stays
+`prohibit-password` from `group_vars/proxmox.yml`, and socket activation is disabled there, so the
+change is low-value and the blast radius is the whole platform: per that same group_vars file the
+physical recovery path is unavailable while the GPU is passed through. It belongs in a window with
+a second session already open, not at the end of an unplanned sequence.
 
 **The class: a role changed is not a fleet changed.**
 This is [KE-6](#ke-6) in a different medium. That entry produced the rule "when closing a
@@ -1770,5 +1782,82 @@ its own; the counterpart is the drift check in the
 [remediation plan](remediation-plan.md), which would have reported this on 2026-07-15.
 
 **Related:** [KE-6](#ke-6), [KE-18](#ke-18) (also found by sweeping rather than by an alert),
+[KE-24](#ke-24) (what applying the fix uncovered),
 [Ansible platform doc](ansible.md), A.8.5 in
 [security controls](security-controls.md).
+
+---
+
+<a id="ke-24"></a>
+
+## KE-24: Two units owned port 22, and a reload was all it took
+
+**Affected component:** LXC200, LXC210, LXC211, LXC220, LXC230, LXC260
+
+**Symptom:**
+Applying [KE-23](#ke-23) ran `ssh_hardening` across the guests. Six containers came back with
+`ssh.service` in `failed`, while SSH kept working. `sshd -T` on those six exited 255 with
+`Missing privilege separation directory: /run/sshd`, which is what made the fault visible - the
+verification step returned nothing where it had returned four directives an hour earlier.
+
+**Root cause:**
+Both `ssh.service` and `ssh.socket` were `enabled` on these six, and only there. The journal
+records the whole sequence in three lines:
+
+```
+systemd[1]: Reloading ssh.service - OpenBSD Secure Shell server...
+sshd[192]: Received SIGHUP; restarting.
+sshd[192]: error: Bind to port 22 on 0.0.0.0 failed: Address already in use.
+```
+
+sshd does not re-read its configuration on SIGHUP, it re-execs itself. Under socket activation
+systemd owns the listening socket, so the re-executed daemon found port 22 taken and exited 255.
+The unit went to `failed`, `RuntimeDirectory=` cleanup removed `/run/sshd` with it, and every
+later `sshd -t` failed for that second reason, masking the first.
+
+Nothing was unreachable at any point: `ssh.socket` answers connections on its own, spawning a
+per-connection instance. That is precisely what makes this hard to notice - the service is dead
+and the service it provides is not.
+
+**Why the fleet split this way:** the four nodes that were unaffected (vm100, vm102, lxc250, the
+Proxmox host) have `ssh.socket` disabled. The six affected are Proxmox Debian 12 containers, where
+the template leaves it enabled. The conflict was therefore present from the day each container was
+created and would have surfaced at the next reboot regardless.
+
+**Fix:**
+Resolve the topology to the long-running daemon, one node at a time:
+`systemctl disable --now ssh.socket && systemctl start ssh.service`, with
+`pct exec <ctid> -- systemctl start ssh` from the hypervisor as the way back.
+
+Socket activation is the wrong end state here for a specific reason. Under it the socket unit
+decides what is listened on, and `ListenAddress` in `sshd_config` has no effect. The platform
+binding rule would then only be expressible as `ListenStream=<tailscale-ip>:22`, an address that
+does not exist yet at boot - [KE-18](#ke-18) one layer down.
+
+The durable half is in the role: `ssh_hardening` now reads `systemctl is-enabled ssh.socket` and
+refuses to run where both units are enabled, naming the fix. It refuses rather than repairs,
+because which unit owns port 22 is service topology rather than sshd configuration, and a role
+that silently disables a unit on the only remote access path is worse than one that stops.
+
+**What it confirmed, rather than uncovered:** none of the six carries `ListenAddress` in
+`sshd_config`, and port 22 listens on `*:22`. A first draft of this entry called that a new
+finding; it is not. The `ss -tlnH` sweep of 2026-08-17 recorded sshd on the wildcard on ten of
+eleven nodes, with lxc250 the only one pinning an address, and A.8.21 in
+[security controls](security-controls.md) has carried it since. What is new is only the
+confirmation that socket activation would make it harder to fix, not easier. The exposure is
+unchanged by this fault - without `ListenAddress` the long-running daemon binds the wildcard too -
+and is mitigated by key-only authentication with `PasswordAuthentication no`,
+`PermitRootLogin no` and `KbdInteractiveAuthentication no` on all ten nodes.
+
+**Status:** Open. The drop-in from KE-23 is applied on all ten nodes and the effective
+configuration is correct everywhere; what remains is the unit topology on six containers, held for
+a maintenance window because it touches the only remote access path. The role guard is in place,
+so a further `ssh-hardening.yml` run stops on those nodes instead of repeating the fault.
+
+**The class: a latent conflict is not a stable state.** Two units able to claim one port read as
+healthy for as long as nothing disturbs them, and the thing that disturbs them is routine
+maintenance. The same shape as the fstab entry without `x-systemd.automount`
+([KE-15](#ke-15)): correct until the first boot that tests it.
+
+**Related:** [KE-23](#ke-23), [KE-18](#ke-18), [KE-15](#ke-15),
+[hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
