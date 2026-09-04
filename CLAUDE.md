@@ -352,6 +352,17 @@ hidden entry and which GitHub reads just as well.
   Not a clause inside a running sentence.
 - Vary the phrasing. A construction that turns up in every entry stops being writing and becomes a
   template.
+- **Count the moulds, not the sentences.** One label built as "X is not Y" is a term the repository
+  uses; a third one built the same way is a habit, and a habit repeated across documents is what a
+  reader notices. Before adding a class name in a known-error entry or a decision record, grep for
+  the shape. If two already exist, name the new one some other way. Never write a sentence that
+  lists the instances together - someone writing them months apart would not see the pattern, so
+  pointing at it says the opposite of what it intends.
+- **A maxim is a placeholder for the concrete consequence.** "A defect that heals before anyone
+  looks is one that gets rediscovered rather than fixed" says less than "without this entry the
+  next run would have produced the same failure and the same quiet repair, and the third time round
+  somebody would still be starting the diagnosis from nothing". If a sentence would fit in a
+  different document unchanged, it is not about this one.
 - Keep it short. A runbook is read during an incident, not at a desk. Length is a cost.
 
 **Who drafts what:**
