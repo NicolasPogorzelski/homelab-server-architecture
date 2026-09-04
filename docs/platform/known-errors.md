@@ -1657,15 +1657,14 @@ tar: ./opt/calibreweb: Cannot open: Permission denied
 `vzdump 220` exited non-zero, `guest_backup_failed_guests` read 1, and the unit ended in `failed`.
 The other seven guests completed. lxc220 then had no archive for eleven days.
 
-**First diagnosis, and why it was wrong:**
-It was recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error reads
+**Root cause (measured 2026-09-01):**
+It was first recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error reads
 like a permission problem, and that reading went into the runbook's failure table without anyone
 testing it.
 
 The mapping was never the problem. `pct config 220` shows the Proxmox default, and every other path
 on the node behaves correctly under it. One directory was wrong.
 
-**Root cause (measured 2026-09-01):**
 `/opt/calibreweb` is the Calibre-Web deployment that `/srv/calibreweb` replaced. Its log ends with a
 clean `webserver stop` on 2026-02-14 and the new compose file is dated 2026-02-20. The old directory
 was left in place.
@@ -1700,21 +1699,22 @@ other orphans on the same node went in the same pass:
 - `/opt/homelab-server-architecture`, a clone of this repository last updated 2026-03-05. No unit,
   timer or crontab referenced it.
 
-**The class: superseded is not removed.**
-Three artefacts on one node, each left behind by a change that worked. Replacing something and
-retiring what it replaced are two separate jobs, and only the first has an obvious end, so the
-second gets dropped. The cost then appears somewhere unrelated and much later: a January directory
-as an August backup fault, a disabled unit as a second `tailscaled` at every boot. Other instances
-here are [KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's textfile
-directory.
+**The class: give the thing being replaced a removal step, in the change that replaces it.**
+Three artefacts on one node, each left behind by a change that worked. Replacing something has an
+obvious end and retiring what it replaced does not, so the second job is the one that gets dropped.
+The cost then appears somewhere unrelated and much later: a January directory as an August backup
+fault, a disabled unit as a second `tailscaled` at every boot. Other instances here are
+[KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's
+textfile directory.
 
-Give the old location a removal step in the change that creates its replacement.
+On this node that would have been one line in the February compose change: delete
+`/opt/calibreweb` after `/srv/calibreweb` answers.
 
 **Status:** Resolved 2026-09-01. Orphans removed, Calibre-Web unaffected. `vzdump 220` then wrote
 1.03 GB in 33 s and exited 0. The scheduled job ran in full afterwards: `status=0/SUCCESS`,
 `guest_backup_failed_guests` 0, 268 s. That is the unit's first clean finish since 2026-08-21.
 
-**Related:** [KE-6](#ke-6), [KE-4](#ke-4),
+The runbook's failure table carries the corrected diagnosis, in
 [guest backup and restore](../../runbooks/platform/guest-backup-restore.md).
 
 ---
@@ -1774,17 +1774,12 @@ change is low-value and the blast radius is the whole platform: per that same gr
 physical recovery path is unavailable while the GPU is passed through. It belongs in a window with
 a second session already open, not at the end of an unplanned sequence.
 
-**The class: a role changed is not a fleet changed.**
-This is [KE-6](#ke-6) in a different medium. That entry produced the rule "when closing a
-configuration error, sweep the other nodes and record that you did", and the rule was written six
-weeks *after* this commit made the same mistake. A lesson recorded in a document prevents nothing on
-its own; the counterpart is the drift check in the
-[remediation plan](remediation-plan.md), which would have reported this on 2026-07-15.
-
-**Related:** [KE-6](#ke-6), [KE-18](#ke-18) (also found by sweeping rather than by an alert),
-[KE-24](#ke-24) (what applying the fix uncovered),
-[Ansible platform doc](ansible.md), A.8.5 in
-[security controls](security-controls.md).
+This is [KE-6](#ke-6) again, in a different medium: the rule that entry produced - sweep the other
+nodes when closing a configuration error, and record that you did - was written six weeks after
+`6faf809` had already broken it, and it sat in the repository for the whole eight weeks this gap
+stayed open. The drift check in the [remediation plan](remediation-plan.md) would have reported it
+on 2026-07-15; the applied state is in A.8.5 of [security controls](security-controls.md).
+Applying the fix is what turned up [KE-24](#ke-24).
 
 ---
 
@@ -1800,7 +1795,7 @@ Applying [KE-23](#ke-23) ran `ssh_hardening` across the guests. Six containers c
 `Missing privilege separation directory: /run/sshd`, which is what made the fault visible - the
 verification step returned nothing where it had returned four directives an hour earlier.
 
-**First diagnosis, and why it was wrong:**
+**Root cause:**
 Recorded initially as two units both claiming port 22, with the fix being to disable `ssh.socket`
 and restore the long-running daemon. That reading was wrong and would have removed a supported
 configuration from six nodes.
@@ -1816,7 +1811,6 @@ LISTEN 0 4096 *:22 *:* users:(("sshd",pid=4983,fd=3),("systemd",pid=1,fd=38))
 Both units active is the correct steady state, not a collision. The Proxmox Debian 12 template
 enables it; vm100, vm102, lxc250 and the hypervisor have it disabled and run the daemon alone.
 
-**Root cause:**
 sshd does not re-read its configuration on SIGHUP. It re-execs itself, and the new process binds
 port 22 rather than reusing the descriptor it inherited. systemd still holds the socket, so the
 bind fails and the daemon exits:
@@ -1837,29 +1831,13 @@ would have produced the same failure and the same quiet repair, and the third or
 somebody would still be starting the diagnosis from nothing.
 
 **Fix:**
-In the role, not on the nodes. `ssh_hardening` now reads `systemctl is-active ssh.socket` and picks
-the verb per node: `restarted` where the socket is active, `reloaded` where it is not. Both paths
-validate the configuration first, because `ExecStartPre` and `ExecReload` each run `sshd -t`, and a
-restart under socket activation refuses no connection, since the socket keeps listening throughout.
+In the role, not on the nodes. `ssh_hardening` reads `systemctl is-active ssh.socket` and picks the
+verb per node. The reasoning, the fallback and the `KillMode=process` property the choice rests on
+are in the comment above the detection task in `ansible/roles/ssh_hardening/tasks/main.yml`, which
+is where somebody changing that line will be.
 
 Verified 2026-09-04 by dry run against the fleet: six nodes select `restarted`, four select
-`reloaded`, and the run reports `changed=0` on all nine guests.
-
-Established sessions survive either verb. That is not a property of sshd but of the unit:
-`KillMode=process` signals the main process alone, so the forked per-session children keep running.
-Under the systemd default of `control-group` a restart would take down the connection Ansible is
-working over, in the middle of the play.
-
-Where the detection does not run the handler falls back to `restarted`, not to the gentler
-`reloaded`. The node type is unknown in that state and only one verb is safe in both. This platform
-carries no high-availability requirement - the host powers down every night by design - so a
-listener gap of a second or two after a configuration change is not a cost worth optimising
-against, while a dead sshd on six nodes is a hypervisor session to repair.
-
-Socket activation is left in place. Disabling it would be a change to the remote access path of six
-nodes for no benefit, and it has one property worth keeping: the listening socket survives a
-crashed or restarted daemon, so a connection arriving during that window is queued rather than
-refused.
+`reloaded`, `changed=0` on all nine guests. Socket activation is left in place.
 
 **What it confirmed, rather than uncovered:** none of the six carries `ListenAddress` in
 `sshd_config`, and port 22 listens on `*:22`. That is not new. The `ss -tlnH` sweep of 2026-08-17
@@ -1878,5 +1856,5 @@ to obtain everything the old one held, and under socket activation the listening
 obtainable that way. [KE-18](#ke-18) is the same kind of mismatch one layer up, where `After=` was
 read as a readiness guarantee rather than an ordering constraint.
 
-**Related:** [KE-23](#ke-23), [KE-18](#ke-18), [KE-15](#ke-15),
-[hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
+A latent conflict that only routine maintenance disturbs is the same shape as the fstab entry
+without `x-systemd.automount` in [KE-15](#ke-15).

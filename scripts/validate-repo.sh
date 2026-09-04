@@ -1069,11 +1069,47 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 37: changelog entries stay at index length
+# =============================================================================
+# Added 2026-09-04. Measured that day: the ten oldest entries average 173
+# characters, the ten newest 1888. Nothing decided that; each entry was
+# defensible on its own and the trend was visible only in the aggregate.
+#
+# A changelog is an index. The place for the narrative is the known-error entry,
+# the decision record or the runbook that the row links to, where a reader
+# looking for that fault will actually find it. A row that carries the narrative
+# itself buries the one thing the file is for, which is answering "what changed
+# and when" at a glance.
+#
+# Rows dated before the cutoff are left alone. Rewriting a year of history to a
+# rule invented today would replace one uniform register with another.
+echo "Check 37: changelog entries stay at index length"
+
+CHANGELOG="${REPO_ROOT}/docs/platform/changelog.md"
+CHANGELOG_CUTOFF="2026-09-04"
+CHANGELOG_MAX=600
+
+if [[ -f "${CHANGELOG}" ]]; then
+    while IFS= read -r row; do
+        date="${row:2:10}"
+        [[ "${date}" < "${CHANGELOG_CUTOFF}" ]] && continue
+        if (( ${#row} > CHANGELOG_MAX )); then
+            echo "  Changelog entry ${date} is ${#row} characters, limit ${CHANGELOG_MAX}"
+            echo "  (move the detail to the entry it links to; the row is an index line)"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep '^| 20' "${CHANGELOG}")
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 36"
+echo "Checks run: 37"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

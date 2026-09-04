@@ -177,6 +177,13 @@ notes there and keep this section short.
 This repo is a learning vehicle and portfolio piece for a DevOps career transition.
 When working on tasks here:
 
+**Exception, marked explicitly.** A session prefixed with `kein Lernmodus` suspends the teaching
+obligations below - the term checks, the step-by-step derivations, the drafting split further down.
+Speed is the goal in that mode and maximum support is expected. What does not suspend is the
+writing register: the output still has to read like the rest of this repository, which means the
+rules under *Writing style* apply unchanged and with more care rather than less, because nobody is
+reviewing the prose on the way past.
+
 - Explain every CLI flag and every config value - no copy-paste answers.
 - **Check every term against the glossary before writing an explanation.** The register lives at
   `~/git/devops-til/glossary.md`. A term that is in it may be used and linked; a term that is not in
@@ -257,7 +264,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 36 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, and markdown table rows written across several lines.
+This script enforces 37 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, and changelog rows longer than an index line.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -363,6 +370,18 @@ hidden entry and which GitHub reads just as well.
   next run would have produced the same failure and the same quiet repair, and the third time round
   somebody would still be starting the diagnosis from nothing". If a sentence would fit in a
   different document unchanged, it is not about this one.
+- **A class paragraph needs a class that is new.** Known-error entries carry one only where the
+  abstraction does not already exist in this repository. Where it does, a cross-reference in the
+  running text is the whole of it - KE-23 restated KE-6 for three days before that was noticed.
+  The entry has no fixed shape: symptom, cause, fix and status are the minimum and usually the
+  maximum, and a labelled `Related:` block is not part of it.
+- **A measurement beats a paragraph.** Where an entry can explain or show, it shows: the command
+  and its output, the journal line, the exit code. Prose explaining what a measurement would have
+  said is the weakest form of both.
+- **The changelog is an index, not a narrative.** One row per change, at most 600 characters,
+  linking the entry that carries the detail. Enforced by Check 37 for rows dated 2026-09-04 and
+  later. Measured on 2026-09-04: the ten oldest rows averaged 173 characters and the ten newest
+  1888, which nobody decided and nobody noticed, because every single row was defensible.
 - Keep it short. A runbook is read during an incident, not at a desk. Length is a cost.
 
 **Who drafts what:**
@@ -370,9 +389,13 @@ hidden entry and which GitHub reads just as well.
 - `README.md`, the ADRs under `docs/decisions/` and `docs/platform/security-controls.md` are
   drafted blank-file-first, the same rule this file already sets for code. Review afterwards for
   gaps, contradictions and missing verification.
-- Operational logs (`changelog.md`, `known-errors.md`, `ansible-progress.md`) and runbook mechanics
-  can be drafted directly, then reviewed. Nothing is merged that cannot be defended in a
-  conversation about it.
+- **From 2026-09-05:** known-error entries for faults the operator diagnosed are drafted by the
+  operator, blank-file-first, and reviewed afterwards for gaps, contradictions and missing
+  verification. `known-errors.md` is the largest and most distinctive body of prose in the
+  repository, and while it is drafted for the operator its register is not the operator's, which no
+  amount of editing afterwards changes.
+- The changelog, `ansible-progress.md` and runbook mechanics can be drafted directly, then
+  reviewed. Nothing is merged that cannot be defended in a conversation about it.
 
 **Sanitization rules** (enforced by validation):
 

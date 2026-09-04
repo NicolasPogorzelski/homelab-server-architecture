@@ -178,6 +178,23 @@ Done on 2026-08-15, in the same pass that produced this document:
 ## Review cadence
 
 Reviewed with the weekly fleet audit, and rewritten whenever a control moves between states. The
+
+**One measurement belongs to this review and is not about a control.** Documentation drifts towards
+uniformity the same way configuration drifts towards divergence, and neither is visible in a single
+sample. Two numbers, taken with the audit:
+
+```bash
+grep '^| 20' docs/platform/changelog.md | awk '{print length($0)}' > /tmp/cl
+head -10 /tmp/cl | awk '{s+=$1} END {print "newest 10:", s/NR}'
+tail -10 /tmp/cl | awk '{s+=$1} END {print "oldest 10:", s/NR}'
+
+awk '/^## KE-/ {if(n) print len; n=$0; len=0; next} n {len++} END {print len}' \
+    docs/platform/known-errors.md | sort -n | awk '{a[NR]=$1} END {print "KE median:", a[int(NR/2)+1], "max:", a[NR]}'
+```
+
+On 2026-09-04 the changelog read 1888 against 173, an eleven-fold spread that nobody decided and
+nobody noticed, because each row was defensible on its own. Check 37 now holds the changelog side;
+the known-error side has no check and is read by eye against the median.
 status column is the part that rots: a control that was enforced stops being enforced the moment
 someone adds a bypass, and nothing announces that. When a remediation item closes, the matching row
 changes here in the same commit - the same rule the remediation plan already carries.
