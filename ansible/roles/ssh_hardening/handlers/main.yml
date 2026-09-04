@@ -1,5 +1,8 @@
 ---
+# `reloaded` kills the daemon on a socket-activated node - see the comment above
+# the detection task in tasks/main.yml. The verb is chosen per node there and
+# falls back to `reloaded` for any caller that does not set it.
 - name: Reload ssh_config
   ansible.builtin.systemd_service:
     name: ssh
-    state: reloaded
+    state: "{{ ssh_hardening_reload_verb | default('reloaded') }}"

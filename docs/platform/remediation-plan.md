@@ -154,10 +154,11 @@ intention.
   nodes, and nothing reported it for eight weeks ([KE-23](known-errors.md#ke-23)). The item is now
   a scheduled `--check` run across the state-changing playbooks, exporting the `changed` counts as
   a textfile metric with a rule that fires above zero.
-- Resolve the sshd unit topology on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260, one node at
-  a time: `systemctl disable --now ssh.socket && systemctl start ssh.service`, with
-  `pct exec <ctid> -- systemctl start ssh` as the way back ([KE-24](known-errors.md#ke-24)). The
-  Proxmox host's `ssh_hardening` adoption is a separate window with a second session open.
+- Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`. The value is already
+  `prohibit-password` and the file already exists; the run replaces a hand-written comment block
+  with the role's, so the gain is ownership rather than configuration. Held for a window with a
+  second session open, because `group_vars/proxmox.yml` records that the physical recovery path is
+  unavailable while the GPU is passed through.
 - `DATA_SOURCE_NAME` for `postgres_exporter` into the vault. Still an unmanaged literal in
   `/etc/postgres_exporter.env`.
 - Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102, where

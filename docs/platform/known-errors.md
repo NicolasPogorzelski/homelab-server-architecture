@@ -1790,7 +1790,7 @@ its own; the counterpart is the drift check in the
 
 <a id="ke-24"></a>
 
-## KE-24: Two units owned port 22, and a reload was all it took
+## KE-24: sshd's reload is a re-exec, and under socket activation it cannot rebind
 
 **Affected component:** LXC200, LXC210, LXC211, LXC220, LXC230, LXC260
 
@@ -1800,9 +1800,26 @@ Applying [KE-23](#ke-23) ran `ssh_hardening` across the guests. Six containers c
 `Missing privilege separation directory: /run/sshd`, which is what made the fault visible - the
 verification step returned nothing where it had returned four directives an hour earlier.
 
+**First diagnosis, and why it was wrong:**
+Recorded initially as two units both claiming port 22, with the fix being to disable `ssh.socket`
+and restore the long-running daemon. That reading was wrong and would have removed a supported
+configuration from six nodes.
+
+`systemctl cat ssh.socket` settles it: `Accept=no`, `ListenStream=22`, `WantedBy=sockets.target`.
+That is socket activation with descriptor passing. systemd holds the listening socket and hands it
+to `ssh.service` on the first connection, so `ss -lntp` shows both as owners:
+
+```
+LISTEN 0 4096 *:22 *:* users:(("sshd",pid=4983,fd=3),("systemd",pid=1,fd=38))
+```
+
+Both units active is the correct steady state, not a collision. The Proxmox Debian 12 template
+enables it; vm100, vm102, lxc250 and the hypervisor have it disabled and run the daemon alone.
+
 **Root cause:**
-Both `ssh.service` and `ssh.socket` were `enabled` on these six, and only there. The journal
-records the whole sequence in three lines:
+sshd does not re-read its configuration on SIGHUP. It re-execs itself, and the new process binds
+port 22 rather than reusing the descriptor it inherited. systemd still holds the socket, so the
+bind fails and the daemon exits:
 
 ```
 systemd[1]: Reloading ssh.service - OpenBSD Secure Shell server...
@@ -1810,54 +1827,43 @@ sshd[192]: Received SIGHUP; restarting.
 sshd[192]: error: Bind to port 22 on 0.0.0.0 failed: Address already in use.
 ```
 
-sshd does not re-read its configuration on SIGHUP, it re-execs itself. Under socket activation
-systemd owns the listening socket, so the re-executed daemon found port 22 taken and exited 255.
-The unit went to `failed`, `RuntimeDirectory=` cleanup removed `/run/sshd` with it, and every
-later `sshd -t` failed for that second reason, masking the first.
+`RuntimeDirectory=` cleanup removed `/run/sshd` with the unit, which is why every later `sshd -t`
+failed for a second, unrelated reason and hid the first.
 
-Nothing was unreachable at any point: `ssh.socket` answers connections on its own, spawning a
-per-connection instance. That is precisely what makes this hard to notice - the service is dead
-and the service it provides is not.
-
-**Why the fleet split this way:** the four nodes that were unaffected (vm100, vm102, lxc250, the
-Proxmox host) have `ssh.socket` disabled. The six affected are Proxmox Debian 12 containers, where
-the template leaves it enabled. The conflict was therefore present from the day each container was
-created and would have surfaced at the next reboot regardless.
+Nothing was unreachable at any point, and the fault repairs itself: the socket starts the service
+again on the next connection. All six were back to `active` within the hour, without intervention.
+A defect that heals before anyone looks is one that gets rediscovered rather than fixed.
 
 **Fix:**
-Resolve the topology to the long-running daemon, one node at a time:
-`systemctl disable --now ssh.socket && systemctl start ssh.service`, with
-`pct exec <ctid> -- systemctl start ssh` from the hypervisor as the way back.
+In the role, not on the nodes. `ssh_hardening` now reads `systemctl is-active ssh.socket` and picks
+the verb per node: `restarted` where the socket is active, `reloaded` where it is not. Both paths
+validate the configuration first, because `ExecStartPre` and `ExecReload` each run `sshd -t`, and a
+restart under socket activation refuses no connection, since the socket keeps listening throughout.
 
-Socket activation is the wrong end state here for a specific reason. Under it the socket unit
-decides what is listened on, and `ListenAddress` in `sshd_config` has no effect. The platform
-binding rule would then only be expressible as `ListenStream=<tailscale-ip>:22`, an address that
-does not exist yet at boot - [KE-18](#ke-18) one layer down.
+Verified 2026-09-04 by dry run against the fleet: six nodes select `restarted`, four select
+`reloaded`, and the run reports `changed=0` on all nine guests.
 
-The durable half is in the role: `ssh_hardening` now reads `systemctl is-enabled ssh.socket` and
-refuses to run where both units are enabled, naming the fix. It refuses rather than repairs,
-because which unit owns port 22 is service topology rather than sshd configuration, and a role
-that silently disables a unit on the only remote access path is worse than one that stops.
+Socket activation is left in place. Disabling it would be a change to the remote access path of six
+nodes for no benefit, and it has one property worth keeping: the listening socket survives a
+crashed or restarted daemon, so a connection arriving during that window is queued rather than
+refused.
 
 **What it confirmed, rather than uncovered:** none of the six carries `ListenAddress` in
-`sshd_config`, and port 22 listens on `*:22`. A first draft of this entry called that a new
-finding; it is not. The `ss -tlnH` sweep of 2026-08-17 recorded sshd on the wildcard on ten of
-eleven nodes, with lxc250 the only one pinning an address, and A.8.21 in
-[security controls](security-controls.md) has carried it since. What is new is only the
-confirmation that socket activation would make it harder to fix, not easier. The exposure is
-unchanged by this fault - without `ListenAddress` the long-running daemon binds the wildcard too -
-and is mitigated by key-only authentication with `PasswordAuthentication no`,
-`PermitRootLogin no` and `KbdInteractiveAuthentication no` on all ten nodes.
+`sshd_config`, and port 22 listens on `*:22`. That is not new. The `ss -tlnH` sweep of 2026-08-17
+recorded sshd on the wildcard on ten of eleven nodes, with lxc250 the only one pinning an address,
+and A.8.21 in [security controls](security-controls.md) has carried it since. Note for whoever
+closes it: under socket activation `ListenAddress` has no effect, and the binding rule would have
+to be expressed as `ListenStream=<tailscale-ip>:22` in a socket drop-in - an address that does not
+exist yet at boot, which is [KE-18](#ke-18) one layer down.
 
-**Status:** Open. The drop-in from KE-23 is applied on all ten nodes and the effective
-configuration is correct everywhere; what remains is the unit topology on six containers, held for
-a maintenance window because it touches the only remote access path. The role guard is in place,
-so a further `ssh-hardening.yml` run stops on those nodes instead of repeating the fault.
+**Status:** Resolved 2026-09-04 in the role. No node was changed; the six repaired themselves and
+the fleet reports `changed=0`.
 
-**The class: a latent conflict is not a stable state.** Two units able to claim one port read as
-healthy for as long as nothing disturbs them, and the thing that disturbs them is routine
-maintenance. The same shape as the fstab entry without `x-systemd.automount`
-([KE-15](#ke-15)): correct until the first boot that tests it.
+**The class: a reload is not a re-read.** The word suggests a process picking up a new file, and
+for sshd it means the process replacing itself. Everything that was true of its environment has to
+be true again afterwards, and under socket activation one thing is not. The same gap between a
+word and its mechanism as "ordering is not readiness" ([KE-18](#ke-18)) and "free is not
+deallocated" (thin-pool discard).
 
 **Related:** [KE-23](#ke-23), [KE-18](#ke-18), [KE-15](#ke-15),
 [hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).

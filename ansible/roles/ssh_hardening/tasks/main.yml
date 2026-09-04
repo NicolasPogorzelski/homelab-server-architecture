@@ -11,40 +11,42 @@
       a typo here takes SSH down on the node it was meant to harden.
     quiet: true
 
-# Socket activation and the long-running daemon both claim port 22. Where both
-# units are enabled the node survives until something reloads sshd: sshd re-execs
-# on SIGHUP, finds systemd already holding the port, and exits 255. The unit ends
-# `failed`, /run/sshd is cleaned up with it, and SSH keeps working only because
-# the socket answers - which makes the fault easy to miss. Measured on six
-# containers 2026-09-04, triggered by this role's own handler ([KE-24]).
+# sshd must not be reloaded where systemd owns the listening socket.
 #
-# The role refuses rather than repairs. Which unit owns port 22 is service
-# topology, not sshd configuration, and a role that quietly disables a unit on
-# the only remote access path is worse than one that stops and says why.
+# Debian ships ssh.socket with `Accept=no` and `ListenStream=22`, so systemd
+# holds the socket and hands the descriptor to ssh.service on the first
+# connection - both then show as owners of :22 in `ss -lntp`. That is a supported
+# arrangement and the normal steady state on the Proxmox Debian 12 containers,
+# where the template enables it. vm100, vm102, lxc250 and the hypervisor have it
+# disabled and run the daemon on its own.
+#
+# What breaks is SIGHUP. sshd does not re-read its configuration on reload, it
+# re-execs, and the new process binds :22 itself instead of reusing the inherited
+# descriptor. systemd still holds the socket, the bind fails with EADDRINUSE and
+# the unit exits 255. Measured on six containers 2026-09-04 (KE-24). The socket
+# starts the service again on the next connection, so the fault repairs itself,
+# which is most of the reason it went unnoticed.
+#
+# The reload is therefore chosen per node rather than forbidden: restart where
+# the socket is active, reload where it is not. Both validate the configuration
+# first - ExecStartPre and ExecReload each run `sshd -t` - and a restart under
+# socket activation refuses no connection, because the socket keeps listening.
 #
 # noqa: command-instead-of-module - service_facts sees .service units only, and
 # systemd_service has no query-only mode. A node without the unit returns a
-# non-zero rc and empty stdout, which passes the assertion below.
-- name: Read whether socket activation is enabled for sshd
+# non-zero rc and "inactive", which selects the reload path.
+- name: Read whether systemd owns the sshd listening socket
   ansible.builtin.command:  # noqa: command-instead-of-module
-    cmd: systemctl is-enabled ssh.socket
+    cmd: systemctl is-active ssh.socket
   register: ssh_hardening_socket_state
   changed_when: false
   failed_when: false
   check_mode: false
 
-- name: Refuse to touch sshd while both units are enabled
-  ansible.builtin.assert:
-    that:
-      - ssh_hardening_socket_state.stdout | trim != "enabled"
-    fail_msg: >-
-      ssh.socket is enabled on this node alongside ssh.service. Reloading sshd
-      here leaves the service dead and the socket serving, which reads as working
-      SSH with a failed unit. Resolve the topology first, one node at a time:
-      `systemctl disable --now ssh.socket && systemctl start ssh.service`,
-      with `pct exec <ctid> -- systemctl start ssh` from the hypervisor as the
-      way back. See docs/platform/known-errors.md#ke-24.
-    quiet: true
+- name: Record which verb is safe for restarting sshd on this node
+  ansible.builtin.set_fact:
+    ssh_hardening_reload_verb: >-
+      {{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'reloaded' }}
 
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
   ansible.builtin.copy:
