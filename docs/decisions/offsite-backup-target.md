@@ -6,10 +6,10 @@ Decided 2026-09-01.
 
 ## Context
 
-Every copy of this platform's data is in one flat. The database dumps are on vm102's SMB share, the
-guest backups on the auxiliary disk, the user files on the MergerFS pool under SnapRAID parity.
-Tier 1 item 3 of the [remediation plan](../platform/remediation-plan.md) has carried "no off-site
-copy" since the plan was written.
+Every copy of this platform's data is in one flat. The database dumps are on vm102's SMB share, the guest
+backups on the auxiliary disk, the user files on the MergerFS pool under SnapRAID parity. Tier 1
+item 3 of the [remediation plan](../platform/remediation-plan.md) has carried "no off-site copy"
+since the plan was written.
 
 Set against the threats that actually apply, three of five are already answered:
 
@@ -50,15 +50,15 @@ compresses, so the first snapshot is smaller than this and later ones cost only 
    backup account must be able to write and not to delete.
 3. **Client-side encryption.** The data includes identity documents, so it must be unreadable to
    whoever operates the target.
-4. **Usable in practice.** A control the operator does not exercise is worth less than a weaker one
-   they do. This platform's own history is full of scheduled human tasks that stopped happening.
+4. **Usable in practice.** A control that is not exercised is worth less than a weaker one that
+   is. This platform's history holds a run of scheduled manual tasks that stopped happening.
 5. **Cost proportional to the data.** Single-digit euros per month at 41 GB.
 
 ## Options
 
 | Option | Deletion resistance | Day-to-day usability | Assessment |
 |---|---|---|---|
-| Small VPS with an `restic` REST server in append-only mode | Good, by configuration rather than by the storage service | High - a machine the operator already knows how to run, and it can carry more than backups | **Chosen** |
+| Small VPS with an `restic` REST server in append-only mode | Good, by configuration rather than by the storage service | High - a familiar kind of machine to run, and it can carry more than backups | **Chosen** |
 | S3-compatible object storage with Object Lock | Strongest, enforced by the provider | Narrow - it does one job | Rejected: better guarantee, less usable, and it cannot carry the other two purposes |
 | Managed storage box over SSH | Partial - snapshots, or append-only keys on rsync.net | Medium | Middle option that wins on nothing |
 | Rotated encrypted disk kept elsewhere | Total, by being unplugged | Depends on visits, which are irregular | Already exists in this form and cannot be scheduled - see below |
@@ -69,13 +69,13 @@ A small VPS at a European provider, running `rest-server` in append-only mode, w
 `restic` from the homelab. Hetzner Cloud is the working assumption: smallest instance plus a volume,
 since 41 GB does not fit an instance's own disk with room for history.
 
-**This reverses the recommendation an earlier draft of this document made for object storage, and
-the reversal is the operator's call rather than a technical correction.** Object Lock is the stronger
-guarantee: the storage service refuses deletion, so nobody, including the account owner, can remove
-a locked object. A VPS cannot match that, because whoever holds root on the VPS can remove anything.
+This reverses the recommendation an earlier draft of this document made for object storage, and the
+reversal rests on usability rather than on a technical error. Object Lock is the stronger guarantee:
+the storage service refuses deletion, so nobody, including the account owner, can remove a locked
+object. A VPS cannot match that, because whoever holds root on the VPS can remove anything.
 
-It wins on requirement 4 and on scope. A server is a thing this operator runs daily and can inspect,
-extend and repair; a bucket is an API they would touch twice a year. And the VPS carries the three
+It wins on requirement 4 and on scope. A server is inspected, extended and repaired here as a
+matter of routine; a bucket would be an API touched twice a year. The VPS also carries the three
 purposes the remediation plan originally wanted from it, of which two are taken up now.
 
 ### Compensating controls, since Object Lock is not available
@@ -90,7 +90,7 @@ materially worse than the alternative it replaces.
 | `restic forget --prune` runs on the VPS, on its own schedule | Writing and reclaiming are separate privileges held by different accounts |
 | Provider volume snapshots | A second layer that root on the VPS does not remove in passing |
 
-### Residual risk, stated rather than implied
+### Residual risk
 
 Whoever holds root on the VPS can delete the repository. Provider snapshots shrink that window and
 do not close it. Against the position on 2026-09-01 - every copy in one flat, all of them reachable
@@ -116,8 +116,11 @@ Two copies are held away from the server and were recorded nowhere until now.
 - **A rescue of the auxiliary disk's contents**, taken to an administrator workstation on
   2026-06-25, still there on encrypted storage. A point-in-time copy, roughly ten weeks old.
 - **A disk at a second residential site**, holding a mirror taken in May 2026. Genuinely off site
-  and genuinely air-gapped. It is refreshed only when the operator is physically there, which is
-  irregular and not a schedule, so its age is unknown in between and it cannot be planned around.
+  and genuinely air-gapped. It is refreshed only during a visit in person, which is irregular and
+  not a schedule, so its age in between is unknown and cannot be planned around. Its scope is the
+  same as `vzdump`'s: the guest root filesystems, and so the databases that live inside them. The
+  archive pool is not in it, which means none of the C1 documents this decision is about - the
+  Nextcloud files, the Paperless documents, the dump sets - has an off-site copy today.
 
 Neither is a running backup and neither has been restored from. They are the reason "no off-site
 copy of anything" was inaccurate. The second one is also the clearest argument for this decision: it
@@ -130,9 +133,9 @@ substantially better first Terraform exercise than a bucket, which has four attr
 lifecycle.
 
 The VPS is still created by hand first, and Terraform adopts it afterwards with `terraform import`.
-Coupling an open Tier 1 item to a track that starts tomorrow repeats, one layer up, the mistake that
-left the PostgreSQL dumps on a cron schedule the host slept through: the plan read correctly and the
-mechanism never ran.
+The track was deferred on 2026-09-02, the day after this decision, and has no start date. Tying an
+open Tier 1 item to it would repeat, one layer up, the mistake that left the PostgreSQL dumps on a
+cron schedule the host slept through: the plan read correctly and the mechanism never ran.
 
 ## Open points
 
@@ -140,8 +143,8 @@ mechanism never ran.
 - The `restic` repository password must reach the escrow before the first snapshot. A repository
   whose password lives only on the machine being backed up is not a backup.
 - The VPS itself needs patching, monitoring and a backup of its own configuration. It is a tenth
-  machine on a platform whose binding constraint is attention. That cost is accepted here and should
-  be recorded once the machine exists.
+  machine, and the binding constraint here is attention rather than money. That cost is accepted
+  and should be recorded once the machine exists.
 
 ## Consequences
 

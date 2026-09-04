@@ -1705,7 +1705,7 @@ Three artefacts on one node, each left behind by a change that worked. Replacing
 retiring what it replaced are two separate jobs, and only the first has an obvious end, so the
 second gets dropped. The cost then appears somewhere unrelated and much later: a January directory
 as an August backup fault, a disabled unit as a second `tailscaled` at every boot. Other instances
-here are [KE-6](#ke-6), [KE-4](#ke-4), and the orphaned `smart.prom.*` files in the host's textfile
+here are [KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's textfile
 directory.
 
 Give the old location a removal step in the change that creates its replacement.
@@ -1716,3 +1716,59 @@ Give the old location a removal step in the change that creates its replacement.
 
 **Related:** [KE-6](#ke-6), [KE-4](#ke-4),
 [guest backup and restore](../../runbooks/platform/guest-backup-restore.md).
+
+---
+
+<a id="ke-23"></a>
+
+## KE-23: A role gained a task and seven nodes never received it
+
+**Affected component:** `ssh_hardening` role, seven of ten inventory nodes
+
+**Symptom:**
+None. Nothing failed, nothing alerted, and the security posture the role exists to produce is
+correct on every node. The gap is visible only by comparing what the role writes against what is
+on disk, which is why it lasted eight weeks.
+
+**Measured 2026-09-04**, `sshd -T` as root through the inventory, plus a directory listing:
+
+| Node | `sshd_config.d/` | effective |
+|---|---|---|
+| vm100 | `00-hardening.conf`, `50-cloud-init.conf` | `permitrootlogin no`, `passwordauthentication no` |
+| lxc250 | `00-hardening.conf` | same |
+| proxmox-host | `00-hardening.conf` | `without-password`, `passwordauthentication no` |
+| lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, vm102 | empty | same as lxc250 |
+
+`kbdinteractiveauthentication no` on all ten, which closes the PAM route that `PasswordAuthentication
+no` alone leaves open.
+
+**Root cause:**
+`6faf809` (2026-07-08), subject `fix(vm100): neutralize cloud-init sshd drop-in in ssh-hardening
+role`, added the drop-in task. The subject names one node; the role targets `guests`. It was applied
+to vm100. lxc250 and the Proxmox host received it later, on adoption, because the role ran there
+from scratch. The other seven have not seen a run of this role since.
+
+**Why the drop-in and the `sshd_config` lines are not equivalent:**
+Debian's `sshd_config` opens with `Include /etc/ssh/sshd_config.d/*.conf`, and sshd takes the
+first value it obtains for a directive, not the last. A file in that directory therefore beats a line further
+down in the main file. On the seven nodes the directory is empty today, so the main file's lines
+apply and the result is right; the moment anything writes into that directory, they lose. vm100 is
+the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting before `50-` is the
+whole reason the fix worked.
+
+**Status:** Open, scheduled as a maintenance unit. Not an exposure - no node accepts passwords
+today. Plan: `ansible-playbook ssh-hardening.yml --check --diff` with the expectation written down
+first (seven nodes `changed=1`, three `changed=0`), then apply, then re-read `sshd -T` on all ten
+and require it to match the table above exactly. A changed value would be the failure case.
+The host play runs last by design: a bad reload there locks out the one node with no second path in.
+
+**The class: a role changed is not a fleet changed.**
+This is [KE-6](#ke-6) in a different medium. That entry produced the rule "when closing a
+configuration error, sweep the other nodes and record that you did", and the rule was written six
+weeks *after* this commit made the same mistake. A lesson recorded in a document prevents nothing on
+its own; the counterpart is the drift check in the
+[remediation plan](remediation-plan.md), which would have reported this on 2026-07-15.
+
+**Related:** [KE-6](#ke-6), [KE-18](#ke-18) (also found by sweeping rather than by an alert),
+[Ansible platform doc](ansible.md), A.8.5 in
+[security controls](security-controls.md).

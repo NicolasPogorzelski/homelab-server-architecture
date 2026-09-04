@@ -97,9 +97,9 @@ availability.
 |---|---|---|---|---|
 | Vault password and automation credentials | Unbounded - a single copy | Effectively zero | Immediate | The content changes approximately never; the objective is availability, not freshness. |
 | Vaultwarden vault | Not applicable since 2026-09-01 | - | - | Withdrawn. Authentication now rests on the external password manager and the paper escrow alone, which is what makes the annual retrieval drill in Tier 1 #1 the only evidence that it works. |
-| Paperless documents | 1 month off site, until the object store exists | 24 h | 24 h | Originals are also held on paper for a subset. The interim figure is the cadence of the manual copy in the [off-site decision](../decisions/offsite-backup-target.md). |
-| Nextcloud files | 1 month off site, until the object store exists | 24 h | 24 h | On site it is a week, from the guest backup. |
-| Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
+| Paperless documents | No off-site copy | 24 h | 24 h | The May 2026 mirror covers what `vzdump` covers, which is the guests; the documents sit on the archive pool, outside that scope. On site it is a week, from the guest backup. Originals are also held on paper for a subset. |
+| Nextcloud files | No off-site copy | 24 h | 24 h | Same scope problem as Paperless. The database is inside lxc210 and therefore is in the off-site mirror while the files it describes are not, so a restore from that copy yields a complete file index over no files. On site it is a week, from the guest backup. |
+| Nextcloud MariaDB | 24 h of uptime on site, May 2026 off site | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. Off site the mismatch is total: the database is in the mirror, the files are not. |
 | PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The distinction is measured, not theoretical: the staleness alert cannot see a period in which the host is off, because Prometheus is on that host. |
 | Platform configuration | Minutes | Keep | 1 h | Already met by git. |
 | Media library | Not applicable | - | Best effort | Reacquisition, not restoration. |
@@ -161,7 +161,7 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    either: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets 340 MB
    together, about 41 GB in total. At that size any of the candidate targets is affordable, so the
    [off-site decision](../decisions/offsite-backup-target.md) turned on deletion resistance and on
-   what the operator will actually keep running.
+   what will actually be kept running.
 
 ## Review
 
@@ -177,7 +177,7 @@ Recorded on 2026-09-01. Both were found in the 2026-08-20 audit and had been wri
 | Copy | Location | Taken | What it is |
 |---|---|---|---|
 | Auxiliary disk rescue | Encrypted storage on the admin workstation, a different building from the server | 2026-06-25 | Point-in-time copy of the failing disk's contents. Its error log holds only `socket ignored` lines from container runtime sockets, so the copy itself is complete |
-| Disk at a second residential site | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror, contents unverified. Refreshed only when the operator is physically there, which is irregular, so its age between visits is unknown and it cannot be planned around |
+| Disk at a second residential site | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror covering the same scope as `vzdump`: the guest root filesystems, and therefore the databases inside them. It does not cover the archive pool, so no Nextcloud file, Paperless document or database dump is on it. Refreshed only during a visit in person, which is irregular, so its age between visits is unknown and it cannot be planned around |
 
 Neither is a running backup and neither has been restored from. They are the reason "no off-site copy
 of anything" was inaccurate; they are not a reason to consider the item closed. The disk is the

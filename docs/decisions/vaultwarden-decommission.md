@@ -7,7 +7,7 @@ Decided and applied 2026-09-01. Phase 2 is dated 2026-11-30.
 ## Context
 
 LXC240 ran Vaultwarden, a self-hosted implementation of the Bitwarden protocol, from January 2026.
-It held this platform's credentials, and it existed partly so there would be a secrets tier to
+It held the platform's credentials, and it existed partly so there would be a secrets tier to
 point at.
 
 It stopped being used in February. Measured on 2026-09-01, before deciding:
@@ -72,10 +72,14 @@ Container definition, root disk and the data on the share stay.
 
 **Phase 2, on or after 2026-11-30.** Destroy the data on the share, remove the container, and clear
 what it leaves in configuration: the `snapraid_maintenance` exclude rules for its side files, the
-`storage_permissions` entry for its directory, and `240` from the `GUESTS` array in
-`guest-backup.sh`, which is the line that put it there on the same day this decision was
-written. Left in, the weekly job runs against a CTID that no longer exists. Ninety days is long enough to cover a quarterly task
-nobody remembered and short enough that the archive does not become permanent by neglect.
+`storage_permissions` entry for its directory, `240` from the `GUESTS` array in
+`guest-backup.sh`, which is the line that put it there on the same day this decision was written,
+`ansible/inventory/host_vars/lxc240.yml`, which is inert but still on disk, and the node itself in
+the Tailscale console, whose `tag:tier1` assignment and node key outlive the stopped guest.
+Left in, the weekly job runs against a CTID that no longer exists, and a `pct start 240` would put
+a tier1 node back on the tailnet with nothing to re-authorise. Ninety days is long enough to
+cover a quarterly task nobody remembered and short enough that the archive does not become
+permanent by neglect.
 
 ## What could not be exported, and why it did not matter here
 
@@ -83,9 +87,9 @@ Vaultwarden encrypts vault items client-side. The server stores ciphertext and c
 the cold archive is a copy of encrypted blobs and the account metadata around them, not of the
 secrets. A portable export has to come from a logged-in client, before the service stops.
 
-The operator confirmed on 2026-09-01 that nothing in the vault was still needed - the credentials
-that matter are in the external password manager and the paper escrow recorded in Tier 1 item 1 of
-the remediation plan. No export was taken.
+Confirmed on 2026-09-01: nothing in the vault was still needed - the credentials that matter are
+in the external password manager and the paper escrow recorded in Tier 1 item 1 of the remediation
+plan. No export was taken.
 
 ## What the shutdown measured
 
@@ -97,14 +101,14 @@ They were not. Asked directly, on a copy held on local storage, `PRAGMA wal_chec
 returned `(0, 0, 0)` - no frames in the log - and `PRAGMA integrity_check` returned `ok` both before
 and after. The database file alone was complete.
 
-The useful form of this is the one that survives the correction. A write-ahead log is not truncated
-when its frames are checkpointed, so a stale allocation and a genuine backlog look identical from
-the filesystem. Nothing short of opening the database can tell them apart.
+A write-ahead log is not truncated when its frames are checkpointed, so a stale allocation and a
+genuine backlog look identical from the filesystem. Nothing short of opening the database can tell
+them apart.
 
 One loose end. A clean SQLite close removes `-wal` and `-shm`, and both were still present after a
-graceful `pct shutdown`. Something has been closing this database
-untidily, which fits a container stopped by a nightly host power cycle. It no longer matters for
-this service, and it may matter for the next one on CIFS.
+graceful `pct shutdown`. Something has been closing this database untidily, which fits a container
+stopped by a nightly host power cycle. It no longer matters for this service, and it may matter for
+the next one on CIFS.
 
 ## Consequences
 

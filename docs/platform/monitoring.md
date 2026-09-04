@@ -29,7 +29,7 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 15 active scrape jobs (20 targets) - all UP, re-verified 2026-08-20 against the Prometheus API
+- 14 active scrape jobs (18 targets) - all UP, re-verified 2026-09-04 against the Prometheus API
 - **LXC250 joined the targets on 2026-08-20.** It had sat in no inventory group, so the template
   rendered no target for it - while the node did run a `node_exporter`, hand-installed, binding
   `*:9100`, scraped by nobody. `systemctl is-active` reported `active` throughout, which is why

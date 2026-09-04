@@ -18,7 +18,7 @@ Vaultwarden was deployed via Docker Compose inside an unprivileged Debian LXC co
 Important:
 - Vaultwarden uses SQLite for its database (`db.sqlite3`).
 - The database resides at `/opt/vaultwarden`, which is a CIFS mount (`mp0` on LXC240 -> `/mnt/smb/vaultwarden`).
-- This violates the KE-1 architectural rule (no database files on CIFS/SMB). Migration to PostgreSQL (lxc260) is planned.
+- This violated the KE-1 architectural rule (no database files on CIFS/SMB). The migration to PostgreSQL (lxc260) was the planned fix and never happened; the service was decommissioned instead, which is how KE-5 is closed. The PostgreSQL route stays as the reopening path in the decision record.
 - See: [KE-5](../platform/known-errors.md#ke-5-vaultwarden-sqlite-on-cifs--acknowledged-technical-debt)
 
 ## Security / Exposure
@@ -43,6 +43,10 @@ Important:
 - `.env`, database files and private keys are intentionally NOT committed to the repository
 
 ## Access Model (Zero Trust)
+
+Not in effect while the service is withdrawn. The node's `tag:tier1` assignment still exists in the
+Tailscale console until phase 2. What follows applied while the service ran.
+
 - Exposed via Tailscale only (no LAN / no public ingress).
 - Network policy is enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
