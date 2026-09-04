@@ -260,7 +260,7 @@ verified at the time.
 So the change was made behind a dead-man switch: a transient
 `systemd-run --on-active=10min` unit that restores the backed-up config and *restarts* sshd, armed
 before anything was touched and cancelled only after a freshly established connection proved the
-new configuration works. Had the operator's workstation frozen mid-operation - which it had done
+new configuration works. Had the admin workstation frozen mid-operation - which it had done
 once that afternoon - the host would have repaired itself without any console. `sshd -t` gated the
 reload, so a syntax error could never reach a running daemon.
 

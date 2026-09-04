@@ -3,8 +3,9 @@
 # rollback path, so it is the one where the next occurrence must leave evidence.
 # The role is node-agnostic; widening it is a decision about where kernel logs
 # should travel, not a change to the role.
-# Playbooks run from the control node's working tree, so an unpublished
-# tree is an unpublished deployment. preflight.yml refuses that.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

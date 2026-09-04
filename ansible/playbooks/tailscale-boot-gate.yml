@@ -6,8 +6,9 @@
 # The hypervisor is absent on purpose. Its `pveproxy` gate is hand-deployed and
 # predates this role; folding it in belongs to the host adoption, where the other
 # hand-written host units are adopted in one pass rather than one at a time.
-# Playbooks run from the control node's working tree, so an unpublished
-# tree is an unpublished deployment. preflight.yml refuses that.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

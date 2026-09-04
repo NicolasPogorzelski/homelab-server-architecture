@@ -73,7 +73,7 @@ flowchart LR
 ```
 
 `tag:tier0` reaches the same set as `tag:admin`, with one difference the two separate arrows carry:
-admin may also reach admin, which is what lets the operator workstation and lxc250 talk to each
+admin may also reach admin, which is what lets the admin workstation and lxc250 talk to each
 other, and the hypervisor may not.
 
 ### 1b - Service to service, and monitoring
@@ -117,7 +117,7 @@ flowchart LR
 ```
 
 Three grants are left out because drawing them would cost more clarity than they carry. `tag:tier1`,
-`tag:tier2` and `tag:admin` may each reach themselves on all ports, which is what lets the operator
+`tag:tier2` and `tag:admin` may each reach themselves on all ports, which is what lets the admin
 workstation talk to lxc250 and the tier1 services talk among themselves. As self-loops they would
 add three arrows and no insight.
 

@@ -13,8 +13,9 @@
 # administrative account and it has no usable out-of-band console. That fix is
 # what makes this second play possible at all. It is not what makes it safe to
 # write `all`: the next role will not have been checked.
-# Playbooks run from the control node's working tree, so an unpublished
-# tree is an unpublished deployment. preflight.yml refuses that.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

@@ -1,27 +1,25 @@
 ---
-# Refuse to run against live infrastructure from a working tree that matches no commit.
+# Refuse to run against the fleet from a working tree that matches no commit.
 #
-# Playbooks here execute from lxc250's working tree, not from a checked-out
-# commit. A node on a feature branch, mid-merge, or behind origin deploys code
-# that exists nowhere in the history, and nothing reports it.
+# Playbooks run from the working tree on lxc250, not from a checked-out commit.
+# A tree on a feature branch, mid-merge, or behind origin deploys code that
+# exists in no commit, and nothing reports it.
 #
-# It has happened twice. The control node was found mid-merge on 2026-07-09, and
-# two commits behind origin/main on 2026-07-28. In the second case a
-# tailscale-cert.yml run would have put the pre-fix refresh script back over the
-# live KE-18 fix, and the symptom would have appeared about two months later as
-# an expired certificate.
+# That has happened twice. On 2026-07-09 the control node was mid-merge. On
+# 2026-07-28 it was two commits behind origin/main, and a tailscale-cert.yml run
+# would have copied the pre-fix refresh script back over that morning's KE-18
+# fix. Ansible reports "changed" in either direction, so the regression would
+# have been invisible; with the certificate valid until October, the first
+# symptom would have arrived two months later as an expired cert.
 #
-# Imported at the top of every playbook that changes live state. The read-only
-# fleet-health-check.yml does not import it, so diagnosis during an incident is
-# never blocked by this.
+# Imported at the top of every playbook that changes live state.
+# fleet-health-check.yml does not import it, because it only reads and
+# diagnosis during an incident must not be blocked by this gate.
 #
-# One way past this gate exists and does not announce itself: --limit applies to
-# every play in a run, including this one. `ansible-playbook pg-backup.yml
-# --limit lxc260` removes the gate from the run and prints only
-# "skipping: no hosts matched". Any --limit must therefore name localhost as
-# well, e.g. --limit 'lxc260,localhost'. That is the same shape as the guards
-# this platform keeps finding in its own monitoring - one the condition it
-# protects against can switch off - and it cannot be closed from inside a play.
+# One hole cannot be closed from inside a play: --limit applies to every play in
+# the run, this one included. `ansible-playbook pg-backup.yml --limit lxc260`
+# drops the gate and prints only "skipping: no hosts matched". A limited run
+# must name localhost as well: --limit 'lxc260,localhost'.
 - name: Preflight - the control node's working tree must match a published commit
   hosts: localhost
   connection: local
@@ -32,15 +30,14 @@
     # Repository root, two levels up from ansible/playbooks/.
     preflight_repo: "{{ playbook_dir }}/../.."
     preflight_required_branch: main
-    # Takes a reason, not a boolean, and prints it into the run's output. Without
-    # any way past it, this gate would be removed the first time it blocked an
-    # incident.
+    # A reason, not a boolean, and it is printed into the run output. A gate with
+    # no way past it gets deleted the first time it blocks an incident.
     preflight_override: ""
 
   tasks:
-    # noqa: command-instead-of-module - ansible.builtin.git clones and checks out.
-    # It has no query mode, so none of the checks below has a module form. Waived
-    # inline rather than in skip_list, so the rule stays armed repo-wide.
+    # noqa: command-instead-of-module - ansible.builtin.git clones and checks
+    # out. It cannot query, so none of the checks below has a module form.
+    # Waived inline rather than in skip_list, so the rule stays armed repo-wide.
     - name: Read the working tree state
       ansible.builtin.command:  # noqa: command-instead-of-module
         cmd: git status --porcelain
@@ -57,8 +54,8 @@
       changed_when: false
       check_mode: false
 
-    # Fetch before comparing. `git status` answers against the remote-tracking
-    # ref as of the last fetch, so a node that has not fetched for a week still
+    # Fetch before comparing. git status answers against the remote-tracking ref
+    # as of the last fetch, so a node that has not fetched for a week still
     # reports itself up to date.
     - name: Refresh the remote ref
       ansible.builtin.command:  # noqa: command-instead-of-module
@@ -79,12 +76,12 @@
       check_mode: false
 
     # validate-repo.sh Check 15 catches conflict markers that reach a commit.
-    # This catches the ones that never will, which is the case that matters here:
-    # an unresolved merge in the working tree is what gets deployed.
+    # This catches the ones that never will, which is the case that matters
+    # here: an unresolved merge in the working tree is what gets deployed.
     #
     # grep exits 1 for "found nothing" and 2 for "could not look" - a missing
-    # directory, an unreadable file. Only 1 means clean, which is why the
-    # assertion below tests for 1 and not for "not 0".
+    # directory, an unreadable file. Only 1 means clean, which is why the assert
+    # below tests for 1 and not for "not 0".
     - name: Look for merge conflict markers under ansible/
       ansible.builtin.command:
         cmd: "grep -rlE '^(<<<<<<<|=======|>>>>>>>)' {{ preflight_repo }}/ansible"
@@ -93,8 +90,8 @@
       failed_when: false
       check_mode: false
 
-    # grep's three exit codes turned into one readable word, so the report line
-    # below stays inside the line-length limit and says what rc=2 means.
+    # grep's three exit codes as one readable word, so the report line below
+    # fits the line-length limit and rc=2 does not print as "clean".
     - name: Name the marker check's outcome
       ansible.builtin.set_fact:
         preflight_marker_state: "{{ preflight_marker_states[preflight_markers.rc] | default(preflight_marker_broken) }}"

@@ -2,8 +2,9 @@
 # vm100 only for now: it is the node where an autonomous kernel upgrade couples to
 # the NVIDIA DKMS module. The Debian LXCs need different origin ids and are a
 # separate decision.
-# Playbooks run from the control node's working tree, so an unpublished
-# tree is an unpublished deployment. preflight.yml refuses that.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 
