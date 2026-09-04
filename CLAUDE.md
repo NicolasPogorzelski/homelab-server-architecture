@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The Ansible learning track (roadmap items #1-#13) is complete and merged to `main`: everything
 guest-side is Ansible-managed and every scheduled job is a systemd timer. The next learning track is
-Terraform. The completed role/playbook catalog and per-session narratives live in
+Terraform, and it is deferred - the platform stays in maintenance mode until it starts, see below.
+The completed role/playbook catalog and per-session narratives live in
 [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md); platform changes and their
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
 notes there and keep this section short.
@@ -161,11 +162,13 @@ notes there and keep this section short.
   13. ~~CI/CD + ansible-lint (lightweight) - GitHub Actions: `ansible-lint` on push, `--check` against inventory on PR. Keep minimal - no elaborate matrix or multi-stage pipeline.~~ (2026-06-12, `.github/workflows/ansible-lint.yml`)
   14. ~~Molecule - unit testing for Ansible roles~~ Deferred - out of scope for the current learning arc; revisit after the Terraform and Kubernetes tracks.
 
-  **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, which follows as the next learning track after Ansible.
+  **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, the next learning track, which is deferred.
 
-**Next learning track (after Ansible):** Terraform - primarily on AWS (free tier) to learn HCL/state/modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff: `terraform apply` -> LXC exists -> `onboarding.yml` configures it.
+**Next learning track: Terraform, deferred on 2026-09-02.** The track is not cancelled and the content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). Only the timing changed. Terraform carries its own state, and the foreseeable period offers only short sessions, so picking the track up and putting it down would leave that state in a condition nobody can vouch for. Do not propose starting it - the date is decided outside this repository.
 
-**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications, and career milestones live in the private global instructions, not in this repo.
+**Operating mode until then: maintenance.** Work is cut into small self-contained units: one thing, under an hour or two, ending in one commit with one changelog line and a clean stopping point. Anything that changes live state - applies against the fleet, restore tests, hardware - is scheduled into a block that has a rollback path, and is never started just because it came up in conversation. The standing backlog of small units is the "Small open items" list in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md), fed by the recurring fleet audit. New services and new learning tracks wait.
+
+**Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 
 **PR Cadence:** Learning-path branches (`feat/ansible-setup`, `feat/terraform-setup`, etc.) are merged to `main` as a whole when the topic is complete - not after individual items. The items within a topic build on each other and form a single coherent arc. Exception: self-contained platform changes unrelated to the learning topic (e.g. runbooks, hotfixes) are split off to their own branch and PRed independently.
 
@@ -401,7 +404,11 @@ Single-host Proxmox platform. No HA - recovery-oriented design.
 
 Do not flag these as new issues - they are documented tradeoffs or known quirks:
 
-- **LXC220 (Calibre-Web):** UID mapping requires `chown 100000:100000` on mounted storage.
+- **LXC220 (Calibre-Web):** UID mapping requires `chown 100000:100000` on mounted storage. This
+  covers host directories bound into the container, not the container rootfs. A permission error
+  inside the rootfs is a different fault and needs its own diagnosis - see
+  [KE-22](docs/platform/known-errors.md#ke-22), where this entry supplied the wrong answer for
+  eleven days.
 - **LXC240 (Vaultwarden):** SQLite on CIFS is a known limitation, documented as tech debt.
 - **Grafana admin password:** only read on first container start. Reset via
   `grafana-cli admin reset-admin-password`.

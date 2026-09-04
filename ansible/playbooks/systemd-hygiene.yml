@@ -9,6 +9,12 @@
 # `group_vars`. It has no permanently failed unit as of 2026-08-20. Add a
 # `proxmox` play when it does, with the unit named and a reason recorded, which
 # is what this role asks of every other node.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Mask systemd units that can never succeed on their node
   hosts: guests
   become: true

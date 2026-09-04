@@ -144,7 +144,7 @@ The monitoring node runs `blackbox_exporter` and probes service endpoints
 (KE-8 remediation: a node can be up while its service is dead). Beyond
 node_exporter (Rule 1b), it needs the service ports: media HTTP on `tier2`
 (Jellyfin 8096, Audiobookshelf 13378) and Tailscale-Serve HTTPS (443) on
-`tier1` (Paperless, Vaultwarden, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI).
+`tier1` (Paperless, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI). Vaultwarden held a `tier1` tag until its node was stopped on 2026-09-01. The tag definition stays until the node itself is removed in phase 2.
 
 ```json
 {
@@ -253,7 +253,7 @@ Allowed services:
 
 - Jellyfin (port 8096 on gpu-vm)
 - Audiobookshelf (port 13378 on gpu-vm)
-- Tier 1 HTTPS (port 443): Nextcloud, Vaultwarden, Calibre-Web
+- Tier 1 HTTPS (port 443): Nextcloud, Calibre-Web
 - AI stack HTTPS (port 443): OpenWebUI
 
 Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` - see the
@@ -264,7 +264,7 @@ currently unused (no tier2 node serves HTTPS).
 
 The `untrusted` tier is a fixed set of individually enumerated household TVs.
 "Untrusted" is a statement about *device administration*, not about the people:
-these are appliances the operator does not manage, patch, or control, so they are
+these are appliances nobody here manages, patches or controls, so they are
 kept off every infrastructure path and get media streaming only. The tier is not a
 guest-invite mechanism - devices are tagged individually by the admin
 (`tagOwners: autogroup:admin`), and a device cannot self-assign the tag.
@@ -370,6 +370,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-09-01 | Documentation only, no policy change: Vaultwarden removed from the tier1 service lists in Rule 1c and Rule 6. The `tag:tier1` definition stays, and so does the node's tag assignment in the Tailscale console, until the container is removed in phase 2 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)) |
 | 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (household TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
 | (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |

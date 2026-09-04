@@ -39,7 +39,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
 | Ansible vault password, real inventory, automation SSH key | lxc250 home directory, on the boot SSD | C1 | No | None. One copy. |
-| Vaultwarden vault (all household credentials) | `/mnt/smb/vaultwarden` on the archive pool | C1 | Yes | Parity only. No export, no versions. |
+| Vaultwarden vault - withdrawn 2026-09-01, retained until 2026-11-30 | `/mnt/smb/vaultwarden`, 677 KB | C1 while retained | Yes | Cold archive taken at shutdown, checksummed, held in two locations. The service that wrote it is gone ([decision](../decisions/vaultwarden-decommission.md)) |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
 | Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |
@@ -96,10 +96,10 @@ availability.
 | Dataset | RPO today | RPO target | RTO target | Note |
 |---|---|---|---|---|
 | Vault password and automation credentials | Unbounded - a single copy | Effectively zero | Immediate | The content changes approximately never; the objective is availability, not freshness. |
-| Vaultwarden vault | Undefined | 24 h | 4 h | Everything else depends on being able to authenticate. |
-| Paperless documents | Undefined | 24 h | 24 h | Originals are also held on paper for a subset. |
-| Nextcloud files | Undefined | 24 h | 24 h | |
-| Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. |
+| Vaultwarden vault | Not applicable since 2026-09-01 | - | - | Withdrawn. Authentication now rests on the external password manager and the paper escrow alone, which is what makes the annual retrieval drill in Tier 1 #1 the only evidence that it works. |
+| Paperless documents | No off-site copy | 24 h | 24 h | The May 2026 mirror covers what `vzdump` covers, which is the guests; the documents sit on the archive pool, outside that scope. On site it is a week, from the guest backup. Originals are also held on paper for a subset. |
+| Nextcloud files | No off-site copy | 24 h | 24 h | Same scope problem as Paperless. The database is inside lxc210 and therefore is in the off-site mirror while the files it describes are not, so a restore from that copy yields a complete file index over no files. On site it is a week, from the guest backup. |
+| Nextcloud MariaDB | 24 h of uptime on site, May 2026 off site | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. Off site the mismatch is total: the database is in the mirror, the files are not. |
 | PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The distinction is measured, not theoretical: the staleness alert cannot see a period in which the host is off, because Prometheus is on that host. |
 | Platform configuration | Minutes | Keep | 1 h | Already met by git. |
 | Media library | Not applicable | - | Best effort | Reacquisition, not restoration. |
@@ -152,15 +152,16 @@ Both are tracked in the [remediation plan](remediation-plan.md) rather than solv
    Nextcloud database had none - closed 2026-08-15 by the `mariadb_backup` role and
    [its runbook](../../runbooks/database/mariadb-backup.md). Verified live on 2026-08-17: the share
    is provisioned, `mp1` is bound, the timer has produced a dump on each of the three days since,
-   and the metric is scraped. Vaultwarden still has no consistent export: an SQLite file copied from
-   a live CIFS mount is not a backup, it is a gamble on timing. That is now the single open half of
-   Tier 1 #3 before the off-site question itself.
+   and the metric is scraped. Vaultwarden never got its consistent export and no longer needs one:
+   the service was decommissioned on 2026-09-01 rather than repaired. That closes the half of
+   Tier 1 #3 by removing its subject, which is not the same as having solved it.
 3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
    C1 set. One row is now measured - the Nextcloud database at 38.3 MB, which compresses to a
-   rounding error and tells us the databases are not what drives the decision. The documents are:
-   Paperless originals, Nextcloud files and the Vaultwarden vault are still unmeasured, and until
-   they are, the choice between an encrypted object store, a rotated external disk kept elsewhere,
-   and a self-hosted target is unanswerable.
+   rounding error. The documents were measured on 2026-09-01 and turned out not to drive the choice
+   either: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets 340 MB
+   together, about 41 GB in total. At that size any of the candidate targets is affordable, so the
+   [off-site decision](../decisions/offsite-backup-target.md) turned on deletion resistance and on
+   what will actually be kept running.
 
 ## Review
 
@@ -168,3 +169,17 @@ Revisited with the weekly fleet audit, and whenever a new service is added - ste
 new-service procedure in `CLAUDE.md` should be read as including a row in the table above.
 Classification is stable; the protection and RPO columns are what change, and they change most
 often by something being switched off.
+
+## Off-site copies that exist today
+
+Recorded on 2026-09-01. Both were found in the 2026-08-20 audit and had been written down nowhere.
+
+| Copy | Location | Taken | What it is |
+|---|---|---|---|
+| Auxiliary disk rescue | Encrypted storage on the admin workstation, a different building from the server | 2026-06-25 | Point-in-time copy of the failing disk's contents. Its error log holds only `socket ignored` lines from container runtime sockets, so the copy itself is complete |
+| Disk at a second residential site | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror covering the same scope as `vzdump`: the guest root filesystems, and therefore the databases inside them. It does not cover the archive pool, so no Nextcloud file, Paperless document or database dump is on it. Refreshed only during a visit in person, which is irregular, so its age between visits is unknown and it cannot be planned around |
+
+Neither is a running backup and neither has been restored from. They are the reason "no off-site copy
+of anything" was inaccurate; they are not a reason to consider the item closed. The disk is the
+stronger of the two and the one that cannot be given a cadence, which is most of the argument in the
+[off-site decision](../decisions/offsite-backup-target.md).

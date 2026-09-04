@@ -13,7 +13,7 @@
     "trusted.",
     "",
     "The deny list added 2026-08-21 mirrors the one in ~/.claude/settings.json, set",
-    "2026-08-17. Publishing stays with the operator: every push, pull request and",
+    "2026-08-17. Publishing stays outside the session: every push, pull request and",
     "release is issued by hand from a terminal outside the session. Deny beats allow",
     "regardless of which file is more specific, so a project-level allow rule cannot",
     "reopen it - which is why the contradictory wildcard that used to sit in the live",

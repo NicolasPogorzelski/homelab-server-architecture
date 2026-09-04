@@ -4,8 +4,8 @@
 
 [![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
 
-A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, nine of eleven nodes
-managed by Ansible - and a written record of the two that are not.
+A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, ten of eleven nodes
+managed by Ansible - the eleventh is a service withdrawn from use in September 2026.
 
 Built and operated by Nicolas Pogorzelski. Claims here are checked against the running system, and
 the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/security-controls.md)
@@ -162,6 +162,8 @@ What is currently open, ranked by what its loss would cost, is in the
 - [pveproxy Tailscale Boot Ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) (the same race on the hypervisor)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
+- [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
+- [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
 
 ### Security, risk and change
 
@@ -196,7 +198,7 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 30 and 26 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 31 and 26 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 34 structural checks, run by a pre-commit
   hook and by CI on every push

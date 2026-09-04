@@ -3,6 +3,12 @@
 # rollback path, so it is the one where the next occurrence must leave evidence.
 # The role is node-agnostic; widening it is a decision about where kernel logs
 # should travel, not a change to the role.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Stream the kernel log to the Proxmox host
   hosts: vm100
   become: true

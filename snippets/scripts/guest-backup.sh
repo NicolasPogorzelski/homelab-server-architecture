@@ -4,24 +4,22 @@
 #
 # Deployed by the guest_backup role. Edit this file, never the copy on the node.
 #
-# Why this exists: measured 2026-08-20, the platform had no guest backup at all.
+# Why this exists: measured 2026-08-20, there was no guest backup at all.
 # /etc/pve/jobs.cfg did not exist, the vzdump cron file held no entry, and the
 # only artefacts in the dump directory were two log files from February. Eleven
 # machines, none of them recoverable.
 #
-# The gap survived so long because the backups that DO exist look like coverage.
-# pg-backup.sh and mariadb-backup.sh run nightly and are alerted on, so the word
-# "backup" was answered. But a database dump restores data into a machine; it
-# does not produce the machine. Ansible produces configuration, not state -
-# Paperless' document index, Grafana's dashboards and its first-boot admin
-# password, Nextcloud's app configuration are none of them in a role. And every
-# guest root disk lives in one thin pool on one six-year-old SSD behind an HBA
-# with unexplained boot-time I/O errors (KE-14). That is a single failure domain
-# for the whole platform.
+# The gap lasted so long because the existing backups answered the word
+# "backup". pg-backup.sh and mariadb-backup.sh run nightly and are alerted on.
+# They restore data into a machine that already exists, and Ansible restores
+# configuration. Paperless' document index, Grafana's dashboards and its
+# first-boot admin password, and Nextcloud's app configuration are in neither.
+# Every guest root disk also lives in one thin pool on one six-year-old SSD
+# behind an HBA with unexplained boot-time I/O errors (KE-14), so all eleven
+# machines share one failure domain.
 #
-# The sharper evidence is runbooks/platform/lxc250-rebuild.md: a rebuild runbook
-# exists precisely because there is no restore path. This script is what turns
-# that rebuild into a restore.
+# runbooks/platform/lxc250-rebuild.md is the clearest sign: a rebuild runbook
+# exists because there was no restore path. This script creates one.
 
 set -euo pipefail
 
@@ -42,7 +40,15 @@ BACKUP_DIR="/mnt/vzdump"
 # Jellyfin metadata and transcoding cache, all of it reproducible from the compose
 # stack in minutes, and its media lives on vm102. Including it would roughly
 # triple the size of a run to protect the one guest that needs it least.
-GUESTS=(250 260 210 211 200 220 230 102)
+#
+# lxc240 was missing from this array from the first version until 2026-09-01.
+# Unlike vm100 above, that was not a decision - it went unnoticed. `pct list`
+# is the authority on which guests exist; this line is a hand-maintained copy
+# of it and nothing compares the two. The same shape once left lxc250 out of
+# the fstrim array and out of `hosts: all`.
+#
+# Recheck this line against `pct list` when the fleet changes.
+GUESTS=(250 240 260 210 211 200 220 230 102)
 
 # Retention is expressed in time, not in a number of files. The distinction is
 # not pedantic: the PostgreSQL retention reads `-mtime +7`, which means seven
@@ -91,9 +97,9 @@ FAILED=0
 for id in "${GUESTS[@]}"; do
   echo "=== vzdump ${id} ==="
   # --mode snapshot takes an LVM-thin snapshot and backs that up, so the guest
-  # keeps running. `stop` would be consistent but takes the platform down once a
-  # week; `suspend` freezes the guest for the whole run. Snapshot is the only one
-  # of the three that is compatible with a host somebody is using.
+  # keeps running. `stop` would be consistent but takes everything down once a
+  # week; `suspend` freezes the guest for the whole run. Snapshot is the only
+  # one of the three compatible with a host that is in use.
   #
   # A failing guest must not abort the loop: the guests are ordered by value, and
   # stopping at the first error would sacrifice every guest after it to a fault

@@ -10,7 +10,6 @@ all:
       - { name: openwebui,   url: "https://ai-openwebui.<tailnet-id>" }
       - { name: nextcloud,   url: "https://nextcloud.<tailnet-id>" }
       - { name: calibreweb,  url: "https://calibreweb.<tailnet-id>" }
-      - { name: vaultwarden, url: "https://vaultwarden.<tailnet-id>" }
   children:
     media:
       hosts:
@@ -48,10 +47,9 @@ all:
         lxc260:  # PostgreSQL platform
           ansible_host: <tailscale-ip-postgres>
 
-    security:
-      hosts:
-        lxc240:  # Vaultwarden
-          ansible_host: <tailscale-ip-vaultwarden>
+    # The `security` group was removed together with lxc240 on 2026-09-01. It
+    # had that one member and no playbook ever targeted it.
+    # See docs/decisions/vaultwarden-decommission.md.
 
     docker:  # Nodes running Docker Compose stacks (Item #9 update workflow)
       hosts:
@@ -63,8 +61,6 @@ all:
           ansible_host: <tailscale-ip-calibreweb>
         lxc230:  # openwebui
           ansible_host: <tailscale-ip-ai-openwebui>
-        lxc240:  # vaultwarden
-          ansible_host: <tailscale-ip-vaultwarden>
         vm100:  # jellyfin + audiobookshelf
           ansible_host: <tailscale-ip-gpu-vm>
 
@@ -85,15 +81,12 @@ all:
         lxc230:
           ansible_host: <tailscale-ip-ai-openwebui>
           prometheus_label: openwebui
-        lxc240:
-          ansible_host: <tailscale-ip-vaultwarden>
-          prometheus_label: vaultwarden
         # The control node, in the inventory since 2026-08-20. It was absent for
         # months, which meant `hosts: all` excluded it silently: no node_exporter
         # scrape, no NodeDown, no disk alert on its 8 GB root, and no patching.
-        # It is also the node holding the only copy of the vault password, the
-        # real inventory and the Ansible SSH key. An entity present in one list
-        # and missing from another, with nothing comparing the two.
+        # It also holds the only copy of the vault password, the real inventory
+        # and the Ansible SSH key, which made it the worst node on the fleet to
+        # leave unmanaged.
         lxc250:
           ansible_host: <tailscale-ip-devops>
           prometheus_label: devops
@@ -104,13 +97,12 @@ all:
     # Every node that is NOT the hypervisor. Sweeping playbooks target this
     # group, never `all`.
     #
-    # The reason is a failure this platform has already had in both directions.
-    # `all` excluded lxc250 for months because it belonged to no group, and
-    # nothing reported it - absence is silent. The moment the hypervisor joins
-    # the inventory, the same mechanism runs the other way: a play written with
-    # `hosts: all` reaches the machine that runs all ten guests, and nothing
-    # reports that either. Making inclusion explicit turns a habit of checking
-    # into a group definition, and only one of those survives being forgotten.
+    # That has gone wrong in both directions. `all` excluded lxc250 for months
+    # because it belonged to no group, and nothing reported the absence. Since
+    # the hypervisor joined the inventory on 2026-08-21 the same mechanism runs
+    # the other way: a play written with `hosts: all` now also reaches the
+    # machine that runs all ten guests. Naming the group in the playbook removes
+    # the need to remember.
     #
     # Read-only playbooks may still use `all` - fleet-health-check.yml does, and
     # should, because the host belongs in a health report.

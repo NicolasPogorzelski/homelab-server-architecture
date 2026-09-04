@@ -1,4 +1,9 @@
 ---
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
 - name: Update docker compose stacks
   hosts: docker
   serial: 1

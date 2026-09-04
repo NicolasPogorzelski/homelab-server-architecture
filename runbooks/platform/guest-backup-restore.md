@@ -23,7 +23,7 @@ because there is no restore path. This job is what turns that rebuild into a res
 
 ## Solution
 
-A weekly `vzdump --mode snapshot` of eight guests, written by a systemd timer to a generic
+A weekly `vzdump --mode snapshot` of nine guests, written by a systemd timer to a generic
 mountpoint that the host binds to whichever disk currently holds the backup role, pruned on a
 time-expressed schedule, and exposed to Prometheus through a textfile metric so a silent stop
 raises `GuestBackupStale`.
@@ -31,6 +31,10 @@ raises `GuestBackupStale`.
 VM100 is excluded deliberately. It is 25 GB of root plus 18 GB of Jellyfin metadata and transcoding
 cache, reproducible from its compose stack in minutes, and its media lives on vm102. Including it
 would roughly triple a run to protect the guest that needs it least.
+
+lxc240 joined the list on 2026-09-01, having been absent since the job was written. That was an
+oversight rather than an exclusion. Compare this count against `pct list` whenever the fleet
+changes; nothing does it for you.
 
 ### Why the target is a generic path
 
@@ -224,7 +228,7 @@ pct start 260
 |---|---|---|
 | `400 Parameter verification failed. storage: missing property required by 'notes-template'` | `--notes-template` was passed alongside `--dumpdir` | Remove it. The option is declared `requires => 'storage'` in `PVE/VZDump/Common.pm`, so it fails verification before any guest is touched - every guest, deterministically. `protected` carries the same requirement |
 | `0% (... of NN TiB)`, target filling | A VM's passthrough disks lack `backup=0` | Precondition 4 above. `vzdump` backs up every disk attached to a VM; the guest config is what scopes the job |
-| `tar: ./<path>: Cannot open: Permission denied`, one container only | A directory inside the rootfs sits outside the container's UID map | Unprivileged containers are archived through `lxc-usernsexec -m u:0:100000:65536`. A path owned outside that range is unreadable, `tar` exits non-zero and the guest fails while the rest of the run continues. Seen on lxc220 (`/opt/calibreweb`), which is the node whose UID mapping is already documented tech debt |
+| `tar: ./<path>: Cannot open: Permission denied`, one container only | A directory in the rootfs is owned outside the container's UID map, usually because something wrote it from the host side | Unprivileged containers are archived through `lxc-usernsexec -m u:0:100000:65536`, so the backup reads what the container reads. Find the owner first: `ls -lan /proc/$(lxc-info -n <ctid> -p -H)/root/<path>`. A UID below 100000 means the path was created outside the namespace. Establish what put it there before touching the mapping - on lxc220 it was a deployment retired in February, and the fix was deletion ([KE-22](../../docs/platform/known-errors.md#ke-22)) |
 | `is not a mountpoint - refusing` | Backup disk did not mount | `findmnt /mnt/vzdump`; check the fstab entry resolves by-id, not by kernel letter |
 | `resolves to the root device` | The bind source is on `pve-root` | The target must be a different physical disk; a backup sharing the failure domain is not one |
 | `vzdump <id> exited 255`, others fine | One guest failed; the run continued by design | `journalctl -u guest-backup.service`; usually a snapshot that could not be taken because the storage is full |

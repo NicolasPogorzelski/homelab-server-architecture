@@ -29,7 +29,7 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 15 active scrape jobs (20 targets) - all UP, re-verified 2026-08-20 against the Prometheus API
+- 14 active scrape jobs (18 targets) - all UP, re-verified 2026-09-04 against the Prometheus API
 - **LXC250 joined the targets on 2026-08-20.** It had sat in no inventory group, so the template
   rendered no target for it - while the node did run a `node_exporter`, hand-installed, binding
   `*:9100`, scraped by nobody. `systemctl is-active` reported `active` throughout, which is why
@@ -47,12 +47,11 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 | `node-lxc211-paperless` | LXC211 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc220-calibreweb` | LXC220 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc230-openwebui` | LXC230 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc240-vaultwarden` | LXC240 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.11.1; added 2026-08-20, replacing a hand-written unit that bound `*:9100` |
 | `node-lxc260-postgres` | LXC260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `postgres` | LXC260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
 | `blackbox-http` | via `127.0.0.1:9115` | HTTP probes (`http_2xx`): jellyfin, audiobookshelf |
-| `blackbox-https` | via `127.0.0.1:9115` | HTTPS probes (`http_service_up`) behind `tailscale serve`: paperless, openwebui, nextcloud, calibreweb, vaultwarden |
+| `blackbox-https` | via `127.0.0.1:9115` | HTTPS probes (`http_service_up`) behind `tailscale serve`: paperless, openwebui, nextcloud, calibreweb |
 
 Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../docker/monitoring/prometheus/prometheus.yml.example)
 
@@ -97,3 +96,9 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 Monitoring should start independently of application services and storage mounts where possible.
 Dependencies must degrade gracefully without blocking the monitoring stack.
+
+## Withdrawn targets
+
+| Target | Removed | Why |
+|---|---|---|
+| `node-lxc240-vaultwarden`, `vaultwarden` HTTPS probe | 2026-09-01 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)). Removed in the same change as the shutdown: a scrape kept against a node that is off by design leaves `NodeDown` firing permanently |
