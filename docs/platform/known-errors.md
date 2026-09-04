@@ -1658,9 +1658,9 @@ tar: ./opt/calibreweb: Cannot open: Permission denied
 The other seven guests completed. lxc220 then had no archive for eleven days.
 
 **Root cause (measured 2026-09-01):**
-It was first recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error reads
-like a permission problem, and that reading went into the runbook's failure table without anyone
-testing it.
+It was first recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error
+reads like a permission problem, and that reading went into the runbook's failure table without
+anyone testing it.
 
 The mapping was never the problem. `pct config 220` shows the Proxmox default, and every other path
 on the node behaves correctly under it. One directory was wrong.
@@ -1739,8 +1739,8 @@ on disk, which is why it lasted eight weeks.
 | proxmox-host | `00-hardening.conf` | `without-password`, `passwordauthentication no` |
 | lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, vm102 | empty | same as lxc250 |
 
-`kbdinteractiveauthentication no` on all ten, which closes the PAM route that `PasswordAuthentication
-no` alone leaves open.
+`kbdinteractiveauthentication no` on all ten, which closes the PAM route that
+`PasswordAuthentication no` alone leaves open.
 
 **Root cause:**
 `6faf809` (2026-07-08), subject `fix(vm100): neutralize cloud-init sshd drop-in in ssh-hardening
@@ -1750,11 +1750,11 @@ from scratch. The other seven have not seen a run of this role since.
 
 **Why the drop-in and the `sshd_config` lines are not equivalent:**
 Debian's `sshd_config` opens with `Include /etc/ssh/sshd_config.d/*.conf`, and sshd takes the
-first value it obtains for a directive, not the last. A file in that directory therefore beats a line further
-down in the main file. On the seven nodes the directory is empty today, so the main file's lines
-apply and the result is right; the moment anything writes into that directory, they lose. vm100 is
-the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting before `50-` is the
-whole reason the fix worked.
+first value it obtains for a directive, not the last. A file in that directory therefore beats a
+line further down in the main file. On the seven nodes the directory is empty today, so the main
+file's lines apply and the result is right; the moment anything writes into that directory, they
+lose. vm100 is the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting
+before `50-` is the whole reason the fix worked.
 
 **Status:** Resolved on the nine guests 2026-09-04, open on the Proxmox host.
 
