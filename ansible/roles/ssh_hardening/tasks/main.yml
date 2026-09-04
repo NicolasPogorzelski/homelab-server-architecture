@@ -32,6 +32,19 @@
 # first - ExecStartPre and ExecReload each run `sshd -t` - and a restart under
 # socket activation refuses no connection, because the socket keeps listening.
 #
+# Established sessions survive either verb, which is not a given: ssh.service
+# carries `KillMode=process`, so a stop signals the main process alone and the
+# forked per-session children keep running. Under the systemd default of
+# `control-group` a restart would take down the connection Ansible is working
+# over, mid-play.
+#
+# The handler falls back to `restarted` rather than `reloaded` where the
+# detection did not run. This platform has no high-availability requirement -
+# the host powers down every night by design - so a listener gap of a second or
+# two after a configuration change costs nothing, while a dead sshd on six nodes
+# costs a hypervisor session to repair. The safe default is the verb that works
+# on both kinds of node, not the gentler one.
+#
 # noqa: command-instead-of-module - service_facts sees .service units only, and
 # systemd_service has no query-only mode. A node without the unit returns a
 # non-zero rc and "inactive", which selects the reload path.

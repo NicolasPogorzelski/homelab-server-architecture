@@ -1843,6 +1843,17 @@ restart under socket activation refuses no connection, since the socket keeps li
 Verified 2026-09-04 by dry run against the fleet: six nodes select `restarted`, four select
 `reloaded`, and the run reports `changed=0` on all nine guests.
 
+Established sessions survive either verb. That is not a property of sshd but of the unit:
+`KillMode=process` signals the main process alone, so the forked per-session children keep running.
+Under the systemd default of `control-group` a restart would take down the connection Ansible is
+working over, in the middle of the play.
+
+Where the detection does not run the handler falls back to `restarted`, not to the gentler
+`reloaded`. The node type is unknown in that state and only one verb is safe in both. This platform
+carries no high-availability requirement - the host powers down every night by design - so a
+listener gap of a second or two after a configuration change is not a cost worth optimising
+against, while a dead sshd on six nodes is a hypervisor session to repair.
+
 Socket activation is left in place. Disabling it would be a change to the remote access path of six
 nodes for no benefit, and it has one property worth keeping: the listening socket survives a
 crashed or restarted daemon, so a connection arriving during that window is queued rather than
