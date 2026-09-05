@@ -1,4 +1,61 @@
 ---
+# The compose file this role deploys is not self-contained. Six of the seven
+# under docker/ interpolate `${VAR}`, and Compose resolves those from the `.env`
+# sitting beside the file on the target node - a file this role does not deploy,
+# does not template and, until 2026-09-05, did not look at.
+#
+# An unset variable is not an error to Compose. It substitutes an empty string
+# and carries on, so `"${CW_BIND_ADDRESS}:${CW_PORT}:8083"` becomes ":8083:8083",
+# which publishes on every interface, and `${CW_CONFIG}:/config:rw` becomes
+# ":/config:rw", which mounts nothing where the database lives. Measured on
+# lxc220 that day: the node had no `.env` at all, because its compose file still
+# carried the literals the repository had already replaced with variables. The
+# run would have taken a service bound to loopback and put it on the LAN.
+#
+# The gate therefore reads the variables out of the file about to be written and
+# refuses the node if anything on it cannot resolve them. It runs before the copy
+# on purpose: after the copy the working file is already gone.
+- name: Read the .env beside each compose file on the node
+  ansible.builtin.slurp:
+    src: "{{ item.dest }}/.env"
+  register: compose_update_env_files
+  failed_when: false
+  loop: "{{ compose_projects }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+# `${VAR}` is required; `${VAR:-fallback}` is not, and the closing brace right
+# after the name is what separates them - a name followed by `:-` never matches.
+# Variable names are matched as the shell defines them, so a stray `${1}` or a
+# literal `$HOME` in a comment does not become a false precondition.
+- name: Refuse a node that cannot resolve the variables in the file it is about to receive
+  ansible.builtin.assert:
+    that:
+      - compose_update_missing | length == 0
+    fail_msg: >-
+      {{ item.0.dest }} would receive a compose file referencing
+      {{ compose_update_missing | join(', ') }}, and nothing on this node defines
+      {{ 'them' if compose_update_missing | length > 1 else 'it' }}. Compose substitutes an
+      empty string rather than failing, so the result would publish ports on every interface
+      and mount volumes with no source. Create {{ item.0.dest }}/.env from
+      docker/{{ item.0.src }}/.env.example before running this again.
+    success_msg: >-
+      {{ item.0.dest }}: {{ compose_update_required | length }} variable(s) resolvable
+    quiet: true
+  vars:
+    compose_update_required: >-
+      {{ lookup('file', role_path ~ '/../../../docker/' ~ item.0.src ~ '/docker-compose.yml')
+         | regex_findall('\$\{([A-Za-z_][A-Za-z0-9_]*)\}') | unique | sort }}
+    compose_update_env_text: >-
+      {{ (item.1.content | b64decode) if item.1.content is defined else '' }}
+    compose_update_provided: >-
+      {{ compose_update_env_text | regex_findall('(?m)^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=') }}
+    compose_update_missing: >-
+      {{ compose_update_required | difference(compose_update_provided) | sort }}
+  loop: "{{ compose_projects | zip(compose_update_env_files.results) | list }}"
+  loop_control:
+    label: "{{ item.0.dest }}"
+
 - name: Sync compose file from repo to node
   ansible.builtin.copy:
     src: "{{ role_path }}/../../../docker/{{ item.src }}/docker-compose.yml"
