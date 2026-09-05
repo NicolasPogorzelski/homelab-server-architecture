@@ -255,6 +255,15 @@ on purpose and why; and the first open item for the next session. Completeness b
 and a second repository is not a footnote - the glossary lives in another one, and a term added
 without it is a gate that fails on the next run.
 
+**Changed files are shown whole, not as diffs.** Every finished piece of code or documentation
+preparation ends by printing each changed file in full, one after another, before the commands that
+act on them. A diff assumes the reader already holds the rest of the file; the purpose here is that
+reading is possible without opening anything, on any device, which is the same reason a branch is
+reviewed in the conversation rather than on GitHub. One block per file, path as its heading, in the
+order the files were edited. Where a document is long enough that printing it whole defeats that
+purpose - `known-errors.md` runs to some 1900 lines - the changed section is printed complete and
+labelled as an extract, rather than quietly trimmed.
+
 ## Commit Message Format
 
 Conventional Commits with scope required.
