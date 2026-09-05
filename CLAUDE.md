@@ -243,6 +243,18 @@ is already too late. The review is presented in chat and covers:
 A diffstat is not a review. If a diff is long, it is shown in parts, not compressed. The
 operator's confirmation comes after reading it, not after a promise about it.
 
+**The handover is part of the work, not an afterthought.** A unit of work ends in the same shape
+every time, because the alternative is deriving the order of steps again at the moment they are
+needed. It carries: a state table naming every repository the session touched, its branch, how many
+commits are waiting and how that repository publishes - a pull request here, a direct push where
+the history shows one; the validation reproduced and quoted rather than asserted, with any CI check
+run locally instead of predicted; a numbered block of commands in execution order, from the
+verification that names the expected commit, through the push and the pull request with its title
+and body already written, to the cleanup and the control-node sync afterwards; what was left undone
+on purpose and why; and the first open item for the next session. Completeness beats brevity here,
+and a second repository is not a footnote - the glossary lives in another one, and a term added
+without it is a gate that fails on the next run.
+
 ## Commit Message Format
 
 Conventional Commits with scope required.
