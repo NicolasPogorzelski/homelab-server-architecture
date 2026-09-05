@@ -1,5 +1,14 @@
 ---
+# `reloaded` kills the daemon on a socket-activated node - see the comment above
+# the detection task in tasks/main.yml. The verb is chosen per node there.
+#
+# The fallback is `restarted`, which is the value that works on both kinds of
+# node. If the detection task did not run - a caller importing this role without
+# it, a future refactor - the node type is unknown, and only one of the two verbs
+# is safe in that state. Being wrong towards `restarted` costs a listener gap of
+# a second or two on the four nodes that do not need it. Being wrong towards
+# `reloaded` leaves sshd dead on the six that do.
 - name: Reload ssh_config
   ansible.builtin.systemd_service:
     name: ssh
-    state: reloaded
+    state: "{{ ssh_hardening_reload_verb | default('restarted') }}"

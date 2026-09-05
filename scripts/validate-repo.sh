@@ -143,9 +143,28 @@ fi
 # =============================================================================
 # Legitimate placeholder: <tailscale-ip-...>
 # Violation: bare 100.x.y.z addresses
+# Ignored files are skipped here and in checks 8, 11, 14, 15, 26 and 36, the way
+# checks 2, 18, 20, 24 and 27 have always done it. A gate that runs before a
+# commit answers for what the commit will contain, and an ignored file cannot be
+# in one. Reading them instead made the verdict depend on whatever scratch files
+# a workstation happens to hold, which CI can never reproduce: `actions/checkout`
+# writes a clean tree in which those files do not exist. Local and remote then
+# disagree, and the local side is the one that blocks.
+#
+# The concrete case, measured 2026-09-05: `.gitignore` names
+# `SANITIZATION-LEGEND.local.md`, whose purpose is to map each placeholder to the
+# real value it stands for. Creating the file this repository's own tooling
+# describes made checks 7, 8 and 14 fail on every run afterwards.
+#
+# What this gives up: a real address in a file that is ignored today and tracked
+# tomorrow is no longer caught by the pre-commit run. `git add` on it produces a
+# diff, and the check reads it from that point on, so the exposure lasts until
+# the file is staged rather than until someone notices.
 echo "Check 7: no plain Tailscale IPs"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '(?<!<tailscale-ip[->])100\.\d{1,3}\.\d{1,3}\.\d{1,3}' "${mdfile}" || true; } | while read -r match; do
         echo "  Unsanitized IP: ${mdfile}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -165,6 +184,8 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 echo "Check 14: no plain LAN IPs"
 
 while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${file}" || true; } | while read -r match; do
         echo "  Unsanitized LAN IP: ${file}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -183,6 +204,8 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 echo "Check 8: no plain tailnet IDs"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '(?<!<)[a-z0-9-]+\.ts\.net' "${mdfile}" | grep -vP '<tailnet-id>' || true; } | while read -r match; do
         echo "  Unsanitized tailnet ID: ${mdfile}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -223,13 +246,15 @@ fi
 echo "Check 11: duplicate markdown headings"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '^## ' "${mdfile}" || true; } | \
         sed 's/^[0-9]*://' | \
         sort | uniq -d | while read -r dup; do
             echo "  Duplicate heading in ${mdfile}: ${dup}"
             echo "x" >> "${ERROR_LOG}"
         done
-done < <(find "${REPO_ROOT}" -name "*.md" -type f)
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
 
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
@@ -270,6 +295,8 @@ done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".
 echo "Check 15: no merge conflict markers"
 
 while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "${file}" || true; } | while read -r match; do
         echo "  Merge conflict marker: ${file}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -690,7 +717,7 @@ INDEX_FILES=("README.md" "runbooks/README.md")
 
 # Deliberately not indexed:
 #   docs/platform/ansible-progress.md - per-session learning narrative, written
-#   for the operator rather than for a reader of the platform. Linked from
+#   for whoever runs the platform rather than for a reader of it. Linked from
 #   CLAUDE.md, which is where the learning track is steered from.
 INDEX_EXCEPTIONS=("docs/platform/ansible-progress.md")
 
@@ -716,6 +743,7 @@ done
 
 while read -r doc; do
     rel="${doc#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     skip=0
     for ex in "${INDEX_EXCEPTIONS[@]}"; do
         [[ "${rel}" == "${ex}" ]] && skip=1
@@ -985,7 +1013,7 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # were found and removed on the day this check was written.
 #
 # refs/stash and refs/notes are legitimate local state and stay allowed. The
-# check reports rather than deletes: removing a ref is the operator's call, and
+# check reports rather than deletes: removing a ref is a judgement call, and
 # it may still be the only pointer to unfinished work.
 echo "Check 34: no refs outside the standard namespaces"
 
@@ -1005,11 +1033,123 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 35: state-changing playbooks import the preflight gate
+# =============================================================================
+# Added 2026-09-04. preflight.yml refuses a run from a working tree that matches
+# no commit, and it protects only the playbooks that import it. The import is
+# four identical lines repeated in every playbook - a hand-maintained list with
+# nothing comparing it to the directory, which is the shape that once left lxc240
+# out of the guest backup and lxc250 out of `hosts: all`.
+#
+# Two files are exempt by design. preflight.yml is the gate. fleet-health-check
+# only reads, and a gate that blocks diagnosis during an incident gets removed.
+echo "Check 35: state-changing playbooks import the preflight gate"
+
+PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
+if [[ -d "${PLAYBOOK_DIR}" ]]; then
+    for pb in "${PLAYBOOK_DIR}"/*.yml; do
+        [[ -e "${pb}" ]] || continue
+        base="$(basename "${pb}")"
+        case "${base}" in
+            preflight.yml|fleet-health-check.yml) continue ;;
+        esac
+        if ! grep -q '^  import_playbook: preflight.yml$' "${pb}"; then
+            echo "  Missing preflight import: ansible/playbooks/${base}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 36: markdown table rows stay on one line
+# =============================================================================
+# Added 2026-09-04. A table row in markdown ends at the newline. A row written
+# across several lines still renders - the remainder falls out of the table and
+# sits underneath it as a paragraph, which looks deliberate enough that nobody
+# questions it. The changelog carried one for eleven days, and the text that fell
+# out of the table held the first note that lxc240 was missing from the guest
+# backup. It was found by reading, not by any check.
+#
+# The rule is mechanical: a line that opens a table row must also close one.
+# Fenced code blocks are skipped, because a shell pipeline is not a table.
+#
+# awk reports and the shell counts, one error per broken row. The first version
+# counted awk's exit status instead, so a file with three broken rows printed
+# three lines and raised the total by one - a check that names the defects
+# correctly and then understates how many there are.
+# Ignored files are skipped, the same way Check 24 skips them. `*.local.md` is
+# the operator's private scratch space and git does not track it, so a broken
+# row there would fail the run and name a file that is not part of the
+# repository - a commit gate answering for something no commit can contain.
+echo "Check 36: markdown table rows stay on one line"
+
+while IFS= read -r md; do
+    rel="${md#"${REPO_ROOT}/"}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    while IFS= read -r finding; do
+        echo "${finding}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <(awk -v file="${rel}" '
+        /^```/ { fence = !fence; next }
+        fence  { next }
+        /^\|/ {
+            line = $0
+            sub(/[ \t]+$/, "", line)
+            if (line !~ /\|$/) {
+                printf "  Table row broken across lines: %s:%d\n", file, NR
+            }
+        }
+    ' "${md}")
+done < <(find "${REPO_ROOT}" -name '*.md' -not -path '*/.git/*')
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 37: changelog entries stay at index length
+# =============================================================================
+# Added 2026-09-04. Measured that day: the ten oldest entries average 173
+# characters, the ten newest 1888. Nothing decided that; each entry was
+# defensible on its own and the trend was visible only in the aggregate.
+#
+# A changelog is an index. The place for the narrative is the known-error entry,
+# the decision record or the runbook that the row links to, where a reader
+# looking for that fault will actually find it. A row that carries the narrative
+# itself buries the one thing the file is for, which is answering "what changed
+# and when" at a glance.
+#
+# Rows dated before the cutoff are left alone. Rewriting a year of history to a
+# rule invented today would replace one uniform register with another.
+echo "Check 37: changelog entries stay at index length"
+
+CHANGELOG="${REPO_ROOT}/docs/platform/changelog.md"
+CHANGELOG_CUTOFF="2026-09-04"
+CHANGELOG_MAX=600
+
+if [[ -f "${CHANGELOG}" ]]; then
+    while IFS= read -r row; do
+        date="${row:2:10}"
+        [[ "${date}" < "${CHANGELOG_CUTOFF}" ]] && continue
+        if (( ${#row} > CHANGELOG_MAX )); then
+            echo "  Changelog entry ${date} is ${#row} characters, limit ${CHANGELOG_MAX}"
+            echo "  (move the detail to the entry it links to; the row is an index line)"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep '^| 20' "${CHANGELOG}")
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 34"
+echo "Checks run: 37"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

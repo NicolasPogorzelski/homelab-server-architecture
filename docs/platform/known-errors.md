@@ -1657,15 +1657,14 @@ tar: ./opt/calibreweb: Cannot open: Permission denied
 `vzdump 220` exited non-zero, `guest_backup_failed_guests` read 1, and the unit ended in `failed`.
 The other seven guests completed. lxc220 then had no archive for eleven days.
 
-**First diagnosis, and why it was wrong:**
-It was recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error reads
-like a permission problem, and that reading went into the runbook's failure table without anyone
-testing it.
+**Root cause (measured 2026-09-01):**
+It was first recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error
+reads like a permission problem, and that reading went into the runbook's failure table without
+anyone testing it.
 
 The mapping was never the problem. `pct config 220` shows the Proxmox default, and every other path
 on the node behaves correctly under it. One directory was wrong.
 
-**Root cause (measured 2026-09-01):**
 `/opt/calibreweb` is the Calibre-Web deployment that `/srv/calibreweb` replaced. Its log ends with a
 clean `webserver stop` on 2026-02-14 and the new compose file is dated 2026-02-20. The old directory
 was left in place.
@@ -1700,21 +1699,22 @@ other orphans on the same node went in the same pass:
 - `/opt/homelab-server-architecture`, a clone of this repository last updated 2026-03-05. No unit,
   timer or crontab referenced it.
 
-**The class: superseded is not removed.**
-Three artefacts on one node, each left behind by a change that worked. Replacing something and
-retiring what it replaced are two separate jobs, and only the first has an obvious end, so the
-second gets dropped. The cost then appears somewhere unrelated and much later: a January directory
-as an August backup fault, a disabled unit as a second `tailscaled` at every boot. Other instances
-here are [KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's textfile
-directory.
+**The class: give the thing being replaced a removal step, in the change that replaces it.**
+Three artefacts on one node, each left behind by a change that worked. Replacing something has an
+obvious end and retiring what it replaced does not, so the second job is the one that gets dropped.
+The cost then appears somewhere unrelated and much later: a January directory as an August backup
+fault, a disabled unit as a second `tailscaled` at every boot. Other instances here are
+[KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's
+textfile directory.
 
-Give the old location a removal step in the change that creates its replacement.
+On this node that would have been one line in the February compose change: delete
+`/opt/calibreweb` after `/srv/calibreweb` answers.
 
 **Status:** Resolved 2026-09-01. Orphans removed, Calibre-Web unaffected. `vzdump 220` then wrote
 1.03 GB in 33 s and exited 0. The scheduled job ran in full afterwards: `status=0/SUCCESS`,
 `guest_backup_failed_guests` 0, 268 s. That is the unit's first clean finish since 2026-08-21.
 
-**Related:** [KE-6](#ke-6), [KE-4](#ke-4),
+The runbook's failure table carries the corrected diagnosis, in
 [guest backup and restore](../../runbooks/platform/guest-backup-restore.md).
 
 ---
@@ -1739,8 +1739,8 @@ on disk, which is why it lasted eight weeks.
 | proxmox-host | `00-hardening.conf` | `without-password`, `passwordauthentication no` |
 | lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, vm102 | empty | same as lxc250 |
 
-`kbdinteractiveauthentication no` on all ten, which closes the PAM route that `PasswordAuthentication
-no` alone leaves open.
+`kbdinteractiveauthentication no` on all ten, which closes the PAM route that
+`PasswordAuthentication no` alone leaves open.
 
 **Root cause:**
 `6faf809` (2026-07-08), subject `fix(vm100): neutralize cloud-init sshd drop-in in ssh-hardening
@@ -1750,25 +1750,111 @@ from scratch. The other seven have not seen a run of this role since.
 
 **Why the drop-in and the `sshd_config` lines are not equivalent:**
 Debian's `sshd_config` opens with `Include /etc/ssh/sshd_config.d/*.conf`, and sshd takes the
-first value it obtains for a directive, not the last. A file in that directory therefore beats a line further
-down in the main file. On the seven nodes the directory is empty today, so the main file's lines
-apply and the result is right; the moment anything writes into that directory, they lose. vm100 is
-the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting before `50-` is the
-whole reason the fix worked.
+first value it obtains for a directive, not the last. A file in that directory therefore beats a
+line further down in the main file. On the seven nodes the directory is empty today, so the main
+file's lines apply and the result is right; the moment anything writes into that directory, they
+lose. vm100 is the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting
+before `50-` is the whole reason the fix worked.
 
-**Status:** Open, scheduled as a maintenance unit. Not an exposure - no node accepts passwords
-today. Plan: `ansible-playbook ssh-hardening.yml --check --diff` with the expectation written down
-first (seven nodes `changed=1`, three `changed=0`), then apply, then re-read `sshd -T` on all ten
-and require it to match the table above exactly. A changed value would be the failure case.
-The host play runs last by design: a bad reload there locks out the one node with no second path in.
+**Status:** Resolved on the nine guests 2026-09-04, open on the Proxmox host.
 
-**The class: a role changed is not a fleet changed.**
-This is [KE-6](#ke-6) in a different medium. That entry produced the rule "when closing a
-configuration error, sweep the other nodes and record that you did", and the rule was written six
-weeks *after* this commit made the same mistake. A lesson recorded in a document prevents nothing on
-its own; the counterpart is the drift check in the
-[remediation plan](remediation-plan.md), which would have reported this on 2026-07-15.
+The dry run did not match the expectation, which is why the expectation was written down first.
+Nine of ten showed `changed=2` rather than seven: vm100 differed by one character, an em dash the
+role lost in `cd24328` ("use ASCII punctuation") and never redeployed, and the Proxmox host would
+have had its hand-written comment block replaced by the role's. Neither is a value change. Applied
+to the guests afterwards; `sshd -T` across all ten is byte-identical to the table above, which is
+the pass condition. The drop-in is now present on every node.
 
-**Related:** [KE-6](#ke-6), [KE-18](#ke-18) (also found by sweeping rather than by an alert),
-[Ansible platform doc](ansible.md), A.8.5 in
-[security controls](security-controls.md).
+Applying it also set off [KE-24](#ke-24): six containers had `ssh.socket` enabled beside
+`ssh.service`, and the handler's reload left the service dead while the socket kept serving SSH.
+
+The host is deliberately held back. Its delta is a comment block, its value stays
+`prohibit-password` from `group_vars/proxmox.yml`, and socket activation is disabled there, so the
+change is low-value and the blast radius is the whole platform: per that same group_vars file the
+physical recovery path is unavailable while the GPU is passed through. It belongs in a window with
+a second session already open, not at the end of an unplanned sequence.
+
+This is [KE-6](#ke-6) again, in a different medium: the rule that entry produced - sweep the other
+nodes when closing a configuration error, and record that you did - was written six weeks after
+`6faf809` had already broken it, and it sat in the repository for the whole eight weeks this gap
+stayed open. The drift check in the [remediation plan](remediation-plan.md) would have reported it
+on 2026-07-15; the applied state is in A.8.5 of [security controls](security-controls.md).
+Applying the fix is what turned up [KE-24](#ke-24).
+
+---
+
+<a id="ke-24"></a>
+
+## KE-24: sshd's reload is a re-exec, and under socket activation it cannot rebind
+
+**Affected component:** LXC200, LXC210, LXC211, LXC220, LXC230, LXC260
+
+**Symptom:**
+Applying [KE-23](#ke-23) ran `ssh_hardening` across the guests. Six containers came back with
+`ssh.service` in `failed`, while SSH kept working. `sshd -T` on those six exited 255 with
+`Missing privilege separation directory: /run/sshd`, which is what made the fault visible - the
+verification step returned nothing where it had returned four directives an hour earlier.
+
+**Root cause:**
+Recorded initially as two units both claiming port 22, with the fix being to disable `ssh.socket`
+and restore the long-running daemon. That reading was wrong and would have removed a supported
+configuration from six nodes.
+
+`systemctl cat ssh.socket` settles it: `Accept=no`, `ListenStream=22`, `WantedBy=sockets.target`.
+That is socket activation with descriptor passing. systemd holds the listening socket and hands it
+to `ssh.service` on the first connection, so `ss -lntp` shows both as owners:
+
+```
+LISTEN 0 4096 *:22 *:* users:(("sshd",pid=4983,fd=3),("systemd",pid=1,fd=38))
+```
+
+Both units active is the correct steady state, not a collision. The Proxmox Debian 12 template
+enables it; vm100, vm102, lxc250 and the hypervisor have it disabled and run the daemon alone.
+
+sshd does not re-read its configuration on SIGHUP. It re-execs itself, and the new process binds
+port 22 rather than reusing the descriptor it inherited. systemd still holds the socket, so the
+bind fails and the daemon exits:
+
+```
+systemd[1]: Reloading ssh.service - OpenBSD Secure Shell server...
+sshd[192]: Received SIGHUP; restarting.
+sshd[192]: error: Bind to port 22 on 0.0.0.0 failed: Address already in use.
+```
+
+`RuntimeDirectory=` cleanup removed `/run/sshd` with the unit, which is why every later `sshd -t`
+failed for a second, unrelated reason and hid the first.
+
+Nothing was unreachable at any point, and the fault repairs itself: the socket starts the service
+again on the next connection. All six were back to `active` within the hour, with nothing done to
+them. That is the reason this entry exists at all - without it the next `ssh-hardening.yml` run
+would have produced the same failure and the same quiet repair, and the third or fourth time round
+somebody would still be starting the diagnosis from nothing.
+
+**Fix:**
+In the role, not on the nodes. `ssh_hardening` reads `systemctl is-active ssh.socket` and picks the
+verb per node. The reasoning, the fallback and the `KillMode=process` property the choice rests on
+are in the comment above the detection task in `ansible/roles/ssh_hardening/tasks/main.yml`, which
+is where somebody changing that line will be.
+
+Verified 2026-09-04 by dry run against the fleet: six nodes select `restarted`, four select
+`reloaded`, `changed=0` on all nine guests. Socket activation is left in place.
+
+**What it confirmed, rather than uncovered:** none of the six carries `ListenAddress` in
+`sshd_config`, and port 22 listens on `*:22`. That is not new. The `ss -tlnH` sweep of 2026-08-17
+recorded sshd on the wildcard on ten of eleven nodes, with lxc250 the only one pinning an address,
+and A.8.21 in [security controls](security-controls.md) has carried it since. Note for whoever
+closes it: under socket activation `ListenAddress` has no effect, and the binding rule would have
+to be expressed as `ListenStream=<tailscale-ip>:22` in a socket drop-in - an address that does not
+exist yet at boot, which is [KE-18](#ke-18) one layer down.
+
+**Status:** Resolved 2026-09-04 in the role. No node was changed; the six repaired themselves and
+the fleet reports `changed=0`.
+
+**The class: read what a signal does to the process, not what the verb promises.** `reload` names
+an intention. The mechanism sshd implements for it is `execve()` on itself, so the new process has
+to obtain everything the old one held, and under socket activation the listening socket is not
+obtainable that way. [KE-18](#ke-18) is the same kind of mismatch one layer up, where `After=` was
+read as a readiness guarantee rather than an ordering constraint.
+
+A latent conflict that only routine maintenance disturbs is the same shape as the fstab entry
+without `x-systemd.automount` in [KE-15](#ke-15).

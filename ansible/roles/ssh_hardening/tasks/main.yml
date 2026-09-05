@@ -11,6 +11,56 @@
       a typo here takes SSH down on the node it was meant to harden.
     quiet: true
 
+# sshd must not be reloaded where systemd owns the listening socket.
+#
+# Debian ships ssh.socket with `Accept=no` and `ListenStream=22`, so systemd
+# holds the socket and hands the descriptor to ssh.service on the first
+# connection - both then show as owners of :22 in `ss -lntp`. That is a supported
+# arrangement and the normal steady state on the Proxmox Debian 12 containers,
+# where the template enables it. vm100, vm102, lxc250 and the hypervisor have it
+# disabled and run the daemon on its own.
+#
+# What breaks is SIGHUP. sshd does not re-read its configuration on reload, it
+# re-execs, and the new process binds :22 itself instead of reusing the inherited
+# descriptor. systemd still holds the socket, the bind fails with EADDRINUSE and
+# the unit exits 255. Measured on six containers 2026-09-04 (KE-24). The socket
+# starts the service again on the next connection, so the fault repairs itself,
+# which is most of the reason it went unnoticed.
+#
+# The reload is therefore chosen per node rather than forbidden: restart where
+# the socket is active, reload where it is not. Both validate the configuration
+# first - ExecStartPre and ExecReload each run `sshd -t` - and a restart under
+# socket activation refuses no connection, because the socket keeps listening.
+#
+# Established sessions survive either verb, which is not a given: ssh.service
+# carries `KillMode=process`, so a stop signals the main process alone and the
+# forked per-session children keep running. Under the systemd default of
+# `control-group` a restart would take down the connection Ansible is working
+# over, mid-play.
+#
+# The handler falls back to `restarted` rather than `reloaded` where the
+# detection did not run. This platform has no high-availability requirement -
+# the host powers down every night by design - so a listener gap of a second or
+# two after a configuration change costs nothing, while a dead sshd on six nodes
+# costs a hypervisor session to repair. The safe default is the verb that works
+# on both kinds of node, not the gentler one.
+#
+# noqa: command-instead-of-module - service_facts sees .service units only, and
+# systemd_service has no query-only mode. A node without the unit returns a
+# non-zero rc and "inactive", which selects the reload path.
+- name: Read whether systemd owns the sshd listening socket
+  ansible.builtin.command:  # noqa: command-instead-of-module
+    cmd: systemctl is-active ssh.socket
+  register: ssh_hardening_socket_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record which verb is safe for restarting sshd on this node
+  ansible.builtin.set_fact:
+    ssh_hardening_reload_verb: >-
+      {{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'reloaded' }}
+
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/00-hardening.conf
