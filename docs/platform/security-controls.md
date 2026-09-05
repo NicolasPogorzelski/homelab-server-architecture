@@ -178,6 +178,9 @@ Done on 2026-08-15, in the same pass that produced this document:
 ## Review cadence
 
 Reviewed with the weekly fleet audit, and rewritten whenever a control moves between states. The
+status column is the part that rots: a control that was enforced stops being enforced the moment
+someone adds a bypass, and nothing announces that. When a remediation item closes, the matching row
+changes here in the same commit - the same rule the remediation plan already carries.
 
 **One measurement belongs to this review and is not about a control.** Documentation drifts towards
 uniformity the same way configuration drifts towards divergence, and neither is visible in a single
@@ -195,9 +198,6 @@ awk '/^## KE-/ {if(n) print len; n=$0; len=0; next} n {len++} END {print len}' \
 On 2026-09-04 the changelog read 1888 against 173, an eleven-fold spread that nobody decided and
 nobody noticed, because each row was defensible on its own. Check 37 now holds the changelog side;
 the known-error side has no check and is read by eye against the median.
-status column is the part that rots: a control that was enforced stops being enforced the moment
-someone adds a bypass, and nothing announces that. When a remediation item closes, the matching row
-changes here in the same commit - the same rule the remediation plan already carries.
 
 An entry that has been "Practised" for a year without becoming "Enforced" should be read as a
 prediction that it will eventually be skipped.
