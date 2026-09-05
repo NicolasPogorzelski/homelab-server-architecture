@@ -1052,13 +1052,19 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # counted awk's exit status instead, so a file with three broken rows printed
 # three lines and raised the total by one - a check that names the defects
 # correctly and then understates how many there are.
+# Ignored files are skipped, the same way Check 24 skips them. `*.local.md` is
+# the operator's private scratch space and git does not track it, so a broken
+# row there would fail the run and name a file that is not part of the
+# repository - a commit gate answering for something no commit can contain.
 echo "Check 36: markdown table rows stay on one line"
 
 while IFS= read -r md; do
+    rel="${md#"${REPO_ROOT}/"}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     while IFS= read -r finding; do
         echo "${finding}"
         echo "x" >> "${ERROR_LOG}"
-    done < <(awk -v file="${md#"${REPO_ROOT}/"}" '
+    done < <(awk -v file="${rel}" '
         /^```/ { fence = !fence; next }
         fence  { next }
         /^\|/ {
