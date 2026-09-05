@@ -1047,10 +1047,18 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 #
 # The rule is mechanical: a line that opens a table row must also close one.
 # Fenced code blocks are skipped, because a shell pipeline is not a table.
+#
+# awk reports and the shell counts, one error per broken row. The first version
+# counted awk's exit status instead, so a file with three broken rows printed
+# three lines and raised the total by one - a check that names the defects
+# correctly and then understates how many there are.
 echo "Check 36: markdown table rows stay on one line"
 
 while IFS= read -r md; do
-    awk -v file="${md#"${REPO_ROOT}/"}" '
+    while IFS= read -r finding; do
+        echo "${finding}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <(awk -v file="${md#"${REPO_ROOT}/"}" '
         /^```/ { fence = !fence; next }
         fence  { next }
         /^\|/ {
@@ -1058,11 +1066,9 @@ while IFS= read -r md; do
             sub(/[ \t]+$/, "", line)
             if (line !~ /\|$/) {
                 printf "  Table row broken across lines: %s:%d\n", file, NR
-                found = 1
             }
         }
-        END { exit found ? 1 : 0 }
-    ' "${md}" || echo "x" >> "${ERROR_LOG}"
+    ' "${md}")
 done < <(find "${REPO_ROOT}" -name '*.md' -not -path '*/.git/*')
 
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
