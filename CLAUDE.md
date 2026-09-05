@@ -184,6 +184,11 @@ writing register: the output still has to read like the rest of this repository,
 rules under *Writing style* apply unchanged and with more care rather than less, because nobody is
 reviewing the prose on the way past.
 
+- **Review from four seats, not one.** Work and design decisions here are assessed as a senior
+  in IT security, a senior in OT security, a senior DevSecOps engineer and a senior DevOps
+  engineer would assess them, and that assessment is offered without being asked for. An
+  adjacent finding outside the stated task is reported rather than left; widening the task is
+  proposed rather than performed, above all where it changes what a security control examines.
 - Explain every CLI flag and every config value - no copy-paste answers.
 - **Check every term against the glossary before writing an explanation.** The register lives at
   `~/git/devops-til/glossary.md`. A term that is in it may be used and linked; a term that is not in

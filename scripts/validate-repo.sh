@@ -143,9 +143,28 @@ fi
 # =============================================================================
 # Legitimate placeholder: <tailscale-ip-...>
 # Violation: bare 100.x.y.z addresses
+# Ignored files are skipped here and in checks 8, 11, 14, 15, 26 and 36, the way
+# checks 2, 18, 20, 24 and 27 have always done it. A gate that runs before a
+# commit answers for what the commit will contain, and an ignored file cannot be
+# in one. Reading them instead made the verdict depend on whatever scratch files
+# a workstation happens to hold, which CI can never reproduce: `actions/checkout`
+# writes a clean tree in which those files do not exist. Local and remote then
+# disagree, and the local side is the one that blocks.
+#
+# The concrete case, measured 2026-09-05: `.gitignore` names
+# `SANITIZATION-LEGEND.local.md`, whose purpose is to map each placeholder to the
+# real value it stands for. Creating the file this repository's own tooling
+# describes made checks 7, 8 and 14 fail on every run afterwards.
+#
+# What this gives up: a real address in a file that is ignored today and tracked
+# tomorrow is no longer caught by the pre-commit run. `git add` on it produces a
+# diff, and the check reads it from that point on, so the exposure lasts until
+# the file is staged rather than until someone notices.
 echo "Check 7: no plain Tailscale IPs"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '(?<!<tailscale-ip[->])100\.\d{1,3}\.\d{1,3}\.\d{1,3}' "${mdfile}" || true; } | while read -r match; do
         echo "  Unsanitized IP: ${mdfile}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -165,6 +184,8 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 echo "Check 14: no plain LAN IPs"
 
 while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${file}" || true; } | while read -r match; do
         echo "  Unsanitized LAN IP: ${file}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -183,6 +204,8 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 echo "Check 8: no plain tailnet IDs"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '(?<!<)[a-z0-9-]+\.ts\.net' "${mdfile}" | grep -vP '<tailnet-id>' || true; } | while read -r match; do
         echo "  Unsanitized tailnet ID: ${mdfile}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -223,13 +246,15 @@ fi
 echo "Check 11: duplicate markdown headings"
 
 while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nP '^## ' "${mdfile}" || true; } | \
         sed 's/^[0-9]*://' | \
         sort | uniq -d | while read -r dup; do
             echo "  Duplicate heading in ${mdfile}: ${dup}"
             echo "x" >> "${ERROR_LOG}"
         done
-done < <(find "${REPO_ROOT}" -name "*.md" -type f)
+done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
 
 ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
@@ -270,6 +295,8 @@ done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".
 echo "Check 15: no merge conflict markers"
 
 while read -r file; do
+    rel="${file#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     { grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "${file}" || true; } | while read -r match; do
         echo "  Merge conflict marker: ${file}:${match}"
         echo "x" >> "${ERROR_LOG}"
@@ -716,6 +743,7 @@ done
 
 while read -r doc; do
     rel="${doc#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
     skip=0
     for ex in "${INDEX_EXCEPTIONS[@]}"; do
         [[ "${rel}" == "${ex}" ]] && skip=1
