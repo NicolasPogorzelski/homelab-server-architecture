@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+#
+# time_zone shipped as SYSTEM, which resolves against the operating system at
+# server start. Once the node moved to {{ timezone_name }}, NOW() would have
+# started returning local time while every value already stored had been written
+# in UTC - two zones in one column, distinguishable by nothing.
+#
+# Nextcloud itself writes through PHP, which defaults to UTC because
+# date.timezone is unset and PHP does not read /etc/timezone. This pin means the
+# database agrees with it regardless of what the container is set to later.
+[mariadbd]
+default_time_zone = "{{ timezone_mariadb_value }}"

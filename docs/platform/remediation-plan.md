@@ -168,6 +168,29 @@ applied, and move to the baseline only what is a decision with a reason written 
 that is done `FleetDriftUnexpected` fires, which is the intended first output of the sweep rather
 than a defect in it.
 
+**Every scheduled hour in this repository means two different times (found 2026-09-08).** Nine
+guests keep `Etc/UTC`; vm102 and the Proxmox host keep `Europe/Berlin`. A bare `OnCalendar=` hour
+therefore fires two hours later in local terms on nine of eleven nodes, and every schedule written
+down here reads as a local time. Measured:
+
+| Job | Node | Written | Actually fires |
+|---|---|---|---|
+| `snapraid-sync` | vm102 | 23:00 | 23:00 CEST |
+| `guest-backup` | proxmox-host | Sun 11:00 | Sun 11:00 CEST |
+| `lxc-fstrim` | proxmox-host | 10:30 | 10:38 CEST |
+| `pg-backup` | lxc260 | 03:00 | 05:00 CEST |
+| `pg-restore-test` | lxc260 | 1st 09:00 | 1st 11:04 CEST |
+| `mariadb-backup` | lxc210 | 03:30 | 05:30 CEST |
+
+Only one of these has a documented consequence, and it is inverted by this: the restore test was
+said to rely on `lxc-fstrim` reclaiming its thin-pool blocks the same morning, and fstrim in fact
+runs twenty-six minutes earlier, so the reclaim waits a day. Corrected in `CLAUDE.md`. The two
+roles added the same day now name `Europe/Berlin` inside the calendar expression, which systemd 252
+accepts and which survives the daylight-saving change that a fixed UTC hour would not. The open
+work is deciding whether the other timers should follow, or whether the guests should simply carry
+the same zone as the host - the second is one line per node and removes the class rather than each
+instance.
+
 **MagicDNS does not resolve on lxc250 (found 2026-09-08).** Any tooling on the control node that
 addresses a node by its `.ts.net` name fails. The ACL is not the cause: the node holds `tag:admin`
 and reaches every port. `systemd-resolved` is active, `/etc/nsswitch.conf` consults `resolve`

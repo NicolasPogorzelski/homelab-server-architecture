@@ -17,6 +17,12 @@
 
 # Owned by the sweep's user, because the script writes both its report and its
 # metric here. The metric is moved into the collector afterwards by the unit.
+#
+# recurse, because ownership of the directory alone is not enough: the script
+# truncates its report in place, so a single root-owned report.txt left behind by
+# a hand-run makes the service fail with Permission denied every week while the
+# directory itself looks correct. That is what happened on 2026-09-08, from a
+# test run before the role existed.
 - name: Create the report directory
   ansible.builtin.file:
     path: "{{ fleet_drift_report_dir }}"
@@ -24,6 +30,7 @@
     owner: "{{ fleet_drift_user }}"
     group: "{{ fleet_drift_user }}"
     mode: "0755"
+    recurse: true
 
 - name: Deploy the drift sweep script
   ansible.builtin.copy:
