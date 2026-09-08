@@ -327,6 +327,16 @@ if [[ -z "${changed}" ]]; then
     changed="$(git -C "${REPO_ROOT}" diff --name-only HEAD 2>/dev/null || true)"
 fi
 
+# Untracked files are part of the change. Without this the gate is inert for the
+# case it matters most in: a whole new role or playbook is untracked until it is
+# staged, so nothing here would have linted it. Found on 2026-09-08, when this
+# check printed "no changes under ansible/" during a commit that added a role and
+# two playbooks.
+untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)"
+if [[ -n "${untracked}" ]]; then
+    changed="$(printf '%s\n%s' "${changed}" "${untracked}" | grep -v '^$' || true)"
+fi
+
 if ! command -v ansible-lint >/dev/null 2>&1; then
     echo "  SKIP: ansible-lint not in PATH"
 elif ! grep -q '^ansible/' <<< "${changed}"; then
@@ -1041,8 +1051,13 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # nothing comparing it to the directory, which is the shape that once left lxc240
 # out of the guest backup and lxc250 out of `hosts: all`.
 #
-# Two files are exempt by design. preflight.yml is the gate. fleet-health-check
-# only reads, and a gate that blocks diagnosis during an incident gets removed.
+# Three files are exempt by design. preflight.yml is the gate. fleet-health-check
+# and fleet-snapshot only read, and a gate that blocks diagnosis during an
+# incident gets removed. Note what the exemption costs: fleet-snapshot runs
+# weekly from a timer, so a control node left on a feature branch would take
+# its baseline with whichever command set that branch carries. The trade is
+# deliberate - a snapshot that refuses to run during an outage is worth less
+# than one taken from a tree nobody checked.
 echo "Check 35: state-changing playbooks import the preflight gate"
 
 PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
@@ -1051,7 +1066,7 @@ if [[ -d "${PLAYBOOK_DIR}" ]]; then
         [[ -e "${pb}" ]] || continue
         base="$(basename "${pb}")"
         case "${base}" in
-            preflight.yml|fleet-health-check.yml) continue ;;
+            preflight.yml|fleet-health-check.yml|fleet-snapshot.yml) continue ;;
         esac
         if ! grep -q '^  import_playbook: preflight.yml$' "${pb}"; then
             echo "  Missing preflight import: ansible/playbooks/${base}"
@@ -1145,11 +1160,123 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 38: the alerting table in monitoring.md matches the rules file
+# =============================================================================
+# Added 2026-09-08. `monitoring.md` states in prose that its table *is* the
+# count, after three separate miscounts had been corrected there. On this date
+# the table was two whole groups and five rules behind the file it describes:
+# `backup` and `kernel` had been added and the table never grew. Nothing could
+# see it, because the only mechanised comparison in this area is promtool, which
+# reads the rules file and never opens the document.
+#
+# Compared against the file rather than against the live API on purpose. The
+# repository copy is what `prometheus_config` deploys, so it is the version the
+# documentation is supposed to describe, and the check has to work on a laptop
+# with no route to the fleet.
+echo "Check 38: alerting table matches the rules file"
+
+RULES_FILE="${REPO_ROOT}/docker/monitoring/prometheus/rules/alert.rules.yml"
+MON_DOC="${REPO_ROOT}/docs/platform/monitoring.md"
+
+if [[ -f "${RULES_FILE}" && -f "${MON_DOC}" ]]; then
+    # The table runs from its header to the first blank line after it.
+    doc_table="$(sed -n '/^| Group | Rules |/,/^$/p' "${MON_DOC}")"
+
+    if [[ -z "${doc_table}" ]]; then
+        echo "  No '| Group | Rules |' table found in docs/platform/monitoring.md"
+        echo "x" >> "${ERROR_LOG}"
+    else
+        file_groups="$(grep -oE '^  - name: [a-z_]+' "${RULES_FILE}" | sed 's/.*name: //' | sort -u)"
+        file_rules="$(grep -oE '^      - alert: [A-Za-z]+' "${RULES_FILE}" | sed 's/.*alert: //' | sort -u)"
+        # Group cells are the first backticked word of a row; rule names are the
+        # backticked CamelCase entries anywhere in it.
+        doc_groups="$(grep -oE '^\| `[a-z_]+`' <<< "${doc_table}" | tr -d '|` ' | sort -u)"
+        doc_rules="$(grep -oE '`[A-Z][A-Za-z]+`' <<< "${doc_table}" | tr -d '`' | sort -u)"
+
+        while read -r g; do
+            [[ -z "${g}" ]] && continue
+            echo "  Rule group in ${RULES_FILE#"${REPO_ROOT}/"} but not in the monitoring.md table: ${g}"
+            echo "x" >> "${ERROR_LOG}"
+        done < <(comm -23 <(echo "${file_groups}") <(echo "${doc_groups}"))
+
+        while read -r g; do
+            [[ -z "${g}" ]] && continue
+            echo "  Rule group in the monitoring.md table but not in the rules file: ${g}"
+            echo "x" >> "${ERROR_LOG}"
+        done < <(comm -13 <(echo "${file_groups}") <(echo "${doc_groups}"))
+
+        while read -r r; do
+            [[ -z "${r}" ]] && continue
+            echo "  Alert in ${RULES_FILE#"${REPO_ROOT}/"} but not in the monitoring.md table: ${r}"
+            echo "x" >> "${ERROR_LOG}"
+        done < <(comm -23 <(echo "${file_rules}") <(echo "${doc_rules}"))
+
+        while read -r r; do
+            [[ -z "${r}" ]] && continue
+            echo "  Alert in the monitoring.md table but not in the rules file: ${r}"
+            echo "x" >> "${ERROR_LOG}"
+        done < <(comm -13 <(echo "${file_rules}") <(echo "${doc_rules}"))
+    fi
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 39: a change under docs/ or ansible/ carries a changelog row
+# =============================================================================
+# Added 2026-09-08. The Documentation Audit Rule in CLAUDE.md has required this
+# since the rule was written, and it was the one clause in it that a human had
+# to remember while every neighbouring clause had become a check. The changelog
+# is the only reverse-chronological record of what changed on this platform, so
+# a change that skips it is invisible six weeks later, which is exactly the
+# interval at which this repository keeps rediscovering its own history.
+#
+# Diff-scoped like Check 16, and inert under CI for the same reason: a fresh
+# checkout has no diff, so there is nothing to hold a changelog row against.
+echo "Check 39: changed docs/ or ansible/ carry a changelog row"
+
+cl_changed="$(git -C "${REPO_ROOT}" diff --cached --name-only 2>/dev/null || true)"
+if [[ -z "${cl_changed}" ]]; then
+    cl_changed="$(git -C "${REPO_ROOT}" diff --name-only HEAD 2>/dev/null || true)"
+fi
+
+# Untracked files count too, and this is not a detail: a whole new role or
+# playbook is untracked until it is staged, so a diff-only view would let
+# exactly the largest changes through. Found while writing this check - the
+# first run listed one edited document and none of the five new files beside it.
+cl_untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)"
+if [[ -n "${cl_untracked}" ]]; then
+    cl_changed="$(printf '%s\n%s' "${cl_changed}" "${cl_untracked}" | grep -v '^$' || true)"
+fi
+
+CHANGELOG_REL="docs/platform/changelog.md"
+
+if [[ -z "${cl_changed}" ]]; then
+    echo "  SKIP: no diff against HEAD"
+else
+    # The changelog itself is under docs/, so it must not count as its own trigger.
+    cl_trigger="$(grep -E '^(docs|ansible)/' <<< "${cl_changed}" | grep -vFx "${CHANGELOG_REL}" || true)"
+    if [[ -z "${cl_trigger}" ]]; then
+        echo "  SKIP: no changes under docs/ or ansible/"
+    elif grep -qFx "${CHANGELOG_REL}" <<< "${cl_changed}"; then
+        echo "  OK: changelog row present alongside $(wc -l <<< "${cl_trigger}") changed path(s)"
+    else
+        echo "  ${CHANGELOG_REL} unchanged while these were modified:"
+        sed 's/^/    /' <<< "${cl_trigger}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 37"
+echo "Checks run: 39"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
