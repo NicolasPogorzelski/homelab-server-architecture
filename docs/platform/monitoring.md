@@ -63,9 +63,11 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   three times in a row: "15" while the table listed 16, then "17" while the file and the live
   Prometheus both held 19 in 8 groups - the `storage` group had grown by two and the prose was not
   recounted. A number in prose beside a table that already contains it has no owner and only one
-  possible future. It is gone rather than corrected. The `smart` group is present in the rules file
-  and deliberately empty, which is why the Prometheus API returns one group fewer than the file
-  defines.
+  possible future. It is gone rather than corrected. The table then drifted the same way: on
+  2026-09-08 it sat two groups and five rules behind the file, never having grown with `backup`
+  and `kernel`. Check 38 holds the two lists against each other on every run. The `smart` group
+  is present in the rules file and deliberately empty, which is why the Prometheus API returns
+  one group fewer than the file defines.
 
 | Group | Rules |
 |---|---|
@@ -75,6 +77,10 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
+| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing` |
+| `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
+| `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified` |
+| `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
 | `blackbox` | `ServiceDown` |
 | `smart` | *(empty - the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
@@ -90,6 +96,18 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   host-is-off blind spot as the PostgreSQL rule above, for the same structural reason. It covers
   Nextcloud's own database, which the nightly `pg_dumpall` never touched - a gap that existed
   unnoticed until the 2026-08-15 data classification looked for it.
+- `FleetSnapshotStale` / `FleetSnapshotIncomplete` are written by `fleet-snapshot.yml` into the
+  textfile collector on lxc250 (see the [`fleet_snapshot` role](ansible.md)). The snapshot records
+  what no role owns - listening sockets, locally-defined unit files, root crontabs, mounts and
+  running images - because an `ansible-playbook --check` sweep can only report on state a role
+  already manages. Measured 2026-09-08: `ssh-hardening.yml --check` calls vm100 clean while its
+  sshd listens on the wildcard address.
+- The `drift` group is written by `fleet-drift.sh` on lxc250 (see the [`fleet_drift` role](ansible.md)).
+  It answers the question the repository checks cannot: `validate-repo.sh` compares documents
+  against files, and this compares files against nodes. Measured 2026-09-08, all 39 repository
+  checks passed while thirteen playbooks reported drift on the live fleet. `FleetRulesMismatch`
+  reaches one layer further still, comparing the alert names Prometheus has loaded against the
+  rules file here - a deployed-but-not-reloaded file is the [KE-16](known-errors.md#ke-16) shape.
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
 
 ## Failure / Dependency Notes

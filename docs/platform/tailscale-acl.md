@@ -360,6 +360,74 @@ Both approaches are valid; choose per service based on operational needs.
 
 ---
 
+## Policy Tests
+
+The tailnet policy file is HuJSON and accepts a `tests` block. Each entry names a source
+identity and lists destinations that must be reachable and destinations that must not be;
+when an assertion fails, Tailscale rejects the edited policy on save rather than applying it.
+
+That turns the access matrix above from a description into something enforced. Until
+2026-09-08 this model was verified exactly once, by hand, with eight TCP probes during the
+2026-08-17 audit - and every rule change since then has been unverified in the sense that
+nothing re-ran those probes. The block below is those probes written as assertions, extended
+to cover the denials the matrix implies. It is proposed rather than deployed: the policy lives
+in the admin console, so this is applied by pasting it there, and the save itself is the test
+run.
+
+Deny assertions carry the weight here. An allow that breaks announces itself the next time
+somebody uses the service; a deny that breaks is silent, and the tier model exists precisely
+to stop `tag:tier2` from reaching the database and `tag:untrusted` from reaching anything on
+`tag:tier1`.
+
+```json
+"tests": [
+    {
+        "src": "tag:tier2",
+        "deny": ["tag:database:5432", "tag:tier1:443", "tag:monitoring:9090"],
+        "accept": ["tag:storage:445"]
+    },
+    {
+        "src": "tag:tier1",
+        "deny": ["tag:tier2:443", "tag:admin:11434"],
+        "accept": ["tag:database:5432", "tag:storage:445"]
+    },
+    {
+        "src": "tag:untrusted",
+        "deny": ["tag:tier1:443", "tag:storage:445", "tag:database:5432"],
+        "accept": ["tag:tier2:443", "gpu-vm:8096"]
+    },
+    {
+        "src": "tag:client",
+        "deny": ["tag:storage:445", "tag:database:5432"],
+        "accept": ["tag:tier1:443", "tag:tier2:443", "gpu-vm:8096"]
+    },
+    {
+        "src": "tag:monitoring",
+        "deny": ["tag:database:5432", "tag:storage:445"],
+        "accept": ["tag:database:9187", "tag:database:9100", "tag:tier1:9100", "tag:admin:9100"]
+    },
+    {
+        "src": "tag:ai-stack",
+        "deny": ["tag:tier1:443", "tag:tier2:443"],
+        "accept": ["tag:database:5432", "tag:admin:11434", "tag:storage:445"]
+    },
+    {
+        "src": "tag:database",
+        "deny": ["tag:storage:445", "tag:admin:22", "tag:tier1:443"]
+    },
+    {
+        "src": "tag:admin",
+        "accept": ["tag:tier0:22", "tag:tier1:443", "tag:database:5432", "tag:storage:445", "tag:monitoring:9093"]
+    }
+]
+```
+
+Two limits worth stating. The tests check the policy, not the fleet: a service that binds the
+wrong address is still reachable by anything the kernel lets through, which is why
+[`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md) had to answer port 445
+one layer further down. And a tag with no node carrying it passes every assertion about it
+without ever being exercised.
+
 ## Documentation Rule
 
 Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" section and reference this document.

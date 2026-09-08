@@ -1,0 +1,14 @@
+---
+# Sunday morning, ahead of lxc-fstrim.timer at 10:30 and guest-backup at 11:00.
+# The snapshot is meant to describe the week that was, so it runs before the
+# jobs that rewrite state, and it stays clear of the backup's disk load.
+fleet_snapshot_on_calendar: "Sun *-*-* 09:00:00"
+fleet_snapshot_randomized_delay: "300"
+
+# The control node runs the playbook against the whole inventory, so the unit
+# needs the repository, the interpreter and the vault password that only exist
+# on this node.
+fleet_snapshot_user: devops
+fleet_snapshot_repo: /home/devops/git/homelab-server-architecture
+fleet_snapshot_playbook: playbooks/fleet-snapshot.yml
+fleet_snapshot_path: /home/devops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

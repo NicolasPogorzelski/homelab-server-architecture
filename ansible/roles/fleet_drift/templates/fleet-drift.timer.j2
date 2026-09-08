@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Weekly drift sweep of the repository against the fleet
+
+[Timer]
+OnCalendar={{ fleet_drift_on_calendar }}
+# The host is powered down most of the night and every Sunday is a slot that can
+# be missed entirely. Persistent=true runs the overdue sweep at the next boot.
+Persistent=true
+RandomizedDelaySec={{ fleet_drift_randomized_delay }}
+
+[Install]
+WantedBy=timers.target

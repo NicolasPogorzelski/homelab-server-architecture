@@ -1,0 +1,218 @@
+---
+# Record the unmanaged surface of every node, and diff it against the last run.
+#
+# Why this exists next to the `--check` drift sweep rather than instead of it:
+# `ansible-playbook --check` can only report on state a role already owns. It
+# says nothing about what nobody deploys, and that is where this platform's
+# worst findings have come from - the hand-written `node_exporter` on lxc250
+# that bound `*:9100` for four months while `systemctl is-active` answered
+# `active`, the second `tailscaled` on lxc220, the wildcard sshd binds that no
+# playbook manages. Measured 2026-09-08: `ssh-hardening.yml --check` reports
+# vm100 clean while vm100's sshd listens on `0.0.0.0:22`.
+#
+# So the projections below are chosen for what no role would notice: which
+# addresses are listened on, which unit files exist locally, what root's crontab
+# still holds, what is mounted, which images are running.
+#
+# Every projection is normalised - sorted, with clocks and counters removed - so
+# that a diff carries only what changed. `systemctl list-timers` is deliberately
+# absent: its output is four volatile time columns, and which timers exist is
+# already covered by the unit-file projection.
+#
+# Read-only throughout, which is why no preflight gate is imported - the same
+# reasoning as fleet-health-check.yml.
+- name: Collect the per-node snapshot
+  hosts: all
+  gather_facts: false
+  become: true
+
+  tasks:
+    # Ports at or above the ephemeral range are dropped. Tailscale's peerapi
+    # picks a fresh one per start, so keeping them would put one changed line
+    # per node into every diff and train the reader to skim. Every service this
+    # platform runs listens below 32768; measured 2026-09-08, the fifteen ports
+    # above it were all transient.
+    - name: Read the listening sockets
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          ss -H -tln | awk '{print $4}'
+          | awk -F: '$NF < 32768' | sort -u
+        executable: /bin/bash
+      register: fs_listen
+      changed_when: false
+      failed_when: false
+
+    - name: Read enabled and masked unit files
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          systemctl list-unit-files --state=enabled,masked --no-pager --no-legend
+          | awk '{print $1, $2}' | sort
+        executable: /bin/bash
+      register: fs_units
+      changed_when: false
+      failed_when: false
+
+    # The highest-value line here. A unit file under /etc/systemd/system that no
+    # role writes is, by definition, something a rebuild would lose and a sweep
+    # would miss. Symlinks are labelled because a mask is a link to /dev/null and
+    # an enablement is a link into the unit directory - the same filename means
+    # different things.
+    - name: List locally-defined unit files
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          find /etc/systemd/system -maxdepth 1 \( -name '*.service' -o -name '*.timer'
+          -o -name '*.path' -o -name '*.mount' -o -name '*.socket' \)
+          -printf '%f %y\n' 2>/dev/null | sort
+        executable: /bin/bash
+      register: fs_local_units
+      changed_when: false
+      failed_when: false
+
+    - name: Read root's crontab
+      ansible.builtin.shell:
+        cmd: set -o pipefail; crontab -l -u root 2>/dev/null | grep -vE '^\s*(#|$)' | sort || true
+        executable: /bin/bash
+      register: fs_crontab
+      changed_when: false
+      failed_when: false
+
+    # Container overlay mounts are excluded: their paths carry the container ID,
+    # so every restart rewrites them and thirteen lines of hash churn would bury
+    # the mount that actually moved. What matters here is the persistent mount
+    # table - CIFS shares, bind mounts, the archive pool.
+    - name: Read the mount table
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          findmnt -rno TARGET,SOURCE,FSTYPE
+          | grep -vE 'overlay|nsfs|[0-9a-f]{32}' | sort
+        executable: /bin/bash
+      register: fs_mounts
+      changed_when: false
+      failed_when: false
+
+    - name: Read the running container images
+      ansible.builtin.shell:
+        cmd: set -o pipefail; docker ps --format '{{ "{{.Names}} {{.Image}}" }}' 2>/dev/null | sort || true
+        executable: /bin/bash
+      register: fs_docker
+      changed_when: false
+      failed_when: false
+      when: "'docker' in group_names"
+
+    - name: Assemble this node's snapshot
+      ansible.builtin.set_fact:
+        fs_snapshot: |
+          [listen]
+          {{ fs_listen.stdout | default('') }}
+          [unit-files]
+          {{ fs_units.stdout | default('') }}
+          [local-units]
+          {{ fs_local_units.stdout | default('') }}
+          [crontab]
+          {{ fs_crontab.stdout | default('') }}
+          [mounts]
+          {{ fs_mounts.stdout | default('') }}
+          [containers]
+          {{ fs_docker.stdout | default('') }}
+
+- name: Store and diff the snapshot on the control node
+  hosts: lxc250
+  gather_facts: true
+  become: true
+
+  vars:
+    fs_root: /var/lib/fleet-snapshot
+    # node_exporter_textfile_dir is a role default and roles are not in scope
+    # here, so the path is resolved from an inventory override if one exists
+    # and falls back to the fleet-wide default otherwise.
+    fs_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
+    # Hosts that answered. A host that did not is recorded as a count rather
+    # than dropped: a snapshot missing three nodes must not read as a clean one,
+    # which is the failure shape this platform has already met in
+    # PostgreSQLBackupStale and in its own host exporter.
+    fs_reached: "{{ groups['all'] | map('extract', hostvars) | selectattr('fs_snapshot', 'defined') | list | length }}"
+    fs_expected: "{{ groups['all'] | length }}"
+
+  tasks:
+    - name: Ensure the snapshot directories exist
+      ansible.builtin.file:
+        path: "{{ fs_root }}/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - current
+        - previous
+
+    - name: Rotate the previous snapshot
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          rm -rf {{ fs_root }}/previous &&
+          cp -a {{ fs_root }}/current {{ fs_root }}/previous
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Write each node's snapshot
+      ansible.builtin.copy:
+        content: "{{ hostvars[item].fs_snapshot | default('[unreachable]\n') }}"
+        dest: "{{ fs_root }}/current/{{ item }}.txt"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ groups['all'] }}"
+
+    - name: Diff the two snapshots
+      ansible.builtin.shell:
+        cmd: >-
+          diff -ru {{ fs_root }}/previous {{ fs_root }}/current
+          > {{ fs_root }}/diff.txt 2>&1; true
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Count the changed lines
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          grep -cE '^[+-][^+-]' {{ fs_root }}/diff.txt || true
+        executable: /bin/bash
+      register: fs_diff_lines
+      changed_when: false
+
+    # Written to the textfile collector rather than reported, so that a run which
+    # stops happening is visible without anyone opening the directory. There is
+    # deliberately no alert on the changed-line count: drift here is expected
+    # weekly and an alert nobody can clear becomes the permanent red this
+    # repository's rules are written to avoid. What is alerted on is the run
+    # going stale and the snapshot being incomplete.
+    - name: Publish the snapshot metrics
+      ansible.builtin.copy:
+        content: |
+          # HELP fleet_snapshot_last_run_timestamp_seconds Unix time of the last completed fleet snapshot.
+          # TYPE fleet_snapshot_last_run_timestamp_seconds gauge
+          fleet_snapshot_last_run_timestamp_seconds {{ ansible_date_time.epoch }}
+          # HELP fleet_snapshot_changed_lines Added or removed lines between the last two snapshots.
+          # TYPE fleet_snapshot_changed_lines gauge
+          fleet_snapshot_changed_lines {{ fs_diff_lines.stdout | trim | default(0, true) }}
+          # HELP fleet_snapshot_hosts_expected Hosts in the inventory at snapshot time.
+          # TYPE fleet_snapshot_hosts_expected gauge
+          fleet_snapshot_hosts_expected {{ fs_expected }}
+          # HELP fleet_snapshot_hosts_recorded Hosts that answered and produced a snapshot.
+          # TYPE fleet_snapshot_hosts_recorded gauge
+          fleet_snapshot_hosts_recorded {{ fs_reached }}
+        dest: "{{ fs_textfile_dir }}/fleet-snapshot.prom"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Report the outcome
+      ansible.builtin.debug:
+        msg:
+          - "hosts recorded:  {{ fs_reached }} of {{ fs_expected }}"
+          - "changed lines:   {{ fs_diff_lines.stdout | trim }}"
+          - "diff:            {{ fs_root }}/diff.txt"

@@ -1,0 +1,18 @@
+---
+# Installs the weekly drift sweep on the control node.
+#
+# The sweep compares this repository against the running fleet: every playbook in
+# ansible/drift-sweep.conf in check mode, plus the alert rules Prometheus has
+# actually loaded against the rules file here. It is the counterpart to
+# fleet-snapshot.yml, which records the surface no role manages at all.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Schedule the weekly drift sweep on the control node
+  hosts: lxc250
+  become: true
+  roles:
+    - fleet_drift
