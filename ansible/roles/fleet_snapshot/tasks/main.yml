@@ -1,0 +1,58 @@
+---
+# The role installs the schedule; the playbook it starts is the deliverable and
+# lives under ansible/playbooks/. Nothing is copied to /usr/local/sbin, because
+# the thing being scheduled is a playbook in the working tree rather than a
+# script - which is also the one caveat worth knowing: a control node parked on
+# a feature branch would take its weekly snapshot with a different command set
+# and quietly move the baseline. preflight.yml cannot help here, since a
+# read-only playbook must stay runnable during an incident.
+
+- name: Refuse to schedule the snapshot without its playbook
+  ansible.builtin.stat:
+    path: "{{ fleet_snapshot_repo }}/ansible/{{ fleet_snapshot_playbook }}"
+  register: fleet_snapshot_pb
+  check_mode: false
+
+- name: Assert the playbook is present
+  ansible.builtin.assert:
+    that:
+      - fleet_snapshot_pb.stat.exists
+    fail_msg: >-
+      {{ fleet_snapshot_playbook }} is missing under {{ fleet_snapshot_repo }}/ansible.
+      Scheduling the timer now would install a job that fails every week.
+    success_msg: "Snapshot playbook present - safe to schedule."
+
+- name: Create the snapshot directory
+  ansible.builtin.file:
+    path: /var/lib/fleet-snapshot
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the snapshot service unit
+  ansible.builtin.template:
+    src: fleet-snapshot.service.j2
+    dest: /etc/systemd/system/fleet-snapshot.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the snapshot timer unit
+  ansible.builtin.template:
+    src: fleet-snapshot.timer.j2
+    dest: /etc/systemd/system/fleet-snapshot.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so the timer starts against the current unit
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the snapshot timer
+  ansible.builtin.systemd_service:
+    name: fleet-snapshot.timer
+    enabled: true
+    state: started

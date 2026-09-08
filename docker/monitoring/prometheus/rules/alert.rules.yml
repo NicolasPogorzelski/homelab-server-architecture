@@ -319,6 +319,109 @@ groups:
     # stopped the host from reporting it. The general fix is the external
     # heartbeat in remediation-plan.md Tier 4, not a different threshold here.
 
+  - name: snapshot
+    rules:
+      # The weekly snapshot of the fleet's unmanaged surface. Fourteen days is one
+      # missed Sunday plus margin: the host sleeps nightly and the timer carries
+      # Persistent=true, so a Sunday spent powered down is made up at the next
+      # boot and a tighter threshold would fire on an ordinary catch-up.
+      - alert: FleetSnapshotStale
+        expr: (time() - fleet_snapshot_last_run_timestamp_seconds) > 1209600
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fleet snapshot is stale"
+          description: "No fleet snapshot has completed for more than 14 days. Nothing is comparing the fleet's listening sockets, local unit files, crontabs and mounts against last week's."
+
+      # A snapshot taken while three nodes were unreachable records those three as
+      # empty and writes that as the new baseline; next week their real state
+      # returns and reads as fresh drift. Worse, the run in between looks clean.
+      # This is the guard-cannot-measure case stated as a metric rather than left
+      # to whoever opens the diff.
+      - alert: FleetSnapshotIncomplete
+        expr: fleet_snapshot_hosts_recorded < fleet_snapshot_hosts_expected
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fleet snapshot covered {{ $value }} of the expected hosts"
+          description: "At least one inventory host did not answer during the last snapshot. Its file reads [unreachable], which is deliberately not the same as an empty one."
+
+    # There is deliberately no rule on fleet_snapshot_changed_lines. Drift here is
+    # the expected weekly output, not a fault, and an alert that nobody can clear
+    # by acting on it becomes the permanent red that Check 23's rationale in
+    # CLAUDE.md argues against. The metric is exported so the count is visible in
+    # a dashboard and in the review; the judgement about whether a change matters
+    # stays with the person reading the diff.
+
+  - name: drift
+    rules:
+      # The weekly sweep runs every playbook in ansible/drift-sweep.conf with
+      # --check and counts the tasks that would change. `unexpected` is that
+      # count minus the baseline in the same file, so drift held on purpose - the
+      # hypervisor's hand-written sshd drop-in, its node_exporter, the unapplied
+      # homelab_schedule - does not keep this permanently red. Anything above the
+      # baseline is a node running something the repository does not describe.
+      - alert: FleetDriftUnexpected
+        expr: fleet_drift_unexpected_total > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} task(s) drifted beyond the recorded baseline"
+          description: "The weekly check-mode sweep found changes no baseline entry accounts for. Read /var/lib/fleet-drift/report.txt on lxc250 for the playbook and host."
+
+      # Fourteen days is one missed Sunday plus margin, matching the snapshot rule
+      # beside it: the host sleeps nightly and Persistent=true makes an overdue
+      # sweep run at the next boot rather than at the scheduled minute.
+      - alert: FleetDriftStale
+        expr: (time() - fleet_drift_last_run_timestamp_seconds) > 1209600
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drift sweep is stale"
+          description: "No check-mode sweep has completed for more than 14 days. Nothing is comparing the repository against what the fleet runs."
+
+      # A sweep that could not run half its playbooks reports little drift and
+      # looks reassuring. The count of what could not be measured therefore gets
+      # its own rule rather than a line in a report nobody opens.
+      - alert: FleetDriftIncomplete
+        expr: (fleet_drift_playbooks_errored > 0) or (fleet_drift_hosts_unreachable > 0)
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drift sweep could not measure everything"
+          description: "At least one playbook produced no usable recap, or a host was unreachable. The drift figures from this run are a lower bound, not a result."
+
+      # The layer a check run cannot reach. prometheus_config promotes the rules
+      # file and reloads; if that reload failed, the file on disk matches the
+      # repository while the rules in memory are the previous set - the shape of
+      # KE-16, where a renewed certificate sat on disk beside the expired one
+      # Apache was still serving.
+      - alert: FleetRulesMismatch
+        expr: fleet_drift_rules_mismatch > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} alert name(s) differ between the repository and Prometheus"
+          description: "The alert rules Prometheus has loaded are not the rules this repository holds. Either the rules file was never deployed, or it was deployed and the reload did not take."
+
+      # Distinct from the rule above on purpose: that one means the comparison ran
+      # and found a difference, this one means it never ran. Absence of a mismatch
+      # is not agreement.
+      - alert: FleetRulesUnverified
+        expr: fleet_drift_rules_check_ok == 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loaded alert rules could not be compared"
+          description: "The last sweep could not read /api/v1/rules from the monitoring node, so nothing is checking that Prometheus loaded what the repository holds."
+
   - name: kernel
     rules:
       # Added 2026-08-20 after a kernel oops cascade wedged the hypervisor for

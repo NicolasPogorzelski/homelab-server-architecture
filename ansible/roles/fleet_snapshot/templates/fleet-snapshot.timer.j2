@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Weekly fleet snapshot
+
+[Timer]
+OnCalendar={{ fleet_snapshot_on_calendar }}
+# The host powers down nightly, so a Sunday on which it never came up would
+# otherwise skip the week without trace - the defect that lost every PostgreSQL
+# backup between 2026-06-14 and 2026-07-10.
+Persistent=true
+RandomizedDelaySec={{ fleet_snapshot_randomized_delay }}
+
+[Install]
+WantedBy=timers.target

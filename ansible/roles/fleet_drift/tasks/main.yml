@@ -1,0 +1,61 @@
+---
+- name: Refuse to schedule the sweep without its configuration
+  ansible.builtin.stat:
+    path: "{{ fleet_drift_repo }}/ansible/drift-sweep.conf"
+  register: fleet_drift_conf
+  check_mode: false
+
+- name: Assert the sweep configuration is present
+  ansible.builtin.assert:
+    that:
+      - fleet_drift_conf.stat.exists
+    fail_msg: >-
+      ansible/drift-sweep.conf is missing under {{ fleet_drift_repo }}. The sweep
+      reads its playbook list and its baseline from that file and would otherwise
+      install a timer that exits 1 every Sunday.
+    success_msg: "Sweep configuration present - safe to schedule."
+
+# Owned by the sweep's user, because the script writes both its report and its
+# metric here. The metric is moved into the collector afterwards by the unit.
+- name: Create the report directory
+  ansible.builtin.file:
+    path: "{{ fleet_drift_report_dir }}"
+    state: directory
+    owner: "{{ fleet_drift_user }}"
+    group: "{{ fleet_drift_user }}"
+    mode: "0755"
+
+- name: Deploy the drift sweep script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../snippets/scripts/fleet-drift.sh"
+    dest: "{{ fleet_drift_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the drift service unit
+  ansible.builtin.template:
+    src: fleet-drift.service.j2
+    dest: /etc/systemd/system/fleet-drift.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the drift timer unit
+  ansible.builtin.template:
+    src: fleet-drift.timer.j2
+    dest: /etc/systemd/system/fleet-drift.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so the timer starts against the current unit
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the drift timer
+  ansible.builtin.systemd_service:
+    name: fleet-drift.timer
+    enabled: true
+    state: started

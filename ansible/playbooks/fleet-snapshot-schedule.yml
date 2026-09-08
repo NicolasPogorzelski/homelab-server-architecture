@@ -1,0 +1,17 @@
+---
+# Installs the weekly schedule for fleet-snapshot.yml on the control node.
+#
+# Split from the snapshot playbook itself on purpose: one of the two changes
+# state and the other must stay runnable at any moment, including from a dirty
+# tree during an incident. Only this one carries the gate.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Schedule the weekly fleet snapshot on the control node
+  hosts: lxc250
+  become: true
+  roles:
+    - fleet_snapshot

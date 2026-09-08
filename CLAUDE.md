@@ -290,7 +290,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 37 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, and changelog rows longer than an index line.
+This script enforces 39 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, changelog rows longer than an index line, alerting tables that no longer match the rules file, and changes under `docs/` or `ansible/` that carry no changelog row.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -345,6 +345,34 @@ prefix rule never sees. It answers `permissionDecision: deny`, which blocks the 
 the session alive, rather than `continue: false`, which ends the turn.
 
 Global hooks (e.g. 15-minute learning rule) live in `~/.claude/settings.json` - versioned in the `dotfiles` repo.
+
+## Claude Code Subagents
+
+Agent definitions live in `.claude/agents/*.md` and are tracked in git - `.gitignore` excludes
+`.claude/*` and opts these back in. That is deliberate and is the one difference from the hooks
+above: an agent definition carries no machine-specific path, so it can be reviewed in a diff
+instead of being assumed from a table, which is the failure the hooks section describes.
+
+| Agent | Reads | Purpose |
+|---|---|---|
+| `ke-classifier` | `known-errors.md`, remediation plan | Before a new entry: does this failure class already exist, and where |
+| `prose-tics` | any document in scope | Register faults no check can express - repeated moulds, maxims, punchlines |
+| `state-claims` | documents plus live fleet | Present-tense claims that measurement contradicts |
+| `handover` | git and fleet state | The end-of-session handover in the shape this file specifies |
+
+Three rules apply to all of them and belong in every future definition.
+
+- **No agent is the mechanism of a control.** An agent may not run, may answer plausibly wrong,
+  and leaves no metric behind - the same shape as `PostgreSQLBackupStale` during an outage and
+  the host exporter that could not report its own death. What decides is a timer, a metric and a
+  rule. What an agent does is propose, classify and draft.
+- **Every report separates "measured and clean" from "not measurable".** A node that did not
+  answer gets its own line. Absence of a finding is not a finding.
+- **Least privilege in the `tools:` field.** Omitting it grants the full tool list. Three of the
+  four above are `Read, Grep, Glob` and nothing else.
+
+Before reaching for an agent, try writing the task as a comparison. Checks 38 and 39 exist
+because two tasks that looked like judgement turned out to be `comm` and `git diff`.
 
 ## Repository Structure
 

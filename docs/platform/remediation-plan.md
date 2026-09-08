@@ -142,6 +142,43 @@ open incident whose suspected cause is exactly the control nobody documented. Ch
 paper, and the paper is what makes the KE-14 verification a planned step instead of a recurring
 intention.
 
+**Fifteen drifted tasks across ten playbooks, first measured 2026-09-08.** The weekly sweep
+(`fleet_drift`) ran all 25 configured playbooks against eleven nodes in 4.3 minutes with no failure
+and no unreachable host. Twenty-three tasks would change; eight of those are the three held items
+now recorded in `ansible/drift-sweep.conf`, leaving fifteen that nothing accounts for:
+
+| Playbook | Node | Tasks |
+|---|---|---|
+| `breakglass` | vm100, vm102 | 2 |
+| `calibre-import` | lxc220 | 1 |
+| `guest-backup` | proxmox-host | 1 |
+| `jellyfin-watchdog` | vm100 | 2 |
+| `mariadb-backup` | lxc210 | 1 |
+| `paperless-env` | lxc211 | 1 |
+| `pg-backup` | lxc260 | 2 |
+| `pg-restore-test` | lxc260 | 2 |
+| `postgres-exporter` | lxc260 | 2 |
+| `tailscale-cert` | lxc210 | 1 |
+
+Two were opened and both were cosmetic: a deployed `pg-backup.timer` still carrying an em dash the
+repository replaced during the ASCII pass, and `breakglass` differing only in the labels beside two
+otherwise identical public keys. That is not evidence about the other eight, and `paperless-env` on
+lxc211 is known to be a real unapplied fix. The work is to read each diff, apply what should be
+applied, and move to the baseline only what is a decision with a reason written next to it. Until
+that is done `FleetDriftUnexpected` fires, which is the intended first output of the sweep rather
+than a defect in it.
+
+**MagicDNS does not resolve on lxc250 (found 2026-09-08).** Any tooling on the control node that
+addresses a node by its `.ts.net` name fails. The ACL is not the cause: the node holds `tag:admin`
+and reaches every port. `systemd-resolved` is active, `/etc/nsswitch.conf` consults `resolve`
+before `dns`, resolved knows nothing of the Tailscale resolver, and `[!UNAVAIL=return]` ends the
+lookup before `/etc/resolv.conf` - which tailscaled had written correctly, with the right nameserver
+and search domain - is ever consulted. A direct UDP query to the MagicDNS resolver answers.
+`fleet-drift.sh` works around it with `curl --resolve`, which keeps SNI and certificate verification
+intact. The durable fix is a choice between pointing resolved at the Tailscale resolver and taking
+resolved out of the path on these containers, and it wants its own decision: the same nsswitch
+ordering is on every Debian container here.
+
 **Small open items.** A few lines each, collected because none of them blocks anything else.
 
 - ~~The lxc250 `preflight.yml` gate~~ Done 2026-09-01, imported by every playbook that changes live
@@ -153,7 +190,18 @@ intention.
   the control node. `ssh_hardening` gained a task on 2026-07-08 that never reached seven of ten
   nodes, and nothing reported it for eight weeks ([KE-23](known-errors.md#ke-23)). The item is now
   a scheduled `--check` run across the state-changing playbooks, exporting the `changed` counts as
-  a textfile metric with a rule that fires above zero.
+  a textfile metric with a rule that fires above zero. **Measured 2026-09-08:** six playbooks
+  across eleven nodes, 115 s, `rc=0` throughout, three drifts - `ssh_hardening` and
+  `node_exporter` on the Proxmox host (both already recorded here) and the `systemd_hygiene`
+  masking lxc250 never received, which nothing knew about. Three findings the run cannot make
+  by itself. The exit code is not the signal: every run returned 0, drift or not, so the
+  `changed=` counters in the recap are the only source. A `--check` run is not uniformly
+  read-only: nine roles carry `check_mode: false`, seven of them read-only queries, while
+  `prometheus_config` writes a staged file and runs promtool and `netconsole` sends a ping.
+  And the two host drifts are held on purpose, so a rule on `changed > 0` would be red from
+  the first day - the item needs a per-playbook baseline, or the held items closed, before it
+  can be armed. The complementary half is built: `fleet_snapshot` covers what no role manages,
+  which is where `--check` is blind by construction.
 - Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`. The value is already
   `prohibit-password` and the file already exists; the run replaces a hand-written comment block
   with the role's, so the gain is ownership rather than configuration. Held for a window with a
@@ -167,6 +215,9 @@ intention.
   spellings of one readiness gate, one of which hardcodes an address.
 - `SystemdUnitFailed` coverage for lxc200, the last node without it; its exporter is a container
   that cannot see the host's systemd. lxc250 was the second until 2026-08-20.
+- `fleet-snapshot.yml` runs `become: true` against every node once a week. Two of its six
+  projections need it - the root crontab and `docker ps` - and the other four do not. Splitting
+  the play would drop a recurring privileged read across the fleet to two tasks.
 - Clear the orphaned `smart.prom.*` temporary files from the host's textfile directory. The
   collector leaks one per failed run because its `mktemp` has no cleanup trap, and the script is the
   only hand-deployed host script with no copy under `snippets/`.
