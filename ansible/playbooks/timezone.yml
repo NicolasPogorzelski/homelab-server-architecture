@@ -1,0 +1,18 @@
+---
+# Give every node the same timezone, and take the setting out of ambient state.
+#
+# Set by hand this would fix eleven instances and leave the class open: a
+# rebuilt Debian container returns as Etc/UTC and nothing reports it. The role
+# owns it instead, and asserts the node actually took the change rather than
+# trusting the module's return value.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Give every node one timezone
+  hosts: all
+  become: true
+  roles:
+    - timezone

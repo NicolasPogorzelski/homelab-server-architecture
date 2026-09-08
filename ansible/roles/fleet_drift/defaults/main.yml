@@ -2,7 +2,10 @@
 # Half an hour after the snapshot, which takes about 25 seconds, and well before
 # lxc-fstrim.timer at 10:30. The sweep itself ran 25 playbooks across eleven
 # nodes in 4.3 minutes when it was measured on 2026-09-08.
-fleet_drift_on_calendar: "Sun *-*-* 09:30:00"
+#
+# The zone is named for the reason given in the fleet_snapshot role's defaults:
+# this node keeps UTC and the jobs this schedule is ordered against do not.
+fleet_drift_on_calendar: "Sun *-*-* 09:30:00 Europe/Berlin"
 fleet_drift_randomized_delay: "300"
 
 # The sweep runs as the owner of the checkout, not as root. git refuses to

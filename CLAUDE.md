@@ -74,9 +74,14 @@ notes there and keep this section short.
   a full-cluster restore into a throwaway cluster on port 5433 runs monthly via the
   `postgresql_restore_test` role (`*-*-01 09:00`, `Persistent=true`), asserting dump integrity,
   restore success and non-empty key tables, with `PostgreSQLRestoreTestStale` alerting at 40 days.
-  Nothing live is touched. The 09:00 slot is load-bearing: the restored cluster holds ~150 MB
-  of thin-pool blocks and a container cannot `fstrim` itself, so it relies on the host's
-  `lxc-fstrim.timer` at 10:30 to reclaim them the same morning.
+  Nothing live is touched. The 09:00 slot was called load-bearing here, on the grounds that
+  the restored cluster holds ~150 MB of thin-pool blocks, a container cannot `fstrim` itself, and
+  the host's `lxc-fstrim.timer` at 10:30 reclaims them the same morning. **Measured 2026-09-08,
+  the ordering runs the other way.** lxc260 keeps `Etc/UTC` and the hypervisor keeps
+  `Europe/Berlin`, so the restore test fires at 09:04 UTC, which is 11:04 local, while fstrim
+  fires at 10:38 local - twenty-six minutes earlier. The blocks are reclaimed the following
+  morning. Nothing has gone wrong and the pool is watched, but the dependency as stated does not
+  hold, and the remedy is a zone in the calendar expression rather than a different hour.
   **Write-time verification closed 2026-08-14.** `pg-backup.sh` now writes to `*.sql.gz.partial`
   and renames only after three checks pass - non-empty, `gzip -t`, and exactly one
   `cluster dump complete` marker - with verification ordered before retention deletion,

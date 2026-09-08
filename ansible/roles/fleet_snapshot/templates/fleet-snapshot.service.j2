@@ -17,7 +17,7 @@ WorkingDirectory={{ fleet_snapshot_repo }}/ansible
 Environment=PATH={{ fleet_snapshot_path }}
 # ansible.cfg already points at ./inventory/hosts.yml and ~/.vault_pass; both
 # exist only for this user on this node.
-ExecStart=ansible-playbook {{ fleet_snapshot_playbook }}
+ExecStart={{ fleet_snapshot_playbook_bin }} {{ fleet_snapshot_playbook }}
 # A snapshot that hangs on one unreachable node must not hold the timer open
 # until the next week's run.
 TimeoutStartSec=1800

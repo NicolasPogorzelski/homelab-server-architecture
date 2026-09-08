@@ -198,7 +198,7 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 34 and 28 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 35 and 29 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 39 structural checks, run by a pre-commit
   hook and by CI on every push

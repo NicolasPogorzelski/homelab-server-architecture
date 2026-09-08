@@ -2,7 +2,13 @@
 # Sunday morning, ahead of lxc-fstrim.timer at 10:30 and guest-backup at 11:00.
 # The snapshot is meant to describe the week that was, so it runs before the
 # jobs that rewrite state, and it stays clear of the backup's disk load.
-fleet_snapshot_on_calendar: "Sun *-*-* 09:00:00"
+#
+# The zone is part of the expression and is not decoration. lxc250 runs Etc/UTC
+# while the hypervisor those two jobs live on runs Europe/Berlin, so a bare
+# "09:00" here fires at 11:00 local - the minute vzdump starts. Measured
+# 2026-09-08, that is exactly what the first deployment did. Naming the zone
+# also survives the daylight-saving change, which a fixed UTC hour would not.
+fleet_snapshot_on_calendar: "Sun *-*-* 09:00:00 Europe/Berlin"
 fleet_snapshot_randomized_delay: "300"
 
 # The control node runs the playbook against the whole inventory, so the unit
@@ -12,3 +18,8 @@ fleet_snapshot_user: devops
 fleet_snapshot_repo: /home/devops/git/homelab-server-architecture
 fleet_snapshot_playbook: playbooks/fleet-snapshot.yml
 fleet_snapshot_path: /home/devops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Absolute, because systemd resolves a bare ExecStart name against a fixed list of four
+# directories and deliberately ignores the unit's own Environment=PATH. The first deployment
+# used the bare name and the service died with status 203/EXEC before it reached a task.
+fleet_snapshot_playbook_bin: /home/devops/.local/bin/ansible-playbook

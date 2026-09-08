@@ -1,0 +1,30 @@
+---
+# One zone for the whole fleet. Nine of eleven nodes kept Etc/UTC while vm102 and
+# the hypervisor kept Europe/Berlin, so every OnCalendar hour written down in this
+# repository meant two different wall-clock times depending on where it ran, and a
+# journal read across two nodes needed mental arithmetic.
+#
+# Europe/Berlin rather than UTC, although UTC was the majority: the hypervisor is
+# what powers this platform up and down, homelab-setwake.sh programs an RTC wake in
+# local time, and every incident note in this repository is written in local time.
+# The machine follows the operator here, not the other way round.
+#
+# Checked before choosing: no timer on this fleet falls between 02:00 and 03:00,
+# the hour that does not exist in March and happens twice in October. A future
+# timer in that window is the one thing this choice makes harder, and it is the
+# reason the zone is named here rather than assumed.
+timezone_name: Europe/Berlin
+
+# Daemons that read the system zone once at start inherit this change. MariaDB is
+# the only one on this fleet that does - `time_zone = SYSTEM` resolves against the
+# operating system - so the role pins it instead of leaving the coupling in place.
+# Off by default and switched on in host_vars for the node that runs it.
+#
+# PostgreSQL needs nothing: it carries `timezone = Etc/UTC` in its own
+# configuration and never consults the operating system. PHP needs nothing either:
+# with `date.timezone` unset it defaults to UTC and does not read /etc/timezone,
+# which is what keeps Nextcloud's 30 datetime columns writing the same zone they
+# have always written.
+timezone_pin_mariadb: false
+timezone_mariadb_value: "+00:00"
+timezone_mariadb_conf: /etc/mysql/mariadb.conf.d/60-timezone.cnf

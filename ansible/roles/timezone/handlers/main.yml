@@ -1,0 +1,7 @@
+---
+# A restart, not a reload: time_zone is read at server start and no reload path
+# re-reads it. Scoped to the one node that sets timezone_pin_mariadb.
+- name: Restart mariadb
+  ansible.builtin.systemd_service:
+    name: mariadb
+    state: restarted

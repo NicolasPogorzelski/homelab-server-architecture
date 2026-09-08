@@ -1,0 +1,62 @@
+---
+# Written with builtin modules rather than community.general.timezone, which
+# would have to be added to requirements.yml and installed in CI for what Debian
+# expresses as a symlink and a one-line file. Fewer moving parts for the same
+# result, and no collection to keep pinned.
+#
+# No notify on either task. A handler here would fire on all eleven nodes, ten of
+# which run no database, and a role reaching for a service it did not install is
+# how a timezone change becomes an outage. The pin at the bottom notifies
+# instead, and it exists only where MariaDB does.
+- name: Point /etc/localtime at the chosen zone
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ timezone_name }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+
+# The hypervisor carries the symlink and no /etc/timezone at all - Proxmox reads
+# only /etc/localtime - so this task creates the file there rather than
+# correcting it. That is the one change the role makes on a node already set
+# to the right zone, and it makes all eleven describe themselves the same way.
+- name: Record the zone name where Debian expects it
+  ansible.builtin.copy:
+    content: "{{ timezone_name }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read back what the node now reports
+  ansible.builtin.command:  # noqa: command-instead-of-module
+    cmd: timedatectl show -p Timezone --value
+  register: timezone_observed
+  changed_when: false
+  check_mode: false
+
+# The read-back is the point of the role rather than a flourish. A container
+# whose /etc/localtime is bound read-only from the host accepts neither task and
+# reports success for both, and the schedule written here would then mean
+# something else on that node than every document claims.
+- name: Refuse to pass on a node that did not take the change
+  ansible.builtin.assert:
+    that:
+      - timezone_observed.stdout | trim == timezone_name
+    fail_msg: >-
+      Node reports {{ timezone_observed.stdout | trim }}, not {{ timezone_name }}.
+      Check whether /etc/localtime is a bind mount from the hypervisor.
+    success_msg: "Node reports {{ timezone_name }}."
+  when: not ansible_check_mode
+
+# Only on the node that runs MariaDB. `+00:00` rather than the name `UTC`,
+# because a named zone needs the mysql.time_zone tables populated and they are
+# empty on a stock install - the server would refuse to start.
+- name: Pin the database timezone so it stops following the operating system
+  ansible.builtin.template:
+    src: mariadb-timezone.cnf.j2
+    dest: "{{ timezone_mariadb_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart mariadb
+  when: timezone_pin_mariadb | bool

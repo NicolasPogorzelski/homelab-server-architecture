@@ -235,6 +235,12 @@ TMP="$(mktemp "${OUTDIR}/.fleet-drift.prom.XXXXXX")"
     echo "# TYPE fleet_drift_rules_mismatch gauge"
     echo "fleet_drift_rules_mismatch ${rules_mismatch}"
 } > "${TMP}"
+# mktemp creates 0600 regardless of umask, and mv preserves it. node_exporter runs
+# under its own account and silently skips a file it cannot read, so the metrics
+# would never reach Prometheus and every rule above them would sit absent - which
+# reads exactly like no drift. Measured 2026-09-08: fleet_snapshot_* arrived,
+# fleet_drift_* did not, and the only difference was this mode.
+chmod 0644 "${TMP}"
 mv "${TMP}" "${OUTDIR}/fleet-drift.prom"
 
 say ""
