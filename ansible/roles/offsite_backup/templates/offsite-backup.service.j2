@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Push this node's C1 datasets to the off-site restic repository
+Documentation=file://{{ offsite_backup_repo_docs | default('/root/runbooks/backup/offsite-backup.md') }}
+# The repository is reached over Tailscale, so the daemon has to be up. Ordering
+# is not readiness - restic's own first call is what actually waits - but a unit
+# started before tailscaled has no route at all, which is the KE-18 class.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile={{ offsite_backup_env_file }}
+ExecStart={{ offsite_backup_script_dest }}
+# Reading 41 GB over a domestic uplink is slow the first time and short after
+# that. The ceiling is generous because a run cut off halfway leaves a partial
+# snapshot that the next run has to redo from the beginning.
+TimeoutStartSec=21600
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

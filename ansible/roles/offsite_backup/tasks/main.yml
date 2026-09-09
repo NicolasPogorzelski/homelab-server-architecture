@@ -1,0 +1,112 @@
+---
+# A node with no paths configured would deploy a timer that fails every night
+# against an empty argument, which is worse than not being deployed: it produces
+# a red unit that says nothing about what is missing.
+- name: Assert this node declares what it sends off site
+  ansible.builtin.assert:
+    that:
+      - offsite_backup_paths | length > 0
+    fail_msg: >-
+      offsite_backup_paths is empty for {{ inventory_hostname }}. Set it in the
+      inventory's host_vars; the role deliberately carries no fleet-wide default.
+
+- name: Assert the repository and password are not literals from this repository
+  ansible.builtin.assert:
+    that:
+      - offsite_backup_repository is defined
+      - offsite_backup_password is defined
+      - offsite_backup_password | length > 0
+    fail_msg: >-
+      The vaulted variables vault_offsite_backup_repository and
+      vault_offsite_backup_password are not resolvable. They live in the
+      inventory on lxc250, not in this repository.
+  no_log: true
+
+- name: Install restic
+  ansible.builtin.apt:
+    name: restic
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Verify every declared source path exists
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ offsite_backup_paths }}"
+  register: offsite_backup_sources
+
+# `restic backup` skips a path it cannot find and still exits 0. That is the
+# shape where a backup keeps succeeding while covering less every month, so the
+# check belongs here as well as in the script: the script catches a path that
+# disappears later, this catches one that was wrong from the start.
+- name: Refuse to deploy against a source path that does not exist
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "Source path does not exist on {{ inventory_hostname }}: {{ item.item }}"
+  loop: "{{ offsite_backup_sources.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Deploy the repository password
+  ansible.builtin.copy:
+    content: "{{ offsite_backup_password }}\n"
+    dest: "{{ offsite_backup_password_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Deploy the environment file
+  ansible.builtin.template:
+    src: offsite-backup.env.j2
+    dest: "{{ offsite_backup_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart offsite backup timer
+
+- name: Deploy the off-site backup script
+  ansible.builtin.copy:
+    src: "{{ offsite_backup_script_src }}"
+    dest: "{{ offsite_backup_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: "{{ offsite_backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the off-site backup service unit
+  ansible.builtin.template:
+    src: offsite-backup.service.j2
+    dest: /etc/systemd/system/offsite-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the off-site backup timer unit
+  ansible.builtin.template:
+    src: offsite-backup.timer.j2
+    dest: /etc/systemd/system/offsite-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers before the timer is enabled
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the off-site backup timer
+  ansible.builtin.systemd_service:
+    name: offsite-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

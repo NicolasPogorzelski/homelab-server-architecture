@@ -319,6 +319,65 @@ groups:
     # stopped the host from reporting it. The general fix is the external
     # heartbeat in remediation-plan.md Tier 4, not a different threshold here.
 
+  - name: offsite
+    rules:
+      # The run reports its own outcome rather than leaving the alert to infer it
+      # from a timestamp. A restic run that fails halfway still updates nothing
+      # else, so without this the only symptom would be staleness a day later.
+      - alert: OffsiteBackupFailed
+        expr: offsite_backup_success == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Off-site backup on {{ $labels.instance }} did not complete"
+          description: "The last off-site run exited non-zero. Read `journalctl -u offsite-backup.service` on the node; the runbook is runbooks/backup/offsite-backup.md."
+
+      # 50 hours, not 25: the job runs daily but the host sleeps overnight and a
+      # first upload over a domestic uplink can outlast a single waking day.
+      #
+      # This rule shares the blindness PostgreSQLBackupStale already documents.
+      # Prometheus runs on the same site as the thing it watches, so a period
+      # with the host off produces no scrape, and Persistent=true refreshes the
+      # timestamp before Prometheus is back. It means "not more than 50 hours of
+      # uptime without an off-site copy", which is a weaker sentence than it
+      # looks and is deliberately not fixed here - the answer to that class is
+      # the external heartbeat in the remediation plan, not a longer window.
+      - alert: OffsiteBackupStale
+        expr: time() - offsite_backup_last_run_timestamp_seconds > 180000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No off-site backup from {{ $labels.instance }} in over two days"
+          description: "offsite_backup_last_run_timestamp_seconds is {{ $value | humanizeDuration }} old."
+
+      # Reading the repository's structure proves it is consistent; reading data
+      # back proves the bytes are there. The weekly sample is what separates this
+      # from the guards this platform keeps finding fault with - smart_health_passed,
+      # SnapRAIDScrubStale - which report that a job ran rather than that it
+      # achieved anything.
+      - alert: OffsiteBackupUnverified
+        expr: time() - offsite_backup_last_verify_timestamp_seconds > 1296000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Off-site data from {{ $labels.instance }} has not been read back in 15 days"
+          description: "The weekly --read-data-subset check has not run. The repository may be structurally sound and unreadable in substance."
+
+      # Absent is not zero. A node that never deploys the role, or whose textfile
+      # write fails, exports nothing at all - which every rule above reads as
+      # silence rather than as a fault.
+      - alert: OffsiteBackupMetricsMissing
+        expr: absent(offsite_backup_success)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No off-site backup metrics on the fleet"
+          description: "offsite_backup_success is absent everywhere. Either no node runs the role or the textfile collector is not being read."
+
   - name: snapshot
     rules:
       # The weekly snapshot of the fleet's unmanaged surface. Fourteen days is one

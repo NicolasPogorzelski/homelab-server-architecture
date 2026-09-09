@@ -31,12 +31,16 @@ Related operational model:
 - Guest backup and restore: [platform/guest-backup-restore.md](platform/guest-backup-restore.md)
 - LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
 - pveproxy down after boot (Tailscale-IP bind race): [platform/pveproxy-tailscale-boot-race.md](platform/pveproxy-tailscale-boot-race.md)
+- Off-site VPS provisioning: [platform/offsite-vps-provision.md](platform/offsite-vps-provision.md)
 
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
 - SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)
 - SnapRAID scrub: [storage/snapraid-scrub.md](storage/snapraid-scrub.md)
 - aux-disk failure rescue (read-only): [storage/aux-disk-failure-rescue.md](storage/aux-disk-failure-rescue.md)
+
+## Backup
+- Off-site backup with restic: [backup/offsite-backup.md](backup/offsite-backup.md)
 
 ## Database
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)

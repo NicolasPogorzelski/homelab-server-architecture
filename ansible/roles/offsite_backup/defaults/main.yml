@@ -1,0 +1,54 @@
+---
+# Single source of truth lives in snippets/scripts/.
+offsite_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/offsite-backup.sh"
+offsite_backup_script_dest: /usr/local/sbin/offsite-backup.sh
+
+offsite_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# Per-node, because the C1 set is not in one place. vm102 holds the user files
+# and both dump sets on the archive pool; lxc250 holds the credentials that make
+# every other recovery possible and would be the one loss no other backup
+# covers. Set in the real inventory's host_vars - a list here would be a third
+# copy of a fact the inventory already owns.
+offsite_backup_paths: []
+
+# Written to the environment file, never to the command line: a repository URL
+# with credentials in it is visible in `ps` to every user on the node for the
+# whole run.
+#
+# Both of these are references, not values. The real ones live in the vaulted
+# group_vars of the inventory on lxc250, which is gitignored - the same treatment
+# every other credential on this platform gets. Check 31 fails the build if a
+# literal ever appears here.
+offsite_backup_repository: "{{ vault_offsite_backup_repository }}"
+offsite_backup_password: "{{ vault_offsite_backup_password }}"
+
+offsite_backup_password_file: /etc/offsite-backup.pass
+offsite_backup_env_file: /etc/offsite-backup.env
+
+# The tag separates this node's snapshots inside a repository, and doubles as the
+# restic `--host`, so a restore reads the same name whichever node took it.
+offsite_backup_tag: "{{ inventory_hostname }}"
+
+# 04:15 rather than an hour on the hour. The two database dumps write at 03:00
+# and 03:30 and this is what copies them off site, so it has to run after both,
+# and every other scheduled job on this fleet has already taken a round number.
+#
+# Persistent=true for the reason every timer here carries it: the host powers
+# down overnight and a missed calendar slot is otherwise lost in silence.
+offsite_backup_oncalendar: "*-*-* 04:15:00"
+offsite_backup_persistent: true
+offsite_backup_randomized_delay: 600
+
+# Which weekday re-downloads a sample of the data rather than only reading the
+# repository's structure. 7 is Sunday. A structural check proves the repository
+# describes itself consistently; only reading data back proves the bytes are
+# there. `restic check` alone is the same class of guard as a backup script that
+# checks its own exit code.
+offsite_backup_verify_weekday: 7
+offsite_backup_verify_subset: "1%"
+
+# Not a default anybody should need, and here so that it is greppable: the client
+# credential is append-only, so `restic forget` and `restic prune` fail from this
+# node by design and retention is applied on the server. See the script header.
+offsite_backup_client_prunes: false

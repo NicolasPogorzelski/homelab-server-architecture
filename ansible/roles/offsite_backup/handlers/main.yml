@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart offsite backup timer
+  ansible.builtin.systemd_service:
+    name: offsite-backup.timer
+    state: restarted
+  when: not ansible_check_mode
