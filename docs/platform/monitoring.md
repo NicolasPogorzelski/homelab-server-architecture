@@ -40,7 +40,7 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 |---|---|---|
 | `prometheus` | `127.0.0.1:9090` | Prometheus self-scrape |
 | `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback) |
-| `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | systemd + textfile collector (`smart.prom`, `lvm-thin.prom`) |
+| `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | systemd + textfile collector (`smartmon.prom`, `lvm-thin.prom`, `guest-backup.prom`) |
 | `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.11.1; textfile collector enabled (`snapraid_sync.prom`, `snapraid_scrub.prom`) |
 | `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `node-lxc210-nextcloud` | LXC210 Tailscale IP`:9100` | systemd binary, v1.11.1 |
@@ -66,8 +66,8 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   possible future. It is gone rather than corrected. The table then drifted the same way: on
   2026-09-08 it sat two groups and five rules behind the file, never having grown with `backup`
   and `kernel`. Check 38 holds the two lists against each other on every run. The `smart` group
-  is present in the rules file and deliberately empty, which is why the Prometheus API returns
-  one group fewer than the file defines.
+  was present and deliberately empty until 2026-09-09, so the Prometheus API returned one group
+  fewer than the file defined; it now carries rules and the two counts agree.
 
 | Group | Rules |
 |---|---|
@@ -82,7 +82,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified` |
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
 | `blackbox` | `ServiceDown` |
-| `smart` | *(empty - the host exports only `smart_health_passed` / `smart_temperature_celsius`, and the first reads `1` for a disk with 7680 unreadable sectors. See [KE-13](./known-errors.md#ke-13) and the SMART item in [`operations.md`](./operations.md).)* |
+| `smart` | `SmartAttributeDegrading`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook).
   **It cannot see an outage in which the host is off**, because Prometheus runs on that same host:

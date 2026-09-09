@@ -16,8 +16,8 @@ notes there and keep this section short.
 
 - **KE-13 - aux-disk media failure.** The auxiliary disk is back in service under protest pending a
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
-  Standing hold: do not run `docker-compose-update` against the fleet while this disk is in service
-  - it writes gigabytes of new image layers onto a failing disk. **Correction (measured
+  The standing hold on `docker-compose-update` was lifted on 2026-09-05; see the entry below for
+  what carries that decision. **Correction (measured
   2026-07-28):** the earlier "still degrades slowly" no longer holds. `Reported_Uncorrect` rose
   18 -> 21 between 2026-06-25 and 2026-07-09 and has been static at 21 since (re-measured
   2026-08-13), with `Current_Pending_Sector` static at 7680 - thirty-five further days in service
@@ -734,24 +734,21 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   ransomware, and note the sharper form of that: any credential able to write these backups can
   delete them, and since 2026-08-21 the control node holds hypervisor root. Critical subsets
   (Vaultwarden export, Nextcloud DB, Paperless documents) have no off-site copy.
-- **SMART monitoring is partly deployed, and the deployed part cannot detect the failure it exists
-  for (entry corrected 2026-08-10 after measuring the host).**
-  `/usr/local/sbin/node-exporter-smarttext.sh` has been running on the host every 60 s since
-  2025-12, emitting `smart_health_passed` and `smart_temperature_celsius` for all nine disks. But
-  `smart_health_passed` reads 1 (PASSED) for the aux-disk with 7680 unreadable sectors, exactly
-  as KE-13 records (`Current_Pending_Sector` normalises to 054 against threshold 000 and can never
-  trip the self-assessment). The attributes that matter - `Reported_Uncorrect`,
-  `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count` - are not exported,
-  and the `smart` rule group in `alert.rules.yml` is still `rules: []` with a comment assuming
-  `smartctl_exporter` metric names that do not exist here. So the collector is real and the gap is
-  real: metrics exist, the ones that would have caught KE-13 do not. Disk failure detection still
-  relies on SnapRAID alerts. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
-  returned to service without anyone seeing it still degrading.** Note: all nine disks are attached
-  to the Proxmox host; VM102 reaches seven of them via `by-id` passthrough and sees only
-  virtio-SCSI devices, so SMART is readable *only on the host* - the previous wording here named
-  VM102 as the target node and was wrong. Deploying this requires the host to become an
-  Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.
-  Listed as planned enhancement in `docs/platform/operations.md`.
+- **SMART per-attribute export - RESOLVED 2026-09-09.** For nine months the host ran
+  `/usr/local/sbin/node-exporter-smarttext.sh` every 60 s, emitting `smart_health_passed` and
+  `smart_temperature_celsius` for all nine disks, and the first of those read 1 (PASSED) for the
+  aux-disk with 7680 unreadable sectors - `Current_Pending_Sector` normalises to 054 against
+  threshold 000, so the drive's own self-assessment can never trip. That is why KE-13 ran to total
+  failure unnoticed and why the disk was returned to service without anyone seeing it still
+  degrading. The `smart_metrics` role now deploys Debian's `prometheus-node-exporter-collectors`,
+  whose `smartmon.sh` exports every attribute per disk as `value`, `worst`, `threshold` and
+  `raw_value`; the hand-written script and its units are removed. Four rules fill what was
+  `rules: []`, and they alert on *growth over 25 hours* rather than on level: three disks would
+  have made a level rule red from the first day, and the question nobody could answer between
+  2026-06-25 and 2026-08-13 - are the counters still moving? - was answered by reading them by hand
+  on four separate dates. All nine disks are attached to the Proxmox host; vm102 reaches seven of
+  them via `by-id` passthrough and sees only virtio-SCSI devices, so SMART is readable *only on the
+  host*. The prerequisite this waited on, the host becoming an Ansible node, was met on 2026-08-21.
 - **LXC250 (control node) tracks `main` only - verify before every live run:** playbooks execute
   from the working tree, not from a commit, so a node on a feature branch or mid-merge silently runs
   code matching no commit. Update with `git pull --ff-only`; do feature work on a workstation. Before
@@ -776,9 +773,19 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   but has been static at 21 since (re-read 2026-07-28), as has `Current_Pending_Sector` at 7680.
   The failure is not accelerating; see the KE-13 note in Current Status for why that is not the same
   as safe. Nothing on `/mnt/aux-disk` has an off-site copy.
-- **Standing hold on `docker-compose-update` (until aux-disk is replaced):** the role pulls new
-  images, writing gigabytes of fresh blocks onto that disk. The repo-side image pins and the
-  role's compose-file-sync fix can wait for the replacement.
+- **The `docker-compose-update` hold is lifted (2026-09-05).** It had stood since 2026-07-09 on the
+  grounds that pulling images writes gigabytes of fresh layers onto a failing disk. Three
+  measurements moved the balance. The disk has been static at `Reported_Uncorrect 21` and
+  `Current_Pending_Sector 7680` since 2026-07-09 - sixty-two days in service with no new
+  uncorrectable error. The cost of the hold was counted for the first time on 2026-08-15: 139
+  fixable critical CVEs and 2162 high, running because the disk could not take new layers. And
+  since 2026-09-09 the degradation the hold was compensating for is finally observable, because
+  `smart_metrics` exports the per-attribute counters and `SmartAttributeDegrading` fires on growth
+  within 25 hours; a hold is a poor substitute for a measurement, and there was no measurement
+  until now. What the lift does not change: a run still writes to that disk, so it belongs in a
+  session somebody is watching rather than in the weekly sweep, which is why
+  `docker-compose-update` stays excluded in `ansible/drift-sweep.conf`. The repo-side image pins
+  and the role's compose-file-sync fix are now applicable work rather than blocked work.
 - **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
   mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
   filling the boot SSD - the KE-7 failure class. `mkdir 0` does not prevent this.

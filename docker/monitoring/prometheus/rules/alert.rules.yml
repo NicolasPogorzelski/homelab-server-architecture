@@ -466,31 +466,84 @@ groups:
           description: "Unit {{ $labels.name }} has been activating for over 30 minutes. A hung unit never becomes `failed`, so SystemdUnitFailed cannot see it."
 
   - name: smart
-    rules: []
-    # Deliberately empty. A collector IS deployed -- node-exporter-smarttext.sh has run
-    # on the Proxmox host every 60 s since 2025-12 -- but it exports only two metrics,
-    # and neither can express disk degradation:
-    #   smart_health_passed{disk=...}        the drive's own self-assessment
-    #   smart_temperature_celsius{disk=...}
-    # Measured 2026-08-13: the KE-13 aux-disk, with 7680 unreadable sectors, exports
-    # smart_health_passed = 1. That is not a bug in the collector -- Current_Pending_Sector
-    # normalises to VALUE=054 against THRESH=000, so the self-assessment can never trip.
-    # An alert on smart_health_passed would therefore be worse than none: it would read
-    # green on a failing disk.
-    #
-    # What is missing is per-attribute export (Reported_Uncorrect, Current_Pending_Sector,
-    # Reallocated_Sector_Ct, Wear_Leveling_Count). Note the metric names below are
-    # smartctl_exporter's; that exporter is NOT installed here, so do not write rules
-    # against them without deploying it first.
-    #   - smartctl_device_smart_status (overall SMART pass/fail -- same blindness as above)
-    #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
-    #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
-    #
+    rules:
+      # Growth, not level. Three of the nine disks would trip a level-based rule
+      # the day it was written - the KE-13 aux-disk alone reports 21 reported
+      # uncorrectable errors and 7680 pending sectors - and a rule that is red
+      # from the first day is a rule people learn to scroll past. What nobody
+      # could see until now is the thing that actually matters: whether those
+      # numbers are still moving. They were read by hand on four dates between
+      # 2026-06-25 and 2026-08-13 to answer that question.
+      #
+      # 25h, not 24h: the host powers down overnight, so a 24-hour window can
+      # close entirely inside a period with no scrapes in it.
+      - alert: SmartAttributeDegrading
+        expr: |
+          (increase(smartmon_reported_uncorrect_raw_value[25h]) > 0)
+          or (increase(smartmon_current_pending_sector_raw_value[25h]) > 0)
+          or (increase(smartmon_offline_uncorrectable_raw_value[25h]) > 0)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} gained unreadable sectors in the last day"
+          description: "A SMART error counter on {{ $labels.disk }} rose within 25 hours. The disk is degrading now, not historically. Read `smartctl -A` on the host and match the device against smartmon_device_info - the kernel letter is not stable across boots."
+
+      # A level rule is right for this one: every disk on this host reads 0, and
+      # the first reallocation is the event worth waking up for. Reallocation
+      # means the drive has spent a spare block, which pending sectors have not
+      # yet done.
+      - alert: SmartReallocatedSectors
+        expr: smartmon_reallocated_sector_ct_raw_value > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} has reallocated sectors"
+          description: "smartmon_reallocated_sector_ct_raw_value is {{ $value }} on {{ $labels.disk }}. Every disk here read 0 when this rule was written, so any value is new."
+
+      # The normalised value, which runs 100 down to the threshold, not the raw
+      # program-erase count. The boot SSD reads 47 at 639 cycles with a threshold
+      # of 0, so 20 leaves roughly the same margin again before the vendor calls
+      # the drive spent. It is the only SSD on this host and therefore the only
+      # disk carrying the attribute.
+      - alert: SmartWearLevelingLow
+        expr: smartmon_wear_leveling_count_value < 20
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} is near its rated write endurance"
+          description: "Normalised wear leveling is {{ $value }} on {{ $labels.disk }}. This disk carries every guest root disk; see KE-14."
+
+      # The absence rule the other three depend on. A collector that stops
+      # running exports nothing, and nothing is what a healthy disk also looks
+      # like to a rule written as `> 0`. Same construction as
+      # LvmThinMetricsStale and PostgreSQLRestoreTestStale.
+      #
+      # The timer runs every 15 minutes; two hours tolerates a boot window and a
+      # missed run without reporting on a host that is merely asleep.
+      - alert: SmartMetricsStale
+        expr: time() - max by (instance) (smartmon_smartctl_run) > 7200
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SMART metrics on {{ $labels.instance }} are stale"
+          description: "No smartmon collector run in over two hours. Disk degradation is unobserved while this is firing, which is the state the platform was in until 2026-09-09."
+
     # All nine disks are attached to the Proxmox HOST; VM102 reaches seven of them by
     # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
     # readable only on the host. An earlier version of this comment named VM102 as
-    # the target and was wrong (see KE-14). Extending this requires making the host
-    # an Ansible-managed node.
+    # the target and was wrong (see KE-14).
+    #
+    # The metrics come from Debian's prometheus-node-exporter-collectors
+    # (`smartmon.sh`), deployed by the `smart_metrics` role. They replaced a
+    # hand-written collector that exported `smart_health_passed` and
+    # `smart_temperature_celsius` and nothing else. The first of those read 1 for
+    # the disk with 7680 unreadable sectors, because Current_Pending_Sector
+    # normalises to VALUE=054 against THRESH=000 and can never trip the drive's
+    # own self-assessment. An alert on it would have been worse than none.
 
   - name: blackbox
     rules:

@@ -1,0 +1,131 @@
+---
+- name: Assert smartctl is present
+  ansible.builtin.stat:
+    path: /usr/sbin/smartctl
+  register: smart_metrics_smartctl
+
+# The packaged timer carries ConditionFileIsExecutable=/usr/sbin/smartctl, so a
+# missing smartctl produces a skipped unit rather than a failed one - a collector
+# that is silently absent, which is the class of fault this role exists to end.
+# Fail here instead, where somebody is watching.
+- name: Fail if smartctl is missing
+  ansible.builtin.fail:
+    msg: >-
+      /usr/sbin/smartctl is absent. The packaged timer would skip on its own
+      condition and export nothing, without failing.
+  when: not smart_metrics_smartctl.stat.exists
+
+- name: Install the collector package and sponge
+  ansible.builtin.apt:
+    name:
+      - "{{ smart_metrics_package }}"
+      - "{{ smart_metrics_sponge_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: "{{ smart_metrics_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the drop-in directory for the smartmon unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ smart_metrics_unit }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point the smartmon collector at this host's textfile directory
+  ansible.builtin.template:
+    src: smartmon-override.conf.j2
+    dest: "/etc/systemd/system/{{ smart_metrics_unit }}.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Mask the collector timers this host has no hardware or use for
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+    enabled: false
+    state: stopped
+  loop: "{{ smart_metrics_masked_timers }}"
+
+- name: Flush handlers so the timer starts against the current unit definition
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the smartmon timer
+  ansible.builtin.systemd_service:
+    name: "{{ smart_metrics_timer }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Run it once now rather than waiting up to fifteen minutes for the timer. The
+# legacy collector is removed in the next tasks, so this is what keeps the host
+# from having no SMART metric at all in between.
+- name: Produce a first reading immediately
+  ansible.builtin.systemd_service:
+    name: "{{ smart_metrics_unit }}"
+    state: started
+  changed_when: false
+
+- name: Confirm the first reading was written and is readable
+  ansible.builtin.stat:
+    path: "{{ smart_metrics_textfile_dir }}/{{ smart_metrics_output }}"
+  register: smart_metrics_first
+
+- name: Refuse to retire the old collector unless the new one produced output
+  ansible.builtin.assert:
+    that:
+      - smart_metrics_first.stat.exists
+      - smart_metrics_first.stat.size > 0
+      - smart_metrics_first.stat.mode == '0644'
+    fail_msg: >-
+      {{ smart_metrics_output }} is missing, empty or unreadable. The old
+      collector stays in place: retiring it now would leave this host with no
+      SMART metric at all.
+
+- name: Stop and disable the hand-written collector units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ smart_metrics_legacy_units }}"
+  failed_when: false
+
+- name: Remove the hand-written collector units and script
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ smart_metrics_legacy_units | map('regex_replace', '^', '/etc/systemd/system/') | list + [smart_metrics_legacy_script] }}"
+  notify: Reload systemd
+
+- name: Remove the metric file the retired collector left behind
+  ansible.builtin.file:
+    path: "{{ smart_metrics_textfile_dir }}/{{ smart_metrics_legacy_output }}"
+    state: absent
+
+# The retired script leaked one temporary file per failed run and nothing ever
+# cleared them. node_exporter ignores anything not ending in .prom, so they cost
+# nothing but inodes - the reason they survived unnoticed since 2025-12.
+- name: Find leaked collector temporary files
+  ansible.builtin.find:
+    paths: "{{ smart_metrics_textfile_dir }}"
+    patterns: "*.prom.*"
+    age: "{{ smart_metrics_orphan_age }}s"
+  register: smart_metrics_orphans
+
+- name: Remove leaked collector temporary files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ smart_metrics_orphans.files }}"
+  loop_control:
+    label: "{{ item.path }}"

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Service]
+# TMPDIR and the output path both move into this host's textfile directory. The
+# packaged unit points at Debian's, which the hand-installed node_exporter here
+# does not read.
+Environment=TMPDIR={{ smart_metrics_textfile_dir }}
+# An empty assignment clears the packaged ExecStart before the replacement is
+# added. Without the empty line systemd would run both, and the first would
+# still write into the directory nothing scrapes.
+ExecStart=
+ExecStart=/bin/sh -o pipefail -c "{{ smart_metrics_collector }} | sponge {{ smart_metrics_textfile_dir }}/{{ smart_metrics_output }}"
+# sponge creates the file under the unit's umask, which is 0022 for a system
+# service but is not guaranteed by anything here. node_exporter runs under its
+# own account and skips a file it cannot read without logging it, so the metric
+# would simply be absent - which reads exactly like a healthy fleet. That is how
+# fleet_drift lost its first week of measurements on 2026-09-08.
+ExecStartPost=/bin/chmod 0644 {{ smart_metrics_textfile_dir }}/{{ smart_metrics_output }}

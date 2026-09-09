@@ -1,0 +1,17 @@
+---
+# Per-attribute SMART export on the Proxmox host. Targets the `proxmox` group
+# because all nine disks are attached to the hypervisor: vm102 reaches seven of
+# them through by-id passthrough and sees virtio-SCSI devices, whose SMART data
+# is the virtual device's and therefore empty. Reading them anywhere but here is
+# not a configuration choice, it is impossible.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Export SMART attributes from the Proxmox host
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
+  roles:
+    - smart_metrics
