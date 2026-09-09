@@ -1,0 +1,31 @@
+---
+# Persistence is currently a property of a directory that happens to exist, not
+# of configuration. `Storage=` is unset on all ten nodes, which means `auto`,
+# which means persistent whenever /var/log/journal is present - and RAM-only,
+# silently, the moment it is not. A rebuild, a cleanup script or a full disk that
+# something responds to by removing the directory turns every node into one that
+# forgets its own history across a reboot, and nothing reports it.
+#
+# The measurement that made this worth doing: KE-8 was diagnosed from journal
+# lines written days earlier. Had those two nodes been RAM-only, the diagnosis
+# would have had nothing to read.
+journald_storage: persistent
+
+# systemd's default cap is 10 % of the filesystem, so the limit is whatever the
+# disk happens to be. On lxc250's 7.8 GB root that is roughly 780 MB against
+# 2.0 GB free, on the hypervisor it is tens of gigabytes; measured 2026-09-09 the
+# fleet already holds between 386 MB and 1.3 GB per node. A number stated here is
+# a number somebody chose.
+#
+# 512M keeps several months of this fleet's volume and is small enough that no
+# node's journal can be the reason its filesystem fills. Override per host where
+# a node genuinely needs more.
+journald_system_max_use: 512M
+
+# Below this the journal stops writing rather than evicting further. Without it a
+# journal that is already at its cap keeps the filesystem exactly as full as it
+# was, which is fine, and one that is not keeps growing into the last free byte.
+journald_system_keep_free: 1G
+
+journald_dropin_dir: /etc/systemd/journald.conf.d
+journald_dropin_file: 10-persistence.conf

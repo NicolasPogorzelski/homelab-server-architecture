@@ -24,7 +24,13 @@
 - name: Collect the per-node snapshot
   hosts: all
   gather_facts: false
-  become: true
+  # Not become: true at the play level. Four of the six projections read
+  # world-readable state - sockets, unit files, the mount table, the local unit
+  # directory - and only two genuinely need root: root's crontab, and the Docker
+  # socket. A weekly privileged read of every node is a standing grant that the
+  # task list has to justify each time, so the grant sits on the two tasks that
+  # need it and the recap shows which they are.
+  become: false
 
   tasks:
     # Ports at or above the ephemeral range are dropped. Tailscale's peerapi
@@ -71,7 +77,10 @@
       changed_when: false
       failed_when: false
 
+    # One of the two tasks that needs root, and the reason is not the crontab
+    # command but the account: `crontab -l -u root` is refused to anybody else.
     - name: Read root's crontab
+      become: true
       ansible.builtin.shell:
         cmd: set -o pipefail; crontab -l -u root 2>/dev/null | grep -vE '^\s*(#|$)' | sort || true
         executable: /bin/bash
@@ -94,7 +103,11 @@
       changed_when: false
       failed_when: false
 
+    # The second. The Docker socket is root-owned on these nodes and the ansible
+    # account is deliberately not in the docker group - membership there is
+    # equivalent to root and would be a wider grant than this one task.
     - name: Read the running container images
+      become: true
       ansible.builtin.shell:
         cmd: set -o pipefail; docker ps --format '{{ "{{.Names}} {{.Image}}" }}' 2>/dev/null | sort || true
         executable: /bin/bash

@@ -217,17 +217,31 @@ ordering is on every Debian container here.
   with the role's, so the gain is ownership rather than configuration. Held for a window with a
   second session open, because `group_vars/proxmox.yml` records that the physical recovery path is
   unavailable while the GPU is passed through.
-- `DATA_SOURCE_NAME` for `postgres_exporter` into the vault. Still an unmanaged literal in
-  `/etc/postgres_exporter.env`.
-- Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102, where
-  persistence currently depends on a directory existing rather than on configuration.
+- ~~`DATA_SOURCE_NAME` for `postgres_exporter` into the vault~~ Built 2026-09-09, one inventory
+  line from done. The role now owns `/etc/postgres_exporter.env` behind
+  `postgres_exporter_manage_env`, which defaults to false. The flag is not caution for its own
+  sake: a role that fails on an undefined vault variable would break the weekly sweep for the node
+  it runs against, and a sweep reporting `errored` for work nobody has finished configuring is how
+  a red signal becomes background. Add `vault_postgres_exporter_dsn` to the vaulted `group_vars`
+  on lxc250 and set the flag.
+- ~~Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102~~ Done
+  2026-09-09 by the `journald` role, and on ten nodes rather than two. The item named vm100 and
+  vm102 because those were the nodes somebody had looked at; measured, `Storage=` and
+  `SystemMaxUse=` were unset on every inventoried node, so the recorded defect was a fleet-wide
+  default. Journal volume ranges from 386 MB on lxc250 to 1.3 GB on the hypervisor, against a
+  systemd default cap of 10 % of the filesystem - which on lxc250's 7.8 GB root is roughly 780 MB
+  with 2.0 GB free.
 - Fold the `pveproxy` drop-in onto the shared `wait-for-tailscale-ip.sh`. The host carries two
   spellings of one readiness gate, one of which hardcodes an address.
 - `SystemdUnitFailed` coverage for lxc200, the last node without it; its exporter is a container
   that cannot see the host's systemd. lxc250 was the second until 2026-08-20.
-- `fleet-snapshot.yml` runs `become: true` against every node once a week. Two of its six
-  projections need it - the root crontab and `docker ps` - and the other four do not. Splitting
-  the play would drop a recurring privileged read across the fleet to two tasks.
+- ~~`fleet-snapshot.yml` runs `become: true` against every node once a week~~ Done 2026-09-09. The
+  grant now sits on the two tasks that need it, root's crontab and the Docker socket, and the play
+  runs unprivileged otherwise. Verified rather than assumed: the three countable projections -
+  listening sockets, mount table, enabled and masked unit files - return byte-identical counts on
+  all ten nodes with and without `become`, so nothing narrowed. That check is the point. A
+  privilege reduction that quietly reads less is worse than the grant it removed, because the
+  snapshot would keep reporting and cover less.
 - ~~Clear the orphaned `smart.prom.*` temporary files from the host's textfile directory~~ Done
   2026-09-09. The leak is closed at its source rather than swept: the script whose `mktemp` had no
   cleanup trap is retired with item 8, and the `smart_metrics` role removes any `*.prom.*` left in
