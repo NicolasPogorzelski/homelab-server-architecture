@@ -515,8 +515,20 @@ groups:
       # Thirty minutes tolerates the slow-but-legitimate cases (a Type=notify
       # service waiting on a network dependency, a long fsck) without tolerating
       # a hang.
+      #
+      # `.device` units are excluded, and the exclusion is not a threshold
+      # adjustment. systemd holds a device unit in `activating (tentative)` for
+      # as long as udev has not tagged the device with `systemd`, which for some
+      # devices is forever. Measured on the hypervisor on 2026-09-09:
+      # `dev-fuse.device` reads `activating/tentative` with an empty
+      # `ActiveEnterTimestamp` - it has never been active and never will be -
+      # while `/dev/fuse` is open by lxcfs and pmxcfs and works. The rule was
+      # written on 2026-09-08 and this was its first real firing, on a device
+      # that is not broken, on a host that would have reported it after every
+      # single boot. An alert that is red by construction is one people learn to
+      # dismiss, which would have cost the rule the service hangs it exists for.
       - alert: SystemdUnitStuckActivating
-        expr: node_systemd_unit_state{state="activating"} == 1
+        expr: node_systemd_unit_state{state="activating", name!~".*\\.device"} == 1
         for: 30m
         labels:
           severity: warning
