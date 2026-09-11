@@ -42,6 +42,13 @@ services:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
       - --web.listen-address=${AM_BIND_ADDRESS}:${AM_PORT}
+      # Empty value disables the gossip listener. Without it Alertmanager binds
+      # *:9094 on both protocols by default, which on a host-networked container is
+      # the LAN - a cluster port offered to the segment by the one node that watches
+      # the others. There is no second Alertmanager here and never has been: a
+      # cluster of one has nobody to gossip with, so the port carried no traffic and
+      # no benefit, only exposure. Found by the 2026-08-20 audit.
+      - --cluster.listen-address=
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped

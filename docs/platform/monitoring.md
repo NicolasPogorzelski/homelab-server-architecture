@@ -73,7 +73,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 |---|---|
 | `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBBackupStale` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
-| `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale` |
+| `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `SnapRAIDScrubCoverageAging`, `SnapRAIDArrayUnscrubbed`, `SnapRAIDStatusStale`, `SnapRAIDStatusUnreadable` |
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
@@ -82,6 +82,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified` |
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
+| `heartbeat` | `Watchdog` |
 | `blackbox` | `ServiceDown` |
 | `smart` | `SmartAttributeDegrading`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
@@ -110,6 +111,25 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   reaches one layer further still, comparing the alert names Prometheus has loaded against the
   rules file here - a deployed-but-not-reloaded file is the [KE-16](known-errors.md#ke-16) shape.
 - `SnapRAIDSyncStale` / `SnapRAIDScrubStale` require Node Exporter textfile collector on VM102 (`--collector.textfile.directory=/var/lib/node_exporter/textfile_collector`); written by `snapraid-maintenance.sh`
+- **The four coverage rules beside them exist because `SnapRAIDScrubStale` measures the wrong
+  thing.** It reads when a scrub last succeeded. Measured 2026-08-17, it was green while the oldest
+  block in the array had gone 123 days unverified and 74 % of the array had never been scrubbed at
+  all - the job had run and reached almost nothing. `snapraid status` prints both figures, so
+  `SnapRAIDScrubCoverageAging` and `SnapRAIDArrayUnscrubbed` read them from a `status` timer that
+  runs independently of the sync, and `SnapRAIDStatusStale` / `SnapRAIDStatusUnreadable` cover the
+  case where the reading itself stops. The thresholds sit above the current measurement on purpose:
+  a monthly scrub at snapraid's default 8 % needs about a year for a full pass, so a rule set where
+  the numbers ought to be would be red from its first evaluation and learned as noise. The scrub
+  cadence is the open question, and it is in the remediation plan rather than encoded in a
+  threshold here
+- `Watchdog` fires permanently and is the only rule here whose *absence* is the signal. It is routed
+  to an external heartbeat receiver rather than to Discord, and if that receiver stops seeing it the
+  alerting chain is down - including the ordinary case of this host being off, which is why the
+  receiver's grace period has to exceed the nightly off-window. It closes the structural gap
+  measured on 2026-08-14, where `PostgreSQLBackupStale` could not see three backup-free days because
+  Prometheus runs on the host that was off. Routing is in
+  [`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example); the
+  receiver itself is not provisioned yet
 
 ## Failure / Dependency Notes
 

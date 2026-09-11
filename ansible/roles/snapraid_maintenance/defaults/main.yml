@@ -17,6 +17,15 @@ snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 snapraid_sync_oncalendar: "*-*-* 23:00:00"
 snapraid_scrub_oncalendar: "*-*-01 20:00:00"
 
+# Coverage metrics, read from `snapraid status` and written to the textfile
+# collector. Midday, because it must not share a window with either job above:
+# the point of this timer is to answer "how much of the array is verified" on a
+# day when the sync did not run.
+#
+# `snapraid status` parses the content files and reports; it does not read the
+# array, so this is a cheap call rather than a third maintenance operation.
+snapraid_status_oncalendar: "*-*-* 12:00:00"
+
 snapraid_legacy_cron_file: /etc/cron.d/snapraid
 
 # === Exclude rules ===

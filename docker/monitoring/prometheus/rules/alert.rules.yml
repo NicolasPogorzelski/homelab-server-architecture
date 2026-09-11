@@ -122,6 +122,62 @@ groups:
           summary: "SnapRAID scrub is stale"
           description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
 
+      # The four rules below were added on 2026-09-11 because the one above cannot
+      # see what a scrub achieved. Measured 2026-08-17: it was green while the
+      # oldest block in the array had gone 123 days unverified and 74% of the array
+      # had never been scrubbed at all. The job had run; it had reached almost
+      # nothing. Same shape as smart_health_passed reading PASSED for a disk with
+      # 7680 unreadable sectors, and as PostgreSQLBackupStale during an outage.
+      #
+      # The thresholds sit above the measured baseline rather than at the value
+      # anyone would want, and that is a decision rather than an oversight. The
+      # scrub runs monthly with snapraid's default -p 8, so roughly 8% of the array
+      # is verified per run and a full pass takes about a year by arithmetic, not by
+      # fault. A rule set where the numbers ought to be would be red from its first
+      # evaluation, and this repository has already recorded what that costs: a
+      # permanently red rule is one people learn to scroll past. These fire when
+      # coverage gets worse than the schedule explains, and the cadence itself is an
+      # open decision recorded in the remediation plan.
+      - alert: SnapRAIDScrubCoverageAging
+        expr: snapraid_scrub_oldest_block_age_days > 200
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Oldest SnapRAID block unverified for {{ $value }} days"
+          description: "Some part of the array has not been checked against parity for over 200 days. A monthly 8% scrub should hold this near 120; above 200 the scrub is not keeping up or has stopped."
+
+      - alert: SnapRAIDArrayUnscrubbed
+        expr: snapraid_array_unscrubbed_ratio > 0.85
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the SnapRAID array is unscrubbed"
+          description: "The fraction of the array no scrub has ever verified is above 0.85. Parity exists for these blocks; nothing has confirmed it can be used."
+
+      # Distinct from the two above on purpose: they mean the coverage was read and
+      # is poor, this means it was not read. The metric is written by a timer that
+      # runs independently of the sync, so an absent reading is not explained by a
+      # failed sync.
+      - alert: SnapRAIDStatusStale
+        expr: (time() - snapraid_status_last_run_timestamp) > 172800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID coverage has not been read for 48 hours"
+          description: "snapraid-status.timer on VM102 has not written coverage metrics for more than two days. The scrub figures in Prometheus are older than they look."
+
+      - alert: SnapRAIDStatusUnreadable
+        expr: snapraid_status_parse_ok == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID status output could not be parsed"
+          description: "The collector ran but could not read the scrub age out of `snapraid status` on VM102 - either the command failed or its output format changed. Coverage metrics are not being updated."
+
   - name: storage
     rules:
       # The MergerFS archive is meant to fill, so a percentage threshold says
@@ -615,6 +671,44 @@ groups:
     # the disk with 7680 unreadable sectors, because Current_Pending_Sector
     # normalises to VALUE=054 against THRESH=000 and can never trip the drive's
     # own self-assessment. An alert on it would have been worse than none.
+
+  # === heartbeat ===
+  #
+  # An alert that is always firing, on purpose, routed out of this building.
+  #
+  # The measurement behind it, 2026-08-14: PostgreSQLBackupStale could not see
+  # three backup-free days, because Prometheus runs on the host that was off. No
+  # scrape happened, and by the time Prometheus returned, the timer's
+  # Persistent=true catch-up had already refreshed the timestamp. That is not a
+  # threshold to retune. An observer inside the failure domain it observes cannot
+  # report the domain failing - the same shape as the host node_exporter whose own
+  # death is what stops the host reporting.
+  #
+  # The inversion is the whole idea, and it is what kube-prometheus ships this rule
+  # for: every other rule here fires when something is wrong, and this one fires
+  # continuously so that its *absence* is the signal. Silence at the receiver means
+  # the chain is down somewhere between the expression and the notification - which
+  # includes the host being off, Prometheus being dead, Alertmanager being dead, and
+  # the network in between.
+  #
+  # The receiver has to be operated by somebody else. A self-hosted one needs a
+  # watcher of its own and the argument restarts one machine further out. Routing
+  # is in alertmanager.yml (see the `heartbeat` receiver there); nothing about this
+  # rule depends on which provider that is.
+  #
+  # Note this fleet already builds absence-alerts twice - LvmThinMetricsStale and
+  # PostgreSQLRestoreTestStale - both of which live inside the thing they watch.
+  # This one is the same idea applied to the alerting chain, from outside it.
+  - name: heartbeat
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: none
+        annotations:
+          summary: "The alerting chain is alive"
+          description: "This alert always fires. Its purpose is to prove that Prometheus and Alertmanager are running and that notifications leave the site. If the external receiver stops seeing it, the chain is broken - starting with the possibility that the host is simply off, which is normal overnight and not overnight only."
 
   - name: blackbox
     rules:

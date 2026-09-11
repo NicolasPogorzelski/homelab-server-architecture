@@ -26,6 +26,7 @@
   loop:
     - snapraid-sync
     - snapraid-scrub
+    - snapraid-status
   notify: Reload systemd
 
 # Removed, not left alongside: with both active, a night on which the host stays up
@@ -47,6 +48,7 @@
   loop:
     - snapraid-sync
     - snapraid-scrub
+    - snapraid-status
   when: not ansible_check_mode
 
 # The layout above the block is left alone; only the exclude rules are owned here.
