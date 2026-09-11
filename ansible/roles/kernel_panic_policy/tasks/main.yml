@@ -1,0 +1,40 @@
+---
+- name: Deploy the panic policy sysctl drop-in
+  ansible.builtin.template:
+    src: 60-panic-policy.conf.j2
+    dest: "{{ kernel_panic_sysctl_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+# The file on disk is not the setting. A drop-in that is never read leaves the
+# running kernel at its old value, and the failure it guards against is exactly the
+# kind nobody rehearses - so the role reads the kernel back rather than trusting
+# what it just wrote. This is the journald role's check applied to a second
+# mechanism, and the reason is the same: KE-16 renewed a certificate on disk while
+# the daemon kept serving the old one from memory.
+- name: Flush handlers so the readback sees the new values
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the running values back
+  ansible.builtin.command:
+    cmd: sysctl -n kernel.panic_on_oops kernel.panic
+  register: kernel_panic_running
+  changed_when: false
+  check_mode: false
+
+- name: Assert the running kernel carries the policy
+  ansible.builtin.assert:
+    that:
+      - kernel_panic_running.stdout_lines | length == 2
+      - kernel_panic_running.stdout_lines[0] | int == kernel_panic_on_oops | int
+      - kernel_panic_running.stdout_lines[1] | int == kernel_panic_timeout_seconds | int
+    success_msg: >-
+      Running kernel: panic_on_oops={{ kernel_panic_running.stdout_lines[0] | default('?') }},
+      panic={{ kernel_panic_running.stdout_lines[1] | default('?') }}s.
+    fail_msg: >-
+      {{ kernel_panic_sysctl_file }} was written but the running kernel does not
+      carry its values ({{ kernel_panic_running.stdout | default('no output') }}).
+      Something later in /etc/sysctl.d/ overrides it, or the reload did not run.
+  when: not ansible_check_mode

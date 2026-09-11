@@ -14,3 +14,15 @@
 # it in inventory rather than have it applied silently.
 ssh_hardening_password_authentication: "no"
 ssh_hardening_permit_root_login: "no"
+
+# === ListenAddress ===
+#
+# Empty by default, which leaves sshd on the wildcard address and changes nothing.
+# Set it to a node's Tailscale address to pin the bind, and read
+# docs/decisions/sshd-listen-address.md before doing so on any node.
+#
+# Not a boolean, and not derived from ansible_host automatically. Deriving it would
+# make the change arrive on ten nodes the first time somebody runs the playbook
+# after a merge, and the whole decision is that this is a supervised, one-node-at-
+# a-time rollout with a second terminal already open.
+ssh_hardening_listen_address: ""

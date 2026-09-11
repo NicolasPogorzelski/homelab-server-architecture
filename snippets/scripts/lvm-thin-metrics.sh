@@ -21,13 +21,16 @@ mkdir -p "${OUTDIR}"
 # is invisible to it while being written.
 umask 022
 
-# mktemp in the *same* directory as the target: `mv` is only atomic within one filesystem.
-TMPFILE="$(mktemp "${OUTDIR}/lvm-thin.prom.XXXXXX")"
-
-# The predecessor SMART collector has no cleanup trap, which is why ten orphaned
-# smart.prom.XXXXXX files dating back to 2025-12 sit in this directory: with `set -e`, any
-# failure between mktemp and mv leaks the temp file. Clean up on every exit path.
-trap 'rm -f "${TMPFILE}"' EXIT
+# Staged in the *same* directory as the target: `mv` is only atomic within one filesystem.
+#
+# A fixed name rather than mktemp, changed 2026-09-11. The predecessor SMART collector used
+# mktemp with no cleanup trap and leaked one file per failed run -- fourteen orphans dating
+# back to 2025-12 were cleared on 2026-09-09. This script had the trap and still left one
+# behind, because a trap on EXIT does not run when the process is killed outright or the
+# machine loses power, and this host powers down on a schedule. A fixed staging name cannot
+# accumulate at all: a run that dies between write and rename leaves exactly one file, which
+# the next run truncates. That is the whole defence, and it needs no trap to work.
+TMPFILE="${OUTDIR}/lvm-thin.prom.staged"
 
 scrape_success=1
 
@@ -77,7 +80,6 @@ echo "lvm_thin_metrics_scrape_success ${scrape_success}" >> "${TMPFILE}"
 
 mv -f "${TMPFILE}" "${OUTFILE}"
 chmod 0644 "${OUTFILE}"
-trap - EXIT
 
 # Non-zero exit puts the unit into `failed`, which node_exporter --collector.systemd exports
 # and SystemdUnitFailed picks up. A collector that dies quietly would leave the last .prom

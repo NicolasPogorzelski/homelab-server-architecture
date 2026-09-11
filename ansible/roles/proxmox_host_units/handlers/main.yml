@@ -1,0 +1,14 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Restarted rather than reloaded: socat holds the bound socket for the life of the
+# process, so a changed bind address takes effect only on a restart. Losing a few
+# seconds of a channel that is silent unless a guest is dying is acceptable; a
+# receiver still bound to the previous address would not be.
+- name: Restart the netconsole receiver
+  ansible.builtin.systemd_service:
+    name: netconsole-receiver.service
+    state: restarted
+    daemon_reload: true

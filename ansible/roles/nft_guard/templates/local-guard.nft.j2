@@ -1,0 +1,30 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# Ports on this node that must not be reachable from off the node. Managed by the
+# nft_guard role; see its defaults for why a filter rather than a bind address, and
+# why this is never loaded through nftables.service.
+
+# Idempotent prelude: declaring the table before deleting it makes `nft -f`
+# re-appliable, and lets the delete succeed on the very first run too, since
+# deleting a table that does not exist is an error.
+table inet {{ nft_guard_table }}
+delete table inet {{ nft_guard_table }}
+
+table inet {{ nft_guard_table }} {
+  chain input {
+    type filter hook input priority filter; policy accept;
+
+    # Loopback first and unconditionally. Every consumer of the ports below is on
+    # this node - Nextcloud reaches Collabora through proxy.php on its own web
+    # server - so accepting lo is what keeps the service working while the same
+    # port is closed to everything else.
+    iifname "lo" accept
+
+{% for entry in nft_guard_local_only_ports %}
+    # {{ entry.reason }}
+    tcp dport {{ entry.port }} counter drop
+
+{% endfor %}
+  }
+}

@@ -1,0 +1,33 @@
+---
+# === nft_guard ===
+#
+# A kernel packet filter for ports a service binds on the wildcard address and
+# offers no way to bind anywhere else.
+#
+# The platform's binding rule says a service binds its Tailscale address or
+# loopback, never a LAN interface. Some services cannot comply. Samba on vm102
+# cannot, because tailscale0 is a point-to-point TUN device without the BROADCAST
+# flag and Samba's IPv4 interface selection skips it - so an explicit `interfaces`
+# list removes the Tailscale path instead of securing it. Collabora on lxc210
+# cannot, because it is an AppImage extracted by a Nextcloud app rather than a
+# service anybody configures, and it exposes no listen-address setting at all.
+#
+# Where the service cannot be moved, the boundary moves one layer down. A filter in
+# the kernel is evaluated before the daemon accepts the connection, unlike Samba's
+# own `hosts allow`, which is applied after the TCP accept.
+#
+# Each entry in nft_guard_local_only_ports:
+#   port:   TCP port number
+#   reason: what listens there and why it cannot bind correctly itself
+nft_guard_local_only_ports: []
+
+nft_guard_table: local_guard
+nft_guard_rules_file: /etc/nftables.d/local-guard.nft
+nft_guard_unit: local-guard.service
+
+# NEVER load this through nftables.service. Its stock /etc/nftables.conf opens with
+# `flush ruleset` and its ExecStop flushes everything, either of which wipes the
+# ts-input and ts-forward chains Tailscale maintains - the node would keep running
+# and quietly lose its overlay filtering. Own table, own unit, and no `flush
+# ruleset` anywhere in the rendered file. Same reasoning as vm102's smb-guard,
+# recorded in docs/decisions/smb-bind-and-lan-access.md.

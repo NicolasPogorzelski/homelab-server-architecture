@@ -1,0 +1,16 @@
+---
+# Close ports that a service binds on the wildcard address and offers no way to
+# bind anywhere else. Today that is Collabora on lxc210; vm102's hand-deployed
+# smb-guard is the same pattern and the obvious next adoption, held back because
+# replacing a working filter on the storage node wants its own window.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Guard locally-bound ports with an nftables table
+  hosts: guests
+  become: true
+  roles:
+    - nft_guard

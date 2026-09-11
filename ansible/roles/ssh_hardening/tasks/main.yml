@@ -61,21 +61,52 @@
     ssh_hardening_reload_verb: >-
       {{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'reloaded' }}
 
+# Pinning ListenAddress couples sshd's start to tailscaled having assigned the
+# address, which is the KE-18 class, and sshd is its worst-behaved member: it exits
+# 255 on a failed bind and Debian's ssh.service names 255 in
+# RestartPreventExitStatus, so the packaged unit will not restart it on exactly
+# that failure. A node that gets the bind without the gate comes back from a reboot
+# with no SSH and is reachable only by `pct exec` or a console - and on the
+# hypervisor, by neither.
+#
+# So the role refuses the half-configuration rather than trusting the operator to
+# remember the other half. The two settings are safe together and dangerous alone,
+# and this repository has recorded five instances of the failure they prevent.
+- name: Refuse a pinned bind without the boot gate that makes it survivable
+  ansible.builtin.assert:
+    that:
+      - "'ssh.service' in (tailscale_boot_gate_units | default([]))"
+      - tailscale_boot_gate_clear_restart_prevent | default(false) | bool
+    fail_msg: >-
+      ssh_hardening_listen_address is set on this node, but it does not declare
+      ssh.service in tailscale_boot_gate_units with
+      tailscale_boot_gate_clear_restart_prevent: true. Without the readiness gate
+      sshd binds an address that does not exist yet at boot, exits 255, and the
+      packaged unit refuses to restart it. Nothing was changed.
+    success_msg: "Pinned bind is backed by the boot gate."
+    quiet: true
+  when: ssh_hardening_listen_address | length > 0
+
+# A template rather than inline `content:` since 2026-09-11, so the optional
+# ListenAddress can be a conditional block without leaving a stray blank line in
+# the rendered file on the nine nodes that do not set it. The rendered output for
+# an unset variable is byte-identical to what the copy task produced, which is why
+# this change reports no drift.
+#
+# Deliberately no `validate:`. `sshd -t -f <drop-in>` would test this fragment as a
+# whole configuration, with every other directive falling back to a compiled-in
+# default - a test of something the daemon never reads in that form. The real
+# validation is already in the right place: ssh.service runs `sshd -t` against the
+# complete configuration in both ExecStartPre and ExecReload, so a bad drop-in
+# fails the reload rather than being accepted by a check that proved less than it
+# appeared to.
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: 00-hardening.conf.j2
     dest: /etc/ssh/sshd_config.d/00-hardening.conf
     owner: root
     group: root
     mode: '0644'
-    content: |
-      # Managed by the ssh-hardening Ansible role.
-      # sshd applies the *first* match for a given directive it encounters,
-      # and Include expands sshd_config.d/*.conf in filename-sort order - so a
-      # 00-prefixed file here wins over e.g. cloud-init's 50-cloud-init.conf
-      # without editing or removing that distro/cloud-init-owned file (which
-      # cloud-init can regenerate on a future run).
-      PasswordAuthentication {{ ssh_hardening_password_authentication }}
-      PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config
 
 - name: Password authentication

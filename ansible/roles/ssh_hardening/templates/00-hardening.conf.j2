@@ -1,0 +1,14 @@
+# Managed by the ssh-hardening Ansible role.
+# sshd applies the *first* match for a given directive it encounters,
+# and Include expands sshd_config.d/*.conf in filename-sort order - so a
+# 00-prefixed file here wins over e.g. cloud-init's 50-cloud-init.conf
+# without editing or removing that distro/cloud-init-owned file (which
+# cloud-init can regenerate on a future run).
+PasswordAuthentication {{ ssh_hardening_password_authentication }}
+PermitRootLogin {{ ssh_hardening_permit_root_login }}
+{% if ssh_hardening_listen_address | length > 0 %}
+# A ListenAddress replaces the wildcard bind entirely: sshd listens on the
+# addresses it is given and on nothing else. Only safe alongside the boot gate
+# the role asserts for. See docs/decisions/sshd-listen-address.md.
+ListenAddress {{ ssh_hardening_listen_address }}
+{% endif %}

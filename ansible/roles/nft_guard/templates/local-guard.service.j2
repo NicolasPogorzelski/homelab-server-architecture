@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Local port guard (nftables table {{ nft_guard_table }})
+# After tailscaled so the ts-input chain already exists: this table is separate and
+# does not touch it, but ordering keeps the two from racing on first boot.
+After=network-pre.target tailscaled.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f {{ nft_guard_rules_file }}
+# Delete only this table on stop. `nft flush ruleset` here would take Tailscale's
+# chains with it, which is the whole reason this is not nftables.service.
+ExecStop=/usr/sbin/nft delete table inet {{ nft_guard_table }}
+
+[Install]
+WantedBy=multi-user.target

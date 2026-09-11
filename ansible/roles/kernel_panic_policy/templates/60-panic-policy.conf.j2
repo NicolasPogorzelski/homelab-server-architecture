@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+#
+# See the role defaults for why this host reboots on an oops instead of surviving
+# one. Short version: it has no out-of-band console, so "alive and unreachable" has
+# no recovery path that "rebooting" does not also have.
+
+# Treat an oops as a panic rather than killing only the offending thread and
+# carrying on with whatever locks it held.
+kernel.panic_on_oops = {{ kernel_panic_on_oops }}
+
+# Seconds between the panic and the reboot. Not 0, which would mean "wait forever",
+# and not 1: netconsole frames leave from inside the kernel and the receiver needs a
+# moment to take them.
+kernel.panic = {{ kernel_panic_timeout_seconds }}

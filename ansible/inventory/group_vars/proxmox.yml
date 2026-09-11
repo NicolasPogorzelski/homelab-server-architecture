@@ -23,3 +23,28 @@
 # adoption. A run must therefore produce `changed=0` on a correctly configured
 # host - if it reports a change, the live config drifted and that is the finding.
 ssh_hardening_permit_root_login: prohibit-password
+
+# === Boot gates ===
+#
+# pveproxy is configured in /etc/default/pveproxy to bind this host's Tailscale
+# address only, which is right and which means it cannot start before that address
+# exists. It does not degrade to a partial bind the way PostgreSQL did in KE-9: it
+# exits non-zero, systemd gives up after five rapid starts, and the web interface
+# stays dead until somebody restarts it by hand (KE-12).
+#
+# A drop-in has held that race shut since 2026-06-25 and is cold-boot verified. It
+# was written before the tailscale_boot_gate role existed, so until 2026-09-11 this
+# host carried the same gate in a second spelling - one that hardcoded the address
+# the shared script reads from `tailscale ip -4`, and that explained itself in a
+# language this repository does not use. Adopting it changes the spelling, not the
+# behaviour; the role removes the superseded file rather than leaving it to win on
+# filename order.
+tailscale_boot_gate_units:
+  - pveproxy.service
+
+# The hand-written file was called wait-tailscale.conf. The role writes
+# 10-wait-tailscale.conf, which sorts first, so leaving the old name in place would
+# let it override every directive the two share.
+tailscale_boot_gate_obsolete_dropins:
+  - override.conf
+  - wait-tailscale.conf

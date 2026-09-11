@@ -93,3 +93,67 @@
     label: "{{ item.item.name }}"
   when: item.stdout | trim == "failed"
   changed_when: true
+
+# === Packages that are the cause rather than the symptom ===
+
+# apt-get -s prints the plan without executing it. The assert below reads that plan
+# rather than trusting that a package with no user has no dependents. Whether a
+# removal is confined to what was asked for is not visible from the package name,
+# and it differs per node: a container and a hypervisor running the same package
+# have different things depending on it.
+# noqa: command-instead-of-module - the apt module has no dry-run that reports the
+# plan. `check_mode` reports whether the module would change something, not which
+# packages apt would take with it, and that list is the entire point of the task.
+- name: Simulate the package removal  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: apt-get -s -o Debug::NoLocking=1 remove --purge {{ systemd_hygiene_absent_packages | map(attribute='name') | join(' ') }}
+  register: systemd_hygiene_removal_plan
+  changed_when: false
+  check_mode: false
+  when: systemd_hygiene_absent_packages | length > 0
+
+- name: Refuse a removal that would take anything else with it
+  ansible.builtin.assert:
+    that:
+      - systemd_hygiene_unplanned_removals | length == 0
+    fail_msg: >-
+      Removing {{ systemd_hygiene_absent_packages | map(attribute='name') | join(', ') }}
+      would also remove {{ systemd_hygiene_unplanned_removals | join(', ') }}.
+      Nothing was changed. Decide about those packages explicitly before rerunning.
+    success_msg: >-
+      apt would remove only the listed packages.
+  vars:
+    systemd_hygiene_unplanned_removals: >-
+      {{ systemd_hygiene_removal_plan.stdout_lines
+         | select('match', '^Remv ')
+         | map('regex_replace', '^Remv ([^ ]+).*$', '\\1')
+         | difference(systemd_hygiene_absent_packages | map(attribute='name') | list) }}
+  when: systemd_hygiene_absent_packages | length > 0
+
+- name: Remove packages whose presence is the fault
+  ansible.builtin.apt:
+    name: "{{ systemd_hygiene_absent_packages | map(attribute='name') | list }}"
+    state: absent
+    purge: true
+    autoremove: false
+  when: systemd_hygiene_absent_packages | length > 0
+
+# Unmask before deleting the symlink: systemd knows the unit as masked until told
+# otherwise, and a bare `rm` would leave that state in its head until a reload.
+- name: Unmask units whose package is gone
+  ansible.builtin.systemd_service:
+    name: "{{ item.name }}"
+    masked: false
+  loop: "{{ systemd_hygiene_retired_units }}"
+  loop_control:
+    label: "{{ item.name }} - {{ item.reason }}"
+  failed_when: false
+
+- name: Remove the leftover mask symlinks
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item.name }}
+    state: absent
+  loop: "{{ systemd_hygiene_retired_units }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd

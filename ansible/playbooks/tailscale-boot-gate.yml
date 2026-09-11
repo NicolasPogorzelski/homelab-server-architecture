@@ -1,11 +1,18 @@
 ---
-# Runs against every guest, but the role is a no-op on hosts that declare no
+# Runs against every node, but the role is a no-op on hosts that declare no
 # units - so the target list stays honest and a new node needs a host var, not a
 # playbook edit.
 #
-# The hypervisor is absent on purpose. Its `pveproxy` gate is hand-deployed and
-# predates this role; folding it in belongs to the host adoption, where the other
-# hand-written host units are adopted in one pass rather than one at a time.
+# Two plays rather than one because of how the hypervisor is reached: the
+# inventory connects to it as root and there is no ansible user to escalate from,
+# so `become: true` there would call sudo for no reason.
+#
+# The hypervisor joined on 2026-09-11. Its pveproxy gate had been hand-deployed
+# since 2026-06-25 and predates this role, which left the host carrying two
+# spellings of one readiness gate - the hand-written one hardcoding a Tailscale
+# address that `tailscale ip -4` supplies, and carrying a comment in the wrong
+# language. The role's drop-in sorts before the old file name, so the old file is
+# removed rather than left beside it.
 #
 # Playbooks run from the working tree on lxc250, not from a commit.
 # preflight.yml refuses the run if that tree does not match origin/main.
@@ -15,5 +22,11 @@
 - name: Gate Tailscale-bound units on the address existing
   hosts: guests
   become: true
+  roles:
+    - tailscale_boot_gate
+
+- name: Gate the hypervisor's Tailscale-bound units
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
   roles:
     - tailscale_boot_gate

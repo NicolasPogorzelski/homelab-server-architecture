@@ -1,0 +1,22 @@
+---
+# Reboot the hypervisor on a kernel oops instead of leaving it alive and
+# unreachable. Closes the first of the four remediation items KE-21 left open.
+#
+# Scope is the hypervisor and nothing else, deliberately. The LXCs share this
+# kernel and cannot set these values at all - a sysctl write in an unprivileged
+# container is refused - and the two VMs run kernels of their own, where the same
+# argument may well apply but the evidence does not: vm100's freezes (KE-17, KE-20)
+# left no oops behind, so panic_on_oops would not have caught either of them, and
+# vm100 has no snapshot to fall back on. Widening this to the VMs is a proposal in
+# the remediation plan, not something to fold into a hypervisor fix.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Set the kernel panic policy on the Proxmox host
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
+  roles:
+    - kernel_panic_policy
