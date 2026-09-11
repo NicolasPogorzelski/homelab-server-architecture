@@ -1,0 +1,17 @@
+---
+# Targets the `offsite_sources` group rather than a node list, because the C1 set
+# is not in one place: vm102 holds the user files and both dump sets on the
+# archive pool, and lxc250 holds the credentials without which none of the other
+# restores can be performed. Which paths each node sends is host_vars, not a
+# default here.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Deploy off-site backups to the nodes holding C1 data
+  hosts: offsite_sources
+  become: true
+  roles:
+    - offsite_backup

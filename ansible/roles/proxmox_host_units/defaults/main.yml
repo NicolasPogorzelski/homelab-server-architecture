@@ -1,0 +1,72 @@
+---
+# === proxmox_host_units (Proxmox host) ===
+#
+# Four units that ran on this host for months as files somebody typed, because at
+# the time the host was not an Ansible node. It became one on 2026-08-21, and this
+# role is the payment of that debt: everything here would have been lost on a
+# rebuild, and three of the four are guards, so their loss would have been silent
+# by construction.
+#
+#   lxc-fstrim          returns freed blocks to the LVM thin pool. Containers
+#                       cannot trim themselves - the stock fstrim.timer carries
+#                       ConditionVirtualization=!container and the ioctl is refused
+#                       anyway, both silently - so this is structurally the host's
+#                       job. Without it pve/data climbs until the KE-7 class.
+#   lvm-thin-metrics    exports the pool utilisation a thin pool has no filesystem
+#                       to report. node_filesystem_* cannot see a block-layer
+#                       object, which is why the pool reached 92.55% unobserved.
+#   smb-mounts-check    fails loudly at boot if any /mnt/smb/* path is not backed
+#                       by CIFS. KE-15 lasted a month because nothing failed.
+#   netconsole-receiver takes vm100's kernel log over UDP into this host's
+#                       persistent journal, so a guest freeze leaves evidence that
+#                       survives the reboot. Its sending half has been a role since
+#                       2026-08-17; only the listening half was still hand-made.
+#
+# The fifth artefact on that list, the pveproxy drop-in, is not here. It is a
+# readiness gate, and this host now carries the same gate twice in two spellings,
+# one of which hardcodes a Tailscale address. It is folded onto the shared
+# wait-for-tailscale-ip.sh through the tailscale_boot_gate role instead - see
+# group_vars/proxmox.yml. Deploying a second copy from here would have kept the
+# duplication and merely put a name on it.
+#
+# node_exporter is also absent, deliberately: the role that owns it exists, the
+# host's unit is hand-written, and replacing a running exporter is its own window.
+# It is held in ansible/drift-sweep.conf with that reason.
+
+proxmox_host_units_script_dir: /usr/local/sbin
+proxmox_host_units_unit_dir: /etc/systemd/system
+
+proxmox_host_units_scripts:
+  - src: lxc-fstrim.sh
+  - src: lvm-thin-metrics.sh
+  - src: check-smb-mounts.sh
+
+# Units copied verbatim from snippets/systemd/. netconsole-receiver is not in this
+# list because it needs an address resolved on the node; it is templated below.
+proxmox_host_units_units:
+  - lxc-fstrim.service
+  - lxc-fstrim.timer
+  - lvm-thin-metrics.service
+  - lvm-thin-metrics.timer
+  - smb-mounts-check.service
+
+proxmox_host_units_timers:
+  - lxc-fstrim.timer
+  - lvm-thin-metrics.timer
+
+proxmox_host_units_services:
+  - smb-mounts-check.service
+  - netconsole-receiver.service
+
+# The receiver binds the host's LAN address rather than 0.0.0.0, and that is a
+# documented exception to the platform binding rule rather than an oversight:
+# netconsole frames are written from inside the kernel by netpoll, and a Tailscale
+# address lives on a TUN device served by a userspace daemon that is frozen along
+# with everything else during exactly the failure this captures.
+#
+# Resolved on the node instead of written into the file. The hand-deployed copy
+# carried a placeholder and an install note telling the reader to sed it, which is
+# a step that gets skipped once.
+proxmox_host_units_netconsole_bind: "{{ ansible_default_ipv4.address }}"
+proxmox_host_units_netconsole_port: 6666
+proxmox_host_units_netconsole_identifier: netconsole-vm100

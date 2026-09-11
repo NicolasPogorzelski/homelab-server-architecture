@@ -83,8 +83,11 @@ snapshotted, so vm100 has no rollback path at all. That is the reason a live CIF
 in [KE-20](../platform/known-errors.md#ke-20) could only be ended with `qm stop`, and the reason
 making vm100 snapshottable is the precondition for investigating it.
 
-The standing hold on `docker-compose-update` follows from this disk: the role pulls new images and
-writes gigabytes of fresh layers onto a failing drive.
+The `docker-compose-update` hold followed from this disk - the role pulls new images and writes
+gigabytes of fresh layers onto a failing drive - and was lifted on 2026-09-05 against sixty-two
+days of unchanged error counters and a measured patch debt of 139 fixable critical CVEs. The disk
+is no safer than it was; what changed is that its degradation is now measured rather than assumed,
+so the decision can be revisited on evidence.
 
 **vm102.** Parity is the protection everybody thinks of, and it is narrower than it looks. SnapRAID
 computes one equation over the present contents of the data disks. It reconstructs a disk that

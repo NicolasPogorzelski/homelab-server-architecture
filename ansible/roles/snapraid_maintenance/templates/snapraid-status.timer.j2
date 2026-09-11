@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=SnapRAID coverage metrics at {{ snapraid_status_oncalendar }}
+
+[Timer]
+OnCalendar={{ snapraid_status_oncalendar }}
+# Independent of the sync timer on purpose. The sync already writes these metrics
+# when it succeeds, and that is precisely the case where they are least needed: a
+# reading taken only by the job it describes cannot report that job failing. This
+# timer answers the coverage question on a night the sync did not run at all.
+Persistent=true
+Unit=snapraid-maintenance@status.service
+
+[Install]
+WantedBy=timers.target

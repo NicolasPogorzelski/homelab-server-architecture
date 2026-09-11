@@ -1,0 +1,106 @@
+---
+# socat is the receiver's entire implementation. Asserting it rather than assuming
+# it: a unit whose ExecStart does not exist fails at every boot with 203/EXEC, which
+# is how fleet-snapshot.service died on its first start on 2026-09-08.
+- name: Install socat for the netconsole receiver
+  ansible.builtin.apt:
+    name: socat
+    state: present
+
+- name: Deploy the host maintenance scripts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../snippets/scripts/{{ item.src }}"
+    dest: "{{ proxmox_host_units_script_dir }}/{{ item.src }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop: "{{ proxmox_host_units_scripts }}"
+  loop_control:
+    label: "{{ item.src }}"
+
+- name: Deploy the host units that need no substitution
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../snippets/systemd/{{ item }}"
+    dest: "{{ proxmox_host_units_unit_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ proxmox_host_units_units }}"
+  notify: Reload systemd
+
+- name: Deploy the netconsole receiver unit
+  ansible.builtin.template:
+    src: netconsole-receiver.service.j2
+    dest: "{{ proxmox_host_units_unit_dir }}/netconsole-receiver.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the netconsole receiver
+
+# Skipped in check mode for the reason the snapraid role records: under --check the
+# unit files above were not really written, so systemd cannot see them and `enable`
+# fails with "Could not find the requested service". Without this guard the role
+# cannot be dry-run at all, and a role that cannot be dry-run cannot be reviewed.
+- name: Enable and start the timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ proxmox_host_units_timers }}"
+  when: not ansible_check_mode
+
+- name: Enable and start the services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ proxmox_host_units_services }}"
+  when: not ansible_check_mode
+
+- name: Flush handlers before verifying
+  ansible.builtin.meta: flush_handlers
+
+# Adoption is only real if the unit is running the adopted file. The two guards
+# below read the result rather than the intention: the metric the collector is
+# supposed to produce, and the address the receiver is supposed to hold. A role
+# that reported success here while the host kept its old copy would be the
+# hand-written node_exporter finding again - `systemctl is-active` said `active`
+# and that read as coverage.
+- name: Read back the thin-pool metric the collector writes
+  ansible.builtin.stat:
+    path: /var/lib/node_exporter/textfile_collector/lvm-thin.prom
+  register: proxmox_host_units_lvm_metric
+  when: not ansible_check_mode
+
+- name: Assert the thin-pool collector has produced a file
+  ansible.builtin.assert:
+    that:
+      - proxmox_host_units_lvm_metric.stat.exists
+    fail_msg: >-
+      lvm-thin.prom is missing after the collector was started. Run
+      `systemctl start lvm-thin-metrics.service` and read its journal - the units
+      are deployed but the pool is unobserved until this file exists.
+    success_msg: "Thin-pool metrics are being written."
+  when: not ansible_check_mode
+
+- name: Read the receiver's running command line back # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl show netconsole-receiver.service --property=ExecStart --value
+  register: proxmox_host_units_receiver_exec
+  changed_when: false
+  check_mode: false
+
+- name: Assert the receiver binds this host's LAN address
+  ansible.builtin.assert:
+    that:
+      - proxmox_host_units_receiver_exec.stdout is search('bind=' ~ proxmox_host_units_netconsole_bind)
+    fail_msg: >-
+      netconsole-receiver is running with a bind address that is not
+      {{ proxmox_host_units_netconsole_bind }}. The predecessor unit shipped a
+      placeholder that an install note told the reader to substitute by hand; a
+      receiver bound to the wrong address is silent in exactly the same way as one
+      that is working.
+    success_msg: "Receiver is bound to {{ proxmox_host_units_netconsole_bind }}."
+  when: not ansible_check_mode

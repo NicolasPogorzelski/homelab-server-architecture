@@ -15,25 +15,47 @@ lxc260 existed. Migration is not planned.
 - Document editing: Collabora Online (`coolwsd`), bundled by the `richdocumentscode` app, plus the
   `onlyoffice` connector app - see below
 
-### Collabora Online, recorded 2026-08-17
+### Collabora Online, recorded 2026-08-17, measured 2026-09-09
 
 This component ran unrecorded for an unknown length of time. It appears in no service document, no
 data classification row and no access-model section, and it never passed the "Adding a New Service"
 checklist - it arrived as a Nextcloud app rather than as a deployment, which is exactly the gap that
 lets a component skip the process. It was found by a port sweep, not by reading anything.
 
-What is known, measured on the node:
+The open question the first version left - whether document editing is used - is answered: it is.
+The 2026-09-09 measurement then changed most of the rest of the picture.
 
-- `coolwsd` listens on `*:9983` - a dual-stack wildcard on a container with a public IPv6 address,
-  the same deviation as Apache above and with the same mitigation (the router alone).
-- The `onlyoffice` connector app is enabled alongside it.
-- vm102's `snapraid.conf` already excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`, so the
-  component was operationally known on the storage side while being absent from the documentation.
+**It is not a service on this node.** There is no `coolwsd` package and no `coolwsd` unit;
+`systemctl is-active coolwsd` reads `inactive` while a process listens. What runs is an AppImage
+that the `richdocumentscode` app extracts into `/tmp` and starts as `www-data`. Consequences that
+follow from that and from nothing else: it survives no reboot except by being extracted again, its
+document jails live on the container rootfs on the [KE-14](../platform/known-errors.md#ke-14) boot
+SSD, and no Ansible role can own it without owning the Nextcloud app that ships it.
 
-Open question, not answered here: whether document editing is actually used. If it is not, removing
-the apps closes a wildcard listener and a whole attack surface for free. If it is, it needs a row in
-[`data-classification.md`](../platform/data-classification.md) - documents opened through it pass
-through this process - and the bind needs the same treatment as Apache's.
+**The wildcard bind is real and reachable by nobody.** `coolwsd` listens on `*:9983`, but Nextcloud
+addresses it through `proxy.php` on its own web server - `wopi_url` is
+`https://nextcloud.<tailnet-id>.ts.net/apps/richdocumentscode/proxy.php?req=`. So the port is
+exposed on the LAN and nothing is supposed to reach it there. That makes this a smaller problem
+than Apache's identical deviation and a more awkward one: the app passes `--port=9983` with no
+listen address and offers no setting for one, so the fix is a packet filter rather than a
+configuration line. Grouped with the Apache bind decision rather than solved separately.
+
+**The sandbox is off.** The process runs with `--o:security.capabilities=false` and
+`--o:security.seccomp=false`. Those two switches are what confine the LibreOffice processes that
+parse documents, and documents are the untrusted input here - Paperless feeds this instance from a
+consumption directory. The AppImage sets them because capability-based jailing does not work inside
+an unprivileged LXC, so this is a consequence of where Nextcloud runs rather than a misconfiguration
+anybody made. It is recorded because the risk is real and currently unmitigated: a malicious
+document is confined by the container boundary and by nothing inside it.
+
+**A second office backend is enabled and cannot work.** `onlyoffice` 9.13.0 is enabled with an
+empty `DocumentServerUrl`, so it has no server to talk to, and it has been enabled in that state
+for as long as anybody has looked. Still open: `occ app:disable onlyoffice`, which the editing path
+does not depend on - that runs through `richdocuments` and `richdocumentscode`. Reversible with
+`occ app:enable onlyoffice`, which is why it is a one-line task rather than a decision.
+
+vm102's `snapraid.conf` already excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`, so the
+component was operationally known on the storage side while being absent from the documentation.
 
 ## Runtime Configuration (Sanitized)
 

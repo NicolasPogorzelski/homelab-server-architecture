@@ -1,0 +1,7 @@
+---
+# Restarting journald is safe and briefly loses nothing: clients queue into the
+# socket, which systemd holds open across the restart.
+- name: Restart journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted

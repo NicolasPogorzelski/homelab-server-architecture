@@ -1,0 +1,7 @@
+---
+# --system reads every /etc/sysctl.d/*.conf in order, which is the same thing the
+# boot does, so a converged host and a freshly booted one end up at the same values.
+- name: Reload sysctl
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: false

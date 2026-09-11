@@ -25,18 +25,24 @@ Related operational model:
 ---
 
 ## Platform
+- KE-14 power-path verification: [platform/ke14-power-path-check.md](platform/ke14-power-path-check.md)
+- Annual escrow restore drill: [platform/escrow-restore-drill.md](platform/escrow-restore-drill.md)
 - Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
 - LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
 - Docker data root migration to aux-disk: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
 - Guest backup and restore: [platform/guest-backup-restore.md](platform/guest-backup-restore.md)
 - LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
 - pveproxy down after boot (Tailscale-IP bind race): [platform/pveproxy-tailscale-boot-race.md](platform/pveproxy-tailscale-boot-race.md)
+- Off-site VPS provisioning: [platform/offsite-vps-provision.md](platform/offsite-vps-provision.md)
 
 ## Storage
 - SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
 - SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)
 - SnapRAID scrub: [storage/snapraid-scrub.md](storage/snapraid-scrub.md)
 - aux-disk failure rescue (read-only): [storage/aux-disk-failure-rescue.md](storage/aux-disk-failure-rescue.md)
+
+## Backup
+- Off-site backup with restic: [backup/offsite-backup.md](backup/offsite-backup.md)
 
 ## Database
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)

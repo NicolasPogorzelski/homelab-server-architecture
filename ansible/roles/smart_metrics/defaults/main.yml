@@ -1,0 +1,54 @@
+---
+# The collector is Debian's, not this repository's, and that is the substance of
+# the change rather than an implementation detail. The hand-written script this
+# role replaces exported two metrics, one of which read PASSED for a disk with
+# 7680 unreadable sectors; writing a better one here would have been a third
+# spelling of a problem upstream had already solved. Measured on this host,
+# `smartmon.sh` produces 885 lines against the old script's 18.
+smart_metrics_package: prometheus-node-exporter-collectors
+
+# `sponge` reads the whole stream before it writes anything, so node_exporter
+# never scrapes a half-written file. The packaged unit's ExecStart depends on it
+# and declares that nowhere; it lives in moreutils.
+smart_metrics_sponge_package: moreutils
+
+smart_metrics_collector: /usr/share/prometheus-node-exporter-collectors/smartmon.sh
+
+# The directory every other textfile collector on this host already writes into.
+# The package defaults to /var/lib/prometheus/node-exporter, which belongs to
+# Debian's node_exporter package; this host runs a hand-installed binary that
+# reads the path below. Without the override the collector would run, succeed,
+# and be read by nobody - the shape lxc250's argument-free exporter had for four
+# months.
+smart_metrics_textfile_dir: /var/lib/node_exporter/textfile_collector
+smart_metrics_output: smartmon.prom
+
+smart_metrics_unit: prometheus-node-exporter-smartmon.service
+smart_metrics_timer: prometheus-node-exporter-smartmon.timer
+
+# The package ships five collector timers. Four measure hardware this host does
+# not have (IPMI, Mellanox, NVMe) or duplicate a job Ansible already owns (apt).
+# Masked rather than left disabled, for the reason `systemd_hygiene` gives: a
+# disabled unit is one `systemctl enable` away from running and carries no
+# record of why it should not be.
+smart_metrics_masked_timers:
+  - prometheus-node-exporter-apt.timer
+  - prometheus-node-exporter-ipmitool-sensor.timer
+  - prometheus-node-exporter-mellanox-hca-temp.timer
+  - prometheus-node-exporter-nvme.timer
+
+# What this role retires. Hand-deployed in 2025-12, never in version control,
+# comments in German, and a `mktemp` with no cleanup trap - the orphaned
+# smart.prom.* files in the textfile directory are that leak, one per failed run
+# since the first.
+smart_metrics_legacy_script: /usr/local/sbin/node-exporter-smarttext.sh
+smart_metrics_legacy_units:
+  - node-exporter-smarttext.timer
+  - node-exporter-smarttext.service
+smart_metrics_legacy_output: smart.prom
+
+# Anything matching *.prom.* older than this is a leak rather than a live write.
+# The longest collector run measured on this host is under thirty seconds; an
+# hour leaves three orders of magnitude of headroom and still clears files the
+# same day they are made.
+smart_metrics_orphan_age: 3600

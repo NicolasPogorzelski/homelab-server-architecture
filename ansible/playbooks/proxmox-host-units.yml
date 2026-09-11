@@ -1,0 +1,17 @@
+---
+# Adopt the units this host has been running as hand-typed files. Every one of them
+# would have been lost on a rebuild, and three of the four are guards, so their loss
+# would have been silent - which is the argument for doing this rather than the
+# argument for doing it now. The reason it is possible now is that the host became
+# an Ansible node on 2026-08-21.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Own the hypervisor's maintenance and evidence units
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
+  roles:
+    - proxmox_host_units

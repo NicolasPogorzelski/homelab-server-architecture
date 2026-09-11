@@ -122,6 +122,62 @@ groups:
           summary: "SnapRAID scrub is stale"
           description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
 
+      # The four rules below were added on 2026-09-11 because the one above cannot
+      # see what a scrub achieved. Measured 2026-08-17: it was green while the
+      # oldest block in the array had gone 123 days unverified and 74% of the array
+      # had never been scrubbed at all. The job had run; it had reached almost
+      # nothing. Same shape as smart_health_passed reading PASSED for a disk with
+      # 7680 unreadable sectors, and as PostgreSQLBackupStale during an outage.
+      #
+      # The thresholds sit above the measured baseline rather than at the value
+      # anyone would want, and that is a decision rather than an oversight. The
+      # scrub runs monthly with snapraid's default -p 8, so roughly 8% of the array
+      # is verified per run and a full pass takes about a year by arithmetic, not by
+      # fault. A rule set where the numbers ought to be would be red from its first
+      # evaluation, and this repository has already recorded what that costs: a
+      # permanently red rule is one people learn to scroll past. These fire when
+      # coverage gets worse than the schedule explains, and the cadence itself is an
+      # open decision recorded in the remediation plan.
+      - alert: SnapRAIDScrubCoverageAging
+        expr: snapraid_scrub_oldest_block_age_days > 200
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Oldest SnapRAID block unverified for {{ $value }} days"
+          description: "Some part of the array has not been checked against parity for over 200 days. A monthly 8% scrub should hold this near 120; above 200 the scrub is not keeping up or has stopped."
+
+      - alert: SnapRAIDArrayUnscrubbed
+        expr: snapraid_array_unscrubbed_ratio > 0.85
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the SnapRAID array is unscrubbed"
+          description: "The fraction of the array no scrub has ever verified is above 0.85. Parity exists for these blocks; nothing has confirmed it can be used."
+
+      # Distinct from the two above on purpose: they mean the coverage was read and
+      # is poor, this means it was not read. The metric is written by a timer that
+      # runs independently of the sync, so an absent reading is not explained by a
+      # failed sync.
+      - alert: SnapRAIDStatusStale
+        expr: (time() - snapraid_status_last_run_timestamp) > 172800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID coverage has not been read for 48 hours"
+          description: "snapraid-status.timer on VM102 has not written coverage metrics for more than two days. The scrub figures in Prometheus are older than they look."
+
+      - alert: SnapRAIDStatusUnreadable
+        expr: snapraid_status_parse_ok == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnapRAID status output could not be parsed"
+          description: "The collector ran but could not read the scrub age out of `snapraid status` on VM102 - either the command failed or its output format changed. Coverage metrics are not being updated."
+
   - name: storage
     rules:
       # The MergerFS archive is meant to fill, so a percentage threshold says
@@ -319,6 +375,65 @@ groups:
     # stopped the host from reporting it. The general fix is the external
     # heartbeat in remediation-plan.md Tier 4, not a different threshold here.
 
+  - name: offsite
+    rules:
+      # The run reports its own outcome rather than leaving the alert to infer it
+      # from a timestamp. A restic run that fails halfway still updates nothing
+      # else, so without this the only symptom would be staleness a day later.
+      - alert: OffsiteBackupFailed
+        expr: offsite_backup_success == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Off-site backup on {{ $labels.instance }} did not complete"
+          description: "The last off-site run exited non-zero. Read `journalctl -u offsite-backup.service` on the node; the runbook is runbooks/backup/offsite-backup.md."
+
+      # 50 hours, not 25: the job runs daily but the host sleeps overnight and a
+      # first upload over a domestic uplink can outlast a single waking day.
+      #
+      # This rule shares the blindness PostgreSQLBackupStale already documents.
+      # Prometheus runs on the same site as the thing it watches, so a period
+      # with the host off produces no scrape, and Persistent=true refreshes the
+      # timestamp before Prometheus is back. It means "not more than 50 hours of
+      # uptime without an off-site copy", which is a weaker sentence than it
+      # looks and is deliberately not fixed here - the answer to that class is
+      # the external heartbeat in the remediation plan, not a longer window.
+      - alert: OffsiteBackupStale
+        expr: time() - offsite_backup_last_run_timestamp_seconds > 180000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No off-site backup from {{ $labels.instance }} in over two days"
+          description: "offsite_backup_last_run_timestamp_seconds is {{ $value | humanizeDuration }} old."
+
+      # Reading the repository's structure proves it is consistent; reading data
+      # back proves the bytes are there. The weekly sample is what separates this
+      # from the guards this platform keeps finding fault with - smart_health_passed,
+      # SnapRAIDScrubStale - which report that a job ran rather than that it
+      # achieved anything.
+      - alert: OffsiteBackupUnverified
+        expr: time() - offsite_backup_last_verify_timestamp_seconds > 1296000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Off-site data from {{ $labels.instance }} has not been read back in 15 days"
+          description: "The weekly --read-data-subset check has not run. The repository may be structurally sound and unreadable in substance."
+
+      # Absent is not zero. A node that never deploys the role, or whose textfile
+      # write fails, exports nothing at all - which every rule above reads as
+      # silence rather than as a fault.
+      - alert: OffsiteBackupMetricsMissing
+        expr: absent(offsite_backup_success)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No off-site backup metrics on the fleet"
+          description: "offsite_backup_success is absent everywhere. Either no node runs the role or the textfile collector is not being read."
+
   - name: snapshot
     rules:
       # The weekly snapshot of the fleet's unmanaged surface. Fourteen days is one
@@ -456,8 +571,20 @@ groups:
       # Thirty minutes tolerates the slow-but-legitimate cases (a Type=notify
       # service waiting on a network dependency, a long fsck) without tolerating
       # a hang.
+      #
+      # `.device` units are excluded, and the exclusion is not a threshold
+      # adjustment. systemd holds a device unit in `activating (tentative)` for
+      # as long as udev has not tagged the device with `systemd`, which for some
+      # devices is forever. Measured on the hypervisor on 2026-09-09:
+      # `dev-fuse.device` reads `activating/tentative` with an empty
+      # `ActiveEnterTimestamp` - it has never been active and never will be -
+      # while `/dev/fuse` is open by lxcfs and pmxcfs and works. The rule was
+      # written on 2026-09-08 and this was its first real firing, on a device
+      # that is not broken, on a host that would have reported it after every
+      # single boot. An alert that is red by construction is one people learn to
+      # dismiss, which would have cost the rule the service hangs it exists for.
       - alert: SystemdUnitStuckActivating
-        expr: node_systemd_unit_state{state="activating"} == 1
+        expr: node_systemd_unit_state{state="activating", name!~".*\\.device"} == 1
         for: 30m
         labels:
           severity: warning
@@ -466,31 +593,122 @@ groups:
           description: "Unit {{ $labels.name }} has been activating for over 30 minutes. A hung unit never becomes `failed`, so SystemdUnitFailed cannot see it."
 
   - name: smart
-    rules: []
-    # Deliberately empty. A collector IS deployed -- node-exporter-smarttext.sh has run
-    # on the Proxmox host every 60 s since 2025-12 -- but it exports only two metrics,
-    # and neither can express disk degradation:
-    #   smart_health_passed{disk=...}        the drive's own self-assessment
-    #   smart_temperature_celsius{disk=...}
-    # Measured 2026-08-13: the KE-13 aux-disk, with 7680 unreadable sectors, exports
-    # smart_health_passed = 1. That is not a bug in the collector -- Current_Pending_Sector
-    # normalises to VALUE=054 against THRESH=000, so the self-assessment can never trip.
-    # An alert on smart_health_passed would therefore be worse than none: it would read
-    # green on a failing disk.
-    #
-    # What is missing is per-attribute export (Reported_Uncorrect, Current_Pending_Sector,
-    # Reallocated_Sector_Ct, Wear_Leveling_Count). Note the metric names below are
-    # smartctl_exporter's; that exporter is NOT installed here, so do not write rules
-    # against them without deploying it first.
-    #   - smartctl_device_smart_status (overall SMART pass/fail -- same blindness as above)
-    #   - smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct"} (bad sectors)
-    #   - smartctl_device_attribute{attribute_name="Current_Pending_Sector"} (unstable sectors)
-    #
+    rules:
+      # Growth, not level. Three of the nine disks would trip a level-based rule
+      # the day it was written - the KE-13 aux-disk alone reports 21 reported
+      # uncorrectable errors and 7680 pending sectors - and a rule that is red
+      # from the first day is a rule people learn to scroll past. What nobody
+      # could see until now is the thing that actually matters: whether those
+      # numbers are still moving. They were read by hand on four dates between
+      # 2026-06-25 and 2026-08-13 to answer that question.
+      #
+      # 25h, not 24h: the host powers down overnight, so a 24-hour window can
+      # close entirely inside a period with no scrapes in it.
+      - alert: SmartAttributeDegrading
+        expr: |
+          (increase(smartmon_reported_uncorrect_raw_value[25h]) > 0)
+          or (increase(smartmon_current_pending_sector_raw_value[25h]) > 0)
+          or (increase(smartmon_offline_uncorrectable_raw_value[25h]) > 0)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} gained unreadable sectors in the last day"
+          description: "A SMART error counter on {{ $labels.disk }} rose within 25 hours. The disk is degrading now, not historically. Read `smartctl -A` on the host and match the device against smartmon_device_info - the kernel letter is not stable across boots."
+
+      # A level rule is right for this one: every disk on this host reads 0, and
+      # the first reallocation is the event worth waking up for. Reallocation
+      # means the drive has spent a spare block, which pending sectors have not
+      # yet done.
+      - alert: SmartReallocatedSectors
+        expr: smartmon_reallocated_sector_ct_raw_value > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} has reallocated sectors"
+          description: "smartmon_reallocated_sector_ct_raw_value is {{ $value }} on {{ $labels.disk }}. Every disk here read 0 when this rule was written, so any value is new."
+
+      # The normalised value, which runs 100 down to the threshold, not the raw
+      # program-erase count. The boot SSD reads 47 at 639 cycles with a threshold
+      # of 0, so 20 leaves roughly the same margin again before the vendor calls
+      # the drive spent. It is the only SSD on this host and therefore the only
+      # disk carrying the attribute.
+      - alert: SmartWearLevelingLow
+        expr: smartmon_wear_leveling_count_value < 20
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.disk }} on {{ $labels.instance }} is near its rated write endurance"
+          description: "Normalised wear leveling is {{ $value }} on {{ $labels.disk }}. This disk carries every guest root disk; see KE-14."
+
+      # The absence rule the other three depend on. A collector that stops
+      # running exports nothing, and nothing is what a healthy disk also looks
+      # like to a rule written as `> 0`. Same construction as
+      # LvmThinMetricsStale and PostgreSQLRestoreTestStale.
+      #
+      # The timer runs every 15 minutes; two hours tolerates a boot window and a
+      # missed run without reporting on a host that is merely asleep.
+      - alert: SmartMetricsStale
+        expr: time() - max by (instance) (smartmon_smartctl_run) > 7200
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SMART metrics on {{ $labels.instance }} are stale"
+          description: "No smartmon collector run in over two hours. Disk degradation is unobserved while this is firing, which is the state the platform was in until 2026-09-09."
+
     # All nine disks are attached to the Proxmox HOST; VM102 reaches seven of them by
     # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
     # readable only on the host. An earlier version of this comment named VM102 as
-    # the target and was wrong (see KE-14). Extending this requires making the host
-    # an Ansible-managed node.
+    # the target and was wrong (see KE-14).
+    #
+    # The metrics come from Debian's prometheus-node-exporter-collectors
+    # (`smartmon.sh`), deployed by the `smart_metrics` role. They replaced a
+    # hand-written collector that exported `smart_health_passed` and
+    # `smart_temperature_celsius` and nothing else. The first of those read 1 for
+    # the disk with 7680 unreadable sectors, because Current_Pending_Sector
+    # normalises to VALUE=054 against THRESH=000 and can never trip the drive's
+    # own self-assessment. An alert on it would have been worse than none.
+
+  # === heartbeat ===
+  #
+  # An alert that is always firing, on purpose, routed out of this building.
+  #
+  # The measurement behind it, 2026-08-14: PostgreSQLBackupStale could not see
+  # three backup-free days, because Prometheus runs on the host that was off. No
+  # scrape happened, and by the time Prometheus returned, the timer's
+  # Persistent=true catch-up had already refreshed the timestamp. That is not a
+  # threshold to retune. An observer inside the failure domain it observes cannot
+  # report the domain failing - the same shape as the host node_exporter whose own
+  # death is what stops the host reporting.
+  #
+  # The inversion is the whole idea, and it is what kube-prometheus ships this rule
+  # for: every other rule here fires when something is wrong, and this one fires
+  # continuously so that its *absence* is the signal. Silence at the receiver means
+  # the chain is down somewhere between the expression and the notification - which
+  # includes the host being off, Prometheus being dead, Alertmanager being dead, and
+  # the network in between.
+  #
+  # The receiver has to be operated by somebody else. A self-hosted one needs a
+  # watcher of its own and the argument restarts one machine further out. Routing
+  # is in alertmanager.yml (see the `heartbeat` receiver there); nothing about this
+  # rule depends on which provider that is.
+  #
+  # Note this fleet already builds absence-alerts twice - LvmThinMetricsStale and
+  # PostgreSQLRestoreTestStale - both of which live inside the thing they watch.
+  # This one is the same idea applied to the alerting chain, from outside it.
+  - name: heartbeat
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: none
+        annotations:
+          summary: "The alerting chain is alive"
+          description: "This alert always fires. Its purpose is to prove that Prometheus and Alertmanager are running and that notifications leave the site. If the external receiver stops seeing it, the chain is broken - starting with the possibility that the host is simply off, which is normal overnight and not overnight only."
 
   - name: blackbox
     rules:

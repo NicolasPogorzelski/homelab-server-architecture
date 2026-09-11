@@ -24,3 +24,25 @@ systemd_hygiene_masked_units: []
 #
 # The two lists are concatenated in tasks/main.yml. Same entry format.
 systemd_hygiene_group_units: []
+
+# Packages whose *presence* is the reason a unit above can never succeed. Removing
+# one retires the mask rather than maintaining it, and usually closes something
+# else at the same time: nfs-common on lxc210 brought both run-rpc_pipefs.mount and
+# an rpcbind listening on 0.0.0.0:111 and [::]:111 for a node with no NFS mount.
+#
+# Each entry:
+#   name:   the package
+#   reason: why it cannot be used on this node
+#
+# The role simulates the removal first and refuses to proceed if apt would take
+# anything beyond this list with it. That guard is the whole reason this is a list
+# of names rather than a loop over `apt state=absent`: a dependency nobody checked
+# is how a cleanup becomes an outage.
+systemd_hygiene_absent_packages: []
+
+# Units that were masked by this role and no longer need to be, because the package
+# that shipped them is gone. Unmasked and their leftover symlink removed, so the
+# node does not keep a mask for a unit that no longer exists - a stale mask is
+# indistinguishable from a current one at review time, which is the failure this
+# repository keeps finding in its own documentation.
+systemd_hygiene_retired_units: []

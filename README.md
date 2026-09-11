@@ -164,6 +164,10 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
 - [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
+- [Hypervisor Panic Policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) (a machine with no way in should not survive an oops)
+- [sshd Binding](docs/decisions/sshd-listen-address.md) (ten of eleven nodes break the rule, so it is a fleet decision)
+- [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
+- [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 
 ### Security, risk and change
 
@@ -184,6 +188,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Proxmox Host](docs/platform/proxmox-host.md) (hypervisor-level config, boot ordering, power schedule)
 - [Storage Permissions](docs/platform/storage-permissions.md) (the filesystem side of the share model, verified daily)
 - [Operations](docs/platform/operations.md) (operational model, dependency layers, incident playbooks)
+- [Physical and Environmental Controls](docs/platform/physical-controls.md) (Annex A.7, rated honestly - power, disposal, encryption at rest)
 
 ### Incidents
 
@@ -198,24 +203,25 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 35 and 29 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 41 and 35 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 39 structural checks, run by a pre-commit
   hook and by CI on every push
 
 ### Runbooks
 
-Fifteen procedures under the same contract: every one states its preconditions, its verification
+Nineteen procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All fifteen runbooks</summary>
+<summary>All nineteen runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
 - Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
 - Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
-- Platform: [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
+- Platform: [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
+- Backup: [off-site backup with restic](runbooks/backup/offsite-backup.md) - [off-site VPS provisioning](runbooks/platform/offsite-vps-provision.md)
 - Services: [OpenWebUI health](runbooks/ai-stack/openwebui-health.md) - [Nextcloud/Paperless integration](runbooks/integration/nextcloud-paperless.md)
 
 </details>

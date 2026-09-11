@@ -8,9 +8,19 @@
 # it outright; a systemd drop-in is the tool for units you are not allowed to edit,
 # and would have forced restating the whole ExecStart line anyway.
 #
-# This role deliberately does NOT manage /etc/postgres_exporter.env: it holds
-# DATA_SOURCE_NAME with the database password. Adopting that belongs in a separate
-# Ansible Vault step, not bolted onto a bind-address fix.
+# The environment file holds DATA_SOURCE_NAME, i.e. the database password, and was
+# left unmanaged when the unit was adopted on 2026-07-10 - deliberately, because
+# a credential move does not belong bolted onto a bind-address fix.
+#
+# The role can own it now, and does not by default. Set
+# postgres_exporter_manage_env: true in the inventory once
+# vault_postgres_exporter_dsn exists in the vaulted group_vars on lxc250. The flag
+# is not timidity: a role that fails on an undefined vault variable would break
+# the weekly drift sweep for every node it touches, and the sweep reporting
+# `errored` for a run nobody has finished configuring is how a red signal becomes
+# background noise.
+postgres_exporter_manage_env: false
+postgres_exporter_data_source_name: "{{ vault_postgres_exporter_dsn | default('') }}"
 
 postgres_exporter_bin: /usr/local/bin/postgres_exporter
 postgres_exporter_env_file: /etc/postgres_exporter.env

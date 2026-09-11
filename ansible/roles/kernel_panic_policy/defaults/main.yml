@@ -1,0 +1,24 @@
+---
+# === kernel_panic_policy (Proxmox host) ===
+#
+# What this is for, in one incident: on 2026-08-20 a kernel oops cascade left the
+# hypervisor alive and unreachable for two hours ([KE-21](docs/platform/known-errors.md#ke-21)).
+# SSH connected and never produced a banner, the web interface refused its own
+# tickets, every guest read `unknown`. The kernel had already logged the fault; it
+# simply kept running, because Linux continues after an oops by default and only
+# the thread that tripped it is killed. Everything that thread held stays held.
+#
+# On a machine with a way in, staying up is the better default: an operator can
+# collect evidence. This host has no way in. The single GPU is passed through with
+# `x-vga=1`, there is no serial console and no separate management processor on the
+# board, so a hypervisor that survives an oops into an unreachable state is worse
+# than one that reboots - the guests are down either way, and only one of the two
+# comes back without a hand on the power button.
+#
+# kernel.panic_on_oops=1 turns the oops into a panic. kernel.panic=10 reboots ten
+# seconds later; the delay is there so the netconsole receiver on this host and the
+# persistent journal have a window to capture the trace that explains the reboot.
+kernel_panic_on_oops: 1
+kernel_panic_timeout_seconds: 10
+
+kernel_panic_sysctl_file: /etc/sysctl.d/60-panic-policy.conf

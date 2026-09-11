@@ -1,0 +1,106 @@
+---
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+  when: nft_guard_local_only_ports | length > 0
+
+# An unprivileged container has its own network namespace but not necessarily the
+# capability to write to it, and a filter that cannot be loaded is worse than none:
+# the port stays open and a role reports success. So the node is asked directly,
+# before anything is written, with a table that is created and deleted again.
+- name: Check that this node can load an nftables table
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      nft add table inet nft_guard_probe
+      nft delete table inet nft_guard_probe
+  register: nft_guard_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: nft_guard_local_only_ports | length > 0
+
+- name: Refuse to deploy a filter this node cannot load
+  ansible.builtin.assert:
+    that:
+      - nft_guard_probe.rc == 0
+    fail_msg: >-
+      This node cannot create an nftables table
+      ({{ nft_guard_probe.stderr | default('no output') | trim }}). An unprivileged
+      container without CAP_NET_ADMIN in its own namespace is the likely cause.
+      Nothing was deployed - the alternative is a unit that fails at every boot
+      while the port it was meant to close stays open.
+    success_msg: "nftables is usable on this node."
+  when: nft_guard_local_only_ports | length > 0
+
+- name: Create the nftables drop-in directory
+  ansible.builtin.file:
+    path: "{{ nft_guard_rules_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: nft_guard_local_only_ports | length > 0
+
+- name: Deploy the guard rules
+  ansible.builtin.template:
+    src: local-guard.nft.j2
+    dest: "{{ nft_guard_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+    validate: /usr/sbin/nft -c -f %s
+  notify: Reload the local guard
+  when: nft_guard_local_only_ports | length > 0
+
+- name: Deploy the guard unit
+  ansible.builtin.template:
+    src: local-guard.service.j2
+    dest: /etc/systemd/system/{{ nft_guard_unit }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload the local guard
+  when: nft_guard_local_only_ports | length > 0
+
+- name: Enable and start the guard
+  ansible.builtin.systemd_service:
+    name: "{{ nft_guard_unit }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - nft_guard_local_only_ports | length > 0
+    - not ansible_check_mode
+
+- name: Flush handlers before verifying
+  ansible.builtin.meta: flush_handlers
+
+# The rules file being present proves nothing about the running kernel, which is
+# the distinction this repository keeps rediscovering - KE-16 served an expired
+# certificate from memory while the renewed one sat on disk. Read the table back.
+- name: Read the loaded table back
+  ansible.builtin.command:
+    cmd: nft list table inet {{ nft_guard_table }}
+  register: nft_guard_loaded
+  changed_when: false
+  check_mode: false
+  when:
+    - nft_guard_local_only_ports | length > 0
+    - not ansible_check_mode
+
+- name: Assert every guarded port is dropped in the running ruleset
+  ansible.builtin.assert:
+    that:
+      - nft_guard_loaded.stdout is search('dport ' ~ item.port ~ ' counter.*drop')
+    fail_msg: >-
+      Port {{ item.port }} is not dropped in the loaded table. The file was written
+      but the kernel does not carry the rule.
+    success_msg: "Port {{ item.port }} is dropped for everything but loopback."
+  loop: "{{ nft_guard_local_only_ports }}"
+  loop_control:
+    label: "{{ item.port }}"
+  when:
+    - nft_guard_local_only_ports | length > 0
+    - not ansible_check_mode

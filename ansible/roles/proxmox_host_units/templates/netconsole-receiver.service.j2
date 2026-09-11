@@ -1,0 +1,40 @@
+# {{ ansible_managed }}
+#
+# Receives the kernel log vm100 streams over UDP (see the netconsole role) and
+# writes it into this host's journal, which is persistent - so the evidence
+# survives the reboot that follows the freeze it recorded.
+#
+# Read what it captured:
+#   journalctl -t {{ proxmox_host_units_netconsole_identifier }} --since -1h
+
+[Unit]
+Description=Receive netconsole kernel logs from vm100
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# -u is unidirectional: read from the socket, never write back. fork is omitted on
+# purpose - a datagram socket needs no child per peer, and one process keeps the
+# journal identifier stable.
+ExecStart=/usr/bin/socat -u UDP4-RECV:{{ proxmox_host_units_netconsole_port }},bind={{ proxmox_host_units_netconsole_bind }},reuseaddr -
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ proxmox_host_units_netconsole_identifier }}
+Restart=on-failure
+RestartSec=5s
+
+# It only ever reads one UDP socket and writes to stdout.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

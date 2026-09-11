@@ -69,16 +69,6 @@ somebody reads.
 
 ### Planned Enhancements
 
-- **SMART: the collector is deployed, the useful attributes are not exported.**
-  `node-exporter-smarttext.sh` has run on the Proxmox host every 60 s since 2025-12 (textfile
-  collector), but emits only `smart_health_passed` and `smart_temperature_celsius`. Measured
-  2026-08-13, the failing aux-disk of [KE-13](./known-errors.md#ke-13) - 7680 unreadable sectors -
-  exports `smart_health_passed 1`, because `Current_Pending_Sector` normalises to `054` against
-  threshold `000` and can never trip the drive's self-assessment. What is missing is
-  `Reported_Uncorrect`, `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count`,
-  plus rules in the (currently empty) `smart` group. Disk-failure detection still rests on SnapRAID
-  alerts. The blocker - the host not being an Ansible node - was removed on 2026-08-21; the
-  work itself is still undone
 - "Golden signals" dashboards per tier (Storage/Compute/Services)
 - An external heartbeat, so a total outage produces an alert rather than silence - see the Tier 4
   entry in the [remediation plan](remediation-plan.md)
@@ -395,8 +385,10 @@ not drift.
 - SnapRAID scrub runs from a timer on the 1st. Review the *coverage*, not only the run date:
   `snapraid status` reports how much of the array is unscrubbed and how old the oldest block is,
   and `SnapRAIDScrubStale` can see neither - it measures when a scrub last ran
-- Review disk SMART health by hand (`smartctl -A` per disk, identified by `by-id`) - the
-  exported metrics cannot show degradation, see the SMART note under Planned Enhancements
+- Review disk SMART health by hand (`smartctl -A` per disk, identified by `by-id`). Since
+  2026-09-09 the exported metrics can show degradation on their own and
+  `SmartAttributeDegrading` fires on any counter that rises within 25 hours, so this is a
+  cross-check rather than the only detection path it used to be
 - Confirm the automated restore test passed (it runs on the 1st and raises
   `PostgreSQLRestoreTestStale` if it does not). Manual spot tests are no longer the mechanism -
   this line said so until 2026-08-17
@@ -415,8 +407,6 @@ not drift.
 - ~~Automated SnapRAID sync + scrub schedule~~ (done: `snapraid-maintenance.sh`, Prometheus alerts)
 - ~~IaC-style documentation: sanitized compose files, systemd unit snippets, ACL documentation~~
   (done; the `docker/`, `snippets/` and `docs/platform/tailscale-acl.md` trees are the result)
-- SMART monitoring: extend the existing collector to the attributes that indicate degradation, and
-  populate the empty `smart` rule group
 - Off-site backups for the C1 datasets defined in [`data-classification.md`](data-classification.md)
 
 This list is a summary. The ordered version, with the dependencies that decide what can start

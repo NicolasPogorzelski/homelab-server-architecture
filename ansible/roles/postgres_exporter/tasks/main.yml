@@ -20,6 +20,31 @@
   loop_control:
     label: "{{ item.item }}"
 
+- name: Refuse to manage the environment file without a vaulted DSN
+  ansible.builtin.assert:
+    that:
+      - postgres_exporter_data_source_name | length > 0
+    fail_msg: >-
+      postgres_exporter_manage_env is true but vault_postgres_exporter_dsn is
+      empty or undefined. It lives in the vaulted group_vars of the inventory on
+      lxc250, never in this repository.
+  when: postgres_exporter_manage_env
+  no_log: true
+
+# 0600 and root-owned: the exporter reads it through systemd's EnvironmentFile,
+# which is read by PID 1 before the unit drops to its own account, so the
+# unprivileged exporter user never needs to see the password on disk.
+- name: Deploy the postgres_exporter environment file
+  ansible.builtin.copy:
+    content: "DATA_SOURCE_NAME={{ postgres_exporter_data_source_name }}\n"
+    dest: "{{ postgres_exporter_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: postgres_exporter_manage_env
+  no_log: true
+  notify: Restart postgres_exporter
+
 - name: Deploy the postgres_exporter unit
   ansible.builtin.template:
     src: postgres_exporter.service.j2

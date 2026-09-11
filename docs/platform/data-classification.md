@@ -43,6 +43,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
 | Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |
+| Documents opened through Collabora Online | Transient, in the CODE process's jails under `/tmp` inside lxc210 | C1 while open | Yes - it opens Nextcloud and Paperless files, which include identity documents | None, and none is wanted: the copy is transient and the durable original is the Nextcloud row above. Recorded because the *process* sees C1 content, and because it runs with seccomp and capability jailing disabled - see the [service document](../services/nextcloud.md) |
 | Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Nightly verified dump, ~8-day retention, monthly restore test. |
 | Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump. |
 | Platform configuration and documentation | This repository - GitHub plus two workstations | C2 | No | Git. Distributed by nature, and the only dataset here with a genuine off-site copy. |

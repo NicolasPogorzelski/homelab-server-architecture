@@ -1,0 +1,18 @@
+---
+# Every node, not the two the finding was recorded against. Measured 2026-09-09,
+# `Storage=` and `SystemMaxUse=` are unset on all ten inventoried nodes, so the
+# original entry named a fleet-wide default as a two-node defect. Sweeping the
+# rest is the KE-6 lesson this repository already wrote down: when a
+# configuration error is closed, the other nodes are checked and the check is
+# recorded.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Pin journald persistence and size limits fleet-wide
+  hosts: all
+  become: true
+  roles:
+    - journald

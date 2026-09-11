@@ -16,8 +16,8 @@ notes there and keep this section short.
 
 - **KE-13 - aux-disk media failure.** The auxiliary disk is back in service under protest pending a
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
-  Standing hold: do not run `docker-compose-update` against the fleet while this disk is in service
-  - it writes gigabytes of new image layers onto a failing disk. **Correction (measured
+  The standing hold on `docker-compose-update` was lifted on 2026-09-05; see the entry below for
+  what carries that decision. **Correction (measured
   2026-07-28):** the earlier "still degrades slowly" no longer holds. `Reported_Uncorrect` rose
   18 -> 21 between 2026-06-25 and 2026-07-09 and has been static at 21 since (re-measured
   2026-08-13), with `Current_Pending_Sector` static at 7680 - thirty-five further days in service
@@ -60,7 +60,8 @@ notes there and keep this section short.
   closing a configuration error, sweep the other nodes and record that you did.**
 - **KE-14 - boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
-  verification. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
+  verification - written up as `runbooks/platform/ke14-power-path-check.md` on 2026-09-11, needing
+  host downtime the nightly cycle already provides and no purchase. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
   (`cmd_age=29s`, boot + 3 min, preceding boot clean) - live, and no verification step performed.
   **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
   enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
@@ -688,10 +689,12 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
   design decision; do not bolt it onto an unrelated pass.
 
-- **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
-  because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
-  lxc200 is now the only node without `SystemdUnitFailed` coverage: its exporter cannot see
-  systemd. lxc250 was the second until 2026-08-20, for the different reason that nothing
+- **lxc200 monitors the fleet but not itself - decided 2026-09-11, not yet built:**
+  `node-exporter.yml` runs against `all:!lxc200`, because lxc200's node_exporter is a Docker
+  container that cannot see the host's systemd units. The answer is a second, native exporter on a
+  different port rather than a privileged container or a bind-mounted systemd socket - see
+  `docs/decisions/lxc200-systemd-visibility.md`. It adds a scrape target, so it belongs in the
+  same session as that config change. lxc250 was the second until 2026-08-20, for the different reason that nothing
   scraped it; it is in the inventory and scraped since. The Proxmox host was the
   second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
   container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
@@ -734,36 +737,36 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   ransomware, and note the sharper form of that: any credential able to write these backups can
   delete them, and since 2026-08-21 the control node holds hypervisor root. Critical subsets
   (Vaultwarden export, Nextcloud DB, Paperless documents) have no off-site copy.
-- **SMART monitoring is partly deployed, and the deployed part cannot detect the failure it exists
-  for (entry corrected 2026-08-10 after measuring the host).**
-  `/usr/local/sbin/node-exporter-smarttext.sh` has been running on the host every 60 s since
-  2025-12, emitting `smart_health_passed` and `smart_temperature_celsius` for all nine disks. But
-  `smart_health_passed` reads 1 (PASSED) for the aux-disk with 7680 unreadable sectors, exactly
-  as KE-13 records (`Current_Pending_Sector` normalises to 054 against threshold 000 and can never
-  trip the self-assessment). The attributes that matter - `Reported_Uncorrect`,
-  `Current_Pending_Sector`, `Reallocated_Sector_Ct`, `Wear_Leveling_Count` - are not exported,
-  and the `smart` rule group in `alert.rules.yml` is still `rules: []` with a comment assuming
-  `smartctl_exporter` metric names that do not exist here. So the collector is real and the gap is
-  real: metrics exist, the ones that would have caught KE-13 do not. Disk failure detection still
-  relies on SnapRAID alerts. **This gap is why KE-13 ran to total failure unnoticed, and why the disk was
-  returned to service without anyone seeing it still degrading.** Note: all nine disks are attached
-  to the Proxmox host; VM102 reaches seven of them via `by-id` passthrough and sees only
-  virtio-SCSI devices, so SMART is readable *only on the host* - the previous wording here named
-  VM102 as the target node and was wrong. Deploying this requires the host to become an
-  Ansible-managed node, the same prerequisite `homelab_schedule` is waiting on.
-  Listed as planned enhancement in `docs/platform/operations.md`.
+- **SMART per-attribute export - RESOLVED 2026-09-09.** For nine months the host ran
+  `/usr/local/sbin/node-exporter-smarttext.sh` every 60 s, emitting `smart_health_passed` and
+  `smart_temperature_celsius` for all nine disks, and the first of those read 1 (PASSED) for the
+  aux-disk with 7680 unreadable sectors - `Current_Pending_Sector` normalises to 054 against
+  threshold 000, so the drive's own self-assessment can never trip. That is why KE-13 ran to total
+  failure unnoticed and why the disk was returned to service without anyone seeing it still
+  degrading. The `smart_metrics` role now deploys Debian's `prometheus-node-exporter-collectors`,
+  whose `smartmon.sh` exports every attribute per disk as `value`, `worst`, `threshold` and
+  `raw_value`; the hand-written script and its units are removed. Four rules fill what was
+  `rules: []`, and they alert on *growth over 25 hours* rather than on level: three disks would
+  have made a level rule red from the first day, and the question nobody could answer between
+  2026-06-25 and 2026-08-13 - are the counters still moving? - was answered by reading them by hand
+  on four separate dates. All nine disks are attached to the Proxmox host; vm102 reaches seven of
+  them via `by-id` passthrough and sees only virtio-SCSI devices, so SMART is readable *only on the
+  host*. The prerequisite this waited on, the host becoming an Ansible node, was met on 2026-08-21.
 - **LXC250 (control node) tracks `main` only - verify before every live run:** playbooks execute
   from the working tree, not from a commit, so a node on a feature branch or mid-merge silently runs
   code matching no commit. Update with `git pull --ff-only`; do feature work on a workstation. Before
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **VM100 sshd binds `0.0.0.0:22` (LAN-exposed), violating the platform binding rule:** unlike
-  lxc250, which pins `ListenAddress` to its Tailscale IP. Password auth is off since 2026-07-09,
-  so the acute risk is closed, but the bind is wrong and contradicts vm100.md's own "LAN exposure
-  limited to 8096/13378 only". Fixing it couples sshd startup to Tailscale being up - the
-  KE-9/KE-12 boot-race class. Needs its own design decision, including whether `ssh_hardening`
-  should own `ListenAddress`. Do not bolt this onto an unrelated pass.
+- **sshd binds the wildcard on ten of eleven nodes - decided 2026-09-11.** This entry named vm100
+  as the exception until the 2026-08-17 sweep measured the opposite: lxc250 is the only node that
+  pins `ListenAddress`, and every other node, both VMs and the hypervisor included, binds `*:22`
+  dual-stack on hosts carrying a routable IPv6 address. Password auth is off everywhere since
+  2026-07-09, so the acute risk stays closed. `ssh_hardening` now owns `ListenAddress` behind
+  `ssh_hardening_listen_address`, empty by default, and refuses to write it unless the node also
+  declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list cleared.
+  Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
+  last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
@@ -776,9 +779,22 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   but has been static at 21 since (re-read 2026-07-28), as has `Current_Pending_Sector` at 7680.
   The failure is not accelerating; see the KE-13 note in Current Status for why that is not the same
   as safe. Nothing on `/mnt/aux-disk` has an off-site copy.
-- **Standing hold on `docker-compose-update` (until aux-disk is replaced):** the role pulls new
-  images, writing gigabytes of fresh blocks onto that disk. The repo-side image pins and the
-  role's compose-file-sync fix can wait for the replacement.
+- **The `docker-compose-update` hold is lifted (2026-09-05).** It had stood since 2026-07-09 on the
+  grounds that pulling images writes gigabytes of fresh layers onto a failing disk. Three
+  measurements moved the balance. The disk has been static at `Reported_Uncorrect 21` and
+  `Current_Pending_Sector 7680` since 2026-07-09 - sixty-two days in service with no new
+  uncorrectable error. The cost of the hold was counted for the first time on 2026-08-15: 139
+  fixable critical CVEs and 2162 high, running because the disk could not take new layers. And
+  since 2026-09-09 the degradation the hold was compensating for is finally observable, because
+  `smart_metrics` exports the per-attribute counters and `SmartAttributeDegrading` fires on growth
+  within 25 hours; a hold is a poor substitute for a measurement, and there was no measurement
+  until now. What the lift does not change: a run still writes to that disk, so it belongs in a
+  session somebody is watching rather than in the weekly sweep, which is why
+  `docker-compose-update` stays excluded in `ansible/drift-sweep.conf`. The repo-side image pins
+  and the role's compose-file-sync fix are now applicable work rather than blocked work.
+- **Apache on lxc210 still binds `*:80`/`*:443` and is deliberately not part of the sshd decision
+  above.** Its plausible fix is moving Nextcloud behind `tailscale serve`, which would also retire
+  KE-16 entirely - a project with its own rollback question, not a `ListenAddress` line.
 - **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
   mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
   filling the boot SSD - the KE-7 failure class. `mkdir 0` does not prevent this.

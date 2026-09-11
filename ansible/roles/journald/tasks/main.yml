@@ -1,0 +1,49 @@
+---
+- name: Create the journald drop-in directory
+  ansible.builtin.file:
+    path: "{{ journald_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Pin journald storage and size limits
+  ansible.builtin.template:
+    src: journald-persistence.conf.j2
+    dest: "{{ journald_dropin_dir }}/{{ journald_dropin_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: Ensure the persistent journal directory exists
+  ansible.builtin.file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    mode: "2755"
+
+- name: Flush handlers so the read-back sees the new configuration
+  ansible.builtin.meta: flush_handlers
+
+# Reading the file back would only prove Ansible wrote it. `journalctl` reports
+# what the running daemon decided, which is the thing the drop-in is supposed to
+# change - the same reason the `timezone` role reads the node back rather than
+# trusting its own template.
+- name: Read back what the running journal actually does
+  ansible.builtin.command:
+    cmd: journalctl --header
+  register: journald_header
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Confirm the journal is on disk and not in memory
+  ansible.builtin.assert:
+    that:
+      - "'/var/log/journal' in journald_header.stdout"
+    fail_msg: >-
+      journalctl reports no file under /var/log/journal on {{ inventory_hostname }},
+      so this node is still logging to memory despite Storage={{ journald_storage }}.
+  when: journald_header.rc == 0
