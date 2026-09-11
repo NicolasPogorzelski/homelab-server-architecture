@@ -60,7 +60,8 @@ notes there and keep this section short.
   closing a configuration error, sweep the other nodes and record that you did.**
 - **KE-14 - boot SSD I/O errors.** Diagnosed to the transport layer at the SAS2008 HBA, not the
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
-  verification. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
+  verification - written up as `runbooks/platform/ke14-power-path-check.md` on 2026-09-11, needing
+  host downtime the nightly cycle already provides and no purchase. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
   (`cmd_age=29s`, boot + 3 min, preceding boot clean) - live, and no verification step performed.
   **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
   enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
@@ -688,10 +689,12 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
   design decision; do not bolt it onto an unrelated pass.
 
-- **lxc200 monitors the fleet but not itself:** `node-exporter.yml` runs against `all:!lxc200`,
-  because lxc200's node_exporter is a Docker container that cannot see the host's systemd units.
-  lxc200 is now the only node without `SystemdUnitFailed` coverage: its exporter cannot see
-  systemd. lxc250 was the second until 2026-08-20, for the different reason that nothing
+- **lxc200 monitors the fleet but not itself - decided 2026-09-11, not yet built:**
+  `node-exporter.yml` runs against `all:!lxc200`, because lxc200's node_exporter is a Docker
+  container that cannot see the host's systemd units. The answer is a second, native exporter on a
+  different port rather than a privileged container or a bind-mounted systemd socket - see
+  `docs/decisions/lxc200-systemd-visibility.md`. It adds a scrape target, so it belongs in the
+  same session as that config change. lxc250 was the second until 2026-08-20, for the different reason that nothing
   scraped it; it is in the inventory and scraped since. The Proxmox host was the
   second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
   container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
@@ -755,12 +758,15 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **VM100 sshd binds `0.0.0.0:22` (LAN-exposed), violating the platform binding rule:** unlike
-  lxc250, which pins `ListenAddress` to its Tailscale IP. Password auth is off since 2026-07-09,
-  so the acute risk is closed, but the bind is wrong and contradicts vm100.md's own "LAN exposure
-  limited to 8096/13378 only". Fixing it couples sshd startup to Tailscale being up - the
-  KE-9/KE-12 boot-race class. Needs its own design decision, including whether `ssh_hardening`
-  should own `ListenAddress`. Do not bolt this onto an unrelated pass.
+- **sshd binds the wildcard on ten of eleven nodes - decided 2026-09-11.** This entry named vm100
+  as the exception until the 2026-08-17 sweep measured the opposite: lxc250 is the only node that
+  pins `ListenAddress`, and every other node, both VMs and the hypervisor included, binds `*:22`
+  dual-stack on hosts carrying a routable IPv6 address. Password auth is off everywhere since
+  2026-07-09, so the acute risk stays closed. `ssh_hardening` now owns `ListenAddress` behind
+  `ssh_hardening_listen_address`, empty by default, and refuses to write it unless the node also
+  declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list cleared.
+  Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
+  last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
@@ -786,6 +792,9 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   session somebody is watching rather than in the weekly sweep, which is why
   `docker-compose-update` stays excluded in `ansible/drift-sweep.conf`. The repo-side image pins
   and the role's compose-file-sync fix are now applicable work rather than blocked work.
+- **Apache on lxc210 still binds `*:80`/`*:443` and is deliberately not part of the sshd decision
+  above.** Its plausible fix is moving Nextcloud behind `tailscale serve`, which would also retire
+  KE-16 entirely - a project with its own rollback question, not a `ListenAddress` line.
 - **`appdata_aux-disk` storage lacks `is_mountpoint 1` (host change, deferred):** if aux-disk fails to
   mount, Proxmox treats the storage as active and writes into the empty mountpoint on `pve-root`,
   filling the boot SSD - the KE-7 failure class. `mkdir 0` does not prevent this.

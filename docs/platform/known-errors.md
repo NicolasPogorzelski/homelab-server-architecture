@@ -70,12 +70,26 @@ Changed the datasource URL from `http://prometheus:9090` to `http://127.0.0.1:90
 This systemd mount unit is related to NFS/RPC services. It is automatically generated but not required for the Nextcloud stack (which uses CIFS, not NFS). The unit fails because the unprivileged LXC does not have the necessary kernel capabilities for RPC pipe filesystem mounting.
 
 **Fix:**
-No fix applied. This is a non-blocking cosmetic failure. Nextcloud operates normally without it.
+Masked by the `systemd_hygiene` role from 2026-08-17, so that a failed unit anywhere on the fleet
+would mean something again. That treated the symptom: the unit kept being generated and kept being
+shadowed.
 
-**Status:** Known, non-blocking
+Removed at the source on 2026-09-11 by taking `nfs-common` off the node, which is what generated
+the unit. The same removal closes a second finding the 2026-08-17 audit recorded separately and
+nobody connected to this one: `rpcbind` listening on `0.0.0.0:111` and `[::]:111`, a wildcard bind
+on a node with no NFS mount at all. One package, two entries, eight months apart.
+
+The mask is retired rather than left in place. A mask for a unit that can no longer be generated
+reads at review time exactly like one that is still holding something back.
+
+**Status:** Resolved 2026-09-11 by removing `nfs-common` and `rpcbind`
+(`systemd_hygiene_absent_packages` in `host_vars/lxc210.yml`). The role simulates the removal with
+`apt-get -s` and refuses if apt would take anything else with it; Nextcloud's storage is CIFS, which
+shares no part of the NFS client stack.
 
 **References:**
 - [Nextcloud service documentation](../services/nextcloud.md)
+- [Ansible platform doc - the `systemd_hygiene` role](ansible.md#roles)
 
 ---
 
@@ -726,6 +740,23 @@ could corrupt a guest filesystem.
 **Status:** Diagnosed to transport layer; media and firmware causes excluded; physical root
 cause unconfirmed pending the verification steps above. Re-confirmed live on 2026-08-13 - the
 fault has not resolved itself and none of the four verification steps has been performed.
+
+**The verification is a runbook since 2026-09-11**, rather than four bullet points that had been
+restated in three documents without ever becoming a step:
+[`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md). It needs host
+downtime, which the nightly RTC cycle already provides, and no purchase. Its last section is the
+part that matters for this entry: a negative result gets written here too, because an unrecorded
+measurement is one somebody repeats.
+
+**What this entry has never mentioned, added 2026-09-11.** The drive is a consumer SSD with 58,540
+power-on hours. `Wear_Leveling_Count` normalises to 047 at 633 program-erase cycles, and
+`Used_Rsvd_Blk_Cnt_Tot` carries `WHEN_FAILED=In_the_past` with a worst value of 001 against a
+threshold of 010 - it has been below its threshold at some point, though the raw value reads 0 and
+the current value 100, consistent with a known firmware artefact on this drive family. Measured by
+the 2026-08-20 audit and recorded only in the remediation plan until now. The entry excludes the
+media as a cause on the strength of the error signature, which still holds; age is not the same
+claim as media failure, and leaving it out of the entry that names every other excluded cause made
+the exclusion look broader than it is.
 
 **Incidental correction:** all nine disks are attached to the Proxmox host. VM102 reaches
 six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART
@@ -1629,11 +1660,23 @@ access, an immediate reboot is strictly better than a machine that is alive and 
 - `FilesystemMountTimeout` and `SystemdUnitStuckActivating` added to the `kernel` rule group,
   verified against live series (71 and 1810 respectively) and confirmed to return empty on a
   healthy fleet.
-- `kernel.panic_on_oops=1` with `kernel.panic=10` - **pending.**
+- `kernel.panic_on_oops=1` with `kernel.panic=10` - **built 2026-09-11**, owned by the
+  `kernel_panic_policy` role, not yet applied. The role reads both values back out of the running
+  kernel rather than reporting the file it wrote, because a drop-in that a later file in
+  `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for ten seconds
+  rather than zero, and the decision not to arm `softdog`, are in
+  [the panic and watchdog decision](../decisions/hypervisor-panic-and-watchdog.md).
 - Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **pending.**
 - `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
   window and physical presence.
-- Arm `softdog` - **open for decision.**
+- Arm `softdog` - **decided against 2026-09-11**, with the conditions for revisiting written down
+  rather than left as a feeling. Arming it on Proxmox means enabling the HA stack, because
+  `watchdog-mux` is started by it, and an HA stack on a single node with no quorum partner fences
+  the node it is meant to protect. The residual risk is accepted and stated: `panic_on_oops` only
+  helps where the kernel is well enough to notice, and a hard lockup is precisely where it is not.
+  Revisit on the first lockup that leaves no oops and no netconsole frames, or the day this machine
+  gains an out-of-band path. See the decision for why `nmi_watchdog` is not the middle option it
+  looks like.
 
 **Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
 [KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete
