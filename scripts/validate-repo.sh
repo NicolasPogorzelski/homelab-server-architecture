@@ -40,6 +40,19 @@ while read -r mdfile; do
         if [[ ! -f "${dir}/${link}" && ! -d "${dir}/${link}" ]]; then
             echo "  Broken: ${mdfile} -> ${link}"
             echo "x" >> "${ERROR_LOG}"
+        else
+            # Existing on this workstation is not the same as existing in the
+            # repository. A target git ignores is absent from every clean checkout,
+            # so the link is broken everywhere except here - which is the worst
+            # place for it to look fine. Found 2026-09-11: `**/backup/` in
+            # .gitignore had swallowed runbooks/backup/, and an off-site backup
+            # runbook sat untracked for two days behind three index links while
+            # every local run passed.
+            target_rel="$(realpath -m --relative-to="${REPO_ROOT}" "${dir}/${link}")"
+            if git -C "${REPO_ROOT}" check-ignore -q "${target_rel}" 2>/dev/null; then
+                echo "  Link target is git-ignored, so it does not exist for anyone else: ${mdfile} -> ${link}"
+                echo "x" >> "${ERROR_LOG}"
+            fi
         fi
     done
 done < <(find "${REPO_ROOT}" -name "*.md" -type f)

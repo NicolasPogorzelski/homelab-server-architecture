@@ -28,6 +28,13 @@
 **/db.sqlite3*
 **/data/
 **/backup/
+# `**/backup/` is aimed at backup *data* directories anywhere in the tree. It also
+# swallowed runbooks/backup/, so the off-site backup runbook written on 2026-09-09 was
+# never committed while three index files linked to it - green locally, because the
+# checks skip what git ignores, and three broken links on a clean CI checkout. A
+# negation on the file alone cannot work: git does not re-include a file whose parent
+# directory is excluded, so the directory is what has to come back.
+!runbooks/backup/
 
 # =====================================================
 # Private Keys / Certificates
