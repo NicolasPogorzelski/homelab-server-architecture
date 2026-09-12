@@ -309,7 +309,14 @@ item 4 above; these are the rest.
   [KE-3](known-errors.md#ke-3) mask. The hypervisor half is deliberately left: Proxmox's own
   packages relate to `nfs-common` and a removal there could take a `pve-*` package with it, so it
   needs the simulated removal read by a person rather than the same host var copied across.
-  `apt-get -s remove --purge rpcbind nfs-common` on the host answers it in one command.
+  **Read 2026-09-12, and the fear was justified.** `apt-get -s remove --purge rpcbind nfs-common`
+  on the host lists `proxmox-ve`, `pve-manager`, `pve-container`, `qemu-server`, `pve-ha-manager`,
+  `libpve-storage-perl` and `libpve-guest-common-perl` among the packages it would take - the
+  cleanup that was right on a container would remove the hypervisor's management stack. The port is
+  closed by masking `rpcbind.socket` and `rpcbind.service` instead, declared in
+  `group_vars/proxmox.yml`: no NFS storage is configured, `rpc-statd` is static and inactive, and
+  `sockets.target` only wants the socket, so a mask is skipped rather than failed. Built, not
+  applied.
 - ~~**Alertmanager on lxc200 binds `*:9094`.**~~ Closed 2026-09-11 with
   `--cluster.listen-address=`, an empty value that disables the gossip listener outright. The port
   was open because Alertmanager clusters by default and the container runs with host networking; a

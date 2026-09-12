@@ -48,3 +48,34 @@ tailscale_boot_gate_units:
 tailscale_boot_gate_obsolete_dropins:
   - override.conf
   - wait-tailscale.conf
+
+# === systemd hygiene ===
+#
+# The NFS client stack runs on a node that mounts no NFS. `pvesm` lists no nfs
+# storage, yet rpcbind holds 0.0.0.0:111 and [::]:111, reachable from the LAN -
+# the same finding recorded for lxc210 on 2026-08-17 and closed there on
+# 2026-09-11 by removing the packages - KE-3 in docs/platform/known-errors.md.
+#
+# That answer does not transfer, and the measurement is why rather than a guess:
+# `apt-get -s remove --purge rpcbind nfs-common` on this host reports it would
+# also remove proxmox-ve, pve-manager, pve-container, qemu-server,
+# pve-ha-manager, libpve-storage-perl and libpve-guest-common-perl. Proxmox
+# relates its own metapackages to nfs-common, so the cleanup that was correct on
+# a container would take the hypervisor's management stack with it here.
+#
+# Masking the two units closes the port and keeps the packages. It costs nothing
+# that is running: rpc-statd.service is the only active-system unit that Requires
+# rpcbind.socket, it is `static` and `inactive`, and it starts on demand for an
+# NFS mount that does not exist. sockets.target only Wants the socket, and a
+# wanted unit that is masked is skipped rather than failed - so this does not
+# manufacture the failed unit the role exists to prevent.
+#
+# Reversible in one line if NFS storage is ever added here: drop these entries
+# and re-run. That is the whole reason it is a mask and not a removal.
+systemd_hygiene_masked_units:
+  - name: rpcbind.socket
+    reason: "no NFS storage on this node; the socket is what holds port 111 open, so masking the service alone leaves it listening"
+    action: mask
+  - name: rpcbind.service
+    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it (measured 2026-09-12)"
+    action: mask
