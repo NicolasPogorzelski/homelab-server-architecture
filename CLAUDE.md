@@ -226,7 +226,34 @@ behavior differs.
 ## Commit Policy
 
 - Never add `Co-Authored-By` or any AI attribution trailer to commit messages.
-- Never reference AI tools, Claude, or Anthropic in commit messages or documentation.
+- Never reference AI tools, Claude, or Anthropic in commit messages, pull request titles
+  or pull request bodies.
+
+**The line this rule actually draws, sharpened 2026-09-12.** Naming the tooling as part of the
+platform is documentation and is deliberate: `CLAUDE.md` is a tracked file, `snippets/claude/`
+carries the sanitized hooks reference, `.claude/agents/*.md` are in version control so they can
+be reviewed in a diff, and `runbooks/platform/lxc250-rebuild.md` documents installing the CLI.
+None of that is attribution. What is forbidden is marking authored work as produced by a tool -
+a trailer under a commit, a line under a pull request, a note in a document. The mechanical
+check permits the literal filename `CLAUDE.md` and the two directory paths, and refuses
+everything else.
+
+**Enforced since 2026-09-12, because it was not before.** Nine commits carrying a
+`Claude-Session:` trailer reached the public `main` branch, and `scripts/commit-msg-lint.sh`
+had existed the whole time - reading only the subject line, on a workstation where no
+`commit-msg` hook was installed at all. The rule lived in this file and nothing read it. Now:
+
+| Layer | Covers | Can it be skipped? |
+|---|---|---|
+| `scripts/commit-msg-lint.sh` | The whole message, not the subject alone | Only by not installing the hook |
+| `scripts/hooks/commit-msg` | The hook itself, tracked in git | It is a file in this repository, reviewable in a diff |
+| `validate-repo.sh` Check 40 | Whether this machine has the hook installed | Skipped under CI, where it does not apply |
+| `.github/workflows/commit-messages.yml` | Every commit in a pull request, plus the PR title and body | No |
+
+Install on a new clone with `git config core.hooksPath scripts/hooks`. The three published
+instances of the trailer are left in place on purpose: rewriting a public `main` breaks every
+clone, the commits are visible from the pull request either way, and an edited pull request
+body carries an edit marker that draws attention to exactly the line it removes.
 
 ## Publishing Is the Operator's
 
@@ -296,7 +323,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 39 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, changelog rows longer than an index line, alerting tables that no longer match the rules file, and changes under `docs/` or `ansible/` that carry no changelog row.
+This script enforces 40 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, changelog rows longer than an index line, alerting tables that no longer match the rules file, changes under `docs/` or `ansible/` that carry no changelog row, and a workstation with no commit-message hook installed.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -335,6 +362,12 @@ Reproduction on a new machine: see the `dotfiles` repo.
 | PreToolUse (Bash) | Before any command that commits | `scripts/hooks/pre-commit-guard.sh` - refuses a commit on `main`, and refuses any commit while `validate-repo.sh` reports findings |
 | SessionStart | Session opens | Injects current branch + last 5 commits into context |
 | Stop | Session ends | `devops-til` update reminder |
+
+Separately from those, and not machine-specific: `scripts/hooks/commit-msg` is a git hook -
+not a Claude Code hook like the three above - tracked in this repository and enabled with
+`git config core.hooksPath scripts/hooks`. It runs
+`commit-msg-lint.sh`, which checks the Conventional Commits format and refuses AI attribution
+anywhere in the message.
 
 **This table states the intent; each machine satisfies it separately.** `.claude/settings.local.json`
 is gitignored and carries absolute paths, so it is per-workstation state that no commit can

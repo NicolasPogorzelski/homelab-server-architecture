@@ -1285,11 +1285,63 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 40: the commit-message gate is installed on this machine
+# =============================================================================
+# Added 2026-09-12, after nine commits carrying an AI attribution trailer reached
+# the public main branch. The policy forbidding that had been written down since
+# the repository began; scripts/commit-msg-lint.sh existed to enforce it, and on
+# the workstation those commits were made from there was no .git/hooks/commit-msg
+# at all. The script had never run once.
+#
+# That is the same shape as the hooks table in CLAUDE.md, which states an
+# intention that each machine satisfies separately, and as the .claude settings
+# file found without a hooks key on 2026-08-17. A guard whose installation lives
+# outside version control is a guard nobody can confirm by reading a document.
+#
+# Skipped under CI on purpose. A clean checkout has no hooks installed and is not
+# where commits are written; .github/workflows/commit-messages.yml is the gate
+# that applies there, and it reads every message in the pull request plus the
+# pull request's own title and body.
+echo "Check 40: commit-message gate installed on this machine"
+
+if [[ -n "${CI:-}" ]]; then
+    echo "  SKIP: under CI, where the commit-messages workflow is the gate"
+elif ! git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "  SKIP: not a git repository"
+else
+    # Two ways to be installed, and the tracked one is preferred: core.hooksPath
+    # pointing at scripts/hooks, where the hook is a file in this repository and
+    # can be read in a diff. A symlink into .git/hooks still counts, because it
+    # runs the same script.
+    hooks_dir="$(git -C "${REPO_ROOT}" config --get core.hooksPath || true)"
+    if [[ -n "${hooks_dir}" ]]; then
+        [[ "${hooks_dir}" = /* ]] || hooks_dir="${REPO_ROOT}/${hooks_dir}"
+    else
+        hooks_dir="$(git -C "${REPO_ROOT}" rev-parse --git-path hooks)"
+        [[ "${hooks_dir}" = /* ]] || hooks_dir="${REPO_ROOT}/${hooks_dir}"
+    fi
+    hook_path="${hooks_dir}/commit-msg"
+
+    if [[ ! -x "${hook_path}" ]]; then
+        echo "  No executable commit-msg hook at ${hook_path}"
+        echo "  (install it with: git config core.hooksPath scripts/hooks)"
+        echo "x" >> "${ERROR_LOG}"
+    elif ! grep -q 'commit-msg-lint' "${hook_path}" 2>/dev/null \
+         && [[ "$(readlink -f "${hook_path}" 2>/dev/null)" != *commit-msg-lint.sh ]]; then
+        echo "  commit-msg hook exists but does not run scripts/commit-msg-lint.sh: ${hook_path}"
+        echo "x" >> "${ERROR_LOG}"
+    fi
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 39"
+echo "Checks run: 40"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
