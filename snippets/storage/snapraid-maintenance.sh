@@ -64,9 +64,15 @@ write_metrics() {
 # nothing. `grep -o` plus `tr -dc` rather than a PCRE: busybox-free Debian has GNU
 # grep, but -P is a compile-time option and this script is not the place to find out
 # it was omitted.
+# Always exits 0. That is not cosmetic: this runs under `set -e`, and an
+# assignment from a command substitution whose last command exits non-zero kills
+# the script. Without the `|| true` the absence handling further down is
+# unreachable code - which is exactly what happened on 2026-09-12, when the
+# zero-sub-second pattern missed and the unit died at exit 1 before reaching the
+# branch written to tolerate a missing value.
 extract_number() {
   local text="$1" pattern="$2"
-  grep -oE "$pattern" <<<"$text" | head -1 | grep -oE '[0-9]+' | head -1
+  { grep -oE "$pattern" <<<"$text" | head -1 | grep -oE '[0-9]+' | head -1; } || true
 }
 
 # Export coverage rather than recency. Called after a successful sync or scrub and
@@ -87,9 +93,14 @@ write_status_metrics() {
   # "The 74% of the array is not scrubbed." - snapraid omits the line entirely when
   # the array is fully scrubbed, so an absent match means 0, not unknown.
   unscrubbed="$(extract_number "$out" '[0-9]+% of the array is not scrubbed')"
-  # "You have 63322 files with a zero sub-second timestamp." - likewise absent when
+  # "You have 63350 files with zero sub-second timestamp." - likewise absent when
   # there are none, in which case snapraid prints a "No file has ..." sentence.
-  zerosub="$(extract_number "$out" 'have [0-9]+ files with a zero sub-second')"
+  #
+  # The article is optional in the pattern because the version on vm102 does not
+  # print one, and the first draft of this script assumed it did. The wording was
+  # written from memory rather than from the command's output, and it cost a
+  # failed unit on the first scheduled run.
+  zerosub="$(extract_number "$out" 'have [0-9]+ files with (a )?zero sub-second')"
 
   if [[ -z "$age" ]]; then
     # Only this one is genuinely unknown when absent: a never-scrubbed array prints
@@ -112,12 +123,20 @@ write_status_metrics() {
       echo "# TYPE snapraid_scrub_oldest_block_age_days gauge"
       echo "snapraid_scrub_oldest_block_age_days ${age}"
     fi
-    echo "# HELP snapraid_array_unscrubbed_ratio Fraction of the array no scrub has verified."
-    echo "# TYPE snapraid_array_unscrubbed_ratio gauge"
-    echo "snapraid_array_unscrubbed_ratio $(awk "BEGIN{printf \"%.4f\", ${unscrubbed}/100}")"
-    echo "# HELP snapraid_zero_subsecond_files Files whose timestamp has no sub-second part."
-    echo "# TYPE snapraid_zero_subsecond_files gauge"
-    echo "snapraid_zero_subsecond_files ${zerosub}"
+    # Both of these are emitted only when the output was recognisable at all.
+    # Treating an absent line as zero is right when snapraid omits it because the
+    # count is zero, and wrong when the whole output is something this script
+    # cannot read - there "0% unscrubbed" would be a confident answer to a
+    # question nobody managed to ask. The age above is the marker for which case
+    # this is, since a recognisable status always carries it.
+    if (( parse_ok == 1 )); then
+      echo "# HELP snapraid_array_unscrubbed_ratio Fraction of the array no scrub has verified."
+      echo "# TYPE snapraid_array_unscrubbed_ratio gauge"
+      echo "snapraid_array_unscrubbed_ratio $(awk "BEGIN{printf \"%.4f\", ${unscrubbed}/100}")"
+      echo "# HELP snapraid_zero_subsecond_files Files whose timestamp has no sub-second part."
+      echo "# TYPE snapraid_zero_subsecond_files gauge"
+      echo "snapraid_zero_subsecond_files ${zerosub}"
+    fi
   } | write_metrics snapraid_status
 
   if (( parse_ok == 1 )); then
