@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Tracked git hook. Installed by pointing git at this directory once per clone:
+#
+#   git config core.hooksPath scripts/hooks
+#
+# A tracked file rather than a symlink into .git/hooks, and the difference is the
+# point. A symlink is per-machine state that no commit can guarantee, which is the
+# gap CLAUDE.md already records for .claude/settings.local.json - and measured on
+# 2026-09-12, this workstation had no commit-msg hook at all, so the gate had
+# never run and nine commits carrying an AI attribution trailer reached the
+# public main branch. Here the hook itself is reviewable in a diff, and installing
+# it is one configuration line instead of one symlink per hook.
+#
+# Note the file has no extension: git looks for exactly `commit-msg`.
+#
+# The workstation half is still a local setting, so validate-repo.sh Check 40
+# reports its absence, and .github/workflows/commit-messages.yml is the half that
+# cannot be forgotten on a new machine.
+
+exec "$(dirname "$0")/../commit-msg-lint.sh" "$@"

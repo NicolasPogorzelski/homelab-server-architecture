@@ -1,0 +1,58 @@
+name: Commit messages
+
+# The gate that does not live on one workstation.
+#
+# scripts/commit-msg-lint.sh is wired in as a git hook, and a git hook is
+# per-machine state that no commit can guarantee - the same gap CLAUDE.md already
+# records for .claude/settings.local.json. Measured on 2026-09-12, the admin
+# notebook had no .git/hooks/commit-msg at all, so the local half of this gate had
+# never run, and nine commits carrying an AI attribution trailer reached the
+# public main branch.
+#
+# This workflow reads every commit in the pull request plus the pull request's own
+# title and body, which is where the same trailer also landed. It cannot be
+# skipped by forgetting to install something on a new machine.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        # Pinned to a commit SHA, not a tag: `v4` is a moving reference the upstream owner can
+        # repoint at any commit, so a compromised or mistaken retag would execute unreviewed code
+        # in this workflow. The trailing comment carries the human-readable version, and Dependabot
+        # updates both together.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The default shallow clone cannot walk base..head.
+          fetch-depth: 0
+
+      - name: Lint every message in this pull request
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          chmod +x scripts/commit-msg-lint.sh
+          failed=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            git log -1 --format=%B "$sha" > "${RUNNER_TEMP}/msg.txt"
+            printf '%s %s\n' "${sha:0:9}" "$(git log -1 --format=%s "$sha")"
+            ./scripts/commit-msg-lint.sh "${RUNNER_TEMP}/msg.txt" || failed=1
+          done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
+          exit "$failed"
+
+      # Title and body arrive through the environment rather than through `${{ }}`
+      # inside the script body. Interpolating them directly would splice text an
+      # author controls into the shell this job runs.
+      - name: Lint the pull request title and body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          { printf '%s\n\n' "$PR_TITLE"; printf '%s\n' "$PR_BODY"; } > "${RUNNER_TEMP}/pr.txt"
+          ./scripts/commit-msg-lint.sh --attribution-only "${RUNNER_TEMP}/pr.txt"
