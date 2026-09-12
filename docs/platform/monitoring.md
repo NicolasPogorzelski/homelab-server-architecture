@@ -78,7 +78,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
 | `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing` |
-| `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified`, `OffsiteBackupMetricsMissing` |
+| `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified` |
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified` |
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |

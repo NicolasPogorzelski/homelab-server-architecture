@@ -425,14 +425,25 @@ groups:
       # Absent is not zero. A node that never deploys the role, or whose textfile
       # write fails, exports nothing at all - which every rule above reads as
       # silence rather than as a fault.
-      - alert: OffsiteBackupMetricsMissing
-        expr: absent(offsite_backup_success)
-        for: 1h
-        labels:
-          severity: warning
-        annotations:
-          summary: "No off-site backup metrics on the fleet"
-          description: "offsite_backup_success is absent everywhere. Either no node runs the role or the textfile collector is not being read."
+      # OffsiteBackupMetricsMissing was here and is withdrawn until the target
+      # exists, 2026-09-12. Its expression was `absent(offsite_backup_success)`,
+      # which is true and will stay true until the VPS is bought: no node runs the
+      # role, so nothing writes the metric. It fired within an hour of these rules
+      # first being deployed.
+      #
+      # A rule that is red by construction is the thing this repository keeps
+      # arguing against - the percentage threshold on a pool designed to fill, the
+      # level thresholds the SMART rules avoid, the sweep entry that teaches a
+      # reader to skip the whole report. `ansible/drift-sweep.conf` already
+      # excludes the offsite playbook for exactly this reason and says to add it
+      # back the day the machine answers. This belongs in the same sentence.
+      #
+      # The other three rules in this group need no such treatment: each reads a
+      # series that does not exist yet, so each is inert rather than red.
+      #
+      # Restore it in the same change as the first successful run. What covers the
+      # gap meanwhile is not a rule but the remediation plan, where "no off-site
+      # copy" is Tier 1 item 3 and the most-read open item in the repository.
 
   - name: snapshot
     rules:
