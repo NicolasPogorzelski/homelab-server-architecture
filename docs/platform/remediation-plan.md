@@ -405,9 +405,15 @@ drift and are corrected in place; these are the ones that are work rather than w
   **What the fix exposed is now the open item:** the coverage is not poor because the job is
   broken, it is poor because a monthly scrub at snapraid's default 8 % takes about a year for a
   full pass. So the thresholds are set above today's measurement rather than where anyone would
-  want them, and the real question is the cadence - which cannot be answered without knowing how
-  long a scrub actually runs on this array, a number nobody has. Measure that before changing the
-  schedule. The original finding read: it measures when a scrub last ran, not how
+  want them, and the real question is the cadence. **Answered 2026-09-12, and the number was
+  already on the node.** The scrub timer last fired at 20:00:03 on 2026-09-01 and
+  `snapraid_scrub_last_success_timestamp` reads 21:10:36 the same evening: 8% of this array takes
+  70 minutes, so a full pass is 12.5 runs and the monthly schedule verified everything once every
+  12.5 months. The schedule is now weekly at 12%, which covers the 66% that no scrub has ever
+  reached in about five and a half weeks - before `SnapRAIDScrubCoverageAging` trips at 200 days,
+  which the oldest block reaches around 2026-11-01 at one day per day. Both operations now export
+  their own duration, so the next change to this schedule starts from a measurement rather than
+  from this paragraph. Not applied yet. The original finding read: it measures when a scrub last ran, not how
   much of the array that scrub reached. Measured 2026-08-17: the last run was twelve days ago and
   the rule is green, while `snapraid status` reports the oldest block scrubbed 123 days ago and
   74 % of the array unscrubbed. Same class as `smart_health_passed` and `PostgreSQLBackupStale` -

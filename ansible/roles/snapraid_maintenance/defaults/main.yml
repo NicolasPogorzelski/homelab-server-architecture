@@ -13,9 +13,29 @@
 snapraid_script_src: "{{ playbook_dir }}/../../snippets/storage/snapraid-maintenance.sh"
 snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 
-# Nightly sync, monthly scrub - the schedule the cron file used.
+# Nightly sync. The scrub was monthly until 2026-09-12 - the schedule the cron
+# file used, carried over without anyone costing it.
+#
+# The arithmetic that changed it, from two metrics that were already being
+# written. The 2026-09-01 scrub started at 20:00:03 and its success timestamp
+# reads 21:10:36, so 8% of this array takes 70 minutes; a full pass is 12.5 runs,
+# and monthly that is one complete verification every 12.5 months. Measured the
+# same day: the oldest block had gone 149 days unverified and 66% of the array
+# had never been scrubbed at all, while `SnapRAIDScrubCoverageAging` trips at 200
+# days - roughly 2026-11-01 at one day per day.
+#
+# Weekly at 12% covers the unscrubbed two thirds in about five and a half weeks,
+# which turns that curve before the rule fires rather than after. One run then
+# costs about 105 minutes against a window that closes at 01:00 when the host
+# powers down, so it fits three times over. The nightly sync is untouched and
+# starts at 23:00, an hour and a quarter after a 105-minute scrub has finished.
+#
+# The lever if this proves too much disk for the value: put the percentage back
+# to 8 and keep the weekly cadence, which still gives a full pass in 2.9 months
+# instead of 12.5.
 snapraid_sync_oncalendar: "*-*-* 23:00:00"
-snapraid_scrub_oncalendar: "*-*-01 20:00:00"
+snapraid_scrub_oncalendar: "Mon *-*-* 20:00:00"
+snapraid_scrub_percent: 12
 
 # Coverage metrics, read from `snapraid status` and written to the textfile
 # collector. Midday, because it must not share a window with either job above:
