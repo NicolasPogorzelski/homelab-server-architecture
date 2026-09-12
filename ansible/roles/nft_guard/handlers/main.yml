@@ -1,6 +1,13 @@
 ---
+# Skipped under --check for the reason the snapraid and proxmox_host_units roles
+# already record for `systemctl enable`: in check mode the unit file above was
+# never really written, so systemd cannot see it and the restart fails with
+# "Could not find the requested service". The dry run on 2026-09-12 failed on
+# lxc210 for exactly that, which is a fault in the role rather than on the node -
+# the convention was applied to the enable task and not to the handler beside it.
 - name: Reload the local guard
   ansible.builtin.systemd_service:
     name: "{{ nft_guard_unit }}"
     state: restarted
     daemon_reload: true
+  when: not ansible_check_mode
