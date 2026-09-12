@@ -113,14 +113,25 @@ groups:
           summary: "SnapRAID sync is stale"
           description: "Last successful snapraid sync on VM102 was more than 26 hours ago."
 
+      # 32 days until 2026-09-12, which was one missed run plus margin while the
+      # scrub was monthly. The scrub is weekly now, and leaving the threshold
+      # where it was would have let three consecutive runs fail in silence. Ten
+      # days is the same shape of rule as before: one missed Monday, plus room
+      # for Persistent=true to catch up an overdue run at the next boot.
+      #
+      # What this rule is actually likely to catch, now that the runs are timed:
+      # a scrub the nightly shutdown kills. The timer fires at 20:00, a 12% run
+      # costs about 105 minutes, and the host powers down at 01:00 - so an
+      # overrun is not close today, and if the array grows until it is, the
+      # script never reaches its success metric and this is what says so.
       - alert: SnapRAIDScrubStale
-        expr: (time() - snapraid_scrub_last_success_timestamp) > 2764800
+        expr: (time() - snapraid_scrub_last_success_timestamp) > 864000
         for: 0m
         labels:
           severity: warning
         annotations:
           summary: "SnapRAID scrub is stale"
-          description: "Last successful snapraid scrub on VM102 was more than 32 days ago."
+          description: "Last successful snapraid scrub on VM102 was more than 10 days ago. The scrub is weekly, so this is one missed run plus catch-up margin - check whether the run was killed before it finished."
 
       # The four rules below were added on 2026-09-11 because the one above cannot
       # see what a scrub achieved. Measured 2026-08-17: it was green while the
@@ -130,14 +141,20 @@ groups:
       # 7680 unreadable sectors, and as PostgreSQLBackupStale during an outage.
       #
       # The thresholds sit above the measured baseline rather than at the value
-      # anyone would want, and that is a decision rather than an oversight. The
-      # scrub runs monthly with snapraid's default -p 8, so roughly 8% of the array
-      # is verified per run and a full pass takes about a year by arithmetic, not by
-      # fault. A rule set where the numbers ought to be would be red from its first
-      # evaluation, and this repository has already recorded what that costs: a
-      # permanently red rule is one people learn to scroll past. These fire when
-      # coverage gets worse than the schedule explains, and the cadence itself is an
-      # open decision recorded in the remediation plan.
+      # anyone would want, and that is a decision rather than an oversight. A rule
+      # set where the numbers ought to be would be red from its first evaluation,
+      # and this repository has already recorded what that costs: a permanently
+      # red rule is one people learn to scroll past.
+      #
+      # The schedule they were written against has since changed, and the
+      # thresholds deliberately have not. Until 2026-09-12 the scrub was monthly
+      # at snapraid's default -p 8, which is a full pass every 12.5 months by
+      # arithmetic rather than by fault; it is now weekly at 12%, which should
+      # reach the never-scrubbed two thirds of the array in about five and a half
+      # weeks and turn the oldest-block curve before the 200-day line. Leaving
+      # these numbers alone is what makes the next few weeks a measurement: if
+      # the new cadence works, the values fall away from the thresholds on their
+      # own, and if it does not, these fire.
       - alert: SnapRAIDScrubCoverageAging
         expr: snapraid_scrub_oldest_block_age_days > 200
         for: 1h
@@ -145,7 +162,7 @@ groups:
           severity: warning
         annotations:
           summary: "Oldest SnapRAID block unverified for {{ $value }} days"
-          description: "Some part of the array has not been checked against parity for over 200 days. A monthly 8% scrub should hold this near 120; above 200 the scrub is not keeping up or has stopped."
+          description: "Some part of the array has not been checked against parity for over 200 days. The weekly 12% scrub should pull this down once it has covered the never-scrubbed blocks; above 200 and still rising, the scrub is not keeping up or has stopped."
 
       - alert: SnapRAIDArrayUnscrubbed
         expr: snapraid_array_unscrubbed_ratio > 0.85
