@@ -113,7 +113,7 @@ same command after five boots before calling anything improved, and record the c
   then, nothing changes about the risk: record it and keep the guest-backup schedule.
 - **The reading is in tolerance in both states.** The power hypothesis is weakened, not dead - a
   transient dip is not visible on a handheld meter. The next discriminating step is moving the
-  boot SSD off the HBA to an onboard SATA port, which is remediation plan Tier 2 item 6 and needs
+  boot SSD off the HBA to an onboard SATA port, which is remediation plan Tier 2 item 7 and needs
   no purchase: if the bursts stop it was the HBA path, if they persist it is neither.
 - **The host does not come back.** This is the case the preconditions exist for. The recovery path
   is [`hard-shutdown-recovery.md`](hard-shutdown-recovery.md), and note that the hypervisor has no

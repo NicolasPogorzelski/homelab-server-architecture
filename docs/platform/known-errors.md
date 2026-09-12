@@ -1660,11 +1660,12 @@ access, an immediate reboot is strictly better than a machine that is alive and 
 - `FilesystemMountTimeout` and `SystemdUnitStuckActivating` added to the `kernel` rule group,
   verified against live series (71 and 1810 respectively) and confirmed to return empty on a
   healthy fleet.
-- `kernel.panic_on_oops=1` with `kernel.panic=10` - **built 2026-09-11**, owned by the
-  `kernel_panic_policy` role, not yet applied. The role reads both values back out of the running
-  kernel rather than reporting the file it wrote, because a drop-in that a later file in
-  `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for ten seconds
-  rather than zero, and the decision not to arm `softdog`, are in
+- `kernel.panic_on_oops=1` with `kernel.panic=10` - **applied 2026-09-12**, owned by the
+  `kernel_panic_policy` role. Re-read from the running kernel the same day, outside the run that
+  wrote it: `sysctl kernel.panic_on_oops kernel.panic` returns 1 and 10. The role reads both values
+  back out of the running kernel rather than reporting the file it wrote, because a drop-in that a
+  later file in `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for
+  ten seconds rather than zero, and the decision not to arm `softdog`, are in
   [the panic and watchdog decision](../decisions/hypervisor-panic-and-watchdog.md).
 - Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **pending.**
 - `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
