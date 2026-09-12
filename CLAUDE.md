@@ -383,6 +383,16 @@ normally part of a compound command (`git add -A && git commit -F -`) that a `Ba
 prefix rule never sees. It answers `permissionDecision: deny`, which blocks the one call and leaves
 the session alive, rather than `continue: false`, which ends the turn.
 
+Since 2026-09-12 it also asks which repository the command touches, resolved from an explicit
+`git -C`, a leading `cd`, or the session directory. Before that it read this checkout's branch
+whatever the command was working on, and both directions of that were observed on one day: a
+change to the sister repository let through because this one sat on a branch, and refused because
+this one sat on main. It steps aside only for a worktree it can prove is a different repository;
+anything unresolvable is treated as this one, because over-blocking costs a retry. One accepted
+cost of the broad pattern: a branch whose *name* contains `commit` cannot be created from main,
+since the command mentions both words. Narrowing the pattern would reopen the compound-command
+hole it was widened to close.
+
 Global hooks (e.g. 15-minute learning rule) live in `~/.claude/settings.json` - versioned in the `dotfiles` repo.
 
 ## Claude Code Subagents
