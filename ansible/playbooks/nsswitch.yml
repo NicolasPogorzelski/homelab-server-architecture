@@ -1,0 +1,16 @@
+---
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+# `guests` rather than the one node that needs it, because the role is a no-op
+# where `nsswitch_hosts` is unset and a sweep that visits every node is what turns
+# "only lxc250 has this" from a belief into a run that would have found the
+# second instance. The measurement that scoped this was a loop over all seven
+# containers, not a look at the one that misbehaved.
+- name: Set the host resolution order where a node declares one
+  hosts: guests
+  become: true
+  roles:
+    - nsswitch

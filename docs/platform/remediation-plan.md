@@ -207,9 +207,16 @@ before `dns`, resolved knows nothing of the Tailscale resolver, and `[!UNAVAIL=r
 lookup before `/etc/resolv.conf` - which tailscaled had written correctly, with the right nameserver
 and search domain - is ever consulted. A direct UDP query to the MagicDNS resolver answers.
 `fleet-drift.sh` works around it with `curl --resolve`, which keeps SNI and certificate verification
-intact. The durable fix is a choice between pointing resolved at the Tailscale resolver and taking
-resolved out of the path on these containers, and it wants its own decision: the same nsswitch
-ordering is on every Debian container here.
+intact.
+
+**The closing sentence of this entry was wrong, measured 2026-09-12.** It read "the same nsswitch
+ordering is on every Debian container here", which made a one-node fault look like a fleet decision
+and is a large part of why the fix waited. All seven containers were read: lxc250 is the only one
+carrying `resolve` in the line and the only one running `systemd-resolved`, the other six read
+`files dns` with resolved inactive, and those six resolve both a short MagicDNS name and a fully
+qualified one while lxc250 resolves neither. Built the same day as the `nsswitch` role, which owns
+the line and then reads a name back through `getent` rather than reporting the file it wrote. Not
+applied.
 
 **Small open items.** A few lines each, collected because none of them blocks anything else.
 
