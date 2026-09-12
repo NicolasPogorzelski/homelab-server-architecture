@@ -19,7 +19,9 @@ See: [Runbook index](../../runbooks/README.md)
 
 - Prometheus binds to loopback only (`127.0.0.1:9090`)
 - Grafana binds to loopback only (`127.0.0.1:3000`)
-- Node Exporter binds to loopback only (`127.0.0.1:9100`)
+- Node Exporter binds to loopback only (`127.0.0.1:9100`) - the containerised one. A second,
+  native Node Exporter binds this node's Tailscale address on `:9101` and exports systemd unit
+  state, which a container structurally cannot see
 - No public exposure; remote access follows the zero-trust overlay model (Tailscale)
 - Access is enforced via Tailscale ACL policy (tags + ACL JSON)
 - See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
@@ -29,7 +31,9 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 ## Prometheus Configuration (Current State)
 
 - Scrape interval: 15 seconds
-- 14 active scrape jobs (18 targets) - all UP, re-verified 2026-09-04 against the Prometheus API
+- 14 active scrape jobs (18 targets) - all UP, re-verified 2026-09-04 against the Prometheus API.
+  The lxc200 systemd target below is rendered but not yet deployed, so it is the fifteenth job
+  rather than a measured one
 - **LXC250 joined the targets on 2026-08-20.** It had sat in no inventory group, so the template
   rendered no target for it - while the node did run a `node_exporter`, hand-installed, binding
   `*:9100`, scraped by nobody. `systemctl is-active` reported `active` throughout, which is why
@@ -39,7 +43,8 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 | Job name | Target | Notes |
 |---|---|---|
 | `prometheus` | `127.0.0.1:9090` | Prometheus self-scrape |
-| `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback) |
+| `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback); resources only, no unit state |
+| `node-lxc200-monitoring-systemd` | LXC200 Tailscale IP`:9101` | systemd binary, v1.11.1, native beside the container; the target that gives `SystemdUnitFailed` its eleventh node |
 | `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | systemd + textfile collector (`smartmon.prom`, `lvm-thin.prom`, `guest-backup.prom`) |
 | `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.11.1; textfile collector enabled (`snapraid_sync.prom`, `snapraid_scrub.prom`) |
 | `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.11.1 |

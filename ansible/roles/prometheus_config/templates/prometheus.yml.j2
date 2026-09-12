@@ -14,10 +14,25 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:9090"]
 
-  # Node Exporter - LXC200 monitoring (loopback, Docker container)
+  # Node Exporter - LXC200 monitoring (loopback, Docker container).
+  # Resources only. A container cannot read the host's systemd, so this target
+  # carries no `node_systemd_unit_state` and never could.
   - job_name: "node-lxc200-monitoring"
     static_configs:
       - targets: ["127.0.0.1:9100"]
+
+  # Node Exporter - LXC200 native unit beside that container, systemd collector.
+  # The second half of a deliberate duplication: one job for resources, one for
+  # unit state, on the node that runs the alerting stack and was the last one
+  # `SystemdUnitFailed` could not see.
+  #
+  # The port has no default here on purpose. It is a fact about the node and
+  # lives in its host_vars; a default would let this file and the unit disagree
+  # silently, and a target pointed at a port nothing listens on reports `up == 0`
+  # as though the node were down.
+  - job_name: "node-lxc200-monitoring-systemd"
+    static_configs:
+      - targets: ["{{ hostvars['lxc200']['ansible_host'] }}:{{ hostvars['lxc200']['node_exporter_port'] }}"]
 
   # PostgreSQL Exporter - CT260 (pg_stat_* metrics via Tailscale)
   - job_name: "postgres"
@@ -29,7 +44,11 @@ scrape_configs:
     static_configs:
       - targets: ["{{ proxmox_host_tailscale_ip }}:9100"]
 
-  # Node Exporter from inventory
+  # Node Exporter from inventory. lxc200 is written out above rather than swept
+  # in here: it has two exporters, and this loop names a job after the node's
+  # `prometheus_label`, so it would render the second one as a duplicate of
+  # `node-lxc200-monitoring`. Prometheus refuses a config with two jobs of the
+  # same name outright - the whole file fails to load, not just the duplicate.
   {% for host in groups['lxcs'] %}
   {% if host != 'lxc200' %}
   - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"

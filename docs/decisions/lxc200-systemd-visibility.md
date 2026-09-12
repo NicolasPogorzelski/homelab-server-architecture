@@ -5,6 +5,17 @@
 Decided 2026-09-11. Chosen option is a native `node_exporter` beside the container, not a
 privileged container.
 
+Built 2026-09-12, not yet applied: `node-exporter.yml` no longer excludes the node, the port is
+`node_exporter_port: 9101` in `host_vars/lxc200.yml`, and the rendered Prometheus config carries
+the second job. Applying it changes the monitoring stack's own configuration, so it belongs to a
+session that is watching that stack rather than to a sweep.
+
+One thing the build settled that the decision left open. The second job cannot be swept in by the
+loop that renders the other nodes: that loop names a job after the node's `prometheus_label`, which
+for this node is `monitoring`, so it would emit a second `node-lxc200-monitoring` - and Prometheus
+refuses a configuration with two jobs of one name by failing the whole file, not the duplicate. The
+native target is therefore written out explicitly and named `node-lxc200-monitoring-systemd`.
+
 ## Context
 
 `SystemdUnitFailed` covers every node except lxc200, and the reason is structural rather than an
