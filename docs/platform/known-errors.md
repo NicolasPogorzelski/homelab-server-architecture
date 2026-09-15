@@ -12,6 +12,43 @@ file path, not the fragment.
 
 ---
 
+## Entries
+
+| # | Fault | Status |
+|---|---|---|
+| [KE-1](#ke-1) | SQLite on CIFS - database is locked | Resolved - architectural decision |
+| [KE-2](#ke-2) | Grafana datasource unreachable after host networking switch | Resolved |
+| [KE-3](#ke-3) | Failed run-rpc_pipefs.mount in LXC210 | Resolved 2026-09-11, at the package |
+| [KE-4](#ke-4) | Docker creates directories for missing bind-mount files | Systematic - Docker design behaviour |
+| [KE-5](#ke-5) | Vaultwarden SQLite on CIFS | Closed 2026-09-01 by decommissioning |
+| [KE-6](#ke-6) | Tailscale userspace networking prevents the exporter binding | Resolved 2026-07-28, cold-boot verified |
+| [KE-7](#ke-7) | Package corruption when the LVM thin pool overflows | Resolved 2026-04-26 |
+| [KE-8](#ke-8) | Media services hang while the node stays healthy | Resolved 2026-06-08 |
+| [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09, reboot verified |
+| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Open - workaround only, fault still active |
+| [KE-11](#ke-11) | Grafana admin password not updated after first start | Known, non-blocking |
+| [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25, cold-boot verified |
+| [KE-13](#ke-13) | aux-disk physical failure | Open - in service under protest, replacement pending |
+| [KE-14](#ke-14) | Intermittent boot-time I/O errors on the boot SSD | Open - physical verification pending |
+| [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
+| [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 (inferred) |
+| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - durable fix not applied (inferred) |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - every known instance fixed and boot-proven |
+| [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
+| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - root cause unknown (inferred) |
+| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11, remediation applied (inferred) |
+| [KE-22](#ke-22) | A retired deployment stayed on disk and broke the backup | Resolved 2026-09-01 |
+| [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
+| [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
+| [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
+
+Status is quoted from each entry's `**Status:**` line. Four entries carry none and are marked
+*(inferred)* - KE-16, KE-17, KE-20 and KE-21 express it through other headings, which the
+minimum shape in `CLAUDE.md` does not allow for. Left as it is rather than rewritten here; the
+gap is now visible, which it was not while the file had no index.
+
+---
+
 <a id="ke-1"></a>
 
 ## KE-1: SQLite on CIFS - "database is locked"

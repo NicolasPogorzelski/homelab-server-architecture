@@ -485,6 +485,15 @@ hidden entry and which GitHub reads just as well.
   linking the entry that carries the detail. Enforced by Check 37 for rows dated 2026-09-04 and
   later. Measured on 2026-09-04: the ten oldest rows averaged 173 characters and the ten newest
   1888, which nobody decided and nobody noticed, because every single row was defensible.
+- **Three rules for comments in code and configuration**, measured into existence on 2026-09-15
+  when the same reasoning turned up in four places on one day. **Current state, not the
+  sequence:** a comment says why a value is what it is; anything dated about a *change* belongs in
+  the changelog, or the file grows a second one that no check reads. **Fifteen lines of rationale
+  beside a single value or task is a decision record** - put it in `docs/decisions/` and leave a
+  one-line pointer. This does not apply to a file header, where explaining the whole file is the
+  job: of 61 comment blocks over fifteen lines, 25 are headers and belong as they are.
+  **Phrase a measurement as one:** `measured 2026-09-15: 80.41 %` ages visibly, `the pool is at
+  80 %` ages in silence.
 - Keep it short. A runbook is read during an incident, not at a desk. Length is a cost.
 
 **Who drafts what:**
