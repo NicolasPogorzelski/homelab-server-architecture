@@ -285,10 +285,12 @@ applied.
   `217/USER`, because no role has ever created the `node_exporter` account and lxc200 was the one
   node this playbook never reached. The nine that have it were made by hand before the role
   existed. The role now creates the group and the account, with no uid pinned - the nine sit on
-  996 and 999 depending on what was free at the time. The unit on lxc200 is disabled and stopped
-  meanwhile, so the node carries no failed unit and its container exporter is untouched. What is
-  left is one supervised run of `node-exporter.yml` and `prometheus-config.yml` against lxc200,
-  in that order, because the second adds a scrape target that the first has to be answering.
+  996 and 999 depending on what was free at the time. **Closed 2026-09-15** by both runs in
+  that order, the second adding a scrape target the first had to be answering: the native exporter
+  binds the node's Tailscale address on 9101, both jobs report `up`, and 895
+  `node_systemd_unit_state` series arrive from lxc200. The only instance left without them is the
+  container exporter on `127.0.0.1:9100`, which is the one that cannot see the host's systemd and
+  is why there are two. No node on this fleet is outside `SystemdUnitFailed` any more.
 - ~~`fleet-snapshot.yml` runs `become: true` against every node once a week~~ Done 2026-09-09. The
   grant now sits on the two tasks that need it, root's crontab and the Docker socket, and the play
   runs unprivileged otherwise. Verified rather than assumed: the three countable projections -
