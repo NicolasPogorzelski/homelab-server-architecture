@@ -1,4 +1,29 @@
 ---
+# The unit runs as an unprivileged account, and until 2026-09-15 no role created
+# it. It existed on nine nodes because somebody had made it there by hand before
+# the role was written, and the tenth - lxc200, excluded from this playbook until
+# that day - had none. The unit installed, enabled, and then exited 217/USER on
+# every start. A role that is meant to survive a node rebuild cannot inherit an
+# account from the machine it is rebuilding.
+#
+# No uid is pinned: the nine existing accounts sit on 996 and 999 depending on
+# what was free when each was made, and pinning one would renumber them.
+- name: Create the group the exporter runs as
+  ansible.builtin.group:
+    name: "{{ node_exporter_user }}"
+    system: true
+    state: present
+
+- name: Create the account the exporter runs as
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_user }}"
+    system: true
+    shell: /sbin/nologin
+    home: "/home/{{ node_exporter_user }}"
+    create_home: false
+    state: present
+
 # The install steps are gated on the binary's own reported version. Without the
 # guard the role re-downloads the tarball on every run (the cleanup task removes
 # it again each time), and `--check` fails outright: get_url does not fetch in

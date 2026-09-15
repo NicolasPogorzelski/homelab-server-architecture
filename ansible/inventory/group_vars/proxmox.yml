@@ -63,7 +63,9 @@ tailscale_boot_gate_obsolete_dropins:
 # relates its own metapackages to nfs-common, so the cleanup that was correct on
 # a container would take the hypervisor's management stack with it here.
 #
-# Masking the two units closes the port and keeps the packages. It costs nothing
+# Masking the two units keeps the packages, and the role stops them in the same
+# step - masking alone decides what starts at the next boot and leaves a running
+# daemon listening, which is exactly what happened here on 2026-09-15. It costs nothing
 # that is running: rpc-statd.service is the only active-system unit that Requires
 # rpcbind.socket, it is `static` and `inactive`, and it starts on demand for an
 # NFS mount that does not exist. sockets.target only Wants the socket, and a

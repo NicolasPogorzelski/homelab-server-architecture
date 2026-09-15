@@ -1,4 +1,9 @@
 ---
+# The unprivileged account the exporter runs as. Named here rather than only
+# in the unit template, so the task that creates it and the template that
+# demands it cannot drift apart.
+node_exporter_user: node_exporter
+
 node_exporter_version: "1.11.1"
 node_exporter_port: 9100
 

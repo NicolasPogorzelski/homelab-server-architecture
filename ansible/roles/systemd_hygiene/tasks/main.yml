@@ -18,10 +18,16 @@
 #                  /etc/systemd/system. Masking it fails ("File ... already
 #                  exists") because the symlink target would be the file itself.
 #                  Such a unit is deleted, not shadowed.
+# `state: stopped` alongside the mask, because masking does not stop anything.
+# Measured 2026-09-15 on the hypervisor: rpcbind.socket and rpcbind.service came
+# back `masked`, the changelog recorded the port as closed, and rpcbind was still
+# listening on 0.0.0.0:111 under the pid it had held since boot. A mask decides
+# what starts next time; it says nothing about what is running now.
 - name: Mask package-provided units that can never succeed on this node
   ansible.builtin.systemd_service:
     name: "{{ item.name }}"
     masked: true
+    state: stopped
   loop: "{{ systemd_hygiene_units }}"
   loop_control:
     label: "{{ item.name }} - {{ item.reason }}"
