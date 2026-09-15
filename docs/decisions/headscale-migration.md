@@ -16,7 +16,7 @@ The current access layer relies on Tailscale, which consists of two distinct com
 | Tailscale client (`tailscaled`) | WireGuard-based mesh client, open source | Self (on every node) |
 | Control plane (`login.tailscale.com`) | Key distribution, node discovery, ACL enforcement, DERP coordination | Tailscale Inc. (SaaS) |
 
-This platform's Zero-Trust model (see [Design Decisions #4](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy))
+This platform's Zero-Trust model (see [Design Decisions #4](design-decisions.md#dd-4))
 was designed around minimizing data exposure and attack surface.
 The control plane dependency introduces a structural contradiction with that goal.
 
@@ -164,8 +164,8 @@ Full solution includes self-hosted DERP.
 
 ## Related Documents
 
-- [Design Decisions #4: Zero-Trust Overlay (Tailscale)](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy)
-- [Design Decisions #9: Planned Network Hardening](design-decisions.md#9-planned-architectural-evolution-network-hardening--phase-2)
+- [Design Decisions #4: Zero-Trust Overlay (Tailscale)](design-decisions.md#dd-4)
+- [Design Decisions #9: Planned Network Hardening](design-decisions.md#dd-9)
 - [Loopback + Tailscale Serve - Vendor Lock-in Awareness](loopback-tailscale-serve.md#vendor-lock-in-awareness)
 - [Networking & Zero-Trust Model](../platform/networking.md)
 - [Tailscale ACL Model](../platform/tailscale-acl.md)

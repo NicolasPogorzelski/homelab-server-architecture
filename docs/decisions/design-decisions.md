@@ -18,6 +18,31 @@ This document outlines key architectural decisions, alternatives considered, and
 
 ---
 
+## Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| [1](#dd-1) | SnapRAID + MergerFS instead of ZFS | Lower RAM than ZFS, heterogeneous disk sizes, incremental expansion; parity and namespace stay separable |
+| [2](#dd-2) | Dedicated Storage VM instead of Direct Host Mounting | Separates storage from compute, so a rebuild or migration touches one guest |
+| [3](#dd-3) | SMB instead of NFS (after evaluation) | Per-service identities and deterministic ownership through `force user` and the masks |
+| [4](#dd-4) | Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy | No port-forwarding at all; access is tied to device identity rather than to the network |
+| [5](#dd-5) | Unprivileged LXC Containers | No root-equivalence between container and host, at the cost of UID mapping work |
+| [6](#dd-6) | Read-Only Media Consumers | Producers and consumers of the archive are separated, so a consumer cannot delete |
+| [7](#dd-7) | Monitoring via Dedicated LXC | Observability that does not depend on the services it watches |
+| [8](#dd-8) | LAN Exposure for Performance-Critical Workloads | A stated bandwidth trade-off: ~50 Mbit upstream makes remote streaming unusable |
+| [9](#dd-9) | Planned Architectural Evolution (Network Hardening - Phase 2) | What would have to change before the LAN exposure in 8 can be withdrawn |
+| [10](#dd-10) | Docker Host Networking Eliminates Container DNS | `network_mode: host` removes Docker's DNS resolver, so container names stop resolving |
+| [11](#dd-11) | Monitoring Requires Explicit Outbound ACLs for Scrape Targets | Tailscale ACLs are deny-by-default in both directions; inbound access implies no outbound |
+| [12](#dd-12) | PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag | A tier tag would grant every service in that tier access to the database on all ports |
+| [13](#dd-13) | Standardized TUN Configuration for Tailscale-Capable LXCs | Both the cgroup rule and the mount entry are required; either alone leaves TUN unusable |
+
+Anchors are explicit `dd-<n>` ids rather than the slugs GitHub derives from the headings.
+A derived slug changes when a heading is reworded, and `validate-repo.sh` Check 2 strips the
+fragment before it tests a link, so nothing here would report the break.
+---
+
+<a id="dd-1"></a>
+
 ## 1. SnapRAID + MergerFS instead of ZFS
 
 ### Decision
@@ -37,6 +62,8 @@ Use SnapRAID for parity and MergerFS for namespace abstraction.
 
 ---
 
+<a id="dd-2"></a>
+
 ## 2. Dedicated Storage VM instead of Direct Host Mounting
 
 ### Decision
@@ -54,6 +81,8 @@ Isolate storage services in VM102.
 - Additional internal network hop
 
 ---
+
+<a id="dd-3"></a>
 
 ## 3. SMB instead of NFS (after evaluation)
 
@@ -91,6 +120,8 @@ The decision prioritizes operational predictability over theoretical performance
 
 ---
 
+<a id="dd-4"></a>
+
 ## 4. Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy
 
 ### Decision
@@ -108,6 +139,8 @@ No public ingress. Remote access via identity-based overlay network.
 - Overlay dependency
 
 ---
+
+<a id="dd-5"></a>
 
 ## 5. Unprivileged LXC Containers
 
@@ -127,6 +160,8 @@ All service LXCs run unprivileged.
 
 ---
 
+<a id="dd-6"></a>
+
 ## 6. Read-Only Media Consumers
 
 ### Decision
@@ -143,6 +178,8 @@ Media services receive read-only access to storage.
 
 ---
 
+<a id="dd-7"></a>
+
 ## 7. Monitoring via Dedicated LXC
 
 ### Decision
@@ -158,6 +195,8 @@ Monitoring stack isolated in LXC200.
 - Additional configuration and maintenance surface
 
 ---
+
+<a id="dd-8"></a>
 
 ## 8. LAN Exposure for Performance-Critical Workloads
 
@@ -192,6 +231,8 @@ This represents a deliberate trade-off between strict network isolation and prac
 
 ---
 
+<a id="dd-9"></a>
+
 ## 9. Planned Architectural Evolution (Network Hardening - Phase 2)
 
 The current hybrid LAN + Tailscale access model is a documented performance trade-off influenced by upstream bandwidth limitations (~50 Mbit upload).
@@ -225,6 +266,8 @@ The current implementation is therefore intentionally transitional and documente
 See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 
 ---
+
+<a id="dd-10"></a>
 
 ## 10. Docker Host Networking Eliminates Container DNS
 
@@ -268,6 +311,8 @@ This approach was not chosen because the monitoring stack runs in a dedicated un
 - Isolation is enforced at deeper layers: unprivileged LXC (DD#5), loopback binding, and Tailscale ACL (DD#4)
 
 ---
+
+<a id="dd-11"></a>
 
 ## 11. Monitoring Requires Explicit Outbound ACLs for Scrape Targets
 
@@ -317,6 +362,8 @@ Root cause: Tailscale evaluates ACLs when establishing new peer connections. The
 
 ---
 
+<a id="dd-12"></a>
+
 ## 12. PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag
 
 ### Context
@@ -348,6 +395,8 @@ This follows the same pattern established for `tag:monitoring` (DD#11): platform
 - Accepted for explicit, auditable, per-service access control over implicit tier-based access
 
 ---
+
+<a id="dd-13"></a>
 
 ## 13. Standardized TUN Configuration for Tailscale-Capable LXCs
 
