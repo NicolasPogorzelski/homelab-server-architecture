@@ -27,10 +27,13 @@
 - name: Flush handlers so the read-back sees the new configuration
   ansible.builtin.meta: flush_handlers
 
-# Reading the file back would only prove Ansible wrote it. `journalctl` reports
-# what the running daemon decided, which is the thing the drop-in is supposed to
-# change - the same reason the `timezone` role reads the node back rather than
-# trusting its own template.
+# Two read-backs, because they answer different questions and the first one
+# alone was worthless. It asserted that `journalctl --header` names a file under
+# /var/log/journal, which is true whenever that directory exists - with the
+# drop-in or without it, since `auto` is persistent on exactly that condition.
+# Measured 2026-09-15: the drop-in was absent on all ten nodes and this role had
+# been recorded as applied for six days, because the check it ran could not tell
+# the difference.
 - name: Read back what the running journal actually does
   ansible.builtin.command:
     cmd: journalctl --header
@@ -47,3 +50,50 @@
       journalctl reports no file under /var/log/journal on {{ inventory_hostname }},
       so this node is still logging to memory despite Storage={{ journald_storage }}.
   when: journald_header.rc == 0
+
+# The second one reads the merged configuration rather than the file this role
+# wrote. `systemd-analyze cat-config` prints every source in the order systemd
+# applies them, so the last assignment of a key is the effective one - which
+# catches both the case above, where nothing was written at all, and a drop-in
+# sorting after `10-` that quietly wins. Reading our own template back would
+# have caught neither.
+- name: Read back the configuration journald merges from every source
+  ansible.builtin.command:
+    cmd: systemd-analyze cat-config systemd/journald.conf
+  register: journald_merged
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+# dict() over the key/value pairs in file order: a later assignment overwrites
+# an earlier one, which is systemd's own precedence rule expressed as a mapping.
+- name: Name the values that actually apply
+  ansible.builtin.set_fact:
+    journald_effective: >-
+      {{ dict(journald_merged.stdout_lines | map('trim')
+              | select('match', '^(Storage|SystemMaxUse|SystemKeepFree)=')
+              | map('split', '=')) }}
+  when: journald_merged.rc == 0
+
+# Skipped under --check on purpose. The drop-in does not exist yet on a node
+# that has not been applied, so an enforced assert would report the weekly drift
+# sweep a failure where the honest answer is drift - and a sweep that errors is
+# one whose report stops being read.
+- name: Refuse to pass on a node whose journald ignores this configuration
+  ansible.builtin.assert:
+    that:
+      - journald_effective['Storage'] | default('unset') == journald_storage
+      - journald_effective['SystemMaxUse'] | default('unset') == journald_system_max_use
+      - journald_effective['SystemKeepFree'] | default('unset') == journald_system_keep_free
+    fail_msg: >-
+      journald on {{ inventory_hostname }} merges
+      Storage={{ journald_effective['Storage'] | default('unset') }},
+      SystemMaxUse={{ journald_effective['SystemMaxUse'] | default('unset') }},
+      SystemKeepFree={{ journald_effective['SystemKeepFree'] | default('unset') }}.
+      Either the drop-in is missing or another one overrides it.
+    success_msg: >-
+      journald merges Storage={{ journald_storage }},
+      SystemMaxUse={{ journald_system_max_use }}.
+  when:
+    - not ansible_check_mode
+    - journald_merged.rc == 0
