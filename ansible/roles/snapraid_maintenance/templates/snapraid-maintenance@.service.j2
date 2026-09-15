@@ -11,6 +11,8 @@ After=local-fs.target
 [Service]
 Type=oneshot
 User=root
+# Read by the script's scrub mode only; harmless for sync and status.
+Environment=SNAPRAID_SCRUB_PERCENT={{ snapraid_scrub_percent }}
 ExecStart={{ snapraid_script_dest }} %i
 # A sync over ~multi-terabyte can run for hours. systemd's default is no timeout for
 # oneshot units, but be explicit rather than relying on it.

@@ -1660,11 +1660,12 @@ access, an immediate reboot is strictly better than a machine that is alive and 
 - `FilesystemMountTimeout` and `SystemdUnitStuckActivating` added to the `kernel` rule group,
   verified against live series (71 and 1810 respectively) and confirmed to return empty on a
   healthy fleet.
-- `kernel.panic_on_oops=1` with `kernel.panic=10` - **built 2026-09-11**, owned by the
-  `kernel_panic_policy` role, not yet applied. The role reads both values back out of the running
-  kernel rather than reporting the file it wrote, because a drop-in that a later file in
-  `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for ten seconds
-  rather than zero, and the decision not to arm `softdog`, are in
+- `kernel.panic_on_oops=1` with `kernel.panic=10` - **applied 2026-09-12**, owned by the
+  `kernel_panic_policy` role. Re-read from the running kernel the same day, outside the run that
+  wrote it: `sysctl kernel.panic_on_oops kernel.panic` returns 1 and 10. The role reads both values
+  back out of the running kernel rather than reporting the file it wrote, because a drop-in that a
+  later file in `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for
+  ten seconds rather than zero, and the decision not to arm `softdog`, are in
   [the panic and watchdog decision](../decisions/hypervisor-panic-and-watchdog.md).
 - Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **pending.**
 - `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
@@ -1901,3 +1902,67 @@ read as a readiness guarantee rather than an ordering constraint.
 
 A latent conflict that only routine maintenance disturbs is the same shape as the fstab entry
 without `x-systemd.automount` in [KE-15](#ke-15).
+
+---
+
+<a id="ke-25"></a>
+
+## KE-25: A UID map that exists only in the container's description
+
+**Affected component:** LXC240 (Vaultwarden, decommissioned 2026-09-01), `guest_backup`
+
+**Symptom:**
+`guest-backup.service` exited 1 on 2026-09-15 with `guest_backup_failed_guests 1`, having backed
+up eight of nine guests. The failing one:
+
+```
+tar: ./home/media/.bash_history: Cannot open: Permission denied
+tar: ./home/media/.local/share: Cannot open: Permission denied
+tar: Exiting with failure status due to previous errors
+ERROR: Backup of VM 240 failed - command 'set -o pipefail && lxc-usernsexec
+  -m u:0:100000:65536 -m g:0:100000:65536 -- tar cpf - ...' failed: exit code 2
+```
+
+**Root cause:**
+`vzdump` reads an unprivileged container's rootfs through `lxc-usernsexec` with the map the
+container declares. LXC240 declares the default one, `u:0:100000:65536`, so the archiving process
+can read files owned by host UIDs 100000 to 165535 and nothing else. Eight paths under
+`/home/media` are owned by host UID 1000:
+
+```
+# find /var/lib/lxc/240/rootfs -xdev \( -uid -100000 -o -uid +165535 \) -printf '%U:%G %p\n'
+1000:1000 /var/lib/lxc/240/rootfs/home/media
+1000:1000 /var/lib/lxc/240/rootfs/home/media/.bash_history
+...
+0:0       /var/lib/lxc/240/rootfs/lost+found
+```
+
+Those files were meant to be reachable. `pct config 240` carries the line
+
+```
+description: Pin host UID 1000 <-> container UID 1000 (media)
+```
+
+and no `lxc.idmap` entry anywhere. The description is the only surviving trace of an intention
+that was never configured, and it reads as documentation of a working arrangement. `lost+found`
+is outside the map too and causes nothing, because `vzdump` passes `--exclude=lost+found`.
+
+The fault is older than the symptom. LXC240 was absent from the `GUESTS` array in
+`guest-backup.sh` until the drift sweep of 2026-09-09 added it, so 2026-09-15 was the first run
+that ever tried. [KE-22](#ke-22) produced the same `tar` line on lxc220 from a different cause,
+which is why `CLAUDE.md` and the remediation plan both named lxc220 as the guest that fails; on
+the day this was measured lxc220 backed up in 73 s and lxc240 was the one that did not.
+
+**Fix:**
+`chown -R 100000:100000` on `/home/media` in the stopped container's rootfs, which makes the
+directory root-owned inside the container. Correct for this node because the service is withdrawn
+and the `media` user no longer logs in; on a live container the honest repair would be the
+`lxc.idmap` pair the description promises, plus the matching `/etc/subuid` and `/etc/subgid`
+entries on the host.
+
+**Status:** Resolved 2026-09-15. `vzdump 240` wrote 715 MB in 48 s at exit 0, and
+`systemctl reset-failed` cleared the unit. `GuestBackupPartial` keeps firing until the next
+scheduled run, because `guest_backup_failed_guests` is written by the job and by nothing else.
+Note what the archive does not hold: `mp0` is a bind mount of `/mnt/smb/vaultwarden` and `vzdump`
+reports `excluding bind mount point mp0 ... (not a volume)`, so this is a copy of the machine,
+not of its data.

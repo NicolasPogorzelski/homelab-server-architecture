@@ -1,9 +1,14 @@
 ---
-# lxc200 is excluded because its node_exporter is a Docker container, which
-# cannot see the host's systemd units - so the role would deploy a native
-# exporter alongside a containerised one. That gap is recorded rather than
-# papered over: lxc200 is one of the two nodes without `SystemdUnitFailed`
-# coverage.
+# Every guest, lxc200 included since 2026-09-12. Deploying a native exporter
+# alongside the containerised one is no longer the argument against doing it; it
+# is the point. The compose stack's exporter keeps 9100 and keeps reporting this
+# node's resources, and it cannot see the host's systemd, so
+# `SystemdUnitFailed` was blind on the one node that runs the alerting stack.
+# The role gives it a second unit on 9101 with the systemd collector.
+#
+# Two exporters on one node with one job each, deliberately. When the container
+# is eventually retired, docs/decisions/lxc200-systemd-visibility.md is what
+# records which of the two was load-bearing.
 #
 # Playbooks run from the working tree on lxc250, not from a commit.
 # preflight.yml refuses the run if that tree does not match origin/main.
@@ -11,7 +16,7 @@
   import_playbook: preflight.yml
 
 - name: Deploy node_exporter to the fleet
-  hosts: guests:!lxc200
+  hosts: guests
   become: true
   serial: 1
   roles:

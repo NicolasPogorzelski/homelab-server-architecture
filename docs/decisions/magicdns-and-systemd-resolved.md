@@ -6,6 +6,18 @@ Decided 2026-09-11 for lxc250, where the fault was found. Applied to that node f
 rest only after a boot proves it there, because the same configuration is on every Debian container
 here and a name-resolution change that goes wrong goes wrong everywhere at once.
 
+**Measured 2026-09-12, and that last premise does not hold.** All seven containers were read rather
+than the one that misbehaved. lxc250 is the only node carrying `resolve` in its `hosts:` line and
+the only one where `systemd-resolved` is active; lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260
+read `files dns` with resolved inactive. Those six resolve a short MagicDNS name and a fully
+qualified one; lxc250 resolves neither. So the staged rollout this section describes has nothing to
+roll out to, and the change carries the risk of one node rather than of seven. Two smaller
+corrections from the same reading: the line on lxc250 is `files myhostname resolve
+[!UNAVAIL=return] dns` - `myhostname` is present and stays - and the first lookup to fail is the
+short name, not only the fully qualified one.
+
+The role that implements this is `nsswitch`, built the same day. It is not applied.
+
 ## Context
 
 Found 2026-09-08: anything on lxc250 that addresses a node by its `.ts.net` name fails to resolve.

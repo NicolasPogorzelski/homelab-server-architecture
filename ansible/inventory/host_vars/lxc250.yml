@@ -16,3 +16,20 @@ tailscale_boot_gate_units:
 # failed bind, so the restart backstop is inert unless that list is cleared. The
 # hand-written drop-in had this right; it is carried over deliberately.
 tailscale_boot_gate_clear_restart_prevent: true
+
+# MagicDNS resolves nothing on this node, and has not since at least 2026-09-08.
+# `systemd-resolved` is active here and on no other container, `/etc/nsswitch.conf`
+# consults `resolve` before `dns`, and `[!UNAVAIL=return]` ends the lookup on
+# resolved's "not found" - so glibc never reads the /etc/resolv.conf that
+# tailscaled writes correctly, nameserver and search domain included. A direct
+# query to the Tailscale resolver answers; every program on the node does not.
+#
+# Taking `resolve` out of the line is the fix rather than pointing resolved at the
+# Tailscale resolver, because the working answer already exists in a file nothing
+# was reading. `myhostname` stays: it resolves this node's own name without a
+# lookup, and removing it is a second change with a second failure mode.
+#
+# Measured 2026-09-12: the other six containers read `files dns` with resolved
+# inactive, and all of them resolve MagicDNS. This is a one-node fault, not the
+# fleet-wide nsswitch ordering it was recorded as.
+nsswitch_hosts: "files myhostname dns"

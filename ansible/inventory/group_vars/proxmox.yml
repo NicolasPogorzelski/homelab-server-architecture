@@ -48,3 +48,61 @@ tailscale_boot_gate_units:
 tailscale_boot_gate_obsolete_dropins:
   - override.conf
   - wait-tailscale.conf
+
+# === systemd hygiene ===
+#
+# The NFS client stack runs on a node that mounts no NFS. `pvesm` lists no nfs
+# storage, yet rpcbind holds 0.0.0.0:111 and [::]:111, reachable from the LAN -
+# the same finding recorded for lxc210 on 2026-08-17 and closed there on
+# 2026-09-11 by removing the packages - KE-3 in docs/platform/known-errors.md.
+#
+# That answer does not transfer, and the measurement is why rather than a guess:
+# `apt-get -s remove --purge rpcbind nfs-common` on this host reports it would
+# also remove proxmox-ve, pve-manager, pve-container, qemu-server,
+# pve-ha-manager, libpve-storage-perl and libpve-guest-common-perl. Proxmox
+# relates its own metapackages to nfs-common, so the cleanup that was correct on
+# a container would take the hypervisor's management stack with it here.
+#
+# Masking the two units closes the port and keeps the packages. It costs nothing
+# that is running: rpc-statd.service is the only active-system unit that Requires
+# rpcbind.socket, it is `static` and `inactive`, and it starts on demand for an
+# NFS mount that does not exist. sockets.target only Wants the socket, and a
+# wanted unit that is masked is skipped rather than failed - so this does not
+# manufacture the failed unit the role exists to prevent.
+#
+# Reversible in one line if NFS storage is ever added here: drop these entries
+# and re-run. That is the whole reason it is a mask and not a removal.
+systemd_hygiene_masked_units:
+  - name: rpcbind.socket
+    reason: "no NFS storage on this node; the socket is what holds port 111 open, so masking the service alone leaves it listening"
+    action: mask
+  - name: rpcbind.service
+    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it (measured 2026-09-12)"
+    action: mask
+
+# === Journal retention ===
+#
+# The fleet default of 512M is right for the guests and wrong here, and the
+# difference is where the journal is written rather than how much of it there is.
+#
+# Every guest root is a thin volume in `pve/data`, measured 80.41 % on
+# 2026-09-15. A journal there is allocated pool blocks, and a container cannot
+# `fstrim` itself - the blocks come back the next morning through the host's
+# `lxc-fstrim.timer` or not at all. On lxc200 the journal is 470 MB of the 1.7 GB
+# that container has ever written. Capping it protects the pool whose overflow
+# corrupted packages in KE-7.
+#
+# `pve-root` is a thick LV outside that pool: 37.5 GB, 30 % used, 25 GB free. The
+# journal is 501 MB of it, so the cap here protects nothing that is scarce and
+# costs the one thing this node is asked for - evidence.
+#
+# 2G at the measured rate of 5.7 MB/day (501 MB since 2026-06-19, read
+# 2026-09-15) holds about a year. The year is the point: KE-14 fires
+# intermittently inside the boot window, the power-path check is a planned step,
+# and deciding whether it worked needs a window before it and a window after.
+# Under 512M the before-window was three months and lost a day every day.
+#
+# What it does not buy, so that nobody reads more into it later: KE-20 and KE-21
+# left nothing in the journal at all, which is why the netconsole receiver
+# exists. Retention only helps where something was written.
+journald_system_max_use: 2G

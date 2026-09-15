@@ -38,6 +38,12 @@ systemd_hygiene_group_units: []
 # anything beyond this list with it. That guard is the whole reason this is a list
 # of names rather than a loop over `apt state=absent`: a dependency nobody checked
 # is how a cleanup becomes an outage.
+#
+# When that guard says no, the unit list above is the fallback. Measured on the
+# hypervisor 2026-09-12, `apt-get -s remove --purge rpcbind nfs-common` would have
+# taken proxmox-ve, pve-manager, pve-container, qemu-server, pve-ha-manager and
+# two libpve-* packages with it - the same finding as lxc210 and the opposite
+# answer, which is why this list is read per node rather than copied across.
 systemd_hygiene_absent_packages: []
 
 # Units that were masked by this role and no longer need to be, because the package

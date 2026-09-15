@@ -563,10 +563,13 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   (verified 2026-07-10, as root):** both nodes have `/var/log/journal/<machine-id>/`. vm100
   retains 86 boots back to 2025-12-27, vm102 64 boots back to 2026-02-14, and the KE-8
   window (2026-06-08/09) holds 16,905 and 7,868 journal lines respectively. `Storage=` is unset,
-  so `auto` applies, which is persistent whenever `/var/log/journal` exists. Remaining (minor)
-  hardening: pin `Storage=persistent` and an explicit `SystemMaxUse=`, because `auto` makes
-  persistence a property of a directory that happens to exist rather than of the config, and
-  it degrades silently to RAM-only if that directory is ever removed.
+  so `auto` applies, which is persistent whenever `/var/log/journal` exists. **The hardening this
+  entry called minor is applied since 2026-09-15**, on all ten nodes rather than the two named
+  here, through a drop-in owned by the `journald` role. The hypervisor takes `2G` where the fleet
+  takes `512M`; the reasoning sits beside the value in `ansible/inventory/group_vars/proxmox.yml`.
+  Worth carrying here because it caught the role out: its verification read `journalctl --header`
+  for a path under `/var/log/journal`, which holds under `auto` too, so it reported success on ten
+  nodes that had never received the drop-in. It now reads `systemd-analyze cat-config`.
 - **unattended-upgrades on vm100 - restricted 2026-07-10.** The real defect was not the missing
   kernel exclusion but the origin list: the stock config allowed
   `"${distro_id}:${distro_codename}"`, i.e. the *regular* archive, not just security, with an
@@ -767,10 +770,16 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   precondition for investigating KE-20 and for any non-trivial maintenance on this node.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sun 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
-  a generic path bound onto whichever disk currently holds the role. Seven of ten guests: vm100 is
-  excluded on purpose, lxc220 fails on a path outside its UID map, and lxc240 has never been in the
-  hardcoded list - the same defect class as the fstrim array that once omitted lxc250. Two
-  preconditions the role cannot assert and the runbook therefore carries: a VM's passthrough disks
+  a generic path bound onto whichever disk currently holds the role. Nine of ten guests, and the two
+  exceptions this entry used to name were both wrong by 2026-09-15: vm100 is excluded on purpose,
+  lxc220 backs up cleanly in 73 s, and lxc240 has been in the list since the drift fix of
+  2026-09-09 - which is when it started failing. Its rootfs carries eight paths under
+  `/home/media` owned by host UID 1000, outside the `100000-165535` map `lxc-usernsexec` reads
+  with, so `tar` exited 2 and took the whole run with it; the container's description announces
+  exactly that pinning and its config holds no `lxc.idmap` line
+  ([KE-25](docs/platform/known-errors.md#ke-25)). Fixed 2026-09-15 by `chown`, verified by a
+  single `vzdump 240` at exit 0. Two preconditions the role cannot assert and the runbook
+  therefore carries: a VM's passthrough disks
   need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
   storage accepting a container rootfs is the thin pool, so a restore test uses the *smallest*
   archive. Restore verified 2026-08-21 via `pct mount` without starting the clone - it carries the
@@ -780,8 +789,9 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   ransomware, and note the sharper form of that: any credential able to write these backups can
   delete them, and since 2026-08-21 the control node holds hypervisor root. Critical subsets
   (Vaultwarden export, Nextcloud DB, Paperless documents) have no off-site copy.
-- **SMART per-attribute export - RESOLVED 2026-09-09.** For nine months the host ran
-  `/usr/local/sbin/node-exporter-smarttext.sh` every 60 s, emitting `smart_health_passed` and
+- **SMART per-attribute export - role written 2026-09-09, applied 2026-09-15.** For nine months
+  the host ran `/usr/local/sbin/node-exporter-smarttext.sh` every 60 s, emitting
+  `smart_health_passed` and
   `smart_temperature_celsius` for all nine disks, and the first of those read 1 (PASSED) for the
   aux-disk with 7680 unreadable sectors - `Current_Pending_Sector` normalises to 054 against
   threshold 000, so the drive's own self-assessment can never trip. That is why KE-13 ran to total
@@ -795,6 +805,13 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   on four separate dates. All nine disks are attached to the Proxmox host; vm102 reaches seven of
   them via `by-id` passthrough and sees only virtio-SCSI devices, so SMART is readable *only on the
   host*. The prerequisite this waited on, the host becoming an Ansible node, was met on 2026-08-21.
+  **This entry read RESOLVED for six days while the host ran neither half of it.** Measured
+  2026-09-15: the package sat in dpkg state `rc`, the hand-written script and its timer were
+  still running every 60 s, `smartmon_device_info` existed in no time series, and the four
+  rules therefore read nothing - not red, silent. Applied the same day: 663 time series across
+  nine disks, the aux-disk's `21` and `7680` now readable as a query rather than by hand, the old
+  collector retired and fifteen of its leaked temporary files removed. The weekly drift sweep
+  is what found it, having had no chance to run between the role being written and that day.
 - **LXC250 (control node) tracks `main` only - verify before every live run:** playbooks execute
   from the working tree, not from a commit, so a node on a feature branch or mid-merge silently runs
   code matching no commit. Update with `git pull --ff-only`; do feature work on a workstation. Before

@@ -83,9 +83,22 @@ for pb in "${PLAYBOOKS[@]}"; do
         continue
     fi
 
-    # --check never applies. rc is not the signal: measured 2026-09-08, every
-    # run returned 0 whether it found drift or not, so the recap is read instead.
-    out="$(ansible-playbook "${pb_file}" --check 2>&1)" || playbooks_errored=$((playbooks_errored + 1))
+    # --check never applies. rc is not the signal for drift: measured
+    # 2026-09-08, every run returned 0 whether it found drift or not, so the
+    # recap is read instead.
+    #
+    # A non-zero rc is still worth naming, and until 2026-09-15 this line only
+    # raised the counter. The report then read `errored 1` with no way to tell
+    # which of thirty playbooks it had been, and answering that took a run of
+    # its own - the answer being that the sweep had started inside the host's
+    # boot window. A count without a name is a measurement somebody has to
+    # repeat.
+    rc=0
+    out="$(ansible-playbook "${pb_file}" --check 2>&1)" || rc=$?
+    if [[ ${rc} -ne 0 ]]; then
+        say "ERRORED  ${pb} - ansible-playbook exited ${rc}"
+        playbooks_errored=$((playbooks_errored + 1))
+    fi
     recap="$(sed -n '/PLAY RECAP/,$p' <<< "${out}")"
 
     if [[ -z "${recap}" ]]; then

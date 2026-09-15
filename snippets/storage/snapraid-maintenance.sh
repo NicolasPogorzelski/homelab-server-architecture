@@ -25,6 +25,16 @@ set -euo pipefail
 # disk with 7680 unreadable sectors. `snapraid status` already prints both numbers,
 # so exporting them costs a parse rather than an array operation.
 
+# Why the runs are timed, added 2026-09-12:
+# the coverage metrics answered how much of the array is verified and left the
+# cadence question open, because nobody knew how long a scrub takes here. That is
+# not idle curiosity. The scrub timer fires at 20:00 and the host powers itself
+# down at 01:00, so a run has a five-hour budget and no evidence it fits; a run
+# that overruns it is killed by the shutdown, and the only trace is a
+# last_success timestamp that quietly does not move. Both operations now record
+# their own wall-clock duration, which turns "roughly a year for a full pass at
+# the default 8%" from an estimate into arithmetic on a measured number.
+
 MODE="${1:-}"
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 
@@ -154,15 +164,38 @@ case "$MODE" in
     # Non-fatal on purpose: protecting the array tonight matters more than filling
     # in a timestamp, and `set -e` would otherwise let a touch failure skip the sync.
     snapraid touch || echo "WARNING: snapraid touch failed; continuing to sync" >&2
+    started=$(date +%s)
     snapraid sync
-    echo "snapraid_sync_last_success_timestamp $(date +%s)" | write_metrics snapraid_sync
-    echo "OK: snapraid sync completed at $(date)"
+    finished=$(date +%s)
+    {
+      echo "# HELP snapraid_sync_last_success_timestamp Unix time the last sync finished successfully."
+      echo "# TYPE snapraid_sync_last_success_timestamp gauge"
+      echo "snapraid_sync_last_success_timestamp ${finished}"
+      echo "# HELP snapraid_sync_duration_seconds Wall-clock seconds of the last successful sync."
+      echo "# TYPE snapraid_sync_duration_seconds gauge"
+      echo "snapraid_sync_duration_seconds $((finished - started))"
+    } | write_metrics snapraid_sync
+    echo "OK: snapraid sync completed at $(date) in $((finished - started))s"
     write_status_metrics
     ;;
   scrub)
-    snapraid scrub
-    echo "snapraid_scrub_last_success_timestamp $(date +%s)" | write_metrics snapraid_scrub
-    echo "OK: snapraid scrub completed at $(date)"
+    # -p is the share of the array one run verifies. snapraid's own default is 8,
+    # which is what this script used until 2026-09-12 and what the arithmetic
+    # below is measured against. The value comes from the environment so the unit
+    # carries it and this script still behaves like upstream when run by hand.
+    percent="${SNAPRAID_SCRUB_PERCENT:-8}"
+    started=$(date +%s)
+    snapraid scrub -p "$percent"
+    finished=$(date +%s)
+    {
+      echo "# HELP snapraid_scrub_last_success_timestamp Unix time the last scrub finished successfully."
+      echo "# TYPE snapraid_scrub_last_success_timestamp gauge"
+      echo "snapraid_scrub_last_success_timestamp ${finished}"
+      echo "# HELP snapraid_scrub_duration_seconds Wall-clock seconds of the last successful scrub."
+      echo "# TYPE snapraid_scrub_duration_seconds gauge"
+      echo "snapraid_scrub_duration_seconds $((finished - started))"
+    } | write_metrics snapraid_scrub
+    echo "OK: snapraid scrub of ${percent}% completed at $(date) in $((finished - started))s"
     write_status_metrics
     ;;
   status)

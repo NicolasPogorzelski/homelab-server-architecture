@@ -59,7 +59,7 @@ The asymmetry worth noticing is not the disk, it is what sits on it. Two dataset
 [classified C1](../platform/data-classification.md): lxc250's vault password with the real inventory
 and the automation SSH key, in a single copy with no escrow, and Nextcloud's MariaDB. The database
 half now has a nightly verified dump onto vm102; the secrets half has nothing, which is why it is
-item 1 of the [remediation plan](../platform/remediation-plan.md) and not item 5.
+item 1 of the [remediation plan](../platform/remediation-plan.md) and not item 6.
 
 Identify this disk by `9:0:0:0` or by `by-id`, never by its kernel letter - it enumerated as `sdc`
 for a month of documentation and as `sda` on 2026-08-13.

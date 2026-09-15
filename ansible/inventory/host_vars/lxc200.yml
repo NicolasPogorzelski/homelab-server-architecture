@@ -3,3 +3,11 @@
 # src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
   - { dest: /opt/monitoring, src: monitoring }
+
+# This node runs two node_exporters. The compose stack's container holds 9100 and
+# reports resources; it sees the container's process namespace rather than the
+# host's systemd, so it exports no `node_systemd_unit_state` at all and no alert
+# could fire on a failed unit here. The native unit this port belongs to supplies
+# exactly that, and 9101 is the next free port above the one already taken.
+# Decision: docs/decisions/lxc200-systemd-visibility.md
+node_exporter_port: 9101

@@ -1,0 +1,43 @@
+---
+# Everything here is gated on nsswitch_hosts being set, so the role can be run
+# against a whole group and touch only the nodes that declare a line.
+
+- name: Set the hosts resolution order in nsswitch.conf
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^hosts:'
+    line: "hosts:          {{ nsswitch_hosts }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: nsswitch_hosts | length > 0
+
+# The node's own MagicDNS name, which is the shortest lookup that exercises the
+# Tailscale resolver rather than /etc/hosts. Read from tailscaled rather than
+# assembled from the inventory: the tailnet name belongs to the tailnet, and this
+# repository keeps it out of version control.
+- name: Read this node's MagicDNS name
+  ansible.builtin.command:
+    cmd: tailscale status --json
+  register: nsswitch_ts_status
+  changed_when: false
+  check_mode: false
+  when:
+    - nsswitch_hosts | length > 0
+    - nsswitch_verify
+
+# getent rather than dig or host: it is glibc's own resolution path, which is the
+# thing this role changes. A dig against the resolver would answer even while
+# nsswitch kept every program on the node from asking it - which is precisely the
+# fault that went unnoticed here.
+- name: Verify that a MagicDNS name resolves through nsswitch
+  ansible.builtin.command:
+    cmd: getent ahostsv4 {{ (nsswitch_ts_status.stdout | from_json).Self.DNSName | regex_replace('\.$', '') }}
+  register: nsswitch_getent
+  changed_when: false
+  failed_when: nsswitch_getent.rc != 0
+  when:
+    - nsswitch_hosts | length > 0
+    - nsswitch_verify
+    - not ansible_check_mode
+    - nsswitch_ts_status.stdout is defined

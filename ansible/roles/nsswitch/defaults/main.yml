@@ -1,0 +1,25 @@
+---
+# === nsswitch ===
+#
+# The `hosts:` line of /etc/nsswitch.conf, which decides which resolver answers a
+# name lookup and in what order. Empty by default, so the role is a no-op on every
+# node that does not ask for it.
+#
+# One node asks. Measured 2026-09-12 across all seven containers: lxc250 is the
+# only one whose line reads `files myhostname resolve [!UNAVAIL=return] dns`, and
+# the only one running systemd-resolved. On that node MagicDNS answers nothing -
+# neither a short name nor a fully qualified one - while the other six resolve
+# both. `[!UNAVAIL=return]` is the reason: it ends the lookup when resolved
+# replies "not found", so glibc never reaches `dns` and never reads the
+# /etc/resolv.conf that tailscaled had written correctly all along, nameserver and
+# search domain included.
+#
+# The remedy is therefore a deletion rather than a configuration: take resolved
+# out of the path and let the file that already holds the right answer be read.
+# See docs/decisions/magicdns-and-systemd-resolved.md.
+nsswitch_hosts: ""
+
+# Read back after the write. A template that was applied is not the same claim as
+# a name that resolves, and this role exists because the second one was false
+# while the first was true.
+nsswitch_verify: true
