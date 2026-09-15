@@ -57,6 +57,20 @@
     state: stopped
   loop: "{{ smart_metrics_masked_timers }}"
 
+# Masking a timer that systemd currently holds loaded leaves it `failed`, and the
+# stop above does not clear that. Measured 2026-09-15: installing the package
+# started all four timers, the mask six seconds later made each one report
+# `Unit to trigger vanished` and `Failed with result 'resources'`, and two were
+# still sitting in that state afterwards - enough for SystemdUnitFailed to fire
+# on the hypervisor for units this role had just retired on purpose.
+#
+# reset-failed has no module form and exits 0 for a unit that is not failed, so
+# no guard is needed.
+- name: Clear the failed state masking left behind  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl reset-failed {{ smart_metrics_masked_timers | join(' ') }}
+  changed_when: false
+
 - name: Flush handlers so the timer starts against the current unit definition
   ansible.builtin.meta: flush_handlers
 

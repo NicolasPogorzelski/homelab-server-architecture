@@ -281,8 +281,14 @@ applied.
   **Built 2026-09-12, not applied.** The exclusion is gone from `node-exporter.yml`, the port is in
   `host_vars/lxc200.yml`, and the job is in the template under a name of its own - the loop would
   have rendered it as a duplicate of the container's job, which Prometheus answers by refusing the
-  entire file. What is left is one supervised run of `node-exporter.yml` and `prometheus-config.yml`
-  against lxc200.
+  entire file. Attempted 2026-09-15 and stopped at the first run: the unit installed and then exited
+  `217/USER`, because no role has ever created the `node_exporter` account and lxc200 was the one
+  node this playbook never reached. The nine that have it were made by hand before the role
+  existed. The role now creates the group and the account, with no uid pinned - the nine sit on
+  996 and 999 depending on what was free at the time. The unit on lxc200 is disabled and stopped
+  meanwhile, so the node carries no failed unit and its container exporter is untouched. What is
+  left is one supervised run of `node-exporter.yml` and `prometheus-config.yml` against lxc200,
+  in that order, because the second adds a scrape target that the first has to be answering.
 - ~~`fleet-snapshot.yml` runs `become: true` against every node once a week~~ Done 2026-09-09. The
   grant now sits on the two tasks that need it, root's crontab and the Docker socket, and the play
   runs unprivileged otherwise. Verified rather than assumed: the three countable projections -

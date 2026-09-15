@@ -4,7 +4,7 @@ After=network.target tailscaled.service
 Wants=tailscaled.service
 
 [Service]
-User=node_exporter
+User={{ node_exporter_user }}
 {% set flags = ['--web.listen-address=' ~ ansible_host ~ ':' ~ node_exporter_port] %}
 {% if node_exporter_textfile_dir %}
 {% set _ = flags.append('--collector.textfile.directory=' ~ node_exporter_textfile_dir) %}
