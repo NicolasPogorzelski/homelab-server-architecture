@@ -1702,8 +1702,9 @@ access, an immediate reboot is strictly better than a machine that is alive and 
    `activating` and never becomes `failed`, because it never reaches a timeout. Three units sat in
    `activating` for two hours while that rule read green - correctly, by its own definition. Closed
    by `SystemdUnitStuckActivating`.
-3. `softdog` is loaded but not armed, because arming it requires the HA stack. A watchdog that a
-   blocked systemd stops feeding is exactly the missing exit from this incident.
+3. `softdog` is loaded and its device is active, and nothing can make it fire. `watchdog-mux`
+   feeds it and no HA resource exists that could stop that. A watchdog whose feeding stops when
+   systemd blocks is exactly the missing exit from this incident, and this one has no such client.
 
 **Remediation:**
 
@@ -1721,9 +1722,10 @@ access, an immediate reboot is strictly better than a machine that is alive and 
 - `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
   window and physical presence.
 - Arm `softdog` - **decided against 2026-09-11**, with the conditions for revisiting written down
-  rather than left as a feeling. Arming it on Proxmox means enabling the HA stack, because
-  `watchdog-mux` is started by it, and an HA stack on a single node with no quorum partner fences
-  the node it is meant to protect. The residual risk is accepted and stated: `panic_on_oops` only
+  rather than left as a feeling. Arming it means configuring an HA resource, and an HA stack on a
+  single node with no quorum partner fences the node it is meant to protect. The device itself has
+  been open since boot and reads `active`, corrected here 2026-09-16 along with the decision, which
+  carries the measurements. The residual risk is accepted and stated: `panic_on_oops` only
   helps where the kernel is well enough to notice, and a hard lockup is precisely where it is not.
   Revisit on the first lockup that leaves no oops and no netconsole frames, or the day this machine
   gains an out-of-band path. See the decision for why `nmi_watchdog` is not the middle option it
