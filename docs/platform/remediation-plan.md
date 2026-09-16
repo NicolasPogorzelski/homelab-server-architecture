@@ -238,21 +238,41 @@ applied.
   read-only: nine roles carry `check_mode: false`, seven of them read-only queries, while
   `prometheus_config` writes a staged file and runs promtool and `netconsole` sends a ping.
   And the two host drifts are held on purpose, so a rule on `changed > 0` would be red from
-  the first day - the item needs a per-playbook baseline, or the held items closed, before it
-  can be armed. The complementary half is built: `fleet_snapshot` covers what no role manages,
-  which is where `--check` is blind by construction.
-- Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`. The value is already
-  `prohibit-password` and the file already exists; the run replaces a hand-written comment block
-  with the role's, so the gain is ownership rather than configuration. Held for a window with a
-  second session open, because `group_vars/proxmox.yml` records that the physical recovery path is
-  unavailable while the GPU is passed through.
+  the first day. **Armed 2026-09-12** and confirmed here 2026-09-16: `drift-sweep.conf`
+  carries a `[baseline]` of three held entries with a reason above each, the sweep subtracts
+  them, and `FleetDriftUnexpected` fires on what is left over. The last run read
+  `changed_total 8` against exactly those three baselines and `unexpected_total 0`. The
+  complementary half is built as well: `fleet_snapshot` covers what no role manages, which is
+  where `--check` is blind by construction.
+  **What the sweep did not cover until 2026-09-16** is itself. `timezone`, `fleet-drift` and
+  `fleet-snapshot-schedule` import the preflight gate and were in neither the sweep list nor
+  the exclusions, and the deployed `fleet-drift.sh` had been a commit behind this repository
+  since 2026-09-15 with no way to say so. All three are swept now and Check 44 holds the
+  membership.
+- ~~Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`~~ Done 2026-09-16. The
+  `--check --diff` confirmed what the item predicted: `PasswordAuthentication no` and
+  `PermitRootLogin prohibit-password` stand unchanged on both sides and only the comment block
+  changes owner, so the run was a transfer of ownership with no configuration in it. The missing
+  physical recovery path was answered with a dead-man switch rather than a second person: a
+  `systemd-run --on-active=300` unit holding a copy of the old file and a restart, armed before
+  the run and cancelled after a *new* connection had been opened and `sshd -t` had passed. Worth
+  reusing - it is the only recovery path a single operator has on a host whose console is inside
+  a passed-through GPU.
 - ~~`DATA_SOURCE_NAME` for `postgres_exporter` into the vault~~ Built 2026-09-09, one inventory
   line from done. The role now owns `/etc/postgres_exporter.env` behind
   `postgres_exporter_manage_env`, which defaults to false. The flag is not caution for its own
   sake: a role that fails on an undefined vault variable would break the weekly sweep for the node
   it runs against, and a sweep reporting `errored` for work nobody has finished configuring is how
-  a red signal becomes background. Add `vault_postgres_exporter_dsn` to the vaulted `group_vars`
-  on lxc250 and set the flag.
+  a red signal becomes background. **Both done 2026-09-16, apply pending the merge.**
+  `vault_postgres_exporter_dsn` is in `group_vars/all/vault.yml` and the flag is on in
+  `host_vars/lxc260.yml`. The ciphertext was made on the control node from the value read on
+  lxc260, so neither the vault password nor the plaintext reached a workstation, and the two
+  were proven identical by comparing SHA-256 digests rather than by looking at either. What the
+  run will change is ownership, not content: `postgres_exporter:600` becomes `root:600`, because
+  systemd reads an `EnvironmentFile` as root before dropping to `User=` and the service account
+  never needed read access to its own credential. It cannot run before the merge - playbooks
+  execute from the control node's tree, and `preflight.yml` refuses a tree that is not a clean
+  `main` in sync with `origin`.
 - ~~Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102~~ Role
   written 2026-09-09, applied on all ten nodes 2026-09-15 - the six days in between are the
   entry worth keeping, because the role's own read-back could not tell the difference. It

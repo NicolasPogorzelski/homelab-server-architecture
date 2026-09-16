@@ -12,6 +12,43 @@ file path, not the fragment.
 
 ---
 
+## Entries
+
+| # | Fault | Status |
+|---|---|---|
+| [KE-1](#ke-1) | SQLite on CIFS - database is locked | Resolved - architectural decision |
+| [KE-2](#ke-2) | Grafana datasource unreachable after host networking switch | Resolved |
+| [KE-3](#ke-3) | Failed run-rpc_pipefs.mount in LXC210 | Resolved 2026-09-11, at the package |
+| [KE-4](#ke-4) | Docker creates directories for missing bind-mount files | Systematic - Docker design behaviour |
+| [KE-5](#ke-5) | Vaultwarden SQLite on CIFS | Closed 2026-09-01 by decommissioning |
+| [KE-6](#ke-6) | Tailscale userspace networking prevents the exporter binding | Resolved 2026-07-28, cold-boot verified |
+| [KE-7](#ke-7) | Package corruption when the LVM thin pool overflows | Resolved 2026-04-26 |
+| [KE-8](#ke-8) | Media services hang while the node stays healthy | Resolved 2026-06-08 |
+| [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09, reboot verified |
+| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Open - workaround only, fault still active |
+| [KE-11](#ke-11) | Grafana admin password not updated after first start | Known, non-blocking |
+| [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25, cold-boot verified |
+| [KE-13](#ke-13) | aux-disk physical failure | Open - in service under protest, replacement pending |
+| [KE-14](#ke-14) | Intermittent boot-time I/O errors on the boot SSD | Open - physical verification pending |
+| [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
+| [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
+| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - every known instance fixed and boot-proven |
+| [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
+| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
+| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
+| [KE-22](#ke-22) | A retired deployment stayed on disk and broke the backup | Resolved 2026-09-01 |
+| [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
+| [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
+| [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
+
+Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
+index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
+stood here marked *(inferred)* until 2026-09-16, when each was given the line the minimum shape in
+`CLAUDE.md` asks for.
+
+---
+
 <a id="ke-1"></a>
 
 ## KE-1: SQLite on CIFS - "database is locked"
@@ -167,7 +204,7 @@ closing in order. Not pursued, since the service is gone.
 **Status:** Closed 2026-09-01 by decommissioning. Data retained until 2026-11-30.
 
 **References:**
-- [KE-1: SQLite on CIFS - "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)
+- [KE-1: SQLite on CIFS - "database is locked"](#ke-1)
 - [KE-19: a file that changes during a sync](#ke-19)
 - [Decommissioning decision](../decisions/vaultwarden-decommission.md)
 - [Vaultwarden service documentation](../services/vaultwarden.md)
@@ -974,6 +1011,10 @@ interface, violating the platform binding rule - the same defect class as vm100'
 and Redis on the same node bind single addresses correctly. Re-confirmed live 2026-08-13: both
 wildcard listeners are still present.
 
+**Status:** Resolved 2026-07-10. The certificate was replaced by hand that day and the recurrence
+closed by the `tailscale_cert` role. The wildcard listener recorded above is a different defect
+and remains open.
+
 **References:**
 - [LXC210 node doc](../nodes/lxc210.md)
 - [Nextcloud service doc](../services/nextcloud.md)
@@ -1045,6 +1086,9 @@ the proportionate fix, not a 03:45 page.
   time, since the live console and journal yield nothing after a hard freeze.
 - Recurrence is unquantified - this is the first recorded occurrence. If it repeats, escalate to a
   real investigation (candidate: the KE-10 NVIDIA path).
+
+**Status:** Open. Recovery on 2026-07-11 was a hard power cycle, the logs never yielded a cause,
+and none of the durable follow-ups above is applied. One occurrence on record.
 
 **References:**
 - [VM100 node doc](../nodes/vm100.md)
@@ -1519,7 +1563,13 @@ channel will be silent for exactly the message being sought.
   [KE-18](#ke-18).
 - VM100 cannot be snapshotted at all. That is the precondition for investigating this.
 
+**Status:** Open, and not being pursued. No evidence survived the freeze on the guest side, and
+the investigation waits on VM100 becoming snapshottable. The `netconsole` half is closed since
+2026-08-17.
+
 ---
+
+<a id="ke-21"></a>
 
 ## KE-21: A kernel oops cascade wedged the hypervisor, and nothing could report it
 
@@ -1678,6 +1728,10 @@ access, an immediate reboot is strictly better than a machine that is alive and 
   Revisit on the first lockup that leaves no oops and no netconsole frames, or the day this machine
   gains an out-of-band path. See the decision for why `nmi_watchdog` is not the middle option it
   looks like.
+
+**Status:** Resolved 2026-09-11 in the part that was actionable. `panic_on_oops` is applied and
+was read back out of the running kernel on 2026-09-12, and both alert rules are live. The kernel
+upgrade and the memory test are pending; `softdog` is declined on record.
 
 **Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
 [KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete

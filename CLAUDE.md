@@ -148,9 +148,10 @@ notes there and keep this section short.
   promoted and inactive. Nextcloud files are still parity-only, and **Vaultwarden still has no
   consistent export** - an SQLite file copied from a live CIFS mount is a gamble on timing, not a
   backup. That is now the last open half of Tier 1 #3 before the off-site question itself.
-- **Deferred to the hardware-replacement window:** host-side SMART monitoring (requires making the
-  Proxmox host an Ansible node), the unapplied `homelab_schedule` role, the `is_mountpoint 1`
-  storage fix, and the storage-migration design discussion.
+- **Deferred to the hardware-replacement window:** the `is_mountpoint 1` storage fix and the
+  storage-migration design discussion. Host-side SMART monitoring and the `homelab_schedule`
+  role left this list on 2026-09-15 and 2026-09-16 respectively; both waited on the hypervisor
+  becoming an Ansible node, which happened on 2026-08-21.
 
 - **Ansible Learning Roadmap (in order):**
   1. ~~OS updates playbook~~
@@ -323,7 +324,7 @@ Run the repo validation script before committing or opening a PR:
 ./scripts/validate-repo.sh
 ```
 
-This script enforces 40 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, changelog rows longer than an index line, alerting tables that no longer match the rules file, changes under `docs/` or `ansible/` that carry no changelog row, and a workstation with no commit-message hook installed.
+This script enforces 44 checks and is also run by CI on every push/PR to `main`. Fix all errors before merging. The checks catch: empty markdown files, broken internal links, committed `.env` files, missing required doc sections, unsanitized Tailscale IPs / LAN IPs / tailnet IDs, private keys, missing `.env.example` files, files outside the allowed directory structure, duplicate markdown headings, leftover git merge conflict markers, `ansible-lint` findings, tracked `*.local.md` private files, size-encoding disk labels (`auxNtb`), non-ASCII punctuation, bold used as mid-sentence emphasis instead of as a label, German text in repository content, personal media library counts, measured fill levels for the archive pool, unbalanced markdown code fences, counted claims in the README that no longer match the repository, documents that no index links to, backticked repository paths that no longer exist, undocumented Ansible roles, node documents whose Tailscale tag the ACL model does not define, container images without an explicit version tag, secret-looking Ansible variables holding literal values, Enforced control rows that cite no evidence, service documents naming a node that has no node document, git refs outside the standard namespaces, state-changing playbooks that do not import the preflight gate, markdown table rows written across several lines, changelog rows longer than an index line, alerting tables that no longer match the rules file, changes under `docs/` or `ansible/` that carry no changelog row, a workstation with no commit-message hook installed, internal links whose fragment names an anchor that does not exist, paragraphs that a rule underneath them turns into a heading, register entries that carry no anchor or that their own index does not list, and state-changing playbooks that the drift sweep neither runs nor excludes on record.
 
 **Nothing personal goes into this repository.** It is public and read by recruiters. Infrastructure
 gets sanitized by placeholder (addresses, keys, disk labels); facts about the *owner* do not get
@@ -485,6 +486,15 @@ hidden entry and which GitHub reads just as well.
   linking the entry that carries the detail. Enforced by Check 37 for rows dated 2026-09-04 and
   later. Measured on 2026-09-04: the ten oldest rows averaged 173 characters and the ten newest
   1888, which nobody decided and nobody noticed, because every single row was defensible.
+- **Three rules for comments in code and configuration**, measured into existence on 2026-09-15
+  when the same reasoning turned up in four places on one day. **Current state, not the
+  sequence:** a comment says why a value is what it is; anything dated about a *change* belongs in
+  the changelog, or the file grows a second one that no check reads. **Fifteen lines of rationale
+  beside a single value or task is a decision record** - put it in `docs/decisions/` and leave a
+  one-line pointer. This does not apply to a file header, where explaining the whole file is the
+  job: of 61 comment blocks over fifteen lines, 25 are headers and belong as they are.
+  **Phrase a measurement as one:** `measured 2026-09-15: 80.41 %` ages visibly, `the pool is at
+  80 %` ages in silence.
 - Keep it short. A runbook is read during an incident, not at a desk. Length is a cost.
 
 **Who drafts what:**
@@ -606,10 +616,13 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   the container. After a hard shutdown, LXC260 may fail to start with pre-start hook
   exit 19 (`ENODEV`) if VM102/storage is still booting. Fix: wait for VM102, verify
   `ls /mnt/smb/postgres-backups` on the Proxmox host, then `pct start 260` manually.
-- **`homelab_schedule` role not yet applied to live host (2026-06-17):** role deploys
-  `homelab-setwake.sh` + `homelab-shutdown.sh` + `/etc/cron.d/homelab-schedule` via Ansible.
-  Scripts and cron file currently managed manually. Run `--check --diff` first, then apply.
-  After 2026-07-10 this is the last homelab-authored cron job - every guest-side job we wrote
+- **`homelab_schedule` applied 2026-09-16, and cron stays cron.** The role owns
+  `homelab-setwake.sh`, `homelab-shutdown.sh` and `/etc/cron.d/homelab-schedule` on the host;
+  before that they were hand-maintained and a rebuild would have lost them. The `--check --diff`
+  that preceded the run is what made the decision easy: the three differences were a file header,
+  an em dash that Check 19 would refuse today, and column alignment in the cron file. No time and
+  no command changed, verified after by reading the deployed file and `bash -n` on both scripts.
+  This is the last homelab-authored cron job - every guest-side job we wrote
   is now a systemd timer. Cron is defensible *here*: this job is what powers the host down, so it
   cannot depend on the host being up, and `Persistent=true` catch-up semantics would be actively
   wrong for a shutdown trigger. Decide explicitly when applying the role rather than porting it to
@@ -749,8 +762,11 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   failed unit on the *hypervisor* reached no alert - the gap that would have made
   `smb-mounts-check.service` another silent guard) and binds `100.x:9100` instead of `*:9100`,
   which had been LAN-exposed in violation of the binding rule. Both changes were made by hand,
-  at a time when the host was not an Ansible node. It became reachable as one on 2026-08-21, so
-  the `node_exporter` role can now own this properly - the debt is unblocked, not yet paid.
+  at a time when the host was not an Ansible node. **Paid 2026-09-16:** the role owns the unit,
+  which gained the `wait-for-tailscale-ip.sh` gate and `RestartSec=15s` the rest of the fleet has
+  carried since 2026-08-20, and the superseded hand-written `wait-tailscale.conf` drop-in is gone.
+  Verified after the restart: `active`, `NRestarts=0`, 1532 `node_systemd_unit_state` series and
+  885 `smartmon_` series still arriving on the same Tailscale bind.
   **The trap this entry used to name is gone, corrected 2026-08-15:** it warned that adopting the
   host needs `host_vars` with `node_exporter_textfile_dir` set or the role silently drops the
   textfile collector. That stopped being true on 2026-07-10 (`c134959`), when the default became

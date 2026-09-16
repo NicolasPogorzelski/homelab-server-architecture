@@ -47,17 +47,30 @@
   hosts: localhost
   connection: local
   gather_facts: true
-  become: true
+  # No become, and the report lives under the invoking user's home rather than
+  # in /var/log. This play ran as root against a local connection until
+  # 2026-09-16, which means it never ran at all: the control node's interactive
+  # account has no passwordless sudo, so the play failed with "sudo: a password
+  # is required" every time and /var/log/fleet-health was never created. The
+  # rest of the playbook reaches the fleet as the ansible user and was
+  # unaffected, so a run ended with ten green nodes and one red play.
+  #
+  # Root was never needed for it: every value in the report is a fact the
+  # preceding plays already hold in memory, and the file is for the person who
+  # started the run.
+  become: false
+  vars:
+    fleet_health_report_dir: "{{ ansible_env.HOME }}/fleet-health"
   tasks:
     - name: Ensure report directory exists
       ansible.builtin.file:
-        path: /var/log/fleet-health
+        path: "{{ fleet_health_report_dir }}"
         state: directory
         mode: "0755"
 
     - name: Find reports older than 7 days
       ansible.builtin.find:
-        paths: /var/log/fleet-health
+        paths: "{{ fleet_health_report_dir }}"
         age: 7d
         recurse: false
       register: old_reports
@@ -70,7 +83,7 @@
 
     - name: Write fleet health report
       ansible.builtin.copy:
-        dest: "/var/log/fleet-health/report-{{ ansible_date_time.date }}.txt"
+        dest: "{{ fleet_health_report_dir }}/report-{{ ansible_date_time.date }}.txt"
         content: |
           Fleet Health Report - {{ ansible_date_time.iso8601 }}
           =========================================================

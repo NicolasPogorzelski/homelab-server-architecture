@@ -3,7 +3,7 @@
 
 All self-hosted services require remote access for a single operator.
 The strategic decision to use Tailscale as Zero-Trust overlay is documented in
-[Design Decisions #4](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy).
+[Design Decisions #4](design-decisions.md#dd-4).
 
 This document addresses the implementation pattern: how services are bound and exposed
 within that framework.
@@ -118,8 +118,8 @@ Traefik's automatic container discovery was considered:
 
 | Node | Service | Bind Address | Port | Reason |
 |---|---|---|---|---|
-| VM100 | Jellyfin | 0.0.0.0 | 8096 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#8-lan-exposure-for-performance-critical-workloads)) |
-| VM100 | Audiobookshelf | 0.0.0.0 | 13378 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#8-lan-exposure-for-performance-critical-workloads)) |
+| VM100 | Jellyfin | 0.0.0.0 | 8096 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#dd-8)) |
+| VM100 | Audiobookshelf | 0.0.0.0 | 13378 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#dd-8)) |
 | LXC210 | Nextcloud | 0.0.0.0 | 80, 443 | LAN upload performance for large data volumes; Apache-managed TLS |
 
 #### Nodes Without Web Services
@@ -265,7 +265,7 @@ but the loopback binding convention remains valuable even without Tailscale.
 
 ## Related Documents
 
-- [Design Decisions #4: Zero-Trust Overlay](design-decisions.md#4-zero-trust-overlay-tailscale-instead-of-public-reverse-proxy)
-- [Design Decisions #8/#9: LAN Exposure](design-decisions.md#8-lan-exposure-for-performance-critical-workloads)
+- [Design Decisions #4: Zero-Trust Overlay](design-decisions.md#dd-4)
+- [Design Decisions #8/#9: LAN Exposure](design-decisions.md#dd-8)
 - [Tailscale ACL Model](../platform/tailscale-acl.md)
 - [Networking](../platform/networking.md)
