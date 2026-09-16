@@ -263,8 +263,16 @@ applied.
   `postgres_exporter_manage_env`, which defaults to false. The flag is not caution for its own
   sake: a role that fails on an undefined vault variable would break the weekly sweep for the node
   it runs against, and a sweep reporting `errored` for work nobody has finished configuring is how
-  a red signal becomes background. Add `vault_postgres_exporter_dsn` to the vaulted `group_vars`
-  on lxc250 and set the flag.
+  a red signal becomes background. **Both done 2026-09-16, apply pending the merge.**
+  `vault_postgres_exporter_dsn` is in `group_vars/all/vault.yml` and the flag is on in
+  `host_vars/lxc260.yml`. The ciphertext was made on the control node from the value read on
+  lxc260, so neither the vault password nor the plaintext reached a workstation, and the two
+  were proven identical by comparing SHA-256 digests rather than by looking at either. What the
+  run will change is ownership, not content: `postgres_exporter:600` becomes `root:600`, because
+  systemd reads an `EnvironmentFile` as root before dropping to `User=` and the service account
+  never needed read access to its own credential. It cannot run before the merge - playbooks
+  execute from the control node's tree, and `preflight.yml` refuses a tree that is not a clean
+  `main` in sync with `origin`.
 - ~~Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102~~ Role
   written 2026-09-09, applied on all ten nodes 2026-09-15 - the six days in between are the
   entry worth keeping, because the role's own read-back could not tell the difference. It

@@ -22,6 +22,14 @@
 # (no_log) user-creation task.
 postgres_tenants: []
 
+# The exporter's DATA_SOURCE_NAME is owned by the role rather than left as the
+# hand-written file it was from 2026-04-22. The value lives as
+# vault_postgres_exporter_dsn in the vaulted group_vars, never in plain text
+# here. Turning the flag on also moves the file from postgres_exporter:600 to
+# root:600: systemd reads an EnvironmentFile as root before dropping to User=,
+# so the service account never needed to read its own credential.
+postgres_exporter_manage_env: true
+
 # Units that can never succeed on this node. Masked by the systemd_hygiene role so
 # that every remaining failed unit on the fleet is a real fault worth alerting on.
 systemd_hygiene_masked_units:
