@@ -330,6 +330,76 @@ with two further orphans on that node ([KE-22](known-errors.md#ke-22)).
 [KE-5](known-errors.md#ke-5), the Vaultwarden migration off CIFS, is closed by decommissioning the
 service ([decision](../decisions/vaultwarden-decommission.md)).
 
+## Added by the 2026-09-16 assessment
+
+A review from the DevOps and DevSecOps seats, against the running fleet rather than against the
+documents. Everything the existing machinery watches came back clean, so what follows is what sits
+outside its field of view. These four are ordinary work and are ordered by exposure.
+
+- **Nothing on this platform measures its patch level.** Measured: the hypervisor has 228 packages
+  pending, 55 of them security; vm102 has 62 pending and 23 security; lxc220 has 13 and 7. The
+  remaining nodes were current. `unattended_upgrades` targets exactly one node, vm100, and there is
+  no metric and no rule anywhere for pending updates - `apt-upgrade.yml` is excluded from the drift
+  sweep for a good reason, since `apt` refreshes its cache even under `--check`, so patch level is
+  the one large property of this fleet that nothing observes. Measurement comes first, the way it
+  did for the SMART counters: `prometheus-node-exporter-apt.timer` is already installed on the
+  hypervisor and sits `masked`, collateral from the collector cleanup of 2026-09-15. Unmask it, own
+  it in `smart_metrics` or a sibling role, alert on security updates pending beyond a threshold.
+  Only then the policy question, which is different per node class: the Debian containers can take
+  the same origin-restricted `unattended_upgrades` vm100 has, while the hypervisor holds `pve-*`
+  packages and a kernel upgrade there costs eleven guests.
+- **lxc250 answers LLMNR and mDNS on the LAN.** `systemd-resolved` holds four sockets on
+  `0.0.0.0:5355` and `[::]:5355`, `resolvectl` reports `+LLMNR +mDNS`, and nothing in this
+  repository sets either - both stand at their compiled defaults. It is the only node on the fleet
+  with that listener, and it is the node that holds hypervisor root, the only `~/.vault_pass`, the
+  Ansible SSH key and the only real `hosts.yml`. LLMNR has no authentication: a host on the same
+  segment can answer a lookup that DNS failed and take the connection. The platform binding rule
+  forbids exactly this, and the Tailscale ACLs cannot help, because none of it is tailnet traffic.
+  It arrived with the `nsswitch` change of 2026-09-12, which enabled `systemd-resolved` so MagicDNS
+  names would resolve: the role owns the `hosts` line and nobody owns the protocol switches - the
+  same shape as the `node_exporter` that bound `*:9100` because its unit carried no listen address.
+  Remedy is a drop-in under `/etc/systemd/resolved.conf.d/` with `LLMNR=no` and `MulticastDNS=no`,
+  owned by the `nsswitch` role, proven by `resolvectl status` and an empty
+  `ss -tulnp | grep 5355`. Worth checking the administrator workstation for the same default; the
+  sweep only sees the fleet.
+- **MariaDB has a backup and no proven way back.** PostgreSQL carries write-time verification, a
+  monthly restore into a throwaway cluster, `PostgreSQLRestoreTestStale` at 40 days and a restore
+  runbook. MariaDB, live since 2026-08-15, has the dump, `MariaDBBackupStale` and a backup runbook,
+  and neither a restore test nor a restore runbook. It is the half that makes Nextcloud's files
+  mean anything, and a dump nobody has restored is an assumption. The pattern exists: mirror
+  `postgresql_restore_test` into a throwaway instance, assert non-empty key tables, export the
+  metric, add the staleness rule.
+- **The sshd binding decision has not been executed on any node.** `ssh_hardening_listen_address`
+  appears only as the empty default in the role, and every node still binds `*:22`, measured. The
+  decision of 2026-09-11 calls for one node per session with the containers first
+  ([decision](../decisions/sshd-listen-address.md)). A decision that is never executed reads, six
+  months later, as a solved problem. The dead-man switch used for the hypervisor's sshd on
+  2026-09-16 is the recovery pattern for it, and it is now proven.
+
+## The exercise block, before Terraform
+
+Four controls that the same assessment argued against building at this scale, being built
+anyway and for a reason that is not operational: to have run the thing once and to be able to say
+what it looks like where it belongs. The reasoning, the labelling rules and the exit condition are
+in [the decision](../decisions/exercise-scope-before-terraform.md), which also carries the
+homelab-versus-workplace comparison this block exists to produce.
+
+Read the labelling as part of the work rather than as documentation afterwards. None of these
+enters `security-controls.md` as `Enforced`, none of them gets an alert that would not have been
+built regardless, and each is revisited once the Terraform track has started.
+
+- `auditd` on a node or two, plus `dpkg --verify` as a projection in `fleet_snapshot`. The second
+  half is the one with standalone value and is cheap: package integrity, into a weekly diff that
+  already exists.
+- Central log aggregation for the journals of ten nodes that power down nightly.
+- High availability far enough to see quorum, fencing and what a single node arms against itself.
+  Not left running: an HA stack on one node with no quorum partner fences the node it protects
+  ([decision](../decisions/hypervisor-panic-and-watchdog.md)).
+- An SBOM for the compose stacks, with signature verification where the images allow it.
+
+**This block is the end of maintenance mode.** When these four and the four items above are done,
+the Terraform track begins.
+
 ## Added by the 2026-08-20 repository and fleet audit
 
 A full sweep of both sides before the Terraform track. The repository passed all 33 checks; the

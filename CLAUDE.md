@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The Ansible learning track (roadmap items #1-#13) is complete and merged to `main`: everything
 guest-side is Ansible-managed and every scheduled job is a systemd timer. The next learning track is
-Terraform, and it is deferred - the platform stays in maintenance mode until it starts, see below.
+Terraform, and since 2026-09-16 its start has a condition rather than an open date: one block of
+work stands between here and there, and the platform stays in maintenance mode for the length of
+it, see below.
 The completed role/playbook catalog and per-session narratives live in
 [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md); platform changes and their
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
@@ -171,9 +173,11 @@ notes there and keep this section short.
 
   **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, the next learning track, which is deferred.
 
-**Next learning track: Terraform, deferred on 2026-09-02.** The track is not cancelled and the content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). Only the timing changed. Terraform carries its own state, and the foreseeable period offers only short sessions, so picking the track up and putting it down would leave that state in a condition nobody can vouch for. Do not propose starting it - the date is decided outside this repository.
+**Next learning track: Terraform, deferred on 2026-09-02, and given a condition on 2026-09-16.** The track is not cancelled and the content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). Only the timing changed. Terraform carries its own state, and the foreseeable period offers only short sessions, so picking the track up and putting it down would leave that state in a condition nobody can vouch for. What replaced the open date is a list rather than a day: the eight items of the 2026-09-16 assessment, four operational and four built to be learned, in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). When they are done the track begins. Until then it is still not proposed - but the reason is now a backlog somebody can read, not a decision held elsewhere.
 
 **Operating mode until then: maintenance.** Work is cut into small self-contained units: one thing, under an hour or two, ending in one commit with one changelog line and a clean stopping point. Anything that changes live state - applies against the fleet, restore tests, hardware - is scheduled into a block that has a rollback path, and is never started just because it came up in conversation. The standing backlog of small units is the "Small open items" list in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md), fed by the recurring fleet audit. New services and new learning tracks wait.
+
+**The one block before Terraform, agreed 2026-09-16.** Four operational findings from that day's assessment - patch level that nothing measures, the LLMNR and mDNS responder on lxc250, MariaDB's untested restore, the sshd binding decision executed nowhere - and four controls the same assessment argued against at this scale, built anyway to be learned rather than because the platform needs them ([decision](docs/decisions/exercise-scope-before-terraform.md)). The second half carries an obligation the first does not: each of those four is labelled as an exercise wherever a reader meets it, none enters `security-controls.md` as `Enforced`, and none gets an alert that would not have been built regardless. A control that cannot be told apart from a needed one will be defended as one.
 
 **Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 

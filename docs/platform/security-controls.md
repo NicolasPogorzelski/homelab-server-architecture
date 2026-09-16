@@ -25,6 +25,17 @@ evidence, and the [runbooks](../../runbooks/README.md) are documented operating 
 was vocabulary, not substance - except where it was substance, and those cases are listed at the
 end.
 
+**A third distinction arrives with the block agreed on 2026-09-16.** Four controls will be built
+here that the assessment proposing them argued against at this scale: syscall auditing with a file
+integrity check, central log aggregation, high availability, and an SBOM with signature
+verification. They are exercises, taken on to be understood rather than because the risk on this
+platform calls for them, and the reasoning and the exit are in
+[the decision](../decisions/exercise-scope-before-terraform.md). None of them will be listed below
+as `Enforced`. Check 32 requires an Enforced row to name its evidence, and the evidence these can
+offer is that a unit is running - which says nothing about whether the output is read or whether
+the control is proportionate. Where they appear at all it is as `Practised`, with the exercise
+named in the same row, for the reason this document gives about an unjustified `N/A`.
+
 ## How to read the status column
 
 | Status | Meaning |

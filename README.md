@@ -168,6 +168,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [sshd Binding](docs/decisions/sshd-listen-address.md) (ten of eleven nodes break the rule, so it is a fleet decision)
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
+- [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
 
 ### Security, risk and change
 
