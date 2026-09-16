@@ -31,21 +31,21 @@ file path, not the fragment.
 | [KE-13](#ke-13) | aux-disk physical failure | Open - in service under protest, replacement pending |
 | [KE-14](#ke-14) | Intermittent boot-time I/O errors on the boot SSD | Open - physical verification pending |
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
-| [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 (inferred) |
-| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - durable fix not applied (inferred) |
+| [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
+| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
 | [KE-18](#ke-18) | Services start before Tailscale is ready | Class - every known instance fixed and boot-proven |
 | [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
-| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - root cause unknown (inferred) |
-| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11, remediation applied (inferred) |
+| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
+| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
 | [KE-22](#ke-22) | A retired deployment stayed on disk and broke the backup | Resolved 2026-09-01 |
 | [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
 
-Status is quoted from each entry's `**Status:**` line. Four entries carry none and are marked
-*(inferred)* - KE-16, KE-17, KE-20 and KE-21 express it through other headings, which the
-minimum shape in `CLAUDE.md` does not allow for. Left as it is rather than rewritten here; the
-gap is now visible, which it was not while the file had no index.
+Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
+index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
+stood here marked *(inferred)* until 2026-09-16, when each was given the line the minimum shape in
+`CLAUDE.md` asks for.
 
 ---
 
@@ -1011,6 +1011,10 @@ interface, violating the platform binding rule - the same defect class as vm100'
 and Redis on the same node bind single addresses correctly. Re-confirmed live 2026-08-13: both
 wildcard listeners are still present.
 
+**Status:** Resolved 2026-07-10. The certificate was replaced by hand that day and the recurrence
+closed by the `tailscale_cert` role. The wildcard listener recorded above is a different defect
+and remains open.
+
 **References:**
 - [LXC210 node doc](../nodes/lxc210.md)
 - [Nextcloud service doc](../services/nextcloud.md)
@@ -1082,6 +1086,9 @@ the proportionate fix, not a 03:45 page.
   time, since the live console and journal yield nothing after a hard freeze.
 - Recurrence is unquantified - this is the first recorded occurrence. If it repeats, escalate to a
   real investigation (candidate: the KE-10 NVIDIA path).
+
+**Status:** Open. Recovery on 2026-07-11 was a hard power cycle, the logs never yielded a cause,
+and none of the durable follow-ups above is applied. One occurrence on record.
 
 **References:**
 - [VM100 node doc](../nodes/vm100.md)
@@ -1556,6 +1563,10 @@ channel will be silent for exactly the message being sought.
   [KE-18](#ke-18).
 - VM100 cannot be snapshotted at all. That is the precondition for investigating this.
 
+**Status:** Open, and not being pursued. No evidence survived the freeze on the guest side, and
+the investigation waits on VM100 becoming snapshottable. The `netconsole` half is closed since
+2026-08-17.
+
 ---
 
 <a id="ke-21"></a>
@@ -1717,6 +1728,10 @@ access, an immediate reboot is strictly better than a machine that is alive and 
   Revisit on the first lockup that leaves no oops and no netconsole frames, or the day this machine
   gains an out-of-band path. See the decision for why `nmi_watchdog` is not the middle option it
   looks like.
+
+**Status:** Resolved 2026-09-11 in the part that was actionable. `panic_on_oops` is applied and
+was read back out of the running kernel on 2026-09-12, and both alert rules are live. The kernel
+upgrade and the memory test are pending; `softdog` is declined on record.
 
 **Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
 [KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete
