@@ -1448,11 +1448,64 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 43: every register entry is anchored and listed in its own index
+# =============================================================================
+# Added 2026-09-16, the day after both registers were given an index. An index
+# maintained by hand drifts the moment somebody adds an entry and forgets the
+# table, and it drifts silently: the register still holds the entry, so nothing
+# is lost, and the index still looks complete, so nothing is looked for. This
+# repository has found that shape in its own monitoring often enough to expect
+# it here - the index is a guard over the register, and an unverified guard
+# reports the state it was written in rather than the state that exists.
+#
+# The anchor half is the same argument one layer down. known-errors.md states in
+# its own header that every entry carries an explicit anchor; KE-21 did not, and
+# six links pointed at it (Check 41, added the same day, found them from the
+# other end). Check 41 sees an anchor only where something links to it, so an
+# entry nobody cites yet can still be unreachable by the fragment its neighbours
+# all use.
+echo "Check 43: register entries are anchored and listed in their index"
+
+KE_FILE="${REPO_ROOT}/docs/platform/known-errors.md"
+DD_FILE="${REPO_ROOT}/docs/decisions/design-decisions.md"
+
+if [[ -f "${KE_FILE}" ]]; then
+    while read -r n; do
+        [[ -z "${n}" ]] && continue
+        if ! grep -qF "<a id=\"ke-${n}\"></a>" "${KE_FILE}"; then
+            echo "  KE-${n} carries no explicit <a id=\"ke-${n}\"></a> anchor"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+        if ! grep -qE "^\| \[KE-${n}\]\(#ke-${n}\) \|" "${KE_FILE}"; then
+            echo "  KE-${n} is missing from the entry index in the same file"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep -oP '^## KE-\K[0-9]+(?=:)' "${KE_FILE}" || true)
+fi
+
+if [[ -f "${DD_FILE}" ]]; then
+    while read -r n; do
+        [[ -z "${n}" ]] && continue
+        if ! grep -qF "<a id=\"dd-${n}\"></a>" "${DD_FILE}"; then
+            echo "  Decision ${n} carries no explicit <a id=\"dd-${n}\"></a> anchor"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+        if ! grep -qE "^\| \[${n}\]\(#dd-${n}\) \|" "${DD_FILE}"; then
+            echo "  Decision ${n} is missing from the decision index in the same file"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep -oP '^## \K[0-9]+(?=\. )' "${DD_FILE}" || true)
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 42"
+echo "Checks run: 43"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
