@@ -3,7 +3,8 @@
 ## Status
 
 Decided 2026-09-11 for the panic policy. The watchdog half is decided against, with the condition
-under which it would be revisited written down rather than left as a feeling.
+under which it would be revisited written down rather than left as a feeling. Decision 2 was
+corrected on 2026-09-16: the decision stands, its description of the running state did not.
 
 ## Context
 
@@ -62,11 +63,40 @@ in the [remediation plan](../platform/remediation-plan.md), not folded in here.
 
 ## Decision 2: softdog stays unarmed, and the condition is written down
 
-`softdog` is loaded on this host and not armed. Arming it on Proxmox means enabling the HA stack,
-because `watchdog-mux` is started by it, and that is the objection: the HA stack on a single node
-with no quorum partner will fence the node it is supposed to protect. This platform is documented
-as recovery-oriented and explicitly not highly available, and turning on half of a clustering
-feature to obtain a reboot timer inverts that.
+No HA resource is configured on this host, and that is what the decision keeps that way. The
+objection is unchanged: the HA stack on a single node with no quorum partner will fence the node it
+is supposed to protect, and this platform is documented as recovery-oriented and explicitly not
+highly available, so turning on half of a clustering feature to obtain a reboot timer inverts that.
+
+**This section said `softdog` is loaded and not armed until 2026-09-16, which reads as though the
+device were idle.** It is not:
+
+```
+/sys/class/watchdog/watchdog0/identity : Software Watchdog
+                                 state : active
+                               timeout : 10
+/dev/watchdog                          : held by watchdog-mux, pid 1439
+```
+
+`watchdog-mux.service` is `WantedBy=pve-ha-lrm.service pve-ha-crm.service`, and both of those run
+and are enabled on a stock Proxmox install, so the coupling this section names is real but it is
+not in the future: the device has been open since boot. What is missing is a client. `ha-manager
+config` returns nothing and the local resource manager sits at
+`{"mode":"active","state":"wait_for_agent_lock"}`, so no component ever stops the petting and
+nothing resets the host. The effect is what "not armed" claims; the state is not.
+
+The distinction is worth the paragraph, because a ten-second timer runs against this hypervisor and
+`watchdog-mux` is what keeps it from expiring. What happens if that process dies is answered by the
+kernel's own line at load:
+
+```
+softdog: initialized. soft_noboot=0 soft_margin=60 sec soft_panic=0 (nowayout=0)
+```
+
+`CONFIG_WATCHDOG_NOWAYOUT` is unset in this kernel, so the module takes its documented default.
+With `nowayout=0` the timer stops when the device is closed, and a process that dies closes its
+descriptors, so losing `watchdog-mux` costs the watchdog and not the host. The ten seconds are why
+the device reads `active`, and nothing running here can make them elapse.
 
 The honest counter-argument is that `panic_on_oops` only helps when the kernel is well enough to
 notice, and a lockup is precisely when it is not. That is true, and it is the residual risk this
