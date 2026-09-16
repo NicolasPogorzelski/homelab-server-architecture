@@ -19,7 +19,7 @@ Important:
 - Vaultwarden uses SQLite for its database (`db.sqlite3`).
 - The database resides at `/opt/vaultwarden`, which is a CIFS mount (`mp0` on LXC240 -> `/mnt/smb/vaultwarden`).
 - This violated the KE-1 architectural rule (no database files on CIFS/SMB). The migration to PostgreSQL (lxc260) was the planned fix and never happened; the service was decommissioned instead, which is how KE-5 is closed. The PostgreSQL route stays as the reopening path in the decision record.
-- See: [KE-5](../platform/known-errors.md#ke-5-vaultwarden-sqlite-on-cifs--acknowledged-technical-debt)
+- See: [KE-5](../platform/known-errors.md#ke-5)
 
 ## Security / Exposure
 

@@ -204,7 +204,7 @@ closing in order. Not pursued, since the service is gone.
 **Status:** Closed 2026-09-01 by decommissioning. Data retained until 2026-11-30.
 
 **References:**
-- [KE-1: SQLite on CIFS - "database is locked"](#ke-1-sqlite-on-cifs--database-is-locked)
+- [KE-1: SQLite on CIFS - "database is locked"](#ke-1)
 - [KE-19: a file that changes during a sync](#ke-19)
 - [Decommissioning decision](../decisions/vaultwarden-decommission.md)
 - [Vaultwarden service documentation](../services/vaultwarden.md)
@@ -1557,6 +1557,8 @@ channel will be silent for exactly the message being sought.
 - VM100 cannot be snapshotted at all. That is the precondition for investigating this.
 
 ---
+
+<a id="ke-21"></a>
 
 ## KE-21: A kernel oops cascade wedged the hypervisor, and nothing could report it
 

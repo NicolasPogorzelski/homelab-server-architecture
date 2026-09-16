@@ -39,6 +39,7 @@ This document outlines key architectural decisions, alternatives considered, and
 Anchors are explicit `dd-<n>` ids rather than the slugs GitHub derives from the headings.
 A derived slug changes when a heading is reworded, and `validate-repo.sh` Check 2 strips the
 fragment before it tests a link, so nothing here would report the break.
+
 ---
 
 <a id="dd-1"></a>

@@ -1337,11 +1337,122 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 41: an internal link's fragment lands on an anchor that exists
+# =============================================================================
+# Added 2026-09-16. Check 2 strips the fragment before it tests a link, so it
+# proves the file exists and nothing else. Every cross-reference in this
+# repository is written as file plus fragment, and the fragment half was
+# unverified from the beginning: measured on the day this was written, nine
+# links across seven documents pointed at anchors that were not there. KE-21 had
+# no explicit anchor at all while six links addressed it, and three links carried
+# a slug GitHub derives from a heading, which is what breaks when the heading is
+# reworded.
+#
+# Two kinds of anchor count, because both are in use here. An explicit
+# <a id="..."></a>, which is what known-errors.md and design-decisions.md place
+# above their headings, and the slug GitHub derives from an ATX heading -
+# lowercase, punctuation dropped, spaces to hyphens, underscores kept. The
+# derived form is reproduced rather than forbidden: most documents rely on it
+# and rewriting them all would be a larger change than the one this guard is for.
+#
+# Duplicate headings would make GitHub append -1 to the second slug; Check 11
+# already refuses those, so the simple form is correct here.
+echo "Check 41: internal link fragments resolve to an anchor"
+
+ANCHOR_CACHE="$(mktemp -d)"
+
+anchors_of() {
+    local f="$1" key
+    key="${ANCHOR_CACHE}/$(printf '%s' "${f}" | md5sum | cut -d' ' -f1)"
+    if [[ ! -f "${key}" ]]; then
+        {
+            grep -oP '<a\s+(id|name)="\K[^"]+' "${f}" 2>/dev/null || true
+            { grep -oP '^#{1,6}[[:space:]]+\K.*' "${f}" 2>/dev/null || true; } \
+                | sed -E 's/\[([^]]*)\]\([^)]*\)/\1/g; s/[`*]//g' \
+                | tr '[:upper:]' '[:lower:]' \
+                | sed -E 's/[^a-z0-9 _-]//g; s/ /-/g'
+        } > "${key}"
+    fi
+    cat "${key}"
+}
+
+while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    dir="$(dirname "${mdfile}")"
+    while read -r link; do
+        [[ "${link}" =~ ^https?:// ]] && continue
+        [[ "${link}" == *"#"* ]] || continue
+        frag="${link#*#}"
+        target="${link%%#*}"
+        [[ -n "${frag}" ]] || continue
+        if [[ -z "${target}" ]]; then
+            tfile="${mdfile}"
+        else
+            tfile="${dir}/${target}"
+        fi
+        [[ -f "${tfile}" && "${tfile}" == *.md ]] || continue
+        if ! grep -qxF "${frag}" <(anchors_of "${tfile}"); then
+            echo "  No such anchor: ${rel} -> ${link}"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep -oP '\]\(\K[^)]+' "${mdfile}" 2>/dev/null || true)
+done < <(find "${REPO_ROOT}" -name "*.md" -type f -not -path "*/.git/*")
+
+rm -rf "${ANCHOR_CACHE}"
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
+# Check 42: a paragraph above a rule is a heading, whether or not it meant to be
+# =============================================================================
+# Added 2026-09-16, the day after it happened. Markdown has a second heading
+# syntax besides the leading hashes: a paragraph with --- under it is an H2 and
+# with === under it an H1. A blank line is the whole difference between that and
+# a horizontal rule, and this repository separates its sections with --- on
+# every second page. The index paragraph added to design-decisions.md on
+# 2026-09-15 lost its blank line and rendered on GitHub as an H2 carrying three
+# lines of running text; nothing reported it, because every heading check here
+# reads a leading hash.
+#
+# A list item or a table row above a rule is not affected - a thematic break may
+# interrupt those - and YAML frontmatter closes with the same characters, so a
+# file that opens with --- is skipped to its closing marker.
+echo "Check 42: no paragraph turned into a heading by the rule below it"
+
+while read -r mdfile; do
+    rel="${mdfile#${REPO_ROOT}/}"
+    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+    while read -r finding; do
+        echo "  ${finding}"
+        echo "x" >> "${ERROR_LOG}"
+    done < <(awk -v file="${rel}" '
+        NR == 1 && $0 ~ /^---[[:space:]]*$/ { fm = 1; next }
+        fm && $0 ~ /^---[[:space:]]*$/ { fm = 0; next }
+        fm { next }
+        /^[[:space:]]*```/ { fence = !fence }
+        fence { prev = $0; next }
+        /^(-{3,}|={3,})[[:space:]]*$/ {
+            if (prev != "" && prev !~ /^[[:space:]]*$/ && prev !~ /^[[:space:]]*[|>#]/ \
+                && prev !~ /^[[:space:]]*([-*+]|[0-9]+\.)[[:space:]]/) {
+                printf "%s:%d: paragraph renders as a heading, not a rule - blank line missing above the %s\n", \
+                    file, NR, (substr($0,1,1) == "-" ? "---" : "===")
+            }
+        }
+        { prev = $0 }
+    ' "${mdfile}")
+done < <(find "${REPO_ROOT}" -name "*.md" -type f -not -path "*/.git/*")
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 40"
+echo "Checks run: 42"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
