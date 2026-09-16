@@ -249,11 +249,15 @@ applied.
   the exclusions, and the deployed `fleet-drift.sh` had been a commit behind this repository
   since 2026-09-15 with no way to say so. All three are swept now and Check 44 holds the
   membership.
-- Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`. The value is already
-  `prohibit-password` and the file already exists; the run replaces a hand-written comment block
-  with the role's, so the gain is ownership rather than configuration. Held for a window with a
-  second session open, because `group_vars/proxmox.yml` records that the physical recovery path is
-  unavailable while the GPU is passed through.
+- ~~Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`~~ Done 2026-09-16. The
+  `--check --diff` confirmed what the item predicted: `PasswordAuthentication no` and
+  `PermitRootLogin prohibit-password` stand unchanged on both sides and only the comment block
+  changes owner, so the run was a transfer of ownership with no configuration in it. The missing
+  physical recovery path was answered with a dead-man switch rather than a second person: a
+  `systemd-run --on-active=300` unit holding a copy of the old file and a restart, armed before
+  the run and cancelled after a *new* connection had been opened and `sshd -t` had passed. Worth
+  reusing - it is the only recovery path a single operator has on a host whose console is inside
+  a passed-through GPU.
 - ~~`DATA_SOURCE_NAME` for `postgres_exporter` into the vault~~ Built 2026-09-09, one inventory
   line from done. The role now owns `/etc/postgres_exporter.env` behind
   `postgres_exporter_manage_env`, which defaults to false. The flag is not caution for its own
