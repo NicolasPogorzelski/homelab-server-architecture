@@ -1501,11 +1501,69 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 44: every gated playbook is either swept for drift or excluded on record
+# =============================================================================
+# Added 2026-09-16. A playbook that imports preflight.yml changes live state, and
+# the weekly sweep in ansible/drift-sweep.conf is what notices when the fleet
+# stops matching it. Membership of that list was hand-maintained and unread:
+# measured the day this was written, three gated playbooks were in neither the
+# list nor the prose block of exclusions above it - timezone, fleet-drift and
+# fleet-snapshot-schedule - and the deployed fleet-drift.sh on the control node
+# was a commit behind this repository with nothing able to report it, because
+# the playbook that would have was the one left out of its own sweep.
+#
+# The exclusions moved into an [excluded] section for this check to read. They
+# keep their reasons in the comment above it: the machine needs the names, the
+# reader needs the argument, and neither substitutes for the other.
+#
+# The check refuses a name in both sections as well. Swept and excluded at once
+# is not a state anybody meant, and the sweep would silently take the first.
+echo "Check 44: gated playbooks are swept or excluded on record"
+
+DRIFT_CONF="${REPO_ROOT}/ansible/drift-sweep.conf"
+PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
+
+if [[ -f "${DRIFT_CONF}" && -d "${PLAYBOOK_DIR}" ]]; then
+    # Same sed ranges the sweep script itself uses, so this check and the sweep
+    # cannot disagree about what the file says.
+    swept="$(sed -n '/^\[playbooks\]/,/^\[baseline\]/p' "${DRIFT_CONF}" | grep -E '^[a-z0-9-]+$' || true)"
+    excluded="$(sed -n '/^\[excluded\]/,/^\[playbooks\]/p' "${DRIFT_CONF}" | grep -E '^[a-z0-9-]+$' || true)"
+
+    while read -r pbfile; do
+        [[ -z "${pbfile}" ]] && continue
+        pb="$(basename "${pbfile}" .yml)"
+        in_swept=0; in_excluded=0
+        grep -qxF "${pb}" <<< "${swept}" && in_swept=1
+        grep -qxF "${pb}" <<< "${excluded}" && in_excluded=1
+        if [[ "${in_swept}" -eq 1 && "${in_excluded}" -eq 1 ]]; then
+            echo "  ${pb} is both swept and excluded in drift-sweep.conf"
+            echo "x" >> "${ERROR_LOG}"
+        elif [[ "${in_swept}" -eq 0 && "${in_excluded}" -eq 0 ]]; then
+            echo "  ${pb} imports the preflight gate but drift-sweep.conf neither sweeps nor excludes it"
+            echo "x" >> "${ERROR_LOG}"
+        fi
+    done < <(grep -lE '^[[:space:]]*import_playbook:[[:space:]]*preflight\.yml' "${PLAYBOOK_DIR}"/*.yml 2>/dev/null || true)
+
+    # A name in the config that matches no playbook is the other direction, and
+    # the sweep only reports it at run time, once a week, on the control node.
+    while read -r name; do
+        [[ -z "${name}" ]] && continue
+        [[ -f "${PLAYBOOK_DIR}/${name}.yml" ]] || {
+            echo "  drift-sweep.conf names ${name}, which is not a playbook"
+            echo "x" >> "${ERROR_LOG}"
+        }
+    done < <(printf '%s\n%s\n' "${swept}" "${excluded}" | grep -vE '^$' || true)
+fi
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 43"
+echo "Checks run: 44"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
