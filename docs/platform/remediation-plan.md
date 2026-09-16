@@ -238,9 +238,17 @@ applied.
   read-only: nine roles carry `check_mode: false`, seven of them read-only queries, while
   `prometheus_config` writes a staged file and runs promtool and `netconsole` sends a ping.
   And the two host drifts are held on purpose, so a rule on `changed > 0` would be red from
-  the first day - the item needs a per-playbook baseline, or the held items closed, before it
-  can be armed. The complementary half is built: `fleet_snapshot` covers what no role manages,
-  which is where `--check` is blind by construction.
+  the first day. **Armed 2026-09-12** and confirmed here 2026-09-16: `drift-sweep.conf`
+  carries a `[baseline]` of three held entries with a reason above each, the sweep subtracts
+  them, and `FleetDriftUnexpected` fires on what is left over. The last run read
+  `changed_total 8` against exactly those three baselines and `unexpected_total 0`. The
+  complementary half is built as well: `fleet_snapshot` covers what no role manages, which is
+  where `--check` is blind by construction.
+  **What the sweep did not cover until 2026-09-16** is itself. `timezone`, `fleet-drift` and
+  `fleet-snapshot-schedule` import the preflight gate and were in neither the sweep list nor
+  the exclusions, and the deployed `fleet-drift.sh` had been a commit behind this repository
+  since 2026-09-15 with no way to say so. All three are swept now and Check 44 holds the
+  membership.
 - Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`. The value is already
   `prohibit-password` and the file already exists; the run replaces a hand-written comment block
   with the role's, so the gain is ownership rather than configuration. Held for a window with a
