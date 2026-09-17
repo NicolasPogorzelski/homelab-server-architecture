@@ -644,7 +644,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   before that they were hand-maintained and a rebuild would have lost them. The `--check --diff`
   that preceded the run is what made the decision easy: the three differences were a file header,
   an em dash that Check 19 would refuse today, and column alignment in the cron file. No time and
-  no command changed, verified after by reading the deployed file and `bash -n` on both scripts.
+  no command changed, verified after by reading the deployed file and `bash -n` on both scripts. **And
+  that is exactly what the adoption could not tell anyone:** the script it faithfully reproduced had
+  been programming the wake alarm a day late since it was written ([KE-26](docs/platform/known-errors.md#ke-26)),
+  found the next morning from the boot history rather than from the diff.
   This is the last homelab-authored cron job - every guest-side job we wrote
   is now a systemd timer. Cron is defensible *here*: this job is what powers the host down, so it
   cannot depend on the host being up, and `Persistent=true` catch-up semantics would be actively
