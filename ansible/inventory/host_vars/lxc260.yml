@@ -41,3 +41,9 @@ systemd_hygiene_masked_units:
     reason: >-
       Loads IPMI kernel drivers to talk to a baseboard management controller.
       There is no BMC reachable from inside a container.
+
+# Ships this node's journal to the receiver on lxc200. EXERCISE, not a control
+# this platform needs - see docs/decisions/exercise-scope-before-terraform.md.
+# Two nodes opt in rather than ten: one sender demonstrates nothing about
+# correlation and ten would be the noise the assessment warned about.
+journal_upload_enabled: true

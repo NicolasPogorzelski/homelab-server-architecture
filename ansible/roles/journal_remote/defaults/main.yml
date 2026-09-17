@@ -1,0 +1,43 @@
+---
+# === journal_remote (EXERCISE) ===
+#
+# The receiving half of central log aggregation. Exists to be understood rather
+# than because this platform needs it - the assessment of 2026-09-16 argued
+# against it at ten nodes that power down nightly, and that argument stands. The
+# labelling rules and the exit are in
+# docs/decisions/exercise-scope-before-terraform.md. No alert reads anything this
+# produces and nothing here is Enforced in security-controls.md.
+#
+# systemd's own remoting rather than Loki or an ELK stack, and the choice is the
+# lesson. journald already holds structured records with verified boot ids and
+# monotonic ordering; shipping them as journals keeps that, where a line-based
+# collector would throw it away and a parser would try to guess it back.
+#
+# What it does not fix is the thing aggregation is for. lxc200's storage is on the
+# same boot SSD as every other guest, so logs shipped here do not outlive the
+# disk that produced them - they outlive the *guest*, which is a smaller claim.
+# Real aggregation puts the receiver in another failure domain, and this platform
+# has exactly one.
+journal_remote_package: systemd-journal-remote
+
+# Bound to the node's Tailscale address, never the wildcard. journald's own
+# packaging ships a socket unit listening on [::]:19532, which would put an
+# unauthenticated log sink on the untrusted LAN - the binding rule exists for
+# precisely this, and the LLMNR responder found on lxc250 on 2026-09-16 is what
+# happens when a daemon's default is left to decide.
+journal_remote_listen_address: "{{ ansible_host }}"
+journal_remote_port: 19532
+
+# Where the received journals land, and how much of them is kept. Ten nodes at a
+# few hundred megabytes each would fill this container's root filesystem, which
+# is thin-pool space on the boot SSD.
+journal_remote_dir: /var/log/journal/remote
+journal_remote_max_use: 2G
+journal_remote_max_file_size: 128M
+
+# Plain HTTP over the tailnet, not HTTPS. The transport is already encrypted and
+# authenticated by WireGuard, and adding TLS here would mean a second certificate
+# lifecycle on a node that has one - KE-16 is the entry about what that costs.
+# In a workplace with no overlay this line is the opposite way round, and that is
+# the difference worth noticing.
+journal_remote_use_tls: false

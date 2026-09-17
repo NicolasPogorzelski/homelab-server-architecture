@@ -1,0 +1,29 @@
+---
+# EXERCISE, not a control this platform needs.
+#
+# Central log aggregation with systemd's own remoting: a receiver on lxc200 and
+# uploaders on the nodes that opt in. Built to be understood rather than because
+# the risk here calls for it - ten nodes that power down nightly give correlation
+# nothing to correlate, and the reasoning, labelling rules and exit are in
+# docs/decisions/exercise-scope-before-terraform.md.
+#
+# The receiver comes first on purpose. An uploader started against a listener
+# that does not exist yet fills its own journal with connection errors, which is
+# a self-inflicted version of the noise this exercise is being criticised for.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Receive journals on the monitoring node
+  hosts: lxc200
+  become: true
+  roles:
+    - journal_remote
+
+- name: Ship journals from the nodes that opt in
+  hosts: guests
+  become: true
+  roles:
+    - journal_upload
