@@ -369,7 +369,10 @@ outside its field of view. These four are ordinary work and are ordered by expos
   mean anything, and a dump nobody has restored is an assumption. The pattern exists: mirror
   `postgresql_restore_test` into a throwaway instance, assert non-empty key tables, export the
   metric, add the staleness rule.
-- **The sshd binding decision has not been executed on any node.** `ssh_hardening_listen_address`
+- **The sshd binding decision, first node done 2026-09-17.** lxc220 carries the gate and the
+  pinned bind; nine nodes still hold `*:22`. Continue one per session, containers before the
+  hypervisor. The finding as written:
+- **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
   appears only as the empty default in the role, and every node still binds `*:22`, measured. The
   decision of 2026-09-11 calls for one node per session with the containers first
   ([decision](../decisions/sshd-listen-address.md)). A decision that is never executed reads, six

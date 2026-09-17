@@ -4,3 +4,29 @@
 # Node dir basename ("calibreweb") differs from the repo dir name ("calibre-web").
 compose_projects:
   - { dest: /srv/calibreweb, src: calibre-web }
+
+# === sshd pinned to the Tailscale address, first node of the rollout ===
+#
+# The decision of 2026-09-11 (docs/decisions/sshd-listen-address.md) found ten of
+# eleven nodes binding `*:22` and called for one node per session, containers
+# first, with `pct exec 220` as the recovery path. It was executed on no node
+# until 2026-09-17, which is how a decision turns into a solved problem nobody
+# solved.
+#
+# This node is first because it costs least if it goes wrong: one read-mostly
+# service, no other node depends on it, and the container can be entered from the
+# hypervisor without SSH at all.
+#
+# The gate is not optional decoration next to the bind. sshd binding an address
+# that does not exist yet at boot exits 255, and Debian's ssh.service carries
+# RestartPreventExitStatus=255, so the restart backstop is inert unless that list
+# is cleared - which is why ssh_hardening asserts both of the lines below before
+# it will write a ListenAddress at all.
+tailscale_boot_gate_units:
+  - ssh.service
+
+tailscale_boot_gate_clear_restart_prevent: true
+
+# Read from the inventory rather than hard-coded: this repository keeps Tailscale
+# addresses out of version control, and ansible_host is where the real one lives.
+ssh_hardening_listen_address: "{{ ansible_host }}"
