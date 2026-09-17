@@ -47,11 +47,27 @@
 - name: Flush handlers so the timer starts against the current unit definition
   ansible.builtin.meta: flush_handlers
 
+# Whether systemd has the unit yet. In check mode the template above was not
+# really written, so on a node seeing this role for the first time the unit does
+# not exist and systemd_service fails the whole play - measured 2026-09-17. This
+# role is in the weekly drift sweep, which runs in check mode, so a role added to
+# that list before it is applied turns its node red every Sunday for a state that
+# is not a fault. On a converged node the unit is there and the check reports
+# accurately, which is the behaviour worth keeping.
+- name: Ask systemd whether the timer unit exists yet  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain mariadb-restore-test.timer
+  register: mariadb_restore_test_unit_file
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Enable and start the restore test timer
   ansible.builtin.systemd_service:
     name: mariadb-restore-test.timer
     enabled: true
     state: started
+  when: mariadb_restore_test_unit_file.stdout | length > 0
 
 # Read the schedule back out of systemd rather than reporting the file that was
 # written. A timer whose calendar expression systemd rejected is enabled, listed
@@ -70,6 +86,7 @@
   when:
     - mariadb_restore_test_verify
     - not ansible_check_mode
+    - mariadb_restore_test_unit_file.stdout | length > 0
 
 - name: Report when the restore test will next run
   ansible.builtin.debug:
