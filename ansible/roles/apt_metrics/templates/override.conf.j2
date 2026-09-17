@@ -5,6 +5,13 @@
 # {{ apt_metrics_textfile_dir }}, so the collector is pointed there instead.
 # ExecStart is cleared first: systemd appends to it otherwise, and the unit would
 # run the collector twice, into two directories.
+#
+# `set -o pipefail` is the load-bearing part, not decoration. Without it the
+# pipeline's exit status is sponge's, so a producer that fails to run at all
+# still leaves the unit reporting success - measured 2026-09-17 on lxc260, where
+# a wrong script name produced "Finished successfully" and a zero-byte metric
+# file. A collector that runs, succeeds and writes nothing is the exact shape
+# this platform has on file three times over.
 [Service]
 ExecStart=
-ExecStart=/bin/bash -c '/usr/share/prometheus-node-exporter-collectors/apt.sh | sponge {{ apt_metrics_textfile_dir }}/apt.prom'
+ExecStart=/bin/bash -c 'set -o pipefail; {{ apt_metrics_collector }} | sponge {{ apt_metrics_textfile_dir }}/apt.prom'

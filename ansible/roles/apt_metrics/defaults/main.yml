@@ -22,6 +22,13 @@ apt_metrics_package: prometheus-node-exporter-collectors
 # nowhere.
 apt_metrics_sponge_package: moreutils
 
+# The collector's real name. It is `apt_info.py`, not `apt.sh`: the package ships
+# a mixture of shell and Python collectors, and the name was assumed from
+# smartmon.sh by analogy on 2026-09-17. The wrong path cost a unit that reported
+# success while writing a zero-byte file, which is why the unit now runs under
+# `set -o pipefail` and why the role reads the metric back.
+apt_metrics_collector: /usr/share/prometheus-node-exporter-collectors/apt_info.py
+
 apt_metrics_unit: prometheus-node-exporter-apt.service
 apt_metrics_timer: prometheus-node-exporter-apt.timer
 

@@ -33,6 +33,19 @@
     mode: "0644"
   notify: Reload systemd
 
+# Which of those timers this node actually has. Masking a unit that does not
+# exist is an error, and under --check the package has not been installed, so
+# every guest without it failed the whole play - measured 2026-09-17, nine of ten
+# nodes. This role is in the weekly drift sweep, which runs in check mode, so
+# that would have turned nine red every Sunday for a state that is not a fault.
+- name: List the collector timers this node has  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain prometheus-node-exporter-*.timer
+  register: apt_metrics_unit_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Mask the collector timers this node has no hardware or use for
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -40,7 +53,9 @@
     enabled: false
     state: stopped
   loop: "{{ apt_metrics_masked_timers }}"
-  when: apt_metrics_masked_timers | length > 0
+  when:
+    - apt_metrics_masked_timers | length > 0
+    - item in (apt_metrics_unit_files.stdout | default(''))
 
 # Masking a timer systemd currently holds loaded leaves it `failed`, and stopping
 # it does not clear that. Measured on 2026-09-15 when smart_metrics first masked
@@ -51,7 +66,9 @@
     cmd: systemctl reset-failed {{ apt_metrics_masked_timers | join(' ') }}
   changed_when: false
   failed_when: false
-  when: apt_metrics_masked_timers | length > 0
+  when:
+    - apt_metrics_masked_timers | length > 0
+    - apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 # Unmasked explicitly. smart_metrics masked this timer on the hypervisor on
 # 2026-09-15 with the reasoning that Ansible already owned the apt job, and the
@@ -61,6 +78,7 @@
   ansible.builtin.systemd_service:
     name: "{{ apt_metrics_timer }}"
     masked: false
+  when: apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 - name: Flush handlers so the timer starts against the current unit definition
   ansible.builtin.meta: flush_handlers
@@ -70,6 +88,7 @@
     name: "{{ apt_metrics_timer }}"
     enabled: true
     state: started
+  when: apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 # The timer fires on its own schedule, which can be hours away. One immediate run
 # so the metric exists before this play ends and the verification below has
@@ -78,14 +97,31 @@
   ansible.builtin.systemd_service:
     name: "{{ apt_metrics_unit }}"
     state: started
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
-- name: Read the exported metric back
+# The HELP line rather than a data line. apt_info.py emits one data line per
+# origin with something pending, so a fully patched node produces none - asserting
+# on data would fail exactly the nodes that are in the best state. The HELP line
+# is emitted unconditionally, so its presence proves the collector ran to the end
+# and the file is its output rather than a leftover.
+- name: Prove the collector ran to completion
   ansible.builtin.command:
-    cmd: grep -c '^apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+    cmd: grep -c '^# HELP apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+  register: apt_metrics_help
+  changed_when: false
+  failed_when: apt_metrics_help.rc != 0 or apt_metrics_help.stdout | int < 1
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode
+
+- name: Count what is actually pending here
+  ansible.builtin.command:
+    cmd: grep -c '^apt_upgrades_pending{' {{ apt_metrics_textfile_dir }}/apt.prom
   register: apt_metrics_series
   changed_when: false
-  failed_when: apt_metrics_series.rc != 0 or apt_metrics_series.stdout | int < 1
+  failed_when: false
   when:
     - apt_metrics_verify
     - not ansible_check_mode
@@ -93,8 +129,8 @@
 - name: Report how many pending-upgrade series this node exports
   ansible.builtin.debug:
     msg: >-
-      {{ inventory_hostname }} exports {{ apt_metrics_series.stdout }}
-      apt_upgrades_pending series.
+      {{ inventory_hostname }}: collector complete,
+      {{ apt_metrics_series.stdout | default('0') }} origin(s) with pending upgrades.
   when:
     - apt_metrics_verify
     - not ansible_check_mode
