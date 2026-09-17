@@ -400,8 +400,30 @@ built regardless, and each is revisited once the Terraform track has started.
   ([decision](../decisions/hypervisor-panic-and-watchdog.md)).
 - An SBOM for the compose stacks, with signature verification where the images allow it.
 
-**This block is the end of maintenance mode.** When these four and the four items above are done,
-the Terraform track begins.
+**Built 2026-09-17, applied to nothing.** All four exist in the repository and none has run
+against the fleet, because playbooks execute from the control node's tree and `preflight.yml`
+refuses a tree that is not a clean `main` in sync with `origin`. What each one turned out to
+teach, which is the part worth keeping:
+
+- `auditd` cannot run in an unprivileged LXC at all. The kernel audit subsystem is global and not
+  namespaced, so the role asserts the node is not a container rather than documenting it. In a
+  workplace this is why container auditing happens from the node through the runtime.
+- Its disk actions are `SYSLOG`, not the `HALT` that hardening guides copy from upstream. A
+  logging daemon able to power off a hypervisor carrying eleven guests outweighs what it watches.
+- The `dpkg --verify` half is not an integrity control and says so: dpkg keeps its checksums on
+  the filesystem they describe. It finds mistakes reliably and an adversary not at all.
+- Log aggregation lands on the same boot SSD the senders live on, so it outlives the guest and
+  not the disk. A receiver in a second failure domain is the real control and this platform has
+  one machine.
+- High availability stopped at reading, which the decision required. `pvecm status` exits 2 with
+  no corosync config while `ha-manager status` answers `quorum OK`, and everything but a resource
+  is already running - see [`ha-mechanics.md`](ha-mechanics.md).
+- The SBOM workflow carries a supply-chain weakness in a supply-chain workflow: two actions
+  pinned to tags where every other action here is pinned to a SHA. Named in its header rather
+  than left to be found.
+
+**This block is the end of maintenance mode.** When these four and the four items above have been
+applied and verified, the Terraform track begins.
 
 ## Added by the 2026-08-20 repository and fleet audit
 
