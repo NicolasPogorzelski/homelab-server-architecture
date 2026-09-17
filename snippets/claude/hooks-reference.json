@@ -17,7 +17,18 @@
     "release is issued by hand from a terminal outside the session. Deny beats allow",
     "regardless of which file is more specific, so a project-level allow rule cannot",
     "reopen it - which is why the contradictory wildcard that used to sit in the live",
-    "allow list was removed rather than left as decoration."
+    "allow list was removed rather than left as decoration.",
+    "",
+    "The Stop entry answers with systemMessage, which shows the reminder and lets",
+    "the session end. The earlier form, additionalContext on Stop, is documented as",
+    "'continue the conversation' and was measured to do exactly that on 2026-09-17:",
+    "every turn end re-invoked the model with the reminder, five times in a row",
+    "with no input, until the entry was removed.",
+    "",
+    "The guard's timeout is 120 s against a measured 24 s worst case (validator",
+    "12 s plus ansible-lint 11.5 s). A PreToolUse hook that times out does not",
+    "block the call - the documentation says so - so the margin is the difference",
+    "between a gate and a delay."
   ],
   "permissions": {
     "allow": [
@@ -55,7 +66,7 @@
           {
             "type": "command",
             "command": "<repo-path>/scripts/hooks/pre-commit-guard.sh",
-            "timeout": 60,
+            "timeout": 120,
             "statusMessage": "Validating repository before commit"
           }
         ]
@@ -66,8 +77,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '{\"hookSpecificOutput\": {\"hookEventName\": \"Stop\", \"additionalContext\": \"Per CLAUDE.md, before ending this session check what was learned and update the devops-til repository. New concepts go in new .md files, update the README index, then push.\"}}'",
-            "statusMessage": "devops-til reminder active"
+            "command": "printf '{\"systemMessage\": \"Per CLAUDE.md: before this session ends, record what was learned in devops-til (new concepts as new .md files, README index updated), then push it.\"}'",
+            "statusMessage": "devops-til reminder"
           }
         ]
       }
