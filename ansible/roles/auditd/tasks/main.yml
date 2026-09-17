@@ -1,0 +1,72 @@
+---
+# The first thing this role asserts is where it may run, and the reason is the
+# lesson rather than a guard rail. The kernel audit subsystem is global and not
+# namespaced: one queue per kernel, owned by whoever holds CAP_AUDIT_CONTROL in
+# the initial user namespace. An unprivileged LXC has neither, so auditd inside
+# one either fails to start or reports the host's events under the container's
+# name.
+- name: Refuse to run inside a container
+  ansible.builtin.assert:
+    that: ansible_virtualization_role != 'guest' or ansible_virtualization_type not in ['lxc', 'container', 'docker']
+    fail_msg: >-
+      auditd cannot work inside an unprivileged LXC - the kernel audit subsystem
+      is global and is not namespaced. Audit a container from its node, through
+      the runtime, not from inside it.
+    success_msg: "Not a container; the kernel audit subsystem is reachable."
+    quiet: true
+
+- name: Install auditd
+  ansible.builtin.apt:
+    name: "{{ auditd_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Configure the daemon
+  ansible.builtin.template:
+    src: auditd.conf.j2
+    dest: /etc/audit/auditd.conf
+    owner: root
+    group: root
+    mode: "0640"
+    validate: /usr/sbin/auditd -f -c %s -l && /bin/true
+  notify: Reload audit rules
+
+- name: Deploy the rule set
+  ansible.builtin.template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/50-homelab.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Reload audit rules
+
+- name: Enable and start auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Flush handlers so the rules are loaded before they are read back
+  ansible.builtin.meta: flush_handlers
+
+# Read the kernel's loaded rules, not the file on disk. A rule the kernel
+# rejected leaves the file intact and the daemon running, which is the shape this
+# repository keeps finding: a guard that was written and never armed.
+- name: Read the loaded rules back out of the kernel  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: auditd_loaded
+  changed_when: false
+  failed_when: auditd_loaded.stdout_lines | length < (auditd_rules | length)
+  when: not ansible_check_mode
+
+- name: Report how many rules the kernel holds
+  ansible.builtin.debug:
+    msg: >-
+      auditd on {{ inventory_hostname }} holds
+      {{ auditd_loaded.stdout_lines | length }} loaded rules,
+      {{ auditd_rules | length }} declared. EXERCISE - no alert reads this.
+  when:
+    - not ansible_check_mode
+    - auditd_loaded.stdout_lines is defined

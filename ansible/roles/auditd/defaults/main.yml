@@ -1,0 +1,62 @@
+---
+# === auditd (EXERCISE) ===
+#
+# This role exists to be understood, not because this platform needs it. The
+# assessment of 2026-09-16 argued against fleet-wide syscall auditing at ten
+# guests and one operator, and that argument stands; the reasoning, the labelling
+# rules and the exit are in
+# docs/decisions/exercise-scope-before-terraform.md. Nothing here is listed as an
+# Enforced control, and nothing here has an alert.
+#
+# It targets the hypervisor and no container, and that is the first thing the
+# exercise teaches rather than a scoping preference. The kernel's audit subsystem
+# is global: it is not namespaced, there is one audit queue per kernel, and a
+# process inside an unprivileged LXC can neither own it nor read it. Running
+# auditd in a container therefore either fails outright or reports the host's
+# events under the container's name, which is worse than not running it. In a
+# workplace this is the reason container auditing is done from the node, through
+# the runtime, and not from inside the workload.
+auditd_packages:
+  - auditd
+  - audispd-plugins
+
+# The rules. Deliberately short: a starter set that answers "who changed the
+# accounts and who escalated", which is the question an investigation opens with.
+# A production rule set is an order of magnitude longer and is generated from a
+# benchmark rather than written by hand.
+auditd_rules:
+  - "-w /etc/passwd -p wa -k identity"
+  - "-w /etc/shadow -p wa -k identity"
+  - "-w /etc/group -p wa -k identity"
+  - "-w /etc/sudoers -p wa -k escalation"
+  - "-w /etc/sudoers.d/ -p wa -k escalation"
+  - "-w /root/.ssh/authorized_keys -p wa -k access"
+  - "-w /etc/ssh/sshd_config -p wa -k access"
+  - "-w /etc/ssh/sshd_config.d/ -p wa -k access"
+  - "-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=4294967295 -k rootcmd"
+
+# Log volume, which on this host is the part that could do harm. /var/log sits on
+# the boot SSD, the disk KE-14 is open against and the one every guest root disk
+# lives on. Four files of eight megabytes is a hard ceiling of 32 MB, and the
+# rotation discards rather than compresses, because a compressor scheduled by a
+# log daemon is one more thing to reason about at 3 a.m.
+auditd_max_log_file_mb: 8
+auditd_num_logs: 4
+auditd_max_log_file_action: ROTATE
+
+# The foot-gun, set deliberately rather than left at its default. Debian ships
+# auditd with `admin_space_left_action = SUSPEND` but the upstream default that
+# many hardening guides copy is HALT, which powers the machine off when the audit
+# partition fills. On a hypervisor carrying eleven guests, a logging daemon that
+# can halt the node is a larger availability risk than the thing it was installed
+# to watch. SYSLOG says so and keeps running.
+auditd_space_left_action: SYSLOG
+auditd_admin_space_left_action: SYSLOG
+auditd_disk_full_action: SYSLOG
+
+# Whether the rules are immutable (-e 2). Off here on purpose: immutability means
+# the rule set cannot be changed until the next reboot, which is correct in a
+# place where an operator and an attacker are different people, and merely
+# obstructive in one where they are the same. Turning it on is the single line
+# that separates this exercise from the real control.
+auditd_immutable: false

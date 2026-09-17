@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+log_file = /var/log/audit/audit.log
+log_format = ENRICHED
+log_group = adm
+max_log_file = {{ auditd_max_log_file_mb }}
+num_logs = {{ auditd_num_logs }}
+max_log_file_action = {{ auditd_max_log_file_action }}
+space_left = 256
+space_left_action = {{ auditd_space_left_action }}
+admin_space_left = 128
+admin_space_left_action = {{ auditd_admin_space_left_action }}
+disk_full_action = {{ auditd_disk_full_action }}
+disk_error_action = SYSLOG
+flush = INCREMENTAL_ASYNC
+freq = 50

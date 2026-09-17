@@ -1,0 +1,23 @@
+---
+# EXERCISE, not a control this platform needs.
+#
+# Built to be understood rather than because the risk here calls for it; the
+# reasoning, the labelling rules and the exit condition are in
+# docs/decisions/exercise-scope-before-terraform.md. Nothing in
+# security-controls.md is marked Enforced on the strength of it and no rule in
+# alert.rules.yml reads anything it produces.
+#
+# The hypervisor only, and that is the first thing the exercise demonstrates: the
+# kernel audit subsystem is global and not namespaced, so a container cannot have
+# an audit daemon of its own. The role asserts it rather than documenting it.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Syscall auditing on the hypervisor
+  hosts: proxmox
+  become: true
+  roles:
+    - auditd

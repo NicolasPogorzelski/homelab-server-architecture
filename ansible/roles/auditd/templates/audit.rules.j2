@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+#
+# EXERCISE. This rule set is here to be read and understood, not because this
+# platform's risk calls for syscall auditing - see
+# docs/decisions/exercise-scope-before-terraform.md.
+
+# Start from a known state, so a reload does not stack rules on top of the
+# previous set.
+-D
+
+# Kernel backlog. 8192 is the usual starting figure; too small and the kernel
+# drops events under load, which fails silently unless the loss counter is read.
+-b 8192
+
+{% for rule in auditd_rules %}
+{{ rule }}
+{% endfor %}
+
+{% if auditd_immutable %}
+# Immutable until reboot. Deliberately off by default here: see the role defaults
+# for why it is the line that separates the exercise from the control.
+-e 2
+{% endif %}
