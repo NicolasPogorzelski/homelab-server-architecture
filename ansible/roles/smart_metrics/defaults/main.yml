@@ -26,13 +26,17 @@ smart_metrics_output: smartmon.prom
 smart_metrics_unit: prometheus-node-exporter-smartmon.service
 smart_metrics_timer: prometheus-node-exporter-smartmon.timer
 
-# The package ships five collector timers. Four measure hardware this host does
-# not have (IPMI, Mellanox, NVMe) or duplicate a job Ansible already owns (apt).
-# Masked rather than left disabled, for the reason `systemd_hygiene` gives: a
-# disabled unit is one `systemctl enable` away from running and carries no
-# record of why it should not be.
+# The package ships five collector timers. Three measure hardware this host does
+# not have - IPMI, Mellanox, NVMe. Masked rather than left disabled, for the
+# reason `systemd_hygiene` gives: a disabled unit is one `systemctl enable` away
+# from running and carries no record of why it should not be.
+#
+# The apt timer was in this list until 2026-09-17, masked on the grounds that it
+# duplicated a job Ansible already owned. Measured 2026-09-16, no job owned it:
+# nothing on this platform exported a package count, and this host was 228
+# packages behind with 55 of them security. It is owned by `apt_metrics` now, so
+# masking it here would be two roles asserting opposite things about one unit.
 smart_metrics_masked_timers:
-  - prometheus-node-exporter-apt.timer
   - prometheus-node-exporter-ipmitool-sensor.timer
   - prometheus-node-exporter-mellanox-hca-temp.timer
   - prometheus-node-exporter-nvme.timer

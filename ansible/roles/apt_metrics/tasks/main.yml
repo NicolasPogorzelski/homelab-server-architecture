@@ -1,0 +1,101 @@
+---
+- name: Install the collector package and sponge
+  ansible.builtin.apt:
+    name:
+      - "{{ apt_metrics_package }}"
+      - "{{ apt_metrics_sponge_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: "{{ apt_metrics_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the drop-in directory for the apt collector unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ apt_metrics_unit }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point the apt collector at this node's textfile directory
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: "/etc/systemd/system/{{ apt_metrics_unit }}.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Mask the collector timers this node has no hardware or use for
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+    enabled: false
+    state: stopped
+  loop: "{{ apt_metrics_masked_timers }}"
+  when: apt_metrics_masked_timers | length > 0
+
+# Masking a timer systemd currently holds loaded leaves it `failed`, and stopping
+# it does not clear that. Measured on 2026-09-15 when smart_metrics first masked
+# the same four: each reported "Unit to trigger vanished", which is enough for
+# SystemdUnitFailed and would have arrived as a red alert for a deliberate act.
+- name: Clear the failed state masking leaves behind  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl reset-failed {{ apt_metrics_masked_timers | join(' ') }}
+  changed_when: false
+  failed_when: false
+  when: apt_metrics_masked_timers | length > 0
+
+# Unmasked explicitly. smart_metrics masked this timer on the hypervisor on
+# 2026-09-15 with the reasoning that Ansible already owned the apt job, and the
+# measurement of 2026-09-16 found that nothing did. An `enabled: true` alone
+# leaves a masked unit masked and reports success.
+- name: Unmask the apt collector timer
+  ansible.builtin.systemd_service:
+    name: "{{ apt_metrics_timer }}"
+    masked: false
+
+- name: Flush handlers so the timer starts against the current unit definition
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the apt collector timer
+  ansible.builtin.systemd_service:
+    name: "{{ apt_metrics_timer }}"
+    enabled: true
+    state: started
+
+# The timer fires on its own schedule, which can be hours away. One immediate run
+# so the metric exists before this play ends and the verification below has
+# something to read.
+- name: Run the collector once now
+  ansible.builtin.systemd_service:
+    name: "{{ apt_metrics_unit }}"
+    state: started
+  when: not ansible_check_mode
+
+- name: Read the exported metric back
+  ansible.builtin.command:
+    cmd: grep -c '^apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+  register: apt_metrics_series
+  changed_when: false
+  failed_when: apt_metrics_series.rc != 0 or apt_metrics_series.stdout | int < 1
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode
+
+- name: Report how many pending-upgrade series this node exports
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} exports {{ apt_metrics_series.stdout }}
+      apt_upgrades_pending series.
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode
+    - apt_metrics_series.stdout is defined

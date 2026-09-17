@@ -727,6 +727,44 @@ groups:
   # Note this fleet already builds absence-alerts twice - LvmThinMetricsStale and
   # PostgreSQLRestoreTestStale - both of which live inside the thing they watch.
   # This one is the same idea applied to the alerting chain, from outside it.
+  # Patch level, which nothing on this platform measured until 2026-09-17. The
+  # numbers that prompted it, read by hand on 2026-09-16: 228 packages pending on
+  # the hypervisor with 55 of them security, 62 and 23 on vm102, 13 and 7 on
+  # lxc220, and `unattended_upgrades` running on exactly one node.
+  #
+  # The threshold is a duration, not a count. One security update outstanding for
+  # an afternoon is normal operation on a fleet patched by hand; the same update
+  # outstanding for a fortnight is the thing worth a message. `for: 14d` is
+  # deliberately longer than the weekly window somebody would patch in, so the
+  # rule fires at a backlog rather than at a Tuesday.
+  #
+  # Origin rather than package name: Debian's apt.sh breaks pending upgrades down
+  # by repository origin, and the security pockets are the only ones that carry
+  # `-Security` or `-security` in their label on both Debian and Ubuntu, which is
+  # the one node that is not Debian.
+  - name: apt
+    rules:
+      - alert: AptSecurityUpdatesPending
+        expr: sum by (instance) (apt_upgrades_pending{origin=~".*[Ss]ecurity.*"}) > 0
+        for: 14d
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} security update(s) pending on {{ $labels.instance }} for two weeks"
+          description: "Security updates have been outstanding on this node for fourteen days. apt-upgrade.yml is run by hand and is excluded from the weekly drift sweep, so nothing else reports this."
+
+      # Absence of the metric, which is how every other textfile collector here is
+      # guarded. The apt collector runs daily, so a day and a half is one missed
+      # run plus the nightly power-down the host does by design.
+      - alert: AptMetricsStale
+        expr: (time() - max by (instance) (node_textfile_mtime_seconds{file="apt.prom"})) > 129600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Package metrics on {{ $labels.instance }} are stale"
+          description: "No apt collector run in 36 hours. Patch level is unobserved on this node while this is firing."
+
   - name: heartbeat
     rules:
       - alert: Watchdog

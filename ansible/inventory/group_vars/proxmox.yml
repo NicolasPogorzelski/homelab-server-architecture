@@ -108,3 +108,10 @@ systemd_hygiene_masked_units:
 # left nothing in the journal at all, which is why the netconsole receiver
 # exists. Retention only helps where something was written.
 journald_system_max_use: 2G
+
+# smart_metrics owns the collector timers on this node and enables smartmon among
+# them, so apt_metrics must not assert a masking list of its own here. Two roles
+# with opposite opinions about one unit is how a fleet starts flapping between
+# runs. The apt timer itself is enabled by apt_metrics on every node including
+# this one.
+apt_metrics_masked_timers: []

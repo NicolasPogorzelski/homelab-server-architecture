@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+#
+# The packaged unit writes into /var/lib/prometheus/node-exporter, which is
+# Debian's node_exporter path. This fleet runs a hand-installed binary reading
+# {{ apt_metrics_textfile_dir }}, so the collector is pointed there instead.
+# ExecStart is cleared first: systemd appends to it otherwise, and the unit would
+# run the collector twice, into two directories.
+[Service]
+ExecStart=
+ExecStart=/bin/bash -c '/usr/share/prometheus-node-exporter-collectors/apt.sh | sponge {{ apt_metrics_textfile_dir }}/apt.prom'

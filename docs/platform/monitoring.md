@@ -90,6 +90,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `heartbeat` | `Watchdog` |
 | `blackbox` | `ServiceDown` |
 | `smart` | `SmartAttributeDegrading`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
+| `apt` | `AptSecurityUpdatesPending`, `AptMetricsStale` |
 - `ServiceDown` fires on the `blackbox-http` / `blackbox-https` probe targets (service-level HTTP(S) reachability; KE-8 remediation)
 - `PostgreSQLBackupStale` requires Node Exporter textfile collector on lxc260 (see pg-backup runbook).
   **It cannot see an outage in which the host is off**, because Prometheus runs on that same host:
