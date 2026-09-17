@@ -1,0 +1,29 @@
+---
+# === mariadb_restore_test ===
+#
+# Single source of truth lives in snippets/mariadb/.
+# playbook_dir = ansible/playbooks -> ../../ = repo root.
+mariadb_restore_test_script_src: "{{ playbook_dir }}/../../snippets/mariadb/mariadb-restore-test.sh"
+mariadb_restore_test_script_dest: /usr/local/sbin/mariadb-restore-test.sh
+
+mariadb_restore_test_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# The 15th rather than the 1st, and before 10:30 local, for two separate reasons.
+#
+# Mid-month keeps this off the morning pg-restore-test already uses, so a failure
+# is attributable to one database without reading two journals. And the hour is
+# the same argument that role records: a restored copy occupies thin-pool blocks
+# on the boot SSD, a container cannot fstrim itself, and only the host reclaims
+# them - lxc-fstrim.timer at 10:30 local. A slot after that leaves the blocks
+# allocated for a further day.
+#
+# That ordering was broken between 2026-09-01 and 2026-09-08 without anyone
+# noticing, because lxc260 ran Etc/UTC while the host ran Europe/Berlin and a
+# 09:00 slot landed at 11:04 local. The `timezone` role closed it fleet-wide on
+# 2026-09-08; measured 2026-09-17, every node reports Europe/Berlin and
+# pg-restore-test next elapses at 09:04 CEST against fstrim at 10:31 CEST.
+mariadb_restore_test_oncalendar: "*-*-15 09:00:00"
+
+# Read the timer back after installing it. A unit file that exists and a timer
+# systemd has actually scheduled are different claims.
+mariadb_restore_test_verify: true

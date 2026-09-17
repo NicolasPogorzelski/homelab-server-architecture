@@ -3,3 +3,9 @@
 # src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
   - { dest: /opt/paperless, src: paperless }
+
+# Ships this node's journal to the receiver on lxc200. EXERCISE, not a control
+# this platform needs - see docs/decisions/exercise-scope-before-terraform.md.
+# Two nodes opt in rather than ten: one sender demonstrates nothing about
+# correlation and ten would be the noise the assessment warned about.
+journal_upload_enabled: true

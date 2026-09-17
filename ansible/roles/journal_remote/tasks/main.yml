@@ -1,0 +1,95 @@
+---
+- name: Install the journal receiver
+  ansible.builtin.apt:
+    name: "{{ journal_remote_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the directory the received journals land in
+  ansible.builtin.file:
+    path: "{{ journal_remote_dir }}"
+    state: directory
+    owner: systemd-journal-remote
+    group: systemd-journal
+    mode: "0755"
+
+- name: Cap what the received journals may occupy
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald@remote.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      # EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
+      #
+      # This container's root filesystem is thin-pool space on the boot SSD. Ten
+      # nodes shipping journals here without a ceiling is the KE-7 failure class
+      # with extra steps.
+      [Journal]
+      SystemMaxUse={{ journal_remote_max_use }}
+      SystemMaxFileSize={{ journal_remote_max_file_size }}
+  notify: Restart journal-remote
+
+- name: Create the drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/systemd-journal-remote.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bind the receiver to the Tailscale address
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/systemd-journal-remote.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart journal-remote
+
+# The packaged socket unit is what listens on the wildcard. Leaving it enabled
+# beside a service bound to one address means systemd activates the socket
+# version on first connection and the override is bypassed - the bind rule
+# defeated by a unit nobody looked at.
+- name: Disable the packaged wildcard socket
+  ansible.builtin.systemd_service:
+    name: systemd-journal-remote.socket
+    enabled: false
+    state: stopped
+    masked: true
+
+- name: Flush handlers before reading the bind back
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the receiver
+  ansible.builtin.systemd_service:
+    name: systemd-journal-remote.service
+    enabled: true
+    state: started
+
+# Read the socket table, not the unit state. A service that is active and a
+# service listening where it was told are different claims, and this platform has
+# three entries on the difference.
+- name: Verify the receiver listens on the Tailscale address only
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      ss -tlnH | awk '{print $4}' | grep ':{{ journal_remote_port }}$' | sort -u
+    executable: /bin/bash
+  register: journal_remote_bind
+  changed_when: false
+  failed_when: journal_remote_bind.stdout | trim != journal_remote_listen_address ~ ':' ~ journal_remote_port
+  when: not ansible_check_mode
+
+- name: Report the bind
+  ansible.builtin.debug:
+    msg: >-
+      journal receiver on {{ inventory_hostname }} listens on
+      {{ journal_remote_bind.stdout }}. EXERCISE - no alert reads it.
+  when:
+    - not ansible_check_mode
+    - journal_remote_bind.stdout is defined

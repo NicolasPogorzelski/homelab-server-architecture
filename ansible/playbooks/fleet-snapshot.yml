@@ -116,6 +116,34 @@
       failed_when: false
       when: "'docker' in group_names"
 
+    # The third and last task that needs root, added 2026-09-17. `dpkg --verify`
+    # compares every installed file against the checksum dpkg recorded at install
+    # time and prints only what differs, so a clean node emits nothing and the
+    # projection costs no diff lines. What it catches is a packaged file edited in
+    # place - the shape every "I just changed one line in /etc" incident has -
+    # and, less comfortably, a binary replaced by something that is not the
+    # distribution's.
+    #
+    # It is not an integrity control and must not be read as one. dpkg's database
+    # lives on the same filesystem as the files it describes, so anything able to
+    # edit the second can edit the first; a real file-integrity monitor keeps its
+    # baseline somewhere the watched machine cannot reach. This is the cheap
+    # ninety per cent: it finds mistakes reliably and an adversary not at all.
+    #
+    # Conffiles are excluded. dpkg expects those to be edited and marks them, so
+    # including them would report every node's sshd_config as a finding for ever.
+    - name: Read which packaged files no longer match their package
+      become: true
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          dpkg --verify 2>/dev/null
+          | grep -v '^..5...... c ' | sort || true
+        executable: /bin/bash
+      register: fs_dpkg
+      changed_when: false
+      failed_when: false
+
     - name: Assemble this node's snapshot
       ansible.builtin.set_fact:
         fs_snapshot: |
@@ -131,6 +159,8 @@
           {{ fs_mounts.stdout | default('') }}
           [containers]
           {{ fs_docker.stdout | default('') }}
+          [package-integrity]
+          {{ fs_dpkg.stdout | default('') }}
 
 - name: Store and diff the snapshot on the control node
   hosts: lxc250

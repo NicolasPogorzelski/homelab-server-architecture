@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The Ansible learning track (roadmap items #1-#13) is complete and merged to `main`: everything
 guest-side is Ansible-managed and every scheduled job is a systemd timer. The next learning track is
-Terraform, and it is deferred - the platform stays in maintenance mode until it starts, see below.
+Terraform, and since 2026-09-16 its start has a condition rather than an open date: one block of
+work stands between here and there, and the platform stays in maintenance mode for the length of
+it, see below.
 The completed role/playbook catalog and per-session narratives live in
 [`docs/platform/ansible-progress.md`](docs/platform/ansible-progress.md); platform changes and their
 verification live in [`docs/platform/changelog.md`](docs/platform/changelog.md). Record new session
@@ -78,11 +80,14 @@ notes there and keep this section short.
   Nothing live is touched. The 09:00 slot was called load-bearing here, on the grounds that
   the restored cluster holds ~150 MB of thin-pool blocks, a container cannot `fstrim` itself, and
   the host's `lxc-fstrim.timer` at 10:30 reclaims them the same morning. **Measured 2026-09-08,
-  the ordering runs the other way.** lxc260 keeps `Etc/UTC` and the hypervisor keeps
-  `Europe/Berlin`, so the restore test fires at 09:04 UTC, which is 11:04 local, while fstrim
-  fires at 10:38 local - twenty-six minutes earlier. The blocks are reclaimed the following
-  morning. Nothing has gone wrong and the pool is watched, but the dependency as stated does not
-  hold, and the remedy is a zone in the calendar expression rather than a different hour.
+  the ordering ran the other way - and a different change had already repaired it.** lxc260 kept
+  `Etc/UTC` while the hypervisor kept `Europe/Berlin`, so a 09:00 slot fired at 11:04 local
+  against fstrim at 10:38 and the blocks were reclaimed a morning late. The `timezone` role closed
+  that fleet-wide in the same week and nobody connected the two, so this paragraph went on
+  describing a fault for nine days. Re-measured 2026-09-17: ten of ten nodes report
+  `Europe/Berlin`, the timer's last run reads 11:03 CEST on 2026-09-01 and its next elapse
+  09:04 CEST on 2026-10-01, against `lxc-fstrim.timer` at 10:31. The dependency holds and needs no
+  zone in the calendar expression.
   **Write-time verification closed 2026-08-14.** `pg-backup.sh` now writes to `*.sql.gz.partial`
   and renames only after three checks pass - non-empty, `gzip -t`, and exactly one
   `cluster dump complete` marker - with verification ordered before retention deletion,
@@ -171,9 +176,11 @@ notes there and keep this section short.
 
   **Note:** LXC provisioning (creating containers) is intentionally excluded - that belongs to Terraform, the next learning track, which is deferred.
 
-**Next learning track: Terraform, deferred on 2026-09-02.** The track is not cancelled and the content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). Only the timing changed. Terraform carries its own state, and the foreseeable period offers only short sessions, so picking the track up and putting it down would leave that state in a condition nobody can vouch for. Do not propose starting it - the date is decided outside this repository.
+**Next learning track: Terraform, deferred on 2026-09-02, and given a condition on 2026-09-16.** The track is not cancelled and the content stands: primarily on AWS (free tier) to learn HCL, state and modules on a widely-used provider, plus a thin Proxmox slice for the homelab payoff (`terraform apply` -> LXC exists -> `onboarding.yml` configures it). Only the timing changed. Terraform carries its own state, and the foreseeable period offers only short sessions, so picking the track up and putting it down would leave that state in a condition nobody can vouch for. What replaced the open date is a list rather than a day: the eight items of the 2026-09-16 assessment, four operational and four built to be learned, in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). When they are done the track begins. Until then it is still not proposed - but the reason is now a backlog somebody can read, not a decision held elsewhere.
 
 **Operating mode until then: maintenance.** Work is cut into small self-contained units: one thing, under an hour or two, ending in one commit with one changelog line and a clean stopping point. Anything that changes live state - applies against the fleet, restore tests, hardware - is scheduled into a block that has a rollback path, and is never started just because it came up in conversation. The standing backlog of small units is the "Small open items" list in [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md), fed by the recurring fleet audit. New services and new learning tracks wait.
+
+**The one block before Terraform, agreed 2026-09-16.** Four operational findings from that day's assessment - patch level that nothing measures, the LLMNR and mDNS responder on lxc250, MariaDB's untested restore, the sshd binding decision executed nowhere - and four controls the same assessment argued against at this scale, built anyway to be learned rather than because the platform needs them ([decision](docs/decisions/exercise-scope-before-terraform.md)). The second half carries an obligation the first does not: each of those four is labelled as an exercise wherever a reader meets it, none enters `security-controls.md` as `Enforced`, and none gets an alert that would not have been built regardless. A control that cannot be told apart from a needed one will be defended as one.
 
 **Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 
@@ -637,7 +644,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   before that they were hand-maintained and a rebuild would have lost them. The `--check --diff`
   that preceded the run is what made the decision easy: the three differences were a file header,
   an em dash that Check 19 would refuse today, and column alignment in the cron file. No time and
-  no command changed, verified after by reading the deployed file and `bash -n` on both scripts.
+  no command changed, verified after by reading the deployed file and `bash -n` on both scripts. **And
+  that is exactly what the adoption could not tell anyone:** the script it faithfully reproduced had
+  been programming the wake alarm a day late since it was written ([KE-26](docs/platform/known-errors.md#ke-26)),
+  found the next morning from the boot history rather than from the diff.
   This is the last homelab-authored cron job - every guest-side job we wrote
   is now a systemd timer. Cron is defensible *here*: this job is what powers the host down, so it
   cannot depend on the host being up, and `Persistent=true` catch-up semantics would be actively

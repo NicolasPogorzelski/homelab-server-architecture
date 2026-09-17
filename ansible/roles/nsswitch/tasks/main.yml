@@ -12,6 +12,54 @@
     mode: "0644"
   when: nsswitch_hosts | length > 0
 
+# A precondition that refuses rather than breaks. If anything on the node still
+# points at resolved's stub listener, stopping the daemon takes name resolution
+# with it, and this role would be the cause. Checked against the file glibc
+# actually reads, not against what the role believes it wrote.
+- name: Refuse to disable resolved while resolv.conf still points at its stub
+  ansible.builtin.command:
+    cmd: grep -c '127\.0\.0\.53' /etc/resolv.conf
+  register: nsswitch_stub_refs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: nsswitch_disable_resolved
+
+- name: Assert nothing resolves through the stub
+  ansible.builtin.assert:
+    that: nsswitch_stub_refs.stdout | int == 0
+    fail_msg: >-
+      /etc/resolv.conf still names 127.0.0.53, so systemd-resolved is in the
+      resolution path on this node. Fix the resolver configuration first; this
+      role will not stop a daemon something is still asking.
+    success_msg: "Nothing points at the resolved stub; the daemon carries no lookups."
+  when: nsswitch_disable_resolved
+
+# Stopped and disabled rather than masked. Masking is for units that can never
+# succeed on a node, which is systemd_hygiene's job; this one could succeed and
+# simply has nothing to do here.
+- name: Stop and disable systemd-resolved
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: stopped
+    enabled: false
+  when: nsswitch_disable_resolved
+
+# The point of the change, read back from the kernel rather than from the unit
+# state. A stopped unit and a closed socket are different claims, and it is the
+# second one this task exists for.
+- name: Verify no LLMNR or mDNS listener survives
+  ansible.builtin.shell:
+    cmd: set -o pipefail && ss -tulnH | grep -c ':5355' || true
+    executable: /bin/bash
+  register: nsswitch_llmnr
+  changed_when: false
+  check_mode: false
+  failed_when: nsswitch_llmnr.stdout | int != 0
+  when:
+    - nsswitch_disable_resolved
+    - not ansible_check_mode
+
 # The node's own MagicDNS name, which is the shortest lookup that exercises the
 # Tailscale resolver rather than /etc/hosts. Read from tailscaled rather than
 # assembled from the inventory: the tailnet name belongs to the tailnet, and this

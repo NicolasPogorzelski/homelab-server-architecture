@@ -41,6 +41,7 @@ file path, not the fragment.
 | [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
+| [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Fixed in the repository 2026-09-17, not yet applied |
 
 Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
 index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
@@ -2022,3 +2023,60 @@ scheduled run, because `guest_backup_failed_guests` is written by the job and by
 Note what the archive does not hold: `mp0` is a bind mount of `/mnt/smb/vaultwarden` and `vzdump`
 reports `excluding bind mount point mp0 ... (not a volume)`, so this is a copy of the machine,
 not of its data.
+
+---
+
+<a id="ke-26"></a>
+
+## KE-26: The wake alarm was programmed for the right time on the wrong day
+
+**Affected component:** Proxmox host - `homelab-setwake.sh`, run from
+`/etc/cron.d/homelab-schedule` at 00:45.
+
+**Symptom:**
+The host powered down reliably at 01:01 every night and then stayed off until somebody pressed the
+button. Nobody reported it, because pressing the button is indistinguishable from the machine
+having woken on its own if you arrive after it is up.
+
+**Root cause:**
+The script runs at 00:45, a quarter of an hour after the calendar has rolled over, and computed its
+target with `date -d tomorrow`. At 00:45 on Thursday that is Friday, so the machine shutting down at
+01:00 on Thursday was told to wake on Friday at 07:30 - thirty-one hours later instead of six and a
+half. The weekday test carried the same offset, selecting the 16:00 rule from the day after the one
+it would wake on.
+
+**How it stayed invisible:**
+Three things had to line up, and they did. The operator switches the machine on during the day, so
+the alarm was always overtaken before it came due and never observed to be wrong. `rtcwake`
+accepts a far-future time and exits 0, so the job succeeded every night. And cron reports a failure
+to nobody - the platform's own rule that every scheduled job must be a systemd timer exists for
+exactly this, and this job is the documented exception, because it is what powers the host down and
+cannot depend on the host being up.
+
+**What made it visible:**
+Reading the boot history rather than the script. Six starts - 18:52, 16:00, 10:09, 16:10, 15:09,
+08:08 - of which one falls on a scheduled time, with a gap of two and a half days in the middle,
+against shutdowns at 01:01 that never varied. Measured on the host the same day, `date -d tomorrow`
+returned Friday and `/sys/class/rtc/rtc0/wakealarm` was empty.
+
+**Fix (applied to the repository 2026-09-17):**
+`today` rather than `tomorrow`, in both the weekday test and the timestamp. Two checks were added
+with it: the computed time must lie in the future, and the alarm is read back out of
+`/sys/class/rtc/rtc0/wakealarm` and compared with what was asked for. `rtcwake` returning 0 says
+the ioctl was accepted; the read-back says the hardware holds it, and those two came apart for long
+enough to be worth the lines. The script logs one line per night to the journal, which is the only
+evidence this job can leave: nothing scrapes a host that is about to power off.
+
+**Not caused by the role adoption of 2026-09-16, and worth separating.** The `homelab_schedule`
+role was applied for the first time the day before this was found, and its `--check --diff` showed
+only comments, an em dash and column alignment - the logic was byte-identical on both sides. The
+role faithfully adopted a script that had been wrong since it was written. An adoption proves that
+Ansible reproduces what the node had; it says nothing about whether what the node had was correct.
+
+**Status:** Fixed in the repository 2026-09-17, not yet applied. The apply changes what wakes the
+machine, so it belongs in a session where a failure costs nothing more than switching it on by
+hand - which is what has been happening anyway.
+
+**References:**
+- [The scheduling entry in CLAUDE.md](../../CLAUDE.md)
+- [KE-14 - the boot SSD this host starts from](#ke-14)

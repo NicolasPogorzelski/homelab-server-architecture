@@ -1,0 +1,52 @@
+---
+# === apt_metrics ===
+#
+# Exports how far behind a node's packages are, as a textfile metric.
+#
+# Measured 2026-09-16, this was the one large property of the fleet that nothing
+# observed: the hypervisor had 228 packages pending with 55 of them security,
+# vm102 62 and 23, lxc220 13 and 7, and no metric, rule or dashboard anywhere
+# said so. `apt-upgrade.yml` is excluded from the weekly drift sweep for a good
+# reason - the apt module refreshes the package cache even under --check, which
+# would be a write on ten nodes every Sunday - so patch level fell through the
+# one mechanism that would otherwise have caught it.
+#
+# The collector is Debian's, for the same reason smart_metrics uses it: the
+# packaged apt.sh already exports pending upgrades broken down by origin, which
+# is what separates a security update from a routine one, and a hand-written
+# third spelling would have to be maintained here.
+apt_metrics_package: prometheus-node-exporter-collectors
+
+# moreutils ships sponge, which the packaged units pipe through so node_exporter
+# never scrapes a half-written file. The unit depends on it and declares that
+# nowhere.
+apt_metrics_sponge_package: moreutils
+
+apt_metrics_unit: prometheus-node-exporter-apt.service
+apt_metrics_timer: prometheus-node-exporter-apt.timer
+
+# The directory this fleet's node_exporter actually reads. The package writes to
+# /var/lib/prometheus/node-exporter by default, which belongs to Debian's own
+# node_exporter packaging; every node here runs the hand-installed binary that
+# reads the path below. Without the override the collector would run, succeed and
+# be read by nobody.
+apt_metrics_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
+
+# The collectors this package ships that have nothing to measure on an ordinary
+# guest. Masked rather than disabled, for the reason systemd_hygiene gives: a
+# disabled unit is one `systemctl enable` from running and carries no record of
+# why it should not be.
+#
+# The hypervisor overrides this to an empty list in group_vars/proxmox.yml,
+# because smart_metrics already owns the same four there and two roles asserting
+# opposite things about one unit is how a fleet starts flapping.
+apt_metrics_masked_timers:
+  - prometheus-node-exporter-ipmitool-sensor.timer
+  - prometheus-node-exporter-mellanox-hca-temp.timer
+  - prometheus-node-exporter-nvme.timer
+  - prometheus-node-exporter-smartmon.timer
+
+# Read the metric back out of the file after the first run. A timer that is
+# active and a metric that exists are different claims, and this repository has
+# twice recorded a collector that was running and read by nobody.
+apt_metrics_verify: true

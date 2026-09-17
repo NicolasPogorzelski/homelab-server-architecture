@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+#
+# EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
+#
+# The packaged unit listens on the wildcard. ExecStart is cleared first because
+# systemd appends otherwise and the daemon would be started twice, the second
+# time on the address the package chose.
+[Service]
+ExecStart=
+ExecStart=/lib/systemd/systemd-journal-remote --listen-http={{ journal_remote_listen_address }}:{{ journal_remote_port }} --output={{ journal_remote_dir }}/

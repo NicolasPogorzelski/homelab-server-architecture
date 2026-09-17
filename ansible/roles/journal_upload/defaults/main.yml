@@ -1,0 +1,24 @@
+---
+# === journal_upload (EXERCISE) ===
+#
+# The sending half. Ships this node's journal to the receiver on lxc200.
+# Exercise, not a control this platform needs - see
+# docs/decisions/exercise-scope-before-terraform.md for why it is built anyway
+# and how it is labelled.
+#
+# Set per node rather than derived, so turning it on is a deliberate act on a
+# named node and not a side effect of running a playbook against a group.
+journal_upload_enabled: false
+
+# Where to ship. Written from the inventory so the tailnet address stays out of
+# version control.
+journal_upload_target_host: "{{ hostvars['lxc200'].ansible_host | default('') }}"
+journal_upload_target_port: 19532
+
+# What to do when the receiver is unreachable, which on this platform is most of
+# the night. systemd-journal-upload keeps a cursor and resumes from it, so a
+# receiver that was down loses nothing as long as the sender's own journal still
+# holds the records - which the journald role caps at 512M per node. Past that
+# the oldest records are gone from both ends, and no amount of retrying recovers
+# them.
+journal_upload_state_file: /var/lib/systemd/journal-upload/state

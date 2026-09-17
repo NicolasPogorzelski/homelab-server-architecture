@@ -1,0 +1,9 @@
+---
+# Not `state: restarted` on the service. auditd refuses SIGTERM from systemd by
+# design - it sets RefuseManualStop - and `systemctl restart auditd` fails with
+# "Operation refused". augenrules --load is how the daemon is told to re-read its
+# rules, and it is what the packaged unit's ExecReload does.
+- name: Reload audit rules  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: augenrules --load
+  changed_when: true

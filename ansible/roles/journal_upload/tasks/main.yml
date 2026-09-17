@@ -1,0 +1,65 @@
+---
+# Nothing happens on a node that has not asked for it. The role is run against a
+# group so the configuration lives in one place, and each node opts in by setting
+# the flag, which is the same shape nsswitch uses.
+- name: Refuse an empty target
+  ansible.builtin.assert:
+    that: journal_upload_target_host | length > 0
+    fail_msg: >-
+      journal_upload_enabled is set but no receiver address resolved. The target
+      is read from the inventory entry for lxc200; check that it is present.
+    quiet: true
+  when: journal_upload_enabled
+
+- name: Install the journal uploader
+  ansible.builtin.apt:
+    name: systemd-journal-remote
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: journal_upload_enabled
+
+- name: Point the uploader at the receiver
+  ansible.builtin.template:
+    src: journal-upload.conf.j2
+    dest: /etc/systemd/journal-upload.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journal-upload
+  when: journal_upload_enabled
+
+- name: Flush handlers before reading the state back
+  ansible.builtin.meta: flush_handlers
+  when: journal_upload_enabled
+
+- name: Enable and start the uploader
+  ansible.builtin.systemd_service:
+    name: systemd-journal-upload.service
+    enabled: true
+    state: started
+  when: journal_upload_enabled
+
+# An uploader that is active and an uploader that has actually shipped a record
+# are different claims. The cursor file only appears once something was accepted
+# by the far end, so its existence is the first honest evidence the chain works.
+- name: Verify the uploader has a cursor, meaning something was accepted
+  ansible.builtin.stat:
+    path: "{{ journal_upload_state_file }}"
+  register: journal_upload_state
+  retries: 6
+  delay: 5
+  until: journal_upload_state.stat.exists
+  failed_when: not journal_upload_state.stat.exists
+  when:
+    - journal_upload_enabled
+    - not ansible_check_mode
+
+- name: Report that the chain carried a record
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} has an upload cursor, so the receiver accepted at
+      least one record. EXERCISE - no alert reads this.
+  when:
+    - journal_upload_enabled
+    - not ansible_check_mode

@@ -1,0 +1,19 @@
+---
+# Export how far behind each node's packages are.
+#
+# Patch level was the one large property of this fleet that nothing measured,
+# found on 2026-09-16 with the hypervisor 228 packages behind and 55 of those
+# security. Measurement comes before automation here, the same way it did for the
+# SMART counters: a number nobody can query is a number nobody argues about, and
+# the argument about how to patch this fleet is separate from seeing where it is.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Export pending package updates from every node
+  hosts: all
+  become: true
+  roles:
+    - apt_metrics

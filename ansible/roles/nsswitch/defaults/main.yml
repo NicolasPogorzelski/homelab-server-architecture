@@ -23,3 +23,21 @@ nsswitch_hosts: ""
 # a name that resolves, and this role exists because the second one was false
 # while the first was true.
 nsswitch_verify: true
+
+# Stop and disable systemd-resolved after the hosts line no longer names it.
+# Off by default; one node sets it.
+#
+# On lxc250 the decision of 2026-09-12 took resolved out of the resolution path
+# and left the daemon running. Measured 2026-09-17, that daemon resolves nothing
+# for anybody: the hosts line reads `files myhostname dns`, /etc/resolv.conf is a
+# real file holding Tailscale's MagicDNS servers, and nothing on the node points
+# at the 127.0.0.53 stub. What it still did was answer LLMNR and mDNS on
+# 0.0.0.0:5355 and [::]:5355 - four sockets on the untrusted LAN, on the node
+# that holds hypervisor root, the only ~/.vault_pass and the only real hosts.yml.
+# Neither protocol authenticates anything, and the platform binding rule forbids
+# exactly this shape.
+#
+# A drop-in setting LLMNR=no would close the sockets and keep a daemon nobody
+# uses. The remedy is the same one the MagicDNS decision reached for the same
+# node: remove it from the path rather than configure around it.
+nsswitch_disable_resolved: false

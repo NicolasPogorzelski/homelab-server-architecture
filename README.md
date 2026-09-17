@@ -168,11 +168,13 @@ What is currently open, ranked by what its loss would cost, is in the
 - [sshd Binding](docs/decisions/sshd-listen-address.md) (ten of eleven nodes break the rule, so it is a fleet decision)
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
+- [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
 
 ### Security, risk and change
 
 - [Security Controls](docs/platform/security-controls.md) (ISO/IEC 27001 Annex A mapping - what is enforced, what is merely practised)
 - [Data Classification](docs/platform/data-classification.md) (classification, recovery objectives, data protection assessment)
+- [HA Mechanics](docs/platform/ha-mechanics.md) (what Proxmox HA does, measured on one node, and why it stays off)
 - [Remediation Plan](docs/platform/remediation-plan.md) (open work ordered by loss risk and dependency)
 - [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 20 entries with root causes)
 - [Platform Changelog](docs/platform/changelog.md) (every change with the measurement that verified it)
@@ -203,22 +205,22 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 42 and 36 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 46 and 41 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 44 structural checks, run by a pre-commit
   hook and by CI on every push
 
 ### Runbooks
 
-Nineteen procedures under the same contract: every one states its preconditions, its verification
+Twenty procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All nineteen runbooks</summary>
+<summary>All twenty runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
-- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
+- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md) - [MariaDB restore](runbooks/database/mariadb-restore.md)
 - Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
 - Platform: [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
 - Backup: [off-site backup with restic](runbooks/backup/offsite-backup.md) - [off-site VPS provisioning](runbooks/platform/offsite-vps-provision.md)

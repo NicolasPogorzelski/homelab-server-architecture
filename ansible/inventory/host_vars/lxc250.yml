@@ -33,3 +33,11 @@ tailscale_boot_gate_clear_restart_prevent: true
 # inactive, and all of them resolve MagicDNS. This is a one-node fault, not the
 # fleet-wide nsswitch ordering it was recorded as.
 nsswitch_hosts: "files myhostname dns"
+
+# systemd-resolved is stopped and disabled here. After the line above took it out
+# of the resolution path on 2026-09-12 it kept running with nothing to resolve,
+# and its only remaining effect was an LLMNR and mDNS responder on 0.0.0.0:5355 -
+# unauthenticated, on the untrusted LAN, on the node that holds hypervisor root
+# and the vault password. The role refuses the change if anything still points at
+# the 127.0.0.53 stub.
+nsswitch_disable_resolved: true
