@@ -1,0 +1,132 @@
+name: SBOM and signature verification
+
+# EXERCISE. This workflow is one of four controls built to be understood rather
+# than because this platform needs them - see
+# docs/decisions/exercise-scope-before-terraform.md for why, how they are
+# labelled, and when each is revisited. It reports and never gates, the same way
+# image-scan.yml does and for the same reason: a permanently red check nobody can
+# fix teaches people to ignore checks.
+#
+# What it answers that image-scan.yml does not. That workflow asks "how exposed
+# are we today", which is a question about vulnerabilities. This one asks two
+# questions about provenance: what is actually inside each image, recorded in a
+# form that can be diffed and kept, and whether the image can be shown to come
+# from whoever claims to have built it.
+#
+# The second question is the one worth running once. Most of this fleet's images
+# are community builds from Docker Hub, and community builds are largely
+# unsigned. The expected result is therefore a mostly empty column, and that is
+# the finding rather than a disappointment: in a workplace the answer decides
+# whether an image may run at all, and here it decides nothing, because there is
+# no admission controller to refuse one.
+#
+# An SBOM is only worth generating if it is kept. A bill of materials produced and
+# discarded answers no question later, which is when the question arrives - the
+# day a CVE lands in a library and somebody has to say within the hour whether
+# anything here contains it. These are uploaded as run artifacts with a retention
+# window; a workplace would push them to a registry or an artifact store that
+# outlives the pipeline.
+#
+# ONE HONEST GAP, recorded rather than hidden. Every other action in this
+# repository is pinned to a commit SHA, because a major-version tag is a mutable
+# reference the upstream owner can repoint. The two actions below are pinned to
+# tags, because the author could not resolve their SHAs at the time of writing.
+# That is a supply-chain workflow carrying a supply-chain weakness, which is a
+# poor joke to leave unremarked - it is the first thing to fix if this exercise is
+# kept rather than removed.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Monthly, the day after the first pg restore test, so a person looking at
+    # results has both in the same sitting.
+    - cron: "0 7 2 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Collect pinned images
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the image list from the compose files
+        id: list
+        # Same derivation as image-scan.yml, deliberately. The compose files are
+        # the single source of truth for what runs on the fleet, and a second
+        # hand-maintained list would drift from the first.
+        run: |
+          images="$(grep -rhoP '^\s*image:\s*\K\S+' docker/ | sort -u | jq -R . | jq -sc .)"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+          echo "Found $(echo "${images}" | jq 'length') images" >> "$GITHUB_STEP_SUMMARY"
+
+  sbom:
+    name: SBOM for ${{ matrix.image }}
+    needs: collect
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.collect.outputs.images) }}
+    steps:
+      - name: Derive a stable artifact name
+        id: slug
+        # Through the environment rather than interpolated into the shell, for
+        # the reason image-scan.yml records: `${{ }}` is textual substitution
+        # performed before the shell sees the line.
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
+          echo "value=${slug}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate the SBOM
+        uses: anchore/sbom-action@v0  # tag-pinned; see the gap noted in the header
+        with:
+          image: ${{ matrix.image }}
+          format: spdx-json
+          output-file: sbom-${{ steps.slug.outputs.value }}.spdx.json
+          upload-artifact: false
+
+      - name: Summarise what is in the image
+        env:
+          IMAGE: ${{ matrix.image }}
+          SBOM: sbom-${{ steps.slug.outputs.value }}.spdx.json
+        run: |
+          packages="$(jq '[.packages[]?] | length' "${SBOM}")"
+          printf -- '- `%s` - packages: **%s**\n' "${IMAGE}" "${packages}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep it
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-${{ steps.slug.outputs.value }}
+          path: sbom-${{ steps.slug.outputs.value }}.spdx.json
+          retention-days: 90
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3  # tag-pinned; see the gap noted in the header
+
+      - name: Can this image's provenance be shown at all?
+        env:
+          IMAGE: ${{ matrix.image }}
+        # Never fails the job. An unsigned community image is the expected answer
+        # for most of this fleet, and recording that honestly is the point of the
+        # step. `--certificate-identity-regexp .*` accepts any signer: the
+        # question here is whether a verifiable signature exists, not whether it
+        # belongs to an identity this repository trusts, which is the question a
+        # workplace policy would ask next.
+        run: |
+          if cosign verify \
+               --certificate-identity-regexp '.*' \
+               --certificate-oidc-issuer-regexp '.*' \
+               "${IMAGE}" > cosign.out 2> cosign.err; then
+            signer="$(jq -r '.[0].optional.Issuer // "unknown issuer"' cosign.out 2>/dev/null || echo 'unparsed')"
+            printf -- '  - signature: **verified** (%s)\n' "${signer}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf -- '  - signature: none that cosign could verify\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
