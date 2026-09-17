@@ -48,6 +48,7 @@ Related operational model:
 - PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)
 - PostgreSQL restore: [database/pg-restore.md](database/pg-restore.md)
 - Nextcloud MariaDB backup: [database/mariadb-backup.md](database/mariadb-backup.md)
+- Nextcloud MariaDB restore: [database/mariadb-restore.md](database/mariadb-restore.md)
 
 ## Integration
 - Nextcloud -> Paperless ingestion: [integration/nextcloud-paperless.md](integration/nextcloud-paperless.md)

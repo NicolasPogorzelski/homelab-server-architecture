@@ -80,11 +80,14 @@ notes there and keep this section short.
   Nothing live is touched. The 09:00 slot was called load-bearing here, on the grounds that
   the restored cluster holds ~150 MB of thin-pool blocks, a container cannot `fstrim` itself, and
   the host's `lxc-fstrim.timer` at 10:30 reclaims them the same morning. **Measured 2026-09-08,
-  the ordering runs the other way.** lxc260 keeps `Etc/UTC` and the hypervisor keeps
-  `Europe/Berlin`, so the restore test fires at 09:04 UTC, which is 11:04 local, while fstrim
-  fires at 10:38 local - twenty-six minutes earlier. The blocks are reclaimed the following
-  morning. Nothing has gone wrong and the pool is watched, but the dependency as stated does not
-  hold, and the remedy is a zone in the calendar expression rather than a different hour.
+  the ordering ran the other way - and a different change had already repaired it.** lxc260 kept
+  `Etc/UTC` while the hypervisor kept `Europe/Berlin`, so a 09:00 slot fired at 11:04 local
+  against fstrim at 10:38 and the blocks were reclaimed a morning late. The `timezone` role closed
+  that fleet-wide in the same week and nobody connected the two, so this paragraph went on
+  describing a fault for nine days. Re-measured 2026-09-17: ten of ten nodes report
+  `Europe/Berlin`, the timer's last run reads 11:03 CEST on 2026-09-01 and its next elapse
+  09:04 CEST on 2026-10-01, against `lxc-fstrim.timer` at 10:31. The dependency holds and needs no
+  zone in the calendar expression.
   **Write-time verification closed 2026-08-14.** `pg-backup.sh` now writes to `*.sql.gz.partial`
   and renames only after three checks pass - non-empty, `gzip -t`, and exactly one
   `cluster dump complete` marker - with verification ordered before retention deletion,

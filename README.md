@@ -204,22 +204,22 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 43 and 37 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 44 and 38 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 44 structural checks, run by a pre-commit
   hook and by CI on every push
 
 ### Runbooks
 
-Nineteen procedures under the same contract: every one states its preconditions, its verification
+Twenty procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All nineteen runbooks</summary>
+<summary>All twenty runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
-- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md)
+- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md) - [MariaDB restore](runbooks/database/mariadb-restore.md)
 - Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
 - Platform: [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
 - Backup: [off-site backup with restic](runbooks/backup/offsite-backup.md) - [off-site VPS provisioning](runbooks/platform/offsite-vps-provision.md)

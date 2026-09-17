@@ -1,0 +1,80 @@
+---
+# The script drops a database on every exit path. Refusing here rather than
+# discovering it at 09:00 on the fifteenth: if the client cannot authenticate,
+# the run would fail in the middle rather than before it started.
+- name: Assert the MariaDB client is present
+  ansible.builtin.command:
+    cmd: bash -c 'command -v mariadb || command -v mysql'
+  register: mariadb_restore_test_client
+  changed_when: false
+  failed_when: mariadb_restore_test_client.rc != 0
+  check_mode: false
+
+- name: Deploy the restore test script
+  ansible.builtin.copy:
+    src: "{{ mariadb_restore_test_script_src }}"
+    dest: "{{ mariadb_restore_test_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: "{{ mariadb_restore_test_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the restore test service unit
+  ansible.builtin.template:
+    src: mariadb-restore-test.service.j2
+    dest: /etc/systemd/system/mariadb-restore-test.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the restore test timer unit
+  ansible.builtin.template:
+    src: mariadb-restore-test.timer.j2
+    dest: /etc/systemd/system/mariadb-restore-test.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so the timer starts against the current unit definition
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the restore test timer
+  ansible.builtin.systemd_service:
+    name: mariadb-restore-test.timer
+    enabled: true
+    state: started
+
+# Read the schedule back out of systemd rather than reporting the file that was
+# written. A timer whose calendar expression systemd rejected is enabled, listed
+# and never fires, which is the shape the journald role reported success on for
+# ten nodes before its verification was corrected.
+# noqa: command-instead-of-module - systemd_service has no query-only mode and
+# acts on every call, so reading a property is the one thing it cannot do. The
+# waiver is inline rather than in skip_list so the rule stays armed repo-wide,
+# which is the convention CLAUDE.md records for systemd_hygiene.
+- name: Read back the next scheduled run  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl show mariadb-restore-test.timer -p NextElapseUSecRealtime --value
+  register: mariadb_restore_test_next
+  changed_when: false
+  failed_when: mariadb_restore_test_next.stdout | trim in ['', 'n/a', '0']
+  when:
+    - mariadb_restore_test_verify
+    - not ansible_check_mode
+
+- name: Report when the restore test will next run
+  ansible.builtin.debug:
+    msg: "mariadb-restore-test.timer next elapses at {{ mariadb_restore_test_next.stdout }}"
+  when:
+    - mariadb_restore_test_verify
+    - not ansible_check_mode
+    - mariadb_restore_test_next.stdout is defined

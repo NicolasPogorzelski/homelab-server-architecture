@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Validate that the newest MariaDB backup can be restored
+# Ordering only, no Wants=. Unlike the PostgreSQL test this one restores into a
+# database beside the live one on the same server, so it does need MariaDB to be
+# up - but it must not be the reason MariaDB starts. If the instance is down the
+# run fails and SystemdUnitFailed reports it, which is the honest outcome.
+After=mariadb.service
+# When both timers catch up in the same boot window, let the dump finish first so
+# the test does not pick a half-written file. The script's -mmin guard covers the
+# case where they are not part of the same catch-up.
+After=mariadb-backup.service
+
+[Service]
+Type=oneshot
+# Root, because the client reads /root/.my.cnf for its credentials the same way
+# mariadb-backup.service does. The script creates and drops exactly one database
+# and refuses to start if that name already exists.
+WorkingDirectory=/tmp
+ExecStart={{ mariadb_restore_test_script_dest }}

@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly MariaDB restore validation at {{ mariadb_restore_test_oncalendar }}
+
+[Timer]
+OnCalendar={{ mariadb_restore_test_oncalendar }}
+
+# The host powers down overnight and is not guaranteed to be running on any given
+# calendar day, so a monthly slot is missed outright more often than not.
+# Persistent=true records the last run and fires an overdue one at the next boot
+# rather than skipping the month.
+Persistent=true
+
+# The catch-up lands in the boot window, where every other Persistent=true job on
+# this node fires too. Jitter keeps the restore off the same CIFS share as the
+# dump at the same instant.
+RandomizedDelaySec=300
+
+Unit=mariadb-restore-test.service
+
+[Install]
+WantedBy=timers.target

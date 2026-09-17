@@ -82,6 +82,20 @@ groups:
           summary: "PostgreSQL restore validation is overdue"
           description: "The last successful restore test on CT260 was more than 40 days ago. Dumps are still being written, but nothing has proven they can be read back."
 
+      # The same 40 days against the same monthly shape, for the database that
+      # had a dump, a staleness rule and a runbook and no proof any of it could
+      # be read back. Nextcloud's files live on the archive pool and its index
+      # lives here; a dump that restores into empty tables loses the second
+      # without touching the first, and imports without an error while doing it.
+      - alert: MariaDBRestoreTestStale
+        expr: (time() - mariadb_restore_test_last_success_timestamp) > 3456000
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MariaDB restore validation is overdue"
+          description: "The last successful restore test on CT210 was more than 40 days ago. Dumps are still being written, but nothing has proven Nextcloud's database can be rebuilt from one."
+
   - name: postgres
     rules:
       - alert: PostgreSQLDown

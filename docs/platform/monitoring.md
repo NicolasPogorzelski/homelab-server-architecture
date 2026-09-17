@@ -76,7 +76,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 | Group | Rules |
 |---|---|
-| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBBackupStale` |
+| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBRestoreTestStale`, `MariaDBBackupStale` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `SnapRAIDScrubCoverageAging`, `SnapRAIDArrayUnscrubbed`, `SnapRAIDStatusStale`, `SnapRAIDStatusUnreadable` |
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |

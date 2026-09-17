@@ -1,0 +1,20 @@
+---
+# Prove monthly that the MariaDB dump can be read back.
+#
+# The dump has run nightly since 2026-08-15 with write-time verification, a
+# staleness rule and a runbook, and nobody had restored one. PostgreSQL has
+# carried the same plus a monthly restore since 2026-08-13. This is the half of
+# Nextcloud that makes its files mean anything: the user files live on the
+# archive pool, the database on the boot SSD, and without the database the files
+# are blobs with no owner, no name and no path.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Schedule the MariaDB restore validation on lxc210
+  hosts: lxc210
+  become: true
+  roles:
+    - mariadb_restore_test
