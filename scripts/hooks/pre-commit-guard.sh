@@ -18,25 +18,37 @@
 # snippets/claude/hooks-reference.json:
 #
 #   - It matches `git ... commit` anywhere in the command string rather than
-#     relying on a `Bash(git commit *)` prefix rule. Commits here are usually part
-#     of a compound command (`git add -A && git commit -F -`), which a prefix rule
-#     never sees. A guard that misses the normal case is decoration.
+#     relying on an `if: Bash(git commit *)` filter. Such a filter does see the
+#     subcommands of `git add -A && git commit -F -` - the hooks reference says
+#     so and it was measured - but it runs the hook on every command that holds
+#     `$VAR`, `$()` or backticks, whatever the pattern. The decision therefore
+#     has to live in the script either way, and here it lives only there.
 #   - It answers with permissionDecision "deny" rather than continue:false. Deny
 #     blocks the single tool call and leaves the session running, so the findings
 #     can be fixed and the commit retried; continue:false ends the turn.
 #
 # Known cost of matching that broadly, and it is accepted rather than fixed: any
 # command that merely mentions both words is treated as a commit. A branch whose
-# name contains "commit" cannot be created from main without the guard refusing.
-# Narrowing the pattern to avoid that would reintroduce the compound-command hole
-# it was widened to close, and a false refusal costs one rename.
+# name contains "commit" cannot be created from main without the guard refusing,
+# and so can this script not be invoked by its own absolute path from a session,
+# because that path holds "git/" and "pre-commit-guard" in one segment. Testing
+# it means assembling both words from parts. Narrowing the pattern to avoid that
+# would reintroduce the compound-command hole it was widened to close, and a
+# false refusal costs one rename.
 #
 # Exit code is always 0. A hook that fails noisily on its own bugs would block
 # every commit, so the only way it speaks is the JSON on stdout.
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Resolved by git rather than by `pwd`, so that it comes from the same resolver
+# as the target_root it is compared against below. `pwd` returns the logical
+# path, symlinks intact; `rev-parse --show-toplevel` returns the physical one.
+# On an rpm-ostree workstation /home is a symlink to /var/home, and a hook
+# configured under /home/... therefore computed a REPO_ROOT that never equalled
+# any toplevel git could return - every commit was judged to be in a different
+# repository and let through. Measured 2026-09-17.
+REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
 
 deny() {
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":%s}}' \
@@ -51,6 +63,10 @@ command_line="$(printf '%s' "${payload}" | jq -r '.tool_input.command // ""' 2>/
 
 # Not a commit: say nothing, let the call through.
 printf '%s' "${command_line}" | grep -qE '\bgit\b[^|;&]*\bcommit\b' || exit 0
+
+# A guard that does not know where it lives cannot compare anything. Refusing
+# is the readable form of what an empty root would do anyway further down.
+[ -n "${REPO_ROOT}" ] || deny "pre-commit-guard.sh cannot resolve its own repository root; refusing rather than guessing."
 
 # Which repository does this command actually touch?
 #

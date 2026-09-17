@@ -373,16 +373,32 @@ anywhere in the message.
 **This table states the intent; each machine satisfies it separately.** `.claude/settings.local.json`
 is gitignored and carries absolute paths, so it is per-workstation state that no commit can
 guarantee. On the admin notebook, checked 2026-08-17, the file held no `hooks` key at all: the
-commit gate was absent there and `validate-repo.sh` ran only when it was invoked by hand. What the
-other workstation holds was not checked and is not claimed here. Verify per machine with
+commit gate was absent there and `validate-repo.sh` ran only when it was invoked by hand. The
+other workstation, checked 2026-09-17 after a long pause, held none either, and carries all three
+since that day; what the notebook holds today was not re-measured. Verify per machine with
 `jq '.hooks' .claude/settings.local.json` rather than by reading this table - a guard assumed from
 a document is the failure this repository keeps finding in its own monitoring, and configuration
 that lives outside version control is exactly where it hides.
 
-The guard matches `git ... commit` anywhere in the command string, because commits here are
-normally part of a compound command (`git add -A && git commit -F -`) that a `Bash(git commit *)`
-prefix rule never sees. It answers `permissionDecision: deny`, which blocks the one call and leaves
-the session alive, rather than `continue: false`, which ends the turn.
+The same check found a second way for the gate to be absent while the `hooks` key is present. On
+an rpm-ostree workstation `/home` is a symlink to `/var/home`, and the guard derived its own
+repository root with `pwd`, which keeps symlinks, while it resolved the target repository with
+`git rev-parse --show-toplevel`, which does not. A hook configured under `/home/...` therefore
+judged every commit to be in some other repository and let it through, silently. Since
+2026-09-17 both sides come from `rev-parse`, proven by the same payload through a symlinked path:
+old guard silent, new guard `deny`. The hook path in `settings.local.json` may now be either form.
+
+The guard matches `git ... commit` anywhere in the command string rather than relying on an `if:
+Bash(git commit *)` filter. The reason this file used to give - that such a filter never sees a
+compound command like `git add -A && git commit -F -` - is wrong: the hooks reference documents
+that an `if` pattern is checked against each subcommand, and the global Co-Authored-By hook, which
+uses exactly that filter, was measured on 2026-09-17 to fire on compound commits. What the filter
+actually does is degrade, not miss: a command containing `$VAR`, `$()` or backticks runs the hook
+regardless of the pattern, so the hook body sees every such command and must decide for itself.
+The guard does that deciding once, in a script that can be tested, instead of in a filter whose
+behaviour depends on the shape of the command. It answers `permissionDecision: deny`, which
+blocks the one call and leaves the session alive, rather than `continue: false`, which ends the
+turn.
 
 Since 2026-09-12 it also asks which repository the command touches, resolved from an explicit
 `git -C`, a leading `cd`, or the session directory. Before that it read this checkout's branch
