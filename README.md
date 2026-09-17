@@ -174,6 +174,7 @@ What is currently open, ranked by what its loss would cost, is in the
 
 - [Security Controls](docs/platform/security-controls.md) (ISO/IEC 27001 Annex A mapping - what is enforced, what is merely practised)
 - [Data Classification](docs/platform/data-classification.md) (classification, recovery objectives, data protection assessment)
+- [HA Mechanics](docs/platform/ha-mechanics.md) (what Proxmox HA does, measured on one node, and why it stays off)
 - [Remediation Plan](docs/platform/remediation-plan.md) (open work ordered by loss risk and dependency)
 - [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 20 entries with root causes)
 - [Platform Changelog](docs/platform/changelog.md) (every change with the measurement that verified it)
