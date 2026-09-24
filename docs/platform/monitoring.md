@@ -76,7 +76,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 
 | Group | Rules |
 |---|---|
-| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBRestoreTestStale`, `MariaDBBackupStale` |
+| `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBRestoreTestStale`, `MariaDBBackupStale`, `DatabaseBackupMetricsMissing` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `SnapRAIDScrubCoverageAging`, `SnapRAIDArrayUnscrubbed`, `SnapRAIDStatusStale`, `SnapRAIDStatusUnreadable` |
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
@@ -104,6 +104,12 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   host-is-off blind spot as the PostgreSQL rule above, for the same structural reason. It covers
   Nextcloud's own database, which the nightly `pg_dumpall` never touched - a gap that existed
   unnoticed until the 2026-08-15 data classification looked for it.
+- `DatabaseBackupMetricsMissing` fires when either backup timestamp is absent, the case in which
+  both staleness rules read as nothing rather than red. From 2026-09-18 to 2026-09-24 Prometheus
+  scraped Debian's packaged exporter on lxc260, which reads a different textfile directory, and
+  `pg_backup_last_success_timestamp` was absent while the dumps kept landing. Both staleness rules
+  carry `for: 15m` since the same day, because the first evaluation after a night powered down can
+  precede the timer's catch-up run.
 - `FleetSnapshotStale` / `FleetSnapshotIncomplete` are written by `fleet-snapshot.yml` into the
   textfile collector on lxc250 (see the [`fleet_snapshot` role](ansible.md)). The snapshot records
   what no role owns - listening sockets, locally-defined unit files, root crontabs, mounts and
@@ -128,14 +134,17 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   the numbers ought to be would be red from its first evaluation and learned as noise. The scrub
   cadence is the open question, and it is in the remediation plan rather than encoded in a
   threshold here
-- `Watchdog` fires permanently and is the only rule here whose *absence* is the signal. It is routed
-  to an external heartbeat receiver rather than to Discord, and if that receiver stops seeing it the
-  alerting chain is down - including the ordinary case of this host being off, which is why the
+- `Watchdog` fires permanently and is the only rule here whose *absence* is the signal. It is meant
+  to be routed to an external heartbeat receiver rather than to Discord, and if that receiver stops
+  seeing it the alerting chain is down - including the ordinary case of this host being off, which is why the
   receiver's grace period has to exceed the nightly off-window. It closes the structural gap
   measured on 2026-08-14, where `PostgreSQLBackupStale` could not see three backup-free days because
   Prometheus runs on the host that was off. Routing is in
-  [`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example); the
-  receiver itself is not provisioned yet
+  [`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example) and
+  nowhere else. Measured 2026-09-24, the live `alertmanager.yml` on lxc200 still has the single
+  `discord` route it was written with in May, so the Watchdog arrives in the Discord channel every
+  four hours and nothing outside the site notices when it stops. The route and the receiver go live
+  together, because the route without a receiver has nowhere to send
 
 ## Failure / Dependency Notes
 

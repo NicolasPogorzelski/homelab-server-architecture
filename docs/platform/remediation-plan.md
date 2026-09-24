@@ -142,10 +142,13 @@ service somebody else operates (a free heartbeat SaaS), because a self-hosted on
 of its own. Note the fleet already builds absence-alerts twice - `LvmThinMetricsStale` and
 `PostgreSQLRestoreTestStale` - this extends the same idea to the alerting chain itself.
 
-**Built 2026-09-11, except the receiver.** The `Watchdog` rule and the Alertmanager route that
-keeps it out of the Discord channel both exist. What remains is signing up for a receiver and
-pasting its URL into the live `alertmanager.yml`, which is a decision about a third-party account
-rather than a change to this platform. One number has to be right when that happens and is easy to
+**Built 2026-09-11 in the repository, live nowhere.** The `Watchdog` rule is loaded; the
+Alertmanager route that keeps it out of the Discord channel exists only in
+`alertmanager.yml.example`. Measured 2026-09-24, the live file on lxc200 still carries the single
+`discord` route from May, so the heartbeat has been posting to Discord every four hours since the
+rule went live. What remains is signing up for a receiver and writing the route and its URL into
+the live `alertmanager.yml` together, which is a decision about a third-party account rather than
+a change to this platform. One number has to be right when that happens and is easy to
 get wrong: the receiver's grace period must exceed the nightly off-window, or every morning opens
 with an alarm about a host that powered down on schedule.
 
