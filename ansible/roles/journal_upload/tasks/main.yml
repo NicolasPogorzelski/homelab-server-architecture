@@ -33,12 +33,26 @@
   ansible.builtin.meta: flush_handlers
   when: journal_upload_enabled
 
+# Under --check the package was not installed, so on a first run the unit does
+# not exist and systemd_service fails the play - which the weekly sweep, running
+# in check mode, would report every Sunday until the role is applied.
+- name: Ask systemd whether the uploader exists yet  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain systemd-journal-upload.service
+  register: journal_upload_unit_file
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: journal_upload_enabled
+
 - name: Enable and start the uploader
   ansible.builtin.systemd_service:
     name: systemd-journal-upload.service
     enabled: true
     state: started
-  when: journal_upload_enabled
+  when:
+    - journal_upload_enabled
+    - journal_upload_unit_file.stdout | length > 0 or not ansible_check_mode
 
 # An uploader that is active and an uploader that has actually shipped a record
 # are different claims. The cursor file only appears once something was accepted

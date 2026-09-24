@@ -30,10 +30,10 @@ journal_remote_port: 19532
 
 # Where the received journals land, and how much of them is kept. Ten nodes at a
 # few hundred megabytes each would fill this container's root filesystem, which
-# is thin-pool space on the boot SSD.
+# is thin-pool space on the boot SSD. Enforced by the hourly vacuum timer, not by
+# the receiver - see the task that deploys it.
 journal_remote_dir: /var/log/journal/remote
 journal_remote_max_use: 2G
-journal_remote_max_file_size: 128M
 
 # Plain HTTP over the tailnet, not HTTPS. The transport is already encrypted and
 # authenticated by WireGuard, and adding TLS here would mean a second certificate
