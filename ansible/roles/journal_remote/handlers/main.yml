@@ -7,3 +7,7 @@
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.service
     state: restarted
+  # A check run notifies this handler whenever a file task would change, and on
+  # a node without the package the unit does not exist yet, so the restart fails
+  # the play. A restart proves nothing under --check; the real run still does it.
+  when: not ansible_check_mode
