@@ -61,7 +61,7 @@ permissions:
 jobs:
   collect:
     name: Collect pinned images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       images: ${{ steps.list.outputs.images }}
     steps:
@@ -82,7 +82,7 @@ jobs:
   scan:
     name: Scan ${{ matrix.image }}
     needs: collect
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       # One vulnerable image must not hide the results for the other twelve.
       fail-fast: false

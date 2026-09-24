@@ -7,7 +7,7 @@ on:
 
 jobs:
   Ansible_lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repo code
         # See the note in validate-repo.yml: pinned to a SHA because a major-version tag is mutable.

@@ -48,7 +48,7 @@ permissions:
 jobs:
   collect:
     name: Collect pinned images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       images: ${{ steps.list.outputs.images }}
     steps:
@@ -68,7 +68,7 @@ jobs:
   sbom:
     name: SBOM for ${{ matrix.image }}
     needs: collect
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
