@@ -1,4 +1,18 @@
 ---
+# A mask is a symlink to /dev/null, and a symlink can be written before the unit
+# it masks exists. Done ahead of the install so the package's postinst finds the
+# daemon masked and starts nothing. force stays off: a real file at this path
+# would be a local unit somebody wrote, and replacing it should fail loudly.
+- name: Mask Debian's own node_exporter before the package can start it
+  ansible.builtin.file:
+    src: /dev/null
+    dest: "/etc/systemd/system/{{ apt_metrics_foreign_exporter_unit }}"
+    state: link
+  notify: Reload systemd
+
+- name: Flush handlers so the mask is in force before apt runs
+  ansible.builtin.meta: flush_handlers
+
 - name: Install the collector package and sponge
   ansible.builtin.apt:
     name:
@@ -8,12 +22,32 @@
     update_cache: true
     cache_valid_time: 3600
 
+# A mask stops a unit from starting, not one that already runs. A node that
+# received the package before this role masked it still has the daemon holding
+# the port under its boot-time pid.
+- name: Ask whether the foreign exporter is still running  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ apt_metrics_foreign_exporter_unit }}
+  register: apt_metrics_foreign_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Stop the foreign exporter  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl stop {{ apt_metrics_foreign_exporter_unit }}
+  changed_when: true
+  when: apt_metrics_foreign_active.stdout == 'active'
+
+# No owner or group. The directory is shared by every role that writes a
+# textfile metric, and on lxc260 pg-backup writes into it as postgres, so the two
+# PostgreSQL roles set postgres:postgres. This role used to set root:root, and
+# whichever of them ran last won - the weekly sweep showed that as permanent
+# drift on pg-backup. It only needs the directory to exist.
 - name: Create the textfile collector directory
   ansible.builtin.file:
     path: "{{ apt_metrics_textfile_dir }}"
     state: directory
-    owner: root
-    group: root
     mode: "0755"
 
 - name: Create the drop-in directory for the apt collector unit
@@ -135,3 +169,24 @@
     - apt_metrics_verify
     - not ansible_check_mode
     - apt_metrics_series.stdout is defined
+
+# The claim that matters is about the port, not the unit: nothing on this node
+# may listen on 9100 on every address. Asserted on the socket table rather than
+# on either unit's state, because the failure on lxc260 was a healthy-looking
+# daemon nobody had asked for. The fleet's exporter retries every 15 s, so a
+# freshly freed port is taken back within one interval.
+- name: Prove no exporter listens on the wildcard  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: ss -ltnH sport = :9100
+  register: apt_metrics_port
+  changed_when: false
+  # Column four of `ss -ltnH` is the local address:port.
+  failed_when: >-
+    apt_metrics_port.stdout_lines | map('split') | map(attribute=3)
+    | intersect(['*:9100', '0.0.0.0:9100', '[::]:9100']) | length > 0
+  retries: 4
+  delay: 5
+  until: apt_metrics_port is not failed
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode

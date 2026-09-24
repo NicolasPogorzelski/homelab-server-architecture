@@ -29,6 +29,17 @@ apt_metrics_sponge_package: moreutils
 # `set -o pipefail` and why the role reads the metric back.
 apt_metrics_collector: /usr/share/prometheus-node-exporter-collectors/apt_info.py
 
+# Debian's own node_exporter daemon. On bookworm the collectors package lists it
+# under Depends, not Recommends, so installing the collectors installs a second
+# exporter, and its postinst enables and starts it. It binds *:9100 without
+# waiting for Tailscale, so at boot it wins the port and the fleet's own exporter
+# loses it - measured on lxc260 from 2026-09-18, where Prometheus scraped the
+# packaged 1.5.0 for six days and never saw the backup metrics in the fleet's
+# textfile directory. Masked before the package is installed, so the postinst has
+# nothing to start. Trixie dropped the dependency, which is why the hypervisor
+# never showed this.
+apt_metrics_foreign_exporter_unit: prometheus-node-exporter.service
+
 apt_metrics_unit: prometheus-node-exporter-apt.service
 apt_metrics_timer: prometheus-node-exporter-apt.timer
 
