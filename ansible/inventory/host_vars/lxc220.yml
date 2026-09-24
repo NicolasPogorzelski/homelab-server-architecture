@@ -27,6 +27,25 @@ tailscale_boot_gate_units:
 
 tailscale_boot_gate_clear_restart_prevent: true
 
-# Read from the inventory rather than hard-coded: this repository keeps Tailscale
-# addresses out of version control, and ansible_host is where the real one lives.
-ssh_hardening_listen_address: "{{ ansible_host }}"
+# NOT SET, and the reason is a measurement rather than caution. Applied here on
+# 2026-09-17, the line landed in sshd_config.d and changed nothing: this node is
+# socket-activated, `ssh.socket` is enabled, and under socket activation systemd
+# owns the listening socket. sshd never binds anything itself, so `ListenAddress`
+# is inert and the node went on serving `*:22` with a configuration file claiming
+# otherwise.
+#
+# Measured across the fleet the same day: lxc200, lxc210, lxc211, lxc220, lxc230
+# and lxc260 are socket-activated; vm100, vm102, lxc250 and the hypervisor are
+# not. That is why lxc250 could pin its bind in August and why the decision's
+# "containers first" ordering is exactly backwards - containers are where the
+# mechanism does not work.
+#
+# Pinning a socket-activated node needs `ListenStream=` cleared and re-set on
+# `ssh.socket`, and the boot gate has to move to the socket unit with it, or
+# socket activation has to be turned off on that node. Which of the two is a
+# decision, not an implementation detail, and it belongs in
+# docs/decisions/sshd-listen-address.md before any node is changed.
+#
+# The boot gate above stays. It is correct regardless of which answer wins, and
+# it is what makes either survivable.
+# ssh_hardening_listen_address: "{{ ansible_host }}"

@@ -27,6 +27,11 @@ BACKUP_DIR="/mnt/backups"
 # below refuses to run if a database of this name is one the live instance uses.
 TEST_DB="restoretest_scratch"
 
+# The database inside the dump whose section is extracted. The dump is an
+# --all-databases dump, so it also carries `mysql` with every account and grant -
+# which is right for a real restore and must never reach a scratch database.
+SOURCE_DB="nextcloud"
+
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 METRIC_FILE="${TEXTFILE_DIR}/mariadb_restore_test.prom"
 
@@ -62,6 +67,9 @@ cleanup() {
     sql "DROP DATABASE IF EXISTS \`${TEST_DB}\`;" >/dev/null 2>&1 \
         || echo "WARNING: could not drop ${TEST_DB} - remove it by hand" >&2
 }
+# Re-armed later with the import log added, once that file exists. The scratch
+# database must be dropped on every exit path from here onwards, including the
+# pre-flight failures below.
 trap cleanup EXIT
 
 # === Pre-flight: the scratch name must not be a live database ===
@@ -108,14 +116,59 @@ if [ "${MARKERS}" -ne 1 ]; then
 fi
 
 # === Restore into the throwaway ===
-# --one-database confines the stream: the dump carries `USE \`nextcloud\`;` and
-# without this flag the import would write straight into the live database. The
-# flag filters by the name given on the command line, so the statements for every
-# other database in the file are discarded rather than applied.
+#
+# The first version of this used `--one-database "${TEST_DB}"`, and it imported
+# nothing at all while exiting 0. That flag filters by the database named in the
+# stream's own `USE` statements, not by a rename target: the dump says
+# `USE \`nextcloud\`;`, no statement belongs to `restoretest_scratch`, so every
+# line was discarded. The run was caught on 2026-09-17 by the row assertion below
+# and by nothing else, which is the argument for asserting content rather than
+# exit codes.
+#
+# What must never be done instead is the obvious repair - `--one-database
+# "${SOURCE_DB}"` would confine the stream to the LIVE database and restore an
+# old dump straight over it.
+#
+# So the section is cut out instead. sed prints from the `USE` line of the source
+# database up to the next `USE` line, deleting both, and the client is given the
+# scratch database as its default. `CREATE DATABASE` lines sit outside the range
+# and are skipped, which is intended: this script creates the target itself. The
+# `mysql` database in the same dump is never reached.
 sql "CREATE DATABASE \`${TEST_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
 
-if ! gzip -cd "${DUMP}" | "${CLIENT_BIN}" --one-database "${TEST_DB}"; then
+# How the section is fed to the client, and why it is not just the section.
+#
+# Three runs against real data on 2026-09-17 failed in three different places,
+# all for one reason: a dump is a program, and its middle depends on a preamble.
+# Cutting the stream at the USE line discards that preamble, and each attempt to
+# replace it by hand found the next thing it had contained.
+#
+#   1. "Incorrect string value" on the first four-byte character - the header's
+#      SET NAMES was gone, so the connection fell back to the server default.
+#   2. "Foreign key constraint is incorrectly formed" on oc_mail_action_step -
+#      the header disables FOREIGN_KEY_CHECKS, and without that a table whose key
+#      points at one the dump creates later cannot be built.
+#   3. "Variable 'time_zone' can't be set to the value of 'NULL'" - the section's
+#      own trailer restores @OLD_TIME_ZONE, which the header had saved.
+#
+# So the header is prepended instead of guessed: everything up to the first
+# CREATE DATABASE line, which is where mariadb-dump stops writing session setup
+# and starts writing content. The client is still told utf8mb4 explicitly,
+# because the connection charset is negotiated before the first statement is read.
+IMPORT_LOG="$(mktemp)"
+trap 'rm -f "${IMPORT_LOG}"; cleanup' EXIT
+
+if ! { gzip -cd "${DUMP}" | sed -n '1,/^CREATE DATABASE/{ /^CREATE DATABASE/!p; }';
+       gzip -cd "${DUMP}" \
+       | sed -n "/^USE \`${SOURCE_DB}\`;\$/,/^USE \`/{ /^USE \`/d; p; }"; } \
+     | "${CLIENT_BIN}" --default-character-set=utf8mb4 "${TEST_DB}" \
+       > "${IMPORT_LOG}" 2>&1; then
     echo "ERROR: restore failed - the client exited non-zero" >&2
+    # Only the ERROR lines. On a failed statement the client echoes the offending
+    # row, and these rows are user content - chat messages, file names, display
+    # names. A monthly job writing those into a persistent journal is a data leak
+    # with a schedule.
+    grep '^ERROR' "${IMPORT_LOG}" | head -3 >&2 || true
     exit 1
 fi
 

@@ -14,23 +14,48 @@
     group: systemd-journal
     mode: "0755"
 
-- name: Cap what the received journals may occupy
+# The ceiling. systemd-journal-remote reads no size limit on systemd 252, which
+# is what lxc200 runs: `MaxUse=` in journal-remote.conf arrived in v254, and a
+# journald@remote.conf configures a journald namespace, not this receiver - the
+# first version of this role wrote one and it capped nothing. So a timer vacuums
+# the directory instead. Vacuuming removes archived files only, so the real bound
+# is the target plus one active file per shipping node.
+- name: Deploy the vacuum service
   ansible.builtin.copy:
-    dest: /etc/systemd/journald@remote.conf
+    dest: /etc/systemd/system/journal-remote-vacuum.service
     owner: root
     group: root
     mode: "0644"
     content: |
-      # {{ ansible_managed }}
-      # EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
-      #
-      # This container's root filesystem is thin-pool space on the boot SSD. Ten
-      # nodes shipping journals here without a ceiling is the KE-7 failure class
-      # with extra steps.
-      [Journal]
-      SystemMaxUse={{ journal_remote_max_use }}
-      SystemMaxFileSize={{ journal_remote_max_file_size }}
-  notify: Restart journal-remote
+      # Managed by Ansible (journal_remote). EXERCISE - see
+      # docs/decisions/exercise-scope-before-terraform.md.
+      [Unit]
+      Description=Keep received journals under {{ journal_remote_max_use }}
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/journalctl --directory={{ journal_remote_dir }} --vacuum-size={{ journal_remote_max_use }}
+  notify: Reload systemd
+
+- name: Deploy the vacuum timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/journal-remote-vacuum.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (journal_remote). EXERCISE - see
+      # docs/decisions/exercise-scope-before-terraform.md.
+      [Unit]
+      Description=Vacuum received journals hourly
+
+      [Timer]
+      OnCalendar=hourly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
 
 - name: Create the drop-in directory
   ansible.builtin.file:
@@ -55,12 +80,28 @@
 # beside a service bound to one address means systemd activates the socket
 # version on first connection and the override is bypassed - the bind rule
 # defeated by a unit nobody looked at.
+#
+# Under --check the package above was not installed, so on a first run none of
+# these units exist and systemd_service fails the play. The role is in the weekly
+# drift sweep, which runs in check mode; each unit task asks systemd first.
+- name: Ask systemd which of the role's units exist yet  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: >-
+      systemctl list-unit-files --no-legend --plain
+      systemd-journal-remote.socket systemd-journal-remote.service
+      journal-remote-vacuum.timer
+  register: journal_remote_unit_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Disable the packaged wildcard socket
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.socket
     enabled: false
     state: stopped
     masked: true
+  when: "'systemd-journal-remote.socket' in journal_remote_unit_files.stdout or not ansible_check_mode"
 
 - name: Flush handlers before reading the bind back
   ansible.builtin.meta: flush_handlers
@@ -70,6 +111,14 @@
     name: systemd-journal-remote.service
     enabled: true
     state: started
+  when: "'systemd-journal-remote.service' in journal_remote_unit_files.stdout or not ansible_check_mode"
+
+- name: Enable and start the vacuum timer
+  ansible.builtin.systemd_service:
+    name: journal-remote-vacuum.timer
+    enabled: true
+    state: started
+  when: "'journal-remote-vacuum.timer' in journal_remote_unit_files.stdout or not ansible_check_mode"
 
 # Read the socket table, not the unit state. A service that is active and a
 # service listening where it was told are different claims, and this platform has

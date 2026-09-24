@@ -29,7 +29,11 @@
     owner: root
     group: root
     mode: "0640"
-    validate: /usr/sbin/auditd -f -c %s -l && /bin/true
+  # No validate. auditd has no option that only checks a configuration: -f keeps
+  # the daemon in the foreground, -c takes a directory rather than a file, and
+  # validate runs without a shell, so a `&&` in it is just another argument. The
+  # check that this file was accepted is the daemon starting and the kernel
+  # holding the rules, both asserted below.
   notify: Reload audit rules
 
 - name: Deploy the rule set
@@ -41,11 +45,24 @@
     mode: "0640"
   notify: Reload audit rules
 
+# Under --check the package above was not installed, so on a node seeing this
+# role for the first time the unit does not exist and systemd_service fails the
+# play. The role is in the weekly drift sweep, which runs in check mode, and that
+# failure is what raised FleetDriftIncomplete from 2026-09-20.
+- name: Ask systemd whether auditd exists yet  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain auditd.service
+  register: auditd_unit_file
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Enable and start auditd
   ansible.builtin.systemd_service:
     name: auditd
     enabled: true
     state: started
+  when: auditd_unit_file.stdout | length > 0 or not ansible_check_mode
 
 - name: Flush handlers so the rules are loaded before they are read back
   ansible.builtin.meta: flush_handlers

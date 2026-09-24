@@ -1,4 +1,18 @@
 ---
+# A mask is a symlink to /dev/null, and a symlink can be written before the unit
+# it masks exists. Done ahead of the install so the package's postinst finds the
+# daemon masked and starts nothing. force stays off: a real file at this path
+# would be a local unit somebody wrote, and replacing it should fail loudly.
+- name: Mask Debian's own node_exporter before the package can start it
+  ansible.builtin.file:
+    src: /dev/null
+    dest: "/etc/systemd/system/{{ apt_metrics_foreign_exporter_unit }}"
+    state: link
+  notify: Reload systemd
+
+- name: Flush handlers so the mask is in force before apt runs
+  ansible.builtin.meta: flush_handlers
+
 - name: Install the collector package and sponge
   ansible.builtin.apt:
     name:
@@ -8,12 +22,32 @@
     update_cache: true
     cache_valid_time: 3600
 
+# A mask stops a unit from starting, not one that already runs. A node that
+# received the package before this role masked it still has the daemon holding
+# the port under its boot-time pid.
+- name: Ask whether the foreign exporter is still running  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ apt_metrics_foreign_exporter_unit }}
+  register: apt_metrics_foreign_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Stop the foreign exporter  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl stop {{ apt_metrics_foreign_exporter_unit }}
+  changed_when: true
+  when: apt_metrics_foreign_active.stdout == 'active'
+
+# No owner or group. The directory is shared by every role that writes a
+# textfile metric, and on lxc260 pg-backup writes into it as postgres, so the two
+# PostgreSQL roles set postgres:postgres. This role used to set root:root, and
+# whichever of them ran last won - the weekly sweep showed that as permanent
+# drift on pg-backup. It only needs the directory to exist.
 - name: Create the textfile collector directory
   ansible.builtin.file:
     path: "{{ apt_metrics_textfile_dir }}"
     state: directory
-    owner: root
-    group: root
     mode: "0755"
 
 - name: Create the drop-in directory for the apt collector unit
@@ -33,6 +67,19 @@
     mode: "0644"
   notify: Reload systemd
 
+# Which of those timers this node actually has. Masking a unit that does not
+# exist is an error, and under --check the package has not been installed, so
+# every guest without it failed the whole play - measured 2026-09-17, nine of ten
+# nodes. This role is in the weekly drift sweep, which runs in check mode, so
+# that would have turned nine red every Sunday for a state that is not a fault.
+- name: List the collector timers this node has  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain prometheus-node-exporter-*.timer
+  register: apt_metrics_unit_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Mask the collector timers this node has no hardware or use for
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -40,7 +87,9 @@
     enabled: false
     state: stopped
   loop: "{{ apt_metrics_masked_timers }}"
-  when: apt_metrics_masked_timers | length > 0
+  when:
+    - apt_metrics_masked_timers | length > 0
+    - item in (apt_metrics_unit_files.stdout | default(''))
 
 # Masking a timer systemd currently holds loaded leaves it `failed`, and stopping
 # it does not clear that. Measured on 2026-09-15 when smart_metrics first masked
@@ -51,7 +100,9 @@
     cmd: systemctl reset-failed {{ apt_metrics_masked_timers | join(' ') }}
   changed_when: false
   failed_when: false
-  when: apt_metrics_masked_timers | length > 0
+  when:
+    - apt_metrics_masked_timers | length > 0
+    - apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 # Unmasked explicitly. smart_metrics masked this timer on the hypervisor on
 # 2026-09-15 with the reasoning that Ansible already owned the apt job, and the
@@ -61,6 +112,7 @@
   ansible.builtin.systemd_service:
     name: "{{ apt_metrics_timer }}"
     masked: false
+  when: apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 - name: Flush handlers so the timer starts against the current unit definition
   ansible.builtin.meta: flush_handlers
@@ -70,6 +122,7 @@
     name: "{{ apt_metrics_timer }}"
     enabled: true
     state: started
+  when: apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
 # The timer fires on its own schedule, which can be hours away. One immediate run
 # so the metric exists before this play ends and the verification below has
@@ -78,14 +131,31 @@
   ansible.builtin.systemd_service:
     name: "{{ apt_metrics_unit }}"
     state: started
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
-- name: Read the exported metric back
+# The HELP line rather than a data line. apt_info.py emits one data line per
+# origin with something pending, so a fully patched node produces none - asserting
+# on data would fail exactly the nodes that are in the best state. The HELP line
+# is emitted unconditionally, so its presence proves the collector ran to the end
+# and the file is its output rather than a leftover.
+- name: Prove the collector ran to completion
   ansible.builtin.command:
-    cmd: grep -c '^apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+    cmd: grep -c '^# HELP apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+  register: apt_metrics_help
+  changed_when: false
+  failed_when: apt_metrics_help.rc != 0 or apt_metrics_help.stdout | int < 1
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode
+
+- name: Count what is actually pending here
+  ansible.builtin.command:
+    cmd: grep -c '^apt_upgrades_pending{' {{ apt_metrics_textfile_dir }}/apt.prom
   register: apt_metrics_series
   changed_when: false
-  failed_when: apt_metrics_series.rc != 0 or apt_metrics_series.stdout | int < 1
+  failed_when: false
   when:
     - apt_metrics_verify
     - not ansible_check_mode
@@ -93,9 +163,30 @@
 - name: Report how many pending-upgrade series this node exports
   ansible.builtin.debug:
     msg: >-
-      {{ inventory_hostname }} exports {{ apt_metrics_series.stdout }}
-      apt_upgrades_pending series.
+      {{ inventory_hostname }}: collector complete,
+      {{ apt_metrics_series.stdout | default('0') }} origin(s) with pending upgrades.
   when:
     - apt_metrics_verify
     - not ansible_check_mode
     - apt_metrics_series.stdout is defined
+
+# The claim that matters is about the port, not the unit: nothing on this node
+# may listen on 9100 on every address. Asserted on the socket table rather than
+# on either unit's state, because the failure on lxc260 was a healthy-looking
+# daemon nobody had asked for. The fleet's exporter retries every 15 s, so a
+# freshly freed port is taken back within one interval.
+- name: Prove no exporter listens on the wildcard  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: ss -ltnH sport = :9100
+  register: apt_metrics_port
+  changed_when: false
+  # Column four of `ss -ltnH` is the local address:port.
+  failed_when: >-
+    apt_metrics_port.stdout_lines | map('split') | map(attribute=3)
+    | intersect(['*:9100', '0.0.0.0:9100', '[::]:9100']) | length > 0
+  retries: 4
+  delay: 5
+  until: apt_metrics_port is not failed
+  when:
+    - apt_metrics_verify
+    - not ansible_check_mode

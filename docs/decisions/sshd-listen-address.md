@@ -2,6 +2,30 @@
 
 ## Status
 
+**Amended 2026-09-17, and the amendment inverts the rollout order.** `ListenAddress` only
+binds anything on a node where sshd owns its listening socket. Measured across the fleet that
+day: `ssh.socket` is enabled on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260, and disabled
+on vm100, vm102, lxc250 and the hypervisor. Under socket activation systemd holds the socket and
+hands sshd a connected file descriptor, so the directive is inert - applied to lxc220 it landed
+in `sshd_config.d`, changed nothing, and left the node serving `*:22` with a configuration file
+saying otherwise.
+
+That explains why lxc250 could be pinned in August and why this document's "containers first"
+ordering is backwards: the containers are exactly where the mechanism does not work. Four nodes
+can be pinned as written. Six need a different change, and which one is an open decision:
+
+- **Pin the socket.** A drop-in on `ssh.socket` clearing `ListenStream=` and setting it to the
+  node's Tailscale address. The readiness gate has to move with it, because a socket unit binding
+  an address that does not exist yet fails at boot exactly as sshd would.
+- **Turn socket activation off** on the pinned nodes and let `ssh.service` bind as it does on
+  lxc250, keeping the existing gate unchanged.
+
+The second is simpler and matches the node already pinned; the first leaves Debian's default
+service model intact. Neither is chosen here, and no node is changed until one is.
+
+What stands regardless: lxc220 carries the boot gate as of 2026-09-17, and the gate is the half
+that makes either answer survivable.
+
 Decided 2026-09-11. The mechanism is built and defaulted off; the rollout is a supervised window
 per node, not a sweep.
 
