@@ -131,6 +131,7 @@ support. This paragraph asserted that every runbook carried such a record until 
 | 3 | Monitoring - Prometheus, Grafana, Alertmanager | Done |
 | 4 | Zero Trust Networking - Tailscale, ACL design | Done |
 | 5 | Ansible - playbooks, roles, vault, hardening | Done |
+| 5.5 | Identity - LDAP directory and OIDC provider, [decision](docs/decisions/identity-before-terraform.md) | Scheduled 2026-09-25 to 2026-09-27 |
 | 6 | Terraform - IaC on AWS (free tier) + Proxmox provisioning | Planned |
 | 7 | Kubernetes - k3s in the homelab | Planned |
 | 8 | Cloud depth (AWS) + Python | Planned |
@@ -169,6 +170,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 - [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
+- [Identity Before Terraform](docs/decisions/identity-before-terraform.md) (one directory and one OIDC provider, and which clients cannot use it)
 
 ### Security, risk and change
 
