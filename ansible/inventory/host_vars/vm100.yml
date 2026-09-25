@@ -2,6 +2,11 @@
 # Native admin user that receives the break-glass key on this host.
 breakglass_user: gpu
 
+# Ubuntu 22.04 ships prometheus-node-exporter-collectors from 2021, which has
+# apt.sh and not the apt_info.py of Debian's current package. Both write
+# apt_upgrades_pending with the same labels and the same HELP line.
+apt_metrics_collector: /usr/share/prometheus-node-exporter-collectors/apt.sh
+
 # Docker Compose stacks on this node. dest = project_src on the node;
 # src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
