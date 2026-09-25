@@ -79,3 +79,7 @@ refuses elsewhere, and it would be a poor advertisement for the judgement the re
 The exercise block is also the condition that ends the maintenance mode: when these four and the
 four operational findings from the same assessment are done, the Terraform track begins. That is
 recorded in `CLAUDE.md`, which is where the learning track is steered from.
+
+**Amended 2026-09-24.** An identity track now sits between this block and Terraform. It starts
+before the sshd rollout has reached every node, and Terraform still waits for both, see
+[the identity decision](identity-before-terraform.md).

@@ -426,7 +426,36 @@ teach, which is the part worth keeping:
   than left to be found.
 
 **This block is the end of maintenance mode.** When these four and the four items above have been
-applied and verified, the Terraform track begins.
+applied and verified, the Terraform track begins - after the
+identity track below, which was inserted on 2026-09-24.
+
+## The identity track, between the block and Terraform
+
+The reasoning, the component choice and the cut are in
+[the decision](../decisions/identity-before-terraform.md). This section holds the order and the
+state it starts from.
+
+**Where the block stood on 2026-09-24, measured that evening.** Repository and loaded alert rules
+agree, and PRs #123 to #125 are merged. What remains is applying what was merged: the drift report
+of 18:33 on lxc250 lists 50 changed tasks, all unexpected, in three playbooks - `apt-metrics` on
+nine nodes, `auditd` on the hypervisor, `journal-central` on lxc200, lxc211 and lxc260 - and
+`FleetDriftUnexpected` fires on exactly that. `apt_upgrades_pending` reaches Prometheus from lxc260
+only, and neither `auditd` nor `systemd-journal-upload` is active on any node. LLMNR and mDNS on
+lxc250 are closed, with no listener on 5353 or 5355. The sshd bind is pinned on lxc250 alone.
+
+1. **2026-09-25, the block.** Apply the three playbooks, run the drift sweep by hand, and expect
+   `FleetDriftUnexpected` to clear. Decide how the socket-activated nodes get their bind pinned
+   ([open decision](../decisions/sshd-listen-address.md)) and execute it on one of them. The other
+   nodes follow one per session after the weekend.
+2. **2026-09-26, the node.** Container, `onboarding.yml`, roles for `lldap` and Authelia, both
+   databases through `postgresql_provisioning` on lxc260, Tailscale tag and ACL rule, node and
+   service documents, scrape targets. The thin pool has about 13 GB free for it.
+3. **2026-09-27, the clients.** Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum;
+   Audiobookshelf and Calibre-Web follow if the day allows. Nextcloud and Proxmox VE are deferred
+   on purpose, for the reasons in the decision.
+
+Whatever of step 3 is not done on 2026-09-27 moves to the small open items, except the minimum,
+which gates Terraform like the block does.
 
 ## Added by the 2026-08-20 repository and fleet audit
 
