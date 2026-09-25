@@ -1,4 +1,4 @@
-# Managed by Ansible - homelab-schedule role. Do not edit manually.
-# systemd-cat sends each script's output to the journal instead of to cron's mailer.
-45 0 * * *  root  systemd-cat -t homelab-setwake --stderr-priority=err {{ homelab_setwake_dest }}
-0  1 * * *  root  systemd-cat -t homelab-shutdown --stderr-priority=err {{ homelab_shutdown_dest }}
+# {{ ansible_managed }}
+# systemd-cat sends the script's output to the journal instead of to cron's mailer.
+{% set hour, minute = homelab_schedule_shutdown_time.split(':') %}
+{{ minute | int }} {{ hour | int }} * * *  root  systemd-cat -t homelab-shutdown --stderr-priority=err {{ homelab_shutdown_dest }}

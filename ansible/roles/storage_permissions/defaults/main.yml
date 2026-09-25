@@ -22,8 +22,11 @@ storage_permissions_conf: /etc/storage-permissions.conf
 
 # Daily, shortly after the nightly snapraid sync would have finished. The check
 # only reads metadata, so it does not compete with the sync for disk bandwidth in
-# any meaningful way - the separation is about keeping the journal readable.
-storage_permissions_oncalendar: "*-*-* 23:30:00"
+# any meaningful way - the separation is about keeping the journal readable. It
+# must also finish before the host powers off at 23:30 (homelab_schedule): a run
+# killed by the shutdown counts as having fired, so Persistent=true never
+# repeats it.
+storage_permissions_oncalendar: "*-*-* 23:15:00"
 
 # === The matrix ===
 #

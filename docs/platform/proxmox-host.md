@@ -119,29 +119,25 @@ See: [KE-13](./known-errors.md#ke-13-aux-disk-physical-disk-failure-medium-error
 
 ## Host Cron Jobs
 
-Deployed as `/etc/cron.d/homelab-schedule` by the `homelab_schedule` role (see [Ansible platform](./ansible.md)). Both scripts run through `systemd-cat`, so their output lands in the journal under the tags `homelab-setwake` and `homelab-shutdown`; read it with `journalctl -b -1 -t homelab-setwake`.
+The host runs on a weekly schedule and is off otherwise: it starts by RTC alarm at a time set per weekday, powers off at 23:30, and on weekdays without a start time it stays off until switched on by hand. The `homelab_schedule` role deploys it (see [Ansible platform](./ansible.md)).
 
-| Schedule | User | Script | Purpose |
+| Schedule | User | Command | Purpose |
 |---|---|---|---|
-| `45 0 * * *` | root | `/usr/local/sbin/homelab-setwake.sh` | Program the RTC wakeup for later the same day, then read it back |
-| `0 1 * * *` | root | `/usr/local/sbin/homelab-shutdown.sh` | Scheduled nightly shutdown (2h buffer after SnapRAID sync at 23:00 on VM102) |
+| `30 23 * * *` | root | `systemd-cat -t homelab-shutdown ... /usr/local/sbin/homelab-shutdown.sh` | Wait for guarded work, arm the next start, power off |
 
-### Wake Times (homelab-setwake.sh)
+Both scripts log to the journal: `journalctl -b -1 -t homelab-shutdown -t homelab-setwake` shows the last night's run. `homelab-setwake.sh --dry-run` prints the next start without arming anything.
 
-The script programs the RTC alarm via `rtcwake -m no -t <unix-timestamp>`. It runs after midnight, so the day it computes is the day the machine wakes on ([KE-26](./known-errors.md#ke-26)):
+### Start times (homelab-setwake.sh)
 
-- **Tuesday, Wednesday** (day 2 or 3): wake at 16:00
-- **All other days**: wake at 07:30
+The times per weekday live in `homelab_schedule_plans` in the role defaults, as a list of plans that each apply from a date. The script is rendered from them and looks up to 14 days ahead for the next day that has a start, at least ten minutes away, taking the plan by the date of that day. A new plan therefore takes effect on its date without an apply on the day. With no start in those 14 days it clears the alarm (`rtcwake -m disable`).
 
-It then reads `/sys/class/rtc/rtc0/wakealarm` and exits 1 if no alarm is armed or the armed time is more than 60 s off the requested one. `rtcwake` can arm a second early, so an exact comparison would fail on some nights.
-
-Source: `ansible/roles/homelab_schedule/files/homelab-setwake.sh`.
+It arms the alarm with `rtcwake -m no -t <unix-timestamp>`, then reads `/sys/class/rtc/rtc0/wakealarm` back and exits 1 if no alarm is armed or the armed time is more than 60 s off. `rtcwake` can arm a second early, so an exact comparison would fail on some nights ([KE-26](./known-errors.md#ke-26)). The RTC accepts alarms up to one month ahead (`rtc_cmos ... alarms up to one month` in the boot log), which a start two days away needs.
 
 ### Shutdown (homelab-shutdown.sh)
 
-Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapRAID sync on VM102 (23:00 daily) - the order is: sync completes -> host shuts down -> RTC wakes host at configured time.
+Before powering off, the script waits while any guarded unit is active: `guest-backup.service` and `lxc-fstrim.service` on the host, and on vm102, asked through the QEMU guest agent, the SnapRAID sync and scrub and `storage-permissions.service`. A guest's shutdown would otherwise kill them; the scrub ended with result `signal` that way on 2026-09-21. If work is still running after 180 minutes, or the next start cannot be armed, it exits 1 and the host stays up for the night rather than going off with work cut short or with no way back on.
 
-Source: `ansible/roles/homelab_schedule/files/homelab-shutdown.sh`.
+Source: `ansible/roles/homelab_schedule/templates/`.
 
 ## Host Systemd Timers
 
@@ -162,11 +158,10 @@ Containers cannot trim themselves: the stock `fstrim.timer` carries
 container is refused the ioctl regardless. Without a host-side job, freed blocks stay allocated in
 the thin pool forever - which is how `pve/data` reached 92.55% with only 23 GiB actually in use.
 
-`Persistent=true` is load-bearing. `homelab-setwake.sh` wakes the host at 07:30 on most days but at
-**16:00 on Tuesday and Wednesday**, so no single wall-clock time is inside the awake window every
-day. On those two days the host is still off at 10:30 and the overdue run fires just after the
-16:00 boot. Without catch-up the job would silently never run on Tue/Wed - the same defect that
-cost the PostgreSQL backups two months.
+`Persistent=true` is load-bearing. The host's start time differs by weekday and on some days it
+does not start at all, so 10:30 falls outside the awake window on most days, and the overdue run
+fires just after the next start. Without catch-up the job would silently never run on those days -
+the same defect that cost the PostgreSQL backups two months.
 
 Source: `snippets/scripts/lxc-fstrim.sh`, `snippets/systemd/lxc-fstrim.service`,
 `snippets/systemd/lxc-fstrim.timer`. Hand-deployed, so these would be lost on a rebuild - the

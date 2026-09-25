@@ -1,0 +1,83 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# Arms the RTC for the next scheduled start, then proves it was armed.
+# See KE-26 in docs/platform/known-errors.md.
+#
+# Called by homelab-shutdown.sh right before the host powers off, not by cron.
+# The start times live in homelab_schedule_plans in the role defaults; this file
+# is rendered from them. --dry-run prints the next start and arms nothing.
+set -euo pipefail
+
+# A start closer than this to now could fire while the host is still shutting
+# down, and an alarm that fires before power-off is lost.
+MIN_LEAD_SECONDS=600
+# How far ahead to look for a day that has a start at all.
+SEARCH_DAYS=14
+
+# Prints the start time (HH:MM) for a date given as YYYY-MM-DD, or nothing when
+# that day has no automatic start. The newest plan whose date has been reached
+# wins; ISO dates compare correctly as strings.
+wake_time_for() {
+    local day="$1" dow
+    dow="$(date -d "${day}" +%u)"
+{% for plan in homelab_schedule_plans | sort(attribute='from', reverse=true) %}
+    if [[ ! "${day}" < "{{ plan.from }}" ]]; then
+        case "${dow}" in
+{% for weekday, time in plan.wake | dictsort %}
+            {{ weekday }}) echo "{{ time }}" ;;
+{% endfor %}
+        esac
+        return 0
+    fi
+{% endfor %}
+}
+
+NOW=$(date +%s)
+WAKE_TIME=""
+WAKE_LABEL=""
+for offset in $(seq 0 "${SEARCH_DAYS}"); do
+    day="$(date -d "today + ${offset} day" +%F)"
+    start="$(wake_time_for "${day}")"
+    [ -n "${start}" ] || continue
+    candidate="$(date -d "${day} ${start}" +%s)"
+    if [ "${candidate}" -ge $(( NOW + MIN_LEAD_SECONDS )) ]; then
+        WAKE_TIME="${candidate}"
+        WAKE_LABEL="$(date -d "@${candidate}" '+%a %F %H:%M')"
+        break
+    fi
+done
+
+if [ -z "${WAKE_TIME}" ]; then
+    echo "no automatic start within ${SEARCH_DAYS} days - the alarm is cleared, the host stays off until switched on"
+    [ "${1:-}" = "--dry-run" ] || /usr/sbin/rtcwake -m disable
+    exit 0
+fi
+
+if [ "${1:-}" = "--dry-run" ]; then
+    echo "next start: ${WAKE_LABEL} (dry run, nothing armed)"
+    exit 0
+fi
+
+/usr/sbin/rtcwake -m no -t "${WAKE_TIME}"
+
+# Read the alarm back out of the kernel. rtcwake exiting 0 says the ioctl was
+# accepted; this says the hardware holds the alarm.
+ARMED="$(cat /sys/class/rtc/rtc0/wakealarm 2>/dev/null || true)"
+if [ -z "${ARMED}" ]; then
+    echo "ERROR: rtcwake returned 0 but /sys/class/rtc/rtc0/wakealarm is empty - no alarm is armed" >&2
+    exit 1
+fi
+
+# rtcwake reads the RTC and then the system clock, and subtracts the difference
+# from the requested time. When the second ticks between the two reads, the alarm
+# lands one second early: measured 07:29:59 for a requested 07:30:00. What this
+# check exists to catch is the wrong day or no alarm, so a minute of slack costs
+# nothing and an exact comparison fails at random.
+OFFSET=$(( ARMED - WAKE_TIME ))
+if [ "${OFFSET#-}" -gt 60 ]; then
+    echo "ERROR: alarm reads ${ARMED} ($(date -d "@${ARMED}")), expected ${WAKE_TIME} ($(date -d "@${WAKE_TIME}"))" >&2
+    exit 1
+fi
+
+echo "wakealarm armed for $(date -d "@${ARMED}") (${WAKE_LABEL})"

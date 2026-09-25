@@ -26,7 +26,7 @@ ExecStart={{ fleet_drift_script_dest }}
 ExecStartPost=+/bin/mv {{ fleet_drift_report_dir }}/fleet-drift.prom {{ fleet_drift_textfile_dir }}/fleet-drift.prom
 # Twenty-five playbooks across eleven nodes measured 4.3 minutes. The ceiling is
 # generous because a single unreachable node stretches the run rather than
-# failing it, and a sweep held open until next Sunday reports nothing at all.
+# failing it, and a sweep held open until the next week reports nothing at all.
 TimeoutStartSec=2700
 
 [Install]

@@ -1,0 +1,61 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# Powers the host off for the night: waits for work that must not be cut off,
+# arms the next start, then shuts down.
+#
+# Two refusals keep the host up rather than off. Work still running when the wait
+# runs out would be killed by the guests' shutdown; the SnapRAID scrub on vm102
+# ended that way once, with result 'signal'. And a host powered off without an
+# alarm stays off until somebody presses the button. Either way the host tries
+# again the next night, and running for a night costs only power.
+set -uo pipefail
+
+DEADLINE=$(( $(date +%s) + {{ homelab_schedule_guard_timeout_minutes }} * 60 ))
+
+# Prints the first guarded unit that is active, or nothing.
+busy_unit() {
+    local unit
+    for unit in {{ homelab_schedule_guard_host_units | join(' ') }}; do
+        if systemctl is-active --quiet "${unit}"; then
+            echo "host ${unit}"
+            return 0
+        fi
+    done
+{% for vmid, units in homelab_schedule_guard_guest_units | dictsort %}
+    # A stopped guest runs nothing. An agent that does not answer is not
+    # evidence of work, so it does not hold the shutdown.
+    if qm status {{ vmid }} 2>/dev/null | grep -q 'status: running'; then
+        for unit in {{ units | join(' ') }}; do
+            if qm guest exec {{ vmid }} -- systemctl is-active "${unit}" 2>/dev/null \
+                | grep -q '"out-data" : "active'; then
+                echo "vm{{ vmid }} ${unit}"
+                return 0
+            fi
+        done
+    fi
+{% endfor %}
+}
+
+reported=""
+while true; do
+    unit="$(busy_unit)"
+    [ -n "${unit}" ] || break
+    if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
+        echo "ERROR: ${unit} still active after {{ homelab_schedule_guard_timeout_minutes }} min - not shutting down tonight" >&2
+        exit 1
+    fi
+    if [ "${unit}" != "${reported}" ]; then
+        echo "waiting for ${unit}"
+        reported="${unit}"
+    fi
+    sleep 60
+done
+
+if ! systemd-cat -t homelab-setwake --stderr-priority=err {{ homelab_setwake_dest }}; then
+    echo "ERROR: the next start could not be armed - not shutting down tonight" >&2
+    exit 1
+fi
+
+echo "shutting down"
+/usr/sbin/shutdown -h now

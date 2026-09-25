@@ -41,11 +41,13 @@ offsite_backup_persistent: true
 offsite_backup_randomized_delay: 600
 
 # Which weekday re-downloads a sample of the data rather than only reading the
-# repository's structure. 7 is Sunday. A structural check proves the repository
+# repository's structure. 6 is Saturday: the script compares the weekday of the
+# day it runs, and on Sundays the host does not start by itself, so a catch-up
+# run on Monday would never match 7. A structural check proves the repository
 # describes itself consistently; only reading data back proves the bytes are
 # there. `restic check` alone is the same class of guard as a backup script that
 # checks its own exit code.
-offsite_backup_verify_weekday: 7
+offsite_backup_verify_weekday: 6
 offsite_backup_verify_subset: "1%"
 
 # Not a default anybody should need, and here so that it is greppable: the client

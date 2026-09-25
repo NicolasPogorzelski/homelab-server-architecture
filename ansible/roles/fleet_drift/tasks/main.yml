@@ -12,7 +12,7 @@
     fail_msg: >-
       ansible/drift-sweep.conf is missing under {{ fleet_drift_repo }}. The sweep
       reads its playbook list and its baseline from that file and would otherwise
-      install a timer that exits 1 every Sunday.
+      install a timer that exits 1 every week.
     success_msg: "Sweep configuration present - safe to schedule."
 
 # Owned by the sweep's user, because the script writes both its report and its

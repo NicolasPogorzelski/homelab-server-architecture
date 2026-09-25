@@ -1218,8 +1218,8 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
 | nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
 
-**What makes this platform unusually exposed:** `homelab-schedule` powers the host down at 01:00 and
-wakes it by RTC in the morning, so every day is a cold boot. Timers that carry `Persistent=true`
+**What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and
+wakes it by RTC the next working day, so every day is a cold boot. Timers that carry `Persistent=true`
 to catch up runs missed overnight therefore fire *inside the boot window* by design - that is how
 the lxc210 certificate job became a boot-time job without anyone choosing that. On this platform the
 boot window is a routine execution context, not an edge case.

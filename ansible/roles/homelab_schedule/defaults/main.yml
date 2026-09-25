@@ -2,3 +2,41 @@
 homelab_setwake_dest: /usr/local/sbin/homelab-setwake.sh
 homelab_shutdown_dest: /usr/local/sbin/homelab-shutdown.sh
 homelab_cron_file: /etc/cron.d/homelab-schedule
+
+# The host powers off every night at this time (HH:MM, local time).
+homelab_schedule_shutdown_time: "23:30"
+
+# When the host starts by itself. Each plan applies from its date until the next
+# plan's date. Keys are ISO weekdays (1 = Monday, 7 = Sunday); a weekday without
+# a key gets no automatic start, and the host is switched on by hand if needed.
+# Changing plans needs no apply on the day: the script picks the plan by the date
+# of the start it is computing.
+homelab_schedule_plans:
+  - from: "2026-09-07"
+    wake:
+      1: "15:50"
+      2: "15:50"
+      3: "15:50"
+      4: "15:50"
+      5: "15:50"
+      6: "09:50"
+  - from: "2026-10-12"
+    wake:
+      1: "08:50"
+      2: "12:20"
+      3: "13:20"
+      4: "12:20"
+      6: "09:50"
+
+# Work that must not be cut off by the shutdown. The shutdown waits while any of
+# these units is active, on the host or inside a guest via the QEMU guest agent,
+# and stays up for the night if they are still running when the wait runs out.
+homelab_schedule_guard_host_units:
+  - guest-backup.service
+  - lxc-fstrim.service
+homelab_schedule_guard_guest_units:
+  102:
+    - snapraid-maintenance@sync.service
+    - snapraid-maintenance@scrub.service
+    - storage-permissions.service
+homelab_schedule_guard_timeout_minutes: 180

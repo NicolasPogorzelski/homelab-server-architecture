@@ -21,13 +21,12 @@ guest_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
 # databases - already has its own nightly dump, alerted on separately. What this
 # job protects is the machine around that state, and machines change slowly.
 #
-# 11:00 on Sunday sits inside the host's waking hours. It powers down at 01:00
-# and wakes by RTC in the morning (homelab_schedule), so any slot before roughly
-# 10:00 is a slot that does not exist.
-guest_backup_oncalendar: "Sun *-*-* 11:00:00"
+# Saturday, because the host starts by itself at 09:50 on Saturdays in every
+# plan of homelab_schedule and not at all on Sundays.
+guest_backup_oncalendar: "Sat *-*-* 11:00:00"
 
 # The host is asleep for two thirds of the day, so a weekly calendar slot is
-# missed outright whenever the machine happens to be down on a Sunday morning.
+# missed outright whenever the machine happens to be down on a Saturday morning.
 # Persistent=true records the last run and fires the overdue one at the next
 # boot. This is the same defect that silently stopped the PostgreSQL dumps for
 # two months while they were still a cron job, and the rule it produced: any

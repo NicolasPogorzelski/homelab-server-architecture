@@ -1,14 +1,17 @@
 ---
-# Sunday morning, ahead of lxc-fstrim.timer at 10:30 and guest-backup at 11:00.
+# Saturday morning, ahead of lxc-fstrim.timer at 10:30 and guest-backup at 11:00.
 # The snapshot is meant to describe the week that was, so it runs before the
 # jobs that rewrite state, and it stays clear of the backup's disk load.
+# Saturday because the host starts by itself at 09:50 on Saturdays in every plan
+# of homelab_schedule and not at all on Sundays; 10:10 leaves the guests twenty
+# minutes to come up.
 #
 # The zone is part of the expression and is not decoration. lxc250 runs Etc/UTC
 # while the hypervisor those two jobs live on runs Europe/Berlin, so a bare
-# "09:00" here fires at 11:00 local - the minute vzdump starts. Measured
+# "09:00" here fired at 11:00 local - the minute vzdump started. Measured
 # 2026-09-08, that is exactly what the first deployment did. Naming the zone
 # also survives the daylight-saving change, which a fixed UTC hour would not.
-fleet_snapshot_on_calendar: "Sun *-*-* 09:00:00 Europe/Berlin"
+fleet_snapshot_on_calendar: "Sat *-*-* 10:10:00 Europe/Berlin"
 fleet_snapshot_randomized_delay: "300"
 
 # The control node runs the playbook against the whole inventory, so the unit
