@@ -1,19 +1,21 @@
 ---
 - name: Deploy homelab-setwake.sh
-  ansible.builtin.copy:
-    src: homelab-setwake.sh
+  ansible.builtin.template:
+    src: homelab-setwake.sh.j2
     dest: "{{ homelab_setwake_dest }}"
     owner: root
     group: root
     mode: "0755"
+    validate: bash -n %s
 
 - name: Deploy homelab-shutdown.sh
-  ansible.builtin.copy:
-    src: homelab-shutdown.sh
+  ansible.builtin.template:
+    src: homelab-shutdown.sh.j2
     dest: "{{ homelab_shutdown_dest }}"
     owner: root
     group: root
     mode: "0755"
+    validate: bash -n %s
 
 - name: Deploy cron schedule
   ansible.builtin.template:

@@ -103,7 +103,7 @@ Owned by the [`storage_permissions`](../../ansible/roles/storage_permissions) ro
 - `/etc/storage-permissions.conf` - the matrix above, rendered from the role's `defaults/main.yml`
 - optionally `/etc/storage-permissions.local.conf` - additional entries kept off the repository;
   the script reads it alongside the managed file and Ansible neither writes nor removes it
-- `storage-permissions.timer` - daily at 23:30, `Persistent=true`
+- `storage-permissions.timer` - daily at 23:15, `Persistent=true`, before the host powers off at 23:30
 
 The branch list is not kept in the repository. The script reads it from the running MergerFS
 instance (`user.mergerfs.branches` on the pool's control file), for three reasons: a disk added to

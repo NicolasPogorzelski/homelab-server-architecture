@@ -26,9 +26,9 @@ snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 #
 # Weekly at 12% covers the unscrubbed two thirds in about five and a half weeks,
 # which turns that curve before the rule fires rather than after. One run then
-# costs about 105 minutes against a window that closes at 01:00 when the host
-# powers down, so it fits three times over. The nightly sync is untouched and
-# starts at 23:00, an hour and a quarter after a 105-minute scrub has finished.
+# costs about 105 minutes against a window that closes at 23:30 when the host
+# powers down, so it fits twice over. The nightly sync is untouched and starts
+# at 23:00, an hour and a quarter after a 105-minute scrub has finished.
 #
 # The lever if this proves too much disk for the value: put the percentage back
 # to 8 and keep the weekly cadence, which still gives a full pass in 2.9 months

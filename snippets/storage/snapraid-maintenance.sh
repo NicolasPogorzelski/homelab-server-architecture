@@ -29,8 +29,9 @@ set -euo pipefail
 # the coverage metrics answered how much of the array is verified and left the
 # cadence question open, because nobody knew how long a scrub takes here. That is
 # not idle curiosity. The scrub timer fires at 20:00 and the host powers itself
-# down at 01:00, so a run has a five-hour budget and no evidence it fits; a run
-# that overruns it is killed by the shutdown, and the only trace is a
+# down at 23:30, so a run has a three-and-a-half-hour budget; a run that overruns
+# it holds the shutdown for up to three hours, then keeps the host up for the
+# night, and the only trace of a run killed some other way is a
 # last_success timestamp that quietly does not move. Both operations now record
 # their own wall-clock duration, which turns "roughly a year for a full pass at
 # the default 8%" from an estimate into arithmetic on a measured number.
