@@ -119,27 +119,29 @@ See: [KE-13](./known-errors.md#ke-13-aux-disk-physical-disk-failure-medium-error
 
 ## Host Cron Jobs
 
-Deployed as `/etc/cron.d/homelab-schedule`, currently managed manually (deployed 2026-05-23). A `homelab_schedule` Ansible role exists to codify these scripts + cron file but has not yet been applied to the live host (see [Ansible platform](./ansible.md)).
+Deployed as `/etc/cron.d/homelab-schedule` by the `homelab_schedule` role (see [Ansible platform](./ansible.md)). Both scripts run through `systemd-cat`, so their output lands in the journal under the tags `homelab-setwake` and `homelab-shutdown`; read it with `journalctl -b -1 -t homelab-setwake`.
 
 | Schedule | User | Script | Purpose |
 |---|---|---|---|
-| `45 0 * * *` | root | `/usr/local/sbin/homelab-setwake.sh` | Program RTC wakeup alarm for tomorrow before shutdown |
+| `45 0 * * *` | root | `/usr/local/sbin/homelab-setwake.sh` | Program the RTC wakeup for later the same day, then read it back |
 | `0 1 * * *` | root | `/usr/local/sbin/homelab-shutdown.sh` | Scheduled nightly shutdown (2h buffer after SnapRAID sync at 23:00 on VM102) |
 
 ### Wake Times (homelab-setwake.sh)
 
-The script programs the RTC alarm via `rtcwake -m no -t <unix-timestamp>` based on the next day:
+The script programs the RTC alarm via `rtcwake -m no -t <unix-timestamp>`. It runs after midnight, so the day it computes is the day the machine wakes on ([KE-26](./known-errors.md#ke-26)):
 
 - **Tuesday, Wednesday** (day 2 or 3): wake at 16:00
 - **All other days**: wake at 07:30
 
-Source: `scripts/homelab-setwake.sh` - deployed to `/usr/local/sbin/homelab-setwake.sh`.
+It then reads `/sys/class/rtc/rtc0/wakealarm` and exits 1 if no alarm is armed or the armed time is more than 60 s off the requested one. `rtcwake` can arm a second early, so an exact comparison would fail on some nights.
+
+Source: `ansible/roles/homelab_schedule/files/homelab-setwake.sh`.
 
 ### Shutdown (homelab-shutdown.sh)
 
 Runs `shutdown -h now`. The 01:00 schedule gives a 2-hour buffer after the SnapRAID sync on VM102 (23:00 daily) - the order is: sync completes -> host shuts down -> RTC wakes host at configured time.
 
-Source: `scripts/homelab-shutdown.sh` - deployed to `/usr/local/sbin/homelab-shutdown.sh`.
+Source: `ansible/roles/homelab_schedule/files/homelab-shutdown.sh`.
 
 ## Host Systemd Timers
 

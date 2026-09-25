@@ -8,15 +8,11 @@
 # Runs at 00:45, fifteen minutes before homelab-shutdown.sh. That timing is why
 # the arithmetic reads `today` and not `tomorrow`: at 00:45 the calendar has
 # already rolled over, so the machine shutting down at 01:00 is meant to come
-# back later the same day.
+# back later the same day. See KE-26 in docs/platform/known-errors.md.
 #
-# Until 2026-09-17 every line here said `tomorrow`, which programmed the alarm a
-# full day past the intended one - shut down Thursday 01:00, wake Friday 07:30,
-# thirty-one hours instead of six and a half. Nobody saw it because the host was
-# switched on by hand long before the alarm came due, so the alarm was simply
-# overtaken. The boot history showed it plainly once anyone looked: 18:52, 16:00,
-# 10:09, 16:10, 15:09, 08:08 across six starts, one of which matches a scheduled
-# time, and a gap of two and a half days in the middle.
+# Output reaches the journal under the tag homelab-setwake, because the cron
+# line runs this script through systemd-cat. Without that, cron hands stdout to
+# the local mailer, which on this host delivers nothing.
 #
 # Wake times, by the weekday the machine wakes on:
 #   Tuesday   (day 2): 16:00
@@ -58,12 +54,17 @@ if [ -z "${ARMED}" ]; then
     exit 1
 fi
 
-if [ "${ARMED}" -ne "${WAKE_TIME}" ]; then
+# rtcwake reads the RTC and then the system clock, and subtracts the difference
+# from the requested time. When the second ticks between the two reads, the alarm
+# lands one second early: measured 07:29:59 for a requested 07:30:00. What this
+# check exists to catch is the wrong day or no alarm, so a minute of slack costs
+# nothing and an exact comparison fails at random.
+OFFSET=$(( ARMED - WAKE_TIME ))
+if [ "${OFFSET#-}" -gt 60 ]; then
     echo "ERROR: alarm reads ${ARMED} ($(date -d "@${ARMED}")), expected ${WAKE_TIME} ($(date -d "@${WAKE_TIME}"))" >&2
     exit 1
 fi
 
-# One line in the journal per night, which persists across the power cycle since
-# the journald role. It is the only evidence this job leaves: cron reports a
-# failure to nobody, and the host is down when Prometheus would scrape anything.
+# One line per night, which persists across the power cycle. It is the only
+# evidence this job leaves: the host is down when Prometheus would scrape anything.
 echo "wakealarm armed for $(date -d "@${ARMED}") (${WAKE_LABEL})"

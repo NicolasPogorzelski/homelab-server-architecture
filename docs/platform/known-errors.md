@@ -41,7 +41,7 @@ file path, not the fragment.
 | [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
-| [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Fixed in the repository 2026-09-17, not yet applied |
+| [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25 |
 
 Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
 index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
@@ -2064,8 +2064,28 @@ returned Friday and `/sys/class/rtc/rtc0/wakealarm` was empty.
 with it: the computed time must lie in the future, and the alarm is read back out of
 `/sys/class/rtc/rtc0/wakealarm` and compared with what was asked for. `rtcwake` returning 0 says
 the ioctl was accepted; the read-back says the hardware holds it, and those two came apart for long
-enough to be worth the lines. The script logs one line per night to the journal, which is the only
-evidence this job can leave: nothing scrapes a host that is about to power off.
+enough to be worth the lines.
+
+**The first night after the apply, both additions misfired.** The host woke at 07:31 on 2026-09-25,
+the first scheduled wake in the boot history, yet the script had exited 1. The deferred cron mail
+held its output:
+
+```text
+rtcwake: wakeup using /dev/rtc0 at Fri Sep 25 05:29:59 2026
+ERROR: alarm reads 1790314199 (Fri Sep 25 07:29:59 AM CEST 2026), expected 1790314200 (Fri Sep 25 07:30:00 AM CEST 2026)
+```
+
+`rtcwake` reads the RTC and then `time(NULL)`, and subtracts the difference from the requested
+time (`get_basetimes()` and `alarm -= ctl->sys_time - ctl->rtc_time` in util-linux's
+`rtcwake.c`). When the second ticks between the two reads, the alarm lands one second early. The
+old script's run on 2026-09-24 shows the same `05:29:59`, the nights before it `05:30:00`. The
+read-back now accepts up to 60 s either way, which still refuses an empty alarm and the wrong day.
+
+That output was only readable from the mail queue. The line meant to reach the journal went
+where cron sends all stdout, to the local mailer, and Postfix on the host defers everything
+because `/etc/aliases.db` does not exist - 29 messages were queued, among them smartd's daily
+KE-13 warnings. The cron lines now run both scripts through `systemd-cat`, so each night leaves
+a journal entry under `homelab-setwake` whether the script succeeds or not.
 
 **Not caused by the role adoption of 2026-09-16, and worth separating.** The `homelab_schedule`
 role was applied for the first time the day before this was found, and its `--check --diff` showed
@@ -2073,9 +2093,9 @@ only comments, an em dash and column alignment - the logic was byte-identical on
 role faithfully adopted a script that had been wrong since it was written. An adoption proves that
 Ansible reproduces what the node had; it says nothing about whether what the node had was correct.
 
-**Status:** Fixed in the repository 2026-09-17, not yet applied. The apply changes what wakes the
-machine, so it belongs in a session where a failure costs nothing more than switching it on by
-hand - which is what has been happening anyway.
+**Status:** Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25.
+The read-back tolerance and the journal routing are in the repository, not yet applied; after the
+apply, the proof is a `wakealarm armed for` line in `journalctl -b -1 -t homelab-setwake`.
 
 **References:**
 - [The scheduling entry in CLAUDE.md](../../CLAUDE.md)
