@@ -29,9 +29,10 @@ Config and metadata use local persistent volumes on VM100.
 
 | Source | Port | Access |
 |---|---|---|
-| `tag:client` | 13378 | Allowed |
-| `tag:untrusted` | 13378 | Allowed |
-| `tag:admin`, `tag:tier0` | all | Allowed |
+| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:reader` | 13378 | Allowed |
+| One external user through machine sharing | 13378 | Allowed |
+| `tag:monitoring` | 13378 | Allowed (blackbox probe) |
+| `tag:untrusted`, `tag:tier0`, every other tag | 13378 | Denied |
 
 ## Failure Impact
 

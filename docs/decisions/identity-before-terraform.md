@@ -15,7 +15,7 @@ application asks for its own password against its own user table. Measured 2026-
 
 | Where | What holds identities |
 |---|---|
-| Nextcloud 31.0.12 | Local accounts for the household plus `admin`. `user_ldap` 1.22.0 is installed and disabled |
+| Nextcloud 31.0.12 | Local user accounts plus `admin`. `user_ldap` 1.22.0 is installed and disabled |
 | Proxmox VE 9.1.4 | Realms `pam` and `pve`, one user, `root@pam` |
 | Paperless-ngx 2.20.15, OpenWebUI 0.9.6, Grafana 13.0.2 | Local accounts each |
 | Jellyfin 10.11.11, Audiobookshelf 2.35.1, Calibre-Web 0.6.26 | Local accounts each |

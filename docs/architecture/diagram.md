@@ -25,115 +25,112 @@ in `ansible/inventory/` and in `docs/nodes/`.
 
 ## View 1 - Access policy
 
-Not a node list - the policy itself. Nodes are grouped by their Tailscale tag, and every arrow is an
-ACL rule from [`tailscale-acl.md`](../platform/tailscale-acl.md) with the ports it grants. Here the
-delivery direction and the connection direction are the same: the arrow is the request.
+Not a node list - the policy itself. Every arrow is an ACL rule from
+[`tailscale-acl.md`](../platform/tailscale-acl.md) with the ports it grants. Here the delivery
+direction and the connection direction are the same: the arrow is the request.
 
-Two properties are visible only as absences. Nothing points at `tag:client` or `tag:untrusted` -
-not even `tag:admin`, which reaches every infrastructure tag but no user device. And no arrow leaves
-`tag:database`: lxc260 answers, it never initiates.
+Since the rebuild of 2026-09-26 most grants name a host rather than a tag, because `tag:tier1` holds
+three services and reaching one of them should not mean reaching the other two. The diagram draws
+them the same way: a service box stands for one host, a tag box for every node carrying the tag.
 
 An ACL is a relation between sources and destinations, so it is drawn as one: sources on the left,
 destinations on the right, ports on the edge. It is split in two because the policy answers two
 different questions - what a person or device may reach, and what a service may reach on its own
-behalf. A tag that appears in both halves is still one tag.
+behalf.
 
 ### 1a - Access by people and devices
 
 ```mermaid
 flowchart LR
-  accTitle: Tailscale ACL - access granted to operator, hypervisor, client and untrusted tags
-  accDescr: Four source tags on the left with the destination tags and ports each may reach.
+  accTitle: Tailscale ACL - access granted to people's devices
+  accDescr: Operator workstations, operator phone, end-user devices, e-book reader, a remote TV and an external user through machine sharing, each with the services and ports it may reach.
 
-  ADMIN_S["tag:admin<br/>operator devices, lxc250"]
-  TIER0_S["tag:tier0<br/>Proxmox host"]
-  CLIENT_S["tag:client<br/>trusted user devices"]
-  UNTRUST_S["tag:untrusted<br/>household TVs"]
+  ADMIN_S["tag:admin<br/>operator workstations"]
+  MOBILE_S["tag:admin-mobile<br/>operator phone"]
+  CLIENT_S["tag:client<br/>phone and notebook"]
+  READER_S["tag:reader<br/>e-book reader"]
+  UNTRUST_S["tag:untrusted<br/>remote TV"]
+  EXTERNAL_S["external user<br/>machine sharing"]
 
-  FULL["every infrastructure and service tag<br/>tier0, tier1, tier2, ai-stack,<br/>database, storage, monitoring"]
-  ADMIN_D["tag:admin"]
-  T1_D["tag:tier1<br/>lxc210, lxc211, lxc220, lxc240"]
-  AI_D["tag:ai-stack<br/>lxc230"]
-  T2_D["tag:tier2<br/>vm100"]
+  INFRA["host 22, 8006<br/>vm102 22, 445<br/>lxc250 22<br/>lxc200 443, 9093, 9443"]
+  PVE["host 8006"]
+  NC["nextcloud 443"]
+  PL["paperless 443"]
+  CW["calibreweb 443"]
+  OW["openwebui 443"]
+  JF["vm100 8096<br/>Jellyfin"]
+  ABS["vm100 13378<br/>Audiobookshelf"]
 
-  ADMIN_S ==>|"all ports"| FULL
-  ADMIN_S ==>|"all ports"| ADMIN_D
-  TIER0_S ==>|"all ports"| FULL
-  CLIENT_S -->|"443"| T1_D
-  CLIENT_S -->|"443"| AI_D
-  CLIENT_S -->|"8096, 13378"| T2_D
-  UNTRUST_S -->|"8096, 13378"| T2_D
+  ADMIN_S ==> INFRA
+  ADMIN_S --> NC & PL & CW & OW & JF & ABS
+  MOBILE_S --> PVE & NC & PL & OW & JF & ABS
+  CLIENT_S --> NC & PL & JF & ABS
+  CLIENT_S -.->|"notebook only"| CW
+  READER_S --> CW & ABS
+  UNTRUST_S --> JF
+  EXTERNAL_S --> NC & JF & ABS
 
   classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff
   classDef untrust fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class ADMIN_S,TIER0_S,CLIENT_S src
-  class FULL,ADMIN_D,T1_D,T2_D,AI_D dst
+  class ADMIN_S,MOBILE_S,CLIENT_S,READER_S,EXTERNAL_S src
+  class INFRA,PVE,NC,PL,CW,OW,JF,ABS dst
   class UNTRUST_S untrust
 ```
 
-`tag:tier0` reaches the same set as `tag:admin`, with one difference the two separate arrows carry:
-admin may also reach admin, which is what lets the admin workstation and lxc250 talk to each
-other, and the hypervisor may not.
+The dotted arrow is a real grant with a narrower source: the rule names the client notebook's
+address, not the tag. Two tags are missing on purpose. `tag:isolated` has no rule at all, and no rule
+anywhere has a person's device as its destination, apart from Ollama on the admin desktop in 1b.
 
 ### 1b - Service to service, and monitoring
 
 ```mermaid
 flowchart LR
-  accTitle: Tailscale ACL - service-to-service and monitoring rules
-  accDescr: Service tags and the monitoring tag on the left with the ports they may reach on storage, database, media and operator tags.
+  accTitle: Tailscale ACL - service-to-service, control and monitoring rules
+  accDescr: The monitoring node, the control node, the hypervisor, Paperless and the AI stack on the left, with the ports they may reach.
 
-  T1_S["tag:tier1"]
-  T2_S["tag:tier2"]
-  AI_S["tag:ai-stack"]
   MON_S["tag:monitoring<br/>lxc200"]
+  CTL_S["tag:control<br/>lxc250"]
+  T0_S["tag:tier0<br/>Proxmox host"]
+  PL_S["paperless<br/>lxc211"]
+  DB_S["tag:database<br/>lxc260"]
+  AI_S["tag:ai-stack<br/>lxc230"]
 
+  SERVERS["every server tag<br/>and tag:control"]
+  PROBES["nextcloud, paperless,<br/>calibreweb, openwebui 443<br/>vm100 8096, 13378"]
   ST_D["tag:storage<br/>vm102"]
   DB_D["tag:database<br/>lxc260"]
-  T2_D["tag:tier2<br/>vm100"]
-  ADMIN_D["tag:admin"]
-  T1_D["tag:tier1"]
-  AI_D["tag:ai-stack"]
-  EVERY["every tag except<br/>client and untrusted"]
+  MON_D["tag:monitoring<br/>lxc200"]
+  OLL["vm100 11434<br/>admin desktop 11434"]
 
-  T1_S -->|"445"| ST_D
-  T1_S -->|"5432"| DB_D
-  T2_S -->|"445"| ST_D
-  AI_S -->|"445"| ST_D
-  AI_S -->|"5432"| DB_D
-  AI_S -->|"11434"| T2_D
-  AI_S -->|"11434"| ADMIN_D
-
-  MON_S -->|"9100"| EVERY
+  MON_S -->|"9100"| SERVERS
   MON_S -->|"9187"| DB_D
-  MON_S -->|"443"| T1_D
-  MON_S -->|"443"| AI_D
-  MON_S -->|"8096, 13378"| T2_D
+  MON_S -->|"probes"| PROBES
+  CTL_S ==>|"22"| SERVERS
+  CTL_S -->|"9443"| MON_D
+  T0_S -->|"445"| ST_D
+  PL_S -->|"5432"| DB_D
+  PL_S -.->|"19532"| MON_D
+  DB_S -.->|"19532"| MON_D
+  AI_S -->|"5432"| DB_D
+  AI_S -->|"11434"| OLL
 
   classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff
-  class T1_S,T2_S,AI_S,MON_S src
-  class ST_D,DB_D,T2_D,ADMIN_D,T1_D,AI_D,EVERY dst
+  class MON_S,CTL_S,T0_S,PL_S,DB_S,AI_S src
+  class SERVERS,PROBES,ST_D,DB_D,MON_D,OLL dst
 ```
 
-Three grants are left out because drawing them would cost more clarity than they carry. `tag:tier1`,
-`tag:tier2` and `tag:admin` may each reach themselves on all ports, which is what lets the admin
-workstation talk to lxc250 and the tier1 services talk among themselves. As self-loops they would
-add three arrows and no insight.
+The dotted arrows are the journal upload, an exercise rather than a path the platform depends on.
+Two tags never appear as a source: `tag:storage` and `tag:tier2`. vm102 and vm100 answer and never
+initiate over the tailnet - vm100 mounts its media over the LAN - and since Tailscale ACLs are
+deny-by-default that is enforced rather than merely observed. `tag:database` initiates exactly one
+thing, the journal upload.
 
-Two tags never appear as a source anywhere in the policy: `tag:database` and `tag:storage`. lxc260
-and vm102 answer, they never initiate, and since Tailscale ACLs are deny-by-default that is enforced
-rather than merely observed.
-
-The two monitoring rules are drawn separately on purpose. Port 9100 is node_exporter and reaches
-every tag except the two device tags; the 443, 8096 and 13378 grants are the blackbox probes, added after
-[KE-8](../platform/known-errors.md#ke-8) showed that a node can answer while the service on it is
-dead. One rule measures that the machine is alive, the other that the thing people use is.
-
-Two grants in the policy are deliberately not drawn, because drawing an unused rule as a live path
-would be the sort of over-generous picture this repository keeps correcting: `tag:client:443` and
-`tag:untrusted:443` both point at `tag:tier2`, and no tier2 node serves HTTPS - Calibre-Web is
-`tag:tier1` by the exception noted in the ACL document. The rules exist; the paths do not.
+The two monitoring grants are drawn separately on purpose. Port 9100 is node_exporter; the probes
+were added after [KE-8](../platform/known-errors.md#ke-8) showed that a node can answer while the
+service on it is dead. One measures that the machine is alive, the other that the thing people use
+is.
 
 ---
 

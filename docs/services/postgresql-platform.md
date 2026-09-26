@@ -186,8 +186,9 @@ hostssl <service>_db    <service>_user    <tailscale-ip-lxc###>/32    scram-sha-
 systemctl reload postgresql
 ```
 
-**4. Update Tailscale ACL policy** - verify the service's tag has `tag:database:5432` in the
-relevant ACL rule, or add one. See [tailscale-acl.md](../platform/tailscale-acl.md).
+**4. Update Tailscale ACL policy** - add a rule granting `tag:database:5432` to the service. Where
+the service shares its tag with others, as the tier1 services do, the rule names the service's host
+alias instead of the tag. See [tailscale-acl.md](../platform/tailscale-acl.md).
 
 **5. Register the tenant** - add a row to the Tenant Registry table below.
 
@@ -197,7 +198,7 @@ relevant ACL rule, or add one. See [tailscale-acl.md](../platform/tailscale-acl.
 | Service | Database | User | ACL Rule | pg_hba Entry | Status |
 |---|---|---|---|---|---|
 | OpenWebUI (CT230) | openwebui_db | openwebui_user | tag:ai-stack -> tag:database:5432 | hostssl entry, CT230 /32 | active |
-| Paperless-ngx (CT211) | paperless_db | paperless_user | tag:tier1 -> tag:database:5432 | hostssl entry, CT211 /32 | active |
+| Paperless-ngx (CT211) | paperless_db | paperless_user | host `paperless` -> tag:database:5432 | hostssl entry, CT211 /32 | active |
 | Vaultwarden (LXC240) | vaultwarden_db | vaultwarden_user | TBD | TBD | planned (migration from SQLite/CIFS; see KE-5) |
 
 ## Monitoring

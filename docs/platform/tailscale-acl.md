@@ -9,57 +9,76 @@ Principles:
 - LAN is not trusted
 - No public ingress / no port-forwarding
 - Access is identity-based and explicitly allowed
+- Every grant names a port and, where a tag holds more than one service, a host
 - Policy is managed as code (Tailscale ACL JSON), not ad-hoc per service
 
 Source of truth: The active policy is the Tailscale ACL JSON in the Tailscale admin console.
-This document mirrors the intended model. A sanitized version of the active policy is included below.
+This document mirrors it, sanitized: addresses are placeholders, and people appear by role, never
+by name, device name or e-mail address.
+
+The model was rebuilt on 2026-09-26 from a device-by-device review and from the flows measured on
+the fleet that day. Every rule below answers to one of two sources: a connection observed on a node,
+or a need the owner of a device stated. Anything else is closed.
 
 ---
 
 ## Tier Model
 
-Nodes are grouped into logical tiers based on trust level and responsibility.
+Nodes are grouped by trust level and responsibility. Servers carry one tag each; people's devices
+carry the tag of the role they are used in.
 
-| Tier | Tag | Purpose | Nodes |
-|---|---|---|---|
-| Admin | `tag:admin` | Human operator devices + management tooling | example-device |
-| Tier 0 | `tag:tier0` | Hypervisor / infrastructure control plane | example-device |
-| Tier 1 | `tag:tier1` | Security-critical services | example-device |
-| Tier 2 | `tag:tier2` | Application services | example-device |
-| Monitoring | `tag:monitoring` | Observability stack (Prometheus, Grafana) | example-device |
-| Storage | `tag:storage` | Persistent data layer | example-device |
-| Client | `tag:client` | Trusted end-user devices | example-device |
-| Database | `tag:database` | Central PostgreSQL platform service | example-device |
-| AI Stack | `tag:ai-stack` | AI services (OpenWebUI) | example-device |
-| Untrusted | `tag:untrusted` | Household TVs - not centrally administered | example-device |
+| Tag | Purpose | Nodes |
+|---|---|---|
+| `tag:tier0` | Hypervisor | Proxmox host |
+| `tag:storage` | Persistent data layer | vm102 |
+| `tag:tier1` | Security-critical services | lxc210 (Nextcloud), lxc211 (Paperless-ngx), lxc220 (Calibre-Web) |
+| `tag:tier2` | Application services | vm100 (Jellyfin, Audiobookshelf, Ollama fallback) |
+| `tag:ai-stack` | AI services | lxc230 (OpenWebUI) |
+| `tag:database` | Central PostgreSQL platform service | lxc260 |
+| `tag:monitoring` | Observability stack | lxc200 |
+| `tag:control` | Ansible control node | lxc250 |
+| `tag:admin` | Operator workstations | admin notebook, admin desktop |
+| `tag:admin-mobile` | Operator phone | one device |
+| `tag:client` | End-user devices | a phone and a notebook |
+| `tag:reader` | E-book reader | one device |
+| `tag:untrusted` | A TV outside the home network, administered by nobody here | one device |
+| `tag:isolated` | No access at all: Mullvad-only devices and quarantine | a streaming box |
 
-**Exception:** Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2`, despite
-being an application service by the table above. Confirmed intentional (2026-07-08);
-the specific technical rationale is being re-confirmed and is not yet documented here.
-The auto-import mechanism itself (`calibre-importer` role) has no verified dependency
-on tier1 access - it only needs the SMB port (445), which tier1 and tier2 grant
-identically. Household TVs do not need Calibre-Web access, so the loss of
-untrusted reachability (Rule 7 only grants `tag:tier2:443`) is not a regression.
+**Exception:** Calibre-Web (lxc220) is tagged `tag:tier1`, not `tag:tier2`, despite being an
+application service by the table above. Confirmed intentional (2026-07-08). Since the rebuild the
+tag decides less than it did: every grant to a tier1 service names the host, so the three tier1
+services are reachable independently of each other.
+
+**Why lxc250 has its own tag.** Until 2026-09-26 the control node shared `tag:admin` with the
+operator's devices, and `tag:admin:*` connected all of them on every port. The node that holds the
+vault password, the Ansible key and root on the hypervisor was reachable on every port from a phone,
+and could itself reach every port on the workstations. A human endpoint and an automation server are
+two identities with two jobs; each now gets only its own.
 
 ---
 
 ## Tag Ownership
 
 All tags are owned by `autogroup:admin` (Tailscale account administrators).
+Tags are assigned to nodes via the Tailscale admin console, and lxc250 advertises its own
+(`tailscale up --advertise-tags=tag:control`), so a re-registration asks for the same tag.
 
-Tags are assigned to nodes via the Tailscale admin console.
 ```json
 "tagOwners": {
-    "tag:admin":      ["autogroup:admin"],
-    "tag:tier0":      ["autogroup:admin"],
-    "tag:tier1":      ["autogroup:admin"],
-    "tag:tier2":      ["autogroup:admin"],
-    "tag:monitoring": ["autogroup:admin"],
-    "tag:storage":    ["autogroup:admin"],
-    "tag:client":     ["autogroup:admin"],
-    "tag:database":   ["autogroup:admin"],
-    "tag:ai-stack":   ["autogroup:admin"],
-    "tag:untrusted":  ["autogroup:admin"]
+    "tag:tier0":        ["autogroup:admin"],
+    "tag:storage":      ["autogroup:admin"],
+    "tag:tier2":        ["autogroup:admin"],
+    "tag:tier1":        ["autogroup:admin"],
+    "tag:ai-stack":     ["autogroup:admin"],
+    "tag:database":     ["autogroup:admin"],
+    "tag:monitoring":   ["autogroup:admin"],
+    "tag:control":      ["autogroup:admin"],
+    "tag:admin":        ["autogroup:admin"],
+    "tag:admin-mobile": ["autogroup:admin"],
+    "tag:client":       ["autogroup:admin"],
+    "tag:reader":       ["autogroup:admin"],
+    "tag:untrusted":    ["autogroup:admin"],
+    "tag:isolated":     ["autogroup:admin"]
 }
 ```
 
@@ -67,227 +86,246 @@ Tags are assigned to nodes via the Tailscale admin console.
 
 ## Host Aliases
 
-Named aliases for nodes referenced by IP in ACL rules.
+Where a tag holds several services, a grant names the host instead, so that reaching one service
+does not mean reaching its neighbours.
+
 ```json
 "hosts": {
-    "gpu-vm":    "<tailscale-ip-vm100>",
-    "nextcloud": "<tailscale-ip-lxc210>"
+    "gpu-vm":         "<tailscale-ip-vm100>",
+    "nextcloud":      "<tailscale-ip-lxc210>",
+    "paperless":      "<tailscale-ip-lxc211>",
+    "calibreweb":     "<tailscale-ip-lxc220>",
+    "openwebui":      "<tailscale-ip-lxc230>",
+    "bazzite":        "<tailscale-ip-admin-desktop>",
+    "client-notebook": "<tailscale-ip-client-notebook>"
 }
 ```
+
+An alias is an address, and a node keeps its address only while it stays registered. A node that
+is removed and added again gets a new one, and every rule naming its alias then points at nothing
+or at a stranger. Re-read this block after any re-registration.
 
 ---
 
 ## ACL Rules (Sanitized)
 
-### Rule 1 - Admin: full infrastructure access
+### Rule 1 - Monitoring: scrapes and service probes
 
-Admin nodes have unrestricted access to all infrastructure and service tiers.
-Admin does NOT have implicit access to client or untrusted devices.
+node_exporter on every server, postgres_exporter on the database, and the blackbox probes that
+check the services people actually use ([KE-8](known-errors.md#ke-8)). No monitoring grant reaches
+a person's device.
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:monitoring"],
+    "dst": [
+        "tag:tier0:9100", "tag:storage:9100", "tag:tier2:9100", "tag:tier1:9100",
+        "tag:ai-stack:9100", "tag:database:9100", "tag:control:9100",
+        "tag:database:9187",
+        "gpu-vm:8096", "gpu-vm:13378",
+        "nextcloud:443", "paperless:443", "calibreweb:443", "openwebui:443"
+    ]
+}
+```
+
+lxc200 also scrapes its own native exporter on its Tailscale address, port 9101. That works without
+a rule; measured 2026-09-26, both before and after the rebuild.
+
+### Rule 2 - Journal upload (exercise)
+
+The two nodes that opt into central log collection may reach the receiver on lxc200, and nothing
+else there ([exercise decision](../decisions/exercise-scope-before-terraform.md)). The rule names
+the Paperless host rather than `tag:tier1`, so Nextcloud and Calibre-Web cannot send.
+
+```json
+{
+    "action": "accept",
+    "src":    ["paperless", "tag:database"],
+    "dst":    ["tag:monitoring:19532"]
+}
+```
+
+### Rule 3 - Control node: SSH for Ansible, Prometheus API for the drift sweep
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:control"],
+    "dst": [
+        "tag:tier0:22", "tag:storage:22", "tag:tier2:22", "tag:tier1:22",
+        "tag:ai-stack:22", "tag:database:22", "tag:monitoring:22", "tag:control:22",
+        "tag:monitoring:9443"
+    ]
+}
+```
+
+`tag:control:22` is lxc250 reaching itself: the inventory addresses it by its Tailscale IP like
+every other node.
+
+### Rule 4 - Hypervisor: SMB from vm102
+
+Measured 2026-09-26: the host mounts eight shares from vm102, two of them over the tailnet and six
+over the LAN, where the `smb_guard` table on vm102 admits the host and vm100 only
+([samba.md](samba.md)). Nothing else the host does crosses the tailnet; guests are managed through
+`pct` and `qm` on the host itself.
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:tier0"],
+    "dst":    ["tag:storage:445"]
+}
+```
+
+### Rule 5 - Paperless-ngx: the platform database
+
+The only tier1 service with a database on lxc260. Nextcloud keeps MariaDB locally, Calibre-Web uses
+SQLite.
+
+```json
+{
+    "action": "accept",
+    "src":    ["paperless"],
+    "dst":    ["tag:database:5432"]
+}
+```
+
+### Rule 6 - AI stack: database and inference
+
+OpenWebUI reaches its database and two Ollama backends: the admin desktop as primary and vm100 as
+fallback ([ollama.md](../services/ollama.md)).
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:ai-stack"],
+    "dst":    ["tag:database:5432", "bazzite:11434", "gpu-vm:11434"]
+}
+```
+
+### Rule 7 - Admin workstations
+
+Derived from the workstation's own configuration and the documentation rather than from "admin
+means everything": SSH where an admin key exists (the host, vm102, vm100, lxc250), the web
+interfaces, and the SMB shares the notebook mounts. The LXCs other than lxc250 carry no admin key,
+only the Ansible key, so SSH to them would be an open port nobody can use; `pct exec` on the host is
+the path into them.
+
 ```json
 {
     "action": "accept",
     "src":    ["tag:admin"],
     "dst": [
-        "tag:admin:*",
-        "tag:tier0:*",
-        "tag:tier1:*",
-        "tag:tier2:*",
-        "tag:monitoring:*",
-        "tag:storage:*",
-        "tag:database:*",
-        "tag:ai-stack:*"
+        "tag:tier0:22", "tag:tier0:8006",
+        "tag:storage:22", "tag:storage:445",
+        "gpu-vm:22", "gpu-vm:8096", "gpu-vm:13378",
+        "tag:control:22",
+        "tag:monitoring:443", "tag:monitoring:9093", "tag:monitoring:9443",
+        "nextcloud:443", "paperless:443", "calibreweb:443", "openwebui:443"
     ]
 }
 ```
 
-Note: `tag:admin:*` was added to allow admin-to-admin communication
-(required when multiple admin-tagged nodes exist, e.g. admin workstation + devops LXC).
+Not granted: PostgreSQL from a workstation (nothing in the repository uses it), SPICE on 3128
+(consoles open in the browser through 8006), and any path between two admin devices.
 
-Note: The admin workstation carries `tag:admin` as an operator client device, not solely as an Ollama
-inference backend. Ollama access from LXC230 (ai-stack -> admin:11434) runs through this
-existing tag rather than a dedicated inference tag.
+### Rule 8 - Operator phone
 
-### Rule 1b - Monitoring: outbound scrape access
-
-Monitoring nodes can reach Node Exporter (port 9100) on all infrastructure and service tiers,
-plus postgres_exporter (port 9187) on the database tier.
-No other outbound access is granted.
-
-See: DD#11 in [design-decisions.md](../decisions/design-decisions.md)
+The phone held `tag:admin` so that the host could be shut down from it. It now reaches the Proxmox
+interface and the services its owner uses, and nothing else. The Proxmox side is meant to match: a
+dedicated user whose role holds only `Sys.PowerMgmt`, with a second factor, so a stolen phone can
+switch the host off and do nothing more. Until that user exists the login is still root's.
 
 ```json
 {
     "action": "accept",
-    "src":    ["tag:monitoring"],
+    "src":    ["tag:admin-mobile"],
     "dst": [
-        "tag:admin:9100",
-        "tag:tier0:9100",
-        "tag:tier1:9100",
-        "tag:tier2:9100",
-        "tag:monitoring:9100",
-        "tag:ai-stack:9100",
-        "tag:database:9100",
-        "tag:database:9187",
-        "tag:storage:9100"
+        "tag:tier0:8006",
+        "gpu-vm:8096", "gpu-vm:13378",
+        "nextcloud:443", "paperless:443", "openwebui:443"
     ]
 }
 ```
 
-Note: Tailscale ACLs are deny-by-default. Inbound access (admin -> monitoring) does not
-imply outbound access (monitoring -> targets). Pre-existing WireGuard tunnels can mask
-missing rules until the next connection reset (e.g. container restart). See DD#11 for
-the incident that exposed this.
+`openwebui:443` serves a mobile client for Open WebUI. Ollama's request log on vm100 over the
+preceding 30 days held requests from lxc230 only, none from the phone, which is how the client's
+path was established.
 
-### Rule 1c - Monitoring: outbound service-probe access (blackbox)
+### Rules 9 and 10 - End-user devices
 
-The monitoring node runs `blackbox_exporter` and probes service endpoints
-(KE-8 remediation: a node can be up while its service is dead). Beyond
-node_exporter (Rule 1b), it needs the service ports: media HTTP on `tier2`
-(Jellyfin 8096, Audiobookshelf 13378) and Tailscale-Serve HTTPS (443) on
-`tier1` (Paperless, Calibre-Web, Nextcloud) + `ai-stack` (OpenWebUI). Vaultwarden held a `tier1` tag until its node was stopped on 2026-09-01. The tag definition stays until the node itself is removed in phase 2.
+Nextcloud, Paperless-ngx, Jellyfin and Audiobookshelf from both devices; Calibre-Web from the
+notebook only, requested for use ahead of time.
 
-```json
-{
-    "action": "accept",
-    "src":    ["tag:monitoring"],
-    "dst": [
-        "tag:tier2:8096",
-        "tag:tier2:13378",
-        "tag:tier1:443",
-        "tag:ai-stack:443"
-    ]
-}
-```
-
-### Rule 2 - Tier 0 (Proxmox): workload access only
-
-The hypervisor can reach all workload tiers and storage.
-No access to clients or untrusted devices.
-```json
-{
-    "action": "accept",
-    "src":    ["tag:tier0"],
-    "dst": [
-        "tag:tier0:*",
-        "tag:tier1:*",
-        "tag:tier2:*",
-        "tag:monitoring:*",
-        "tag:ai-stack:*",
-        "tag:database:*",
-        "tag:storage:*"
-    ]
-}
-```
-
-### Rule 3 - Tier 1 (security-critical): strictly isolated
-
-Tier 1 nodes can communicate with other tier 1 nodes,
-access storage via SMB (port 445), and reach the database platform (port 5432).
-
-No access to tier 0, tier 2, clients, or untrusted.
-
-```json
-{
-    "action": "accept",
-    "src":    ["tag:tier1"],
-    "dst": [
-        "tag:tier1:*",
-        "tag:storage:445",
-        "tag:database:5432"
-    ]
-}
-```
-
-### Rule 4 - Tier 2 (application services): strictly isolated
-
-Same isolation model as tier 1.
-Tier 2 nodes can communicate with other tier 2 nodes
-and access storage via SMB (port 445) only.
-```json
-{
-    "action": "accept",
-    "src":    ["tag:tier2"],
-    "dst": [
-        "tag:tier2:*",
-        "tag:storage:445"
-    ]
-}
-```
-
-### Rule 5 - AI Stack: database and inference access
-
-AI stack nodes can access the PostgreSQL platform service, storage via SMB,
-and Ollama inference backends (admin workstation + VM100).
-```json
-{
-    "action": "accept",
-    "src":    ["tag:ai-stack"],
-    "dst": [
-        "tag:database:5432",
-        "tag:storage:445",
-        "tag:admin:11434",
-        "tag:tier2:11434"
-    ]
-}
-```
-
-### Rule 6 - Clients: explicit service access only
-
-Trusted client devices can access specific service ports only.
-No infrastructure access, no storage access.
 ```json
 {
     "action": "accept",
     "src":    ["tag:client"],
-    "dst": [
-        "gpu-vm:8096",
-        "gpu-vm:13378",
-        "tag:tier1:443",
-        "tag:tier2:443",
-        "tag:ai-stack:443"
-    ]
+    "dst":    ["nextcloud:443", "paperless:443", "gpu-vm:8096", "gpu-vm:13378"]
+},
+{
+    "action": "accept",
+    "src":    ["client-notebook"],
+    "dst":    ["calibreweb:443"]
 }
 ```
 
-Allowed services:
+### Rule 11 - E-book reader
 
-- Jellyfin (port 8096 on gpu-vm)
-- Audiobookshelf (port 13378 on gpu-vm)
-- Tier 1 HTTPS (port 443): Nextcloud, Calibre-Web
-- AI stack HTTPS (port 443): OpenWebUI
+Calibre-Web and Audiobookshelf. The device runs an Android release that no longer receives security
+updates and connects only when a book is downloaded.
 
-Note: Calibre-Web (LXC220) is tagged `tag:tier1`, not `tag:tier2` - see the
-Tier Model table caveat below. The `tag:tier2:443` grant in this rule is
-currently unused (no tier2 node serves HTTPS).
+```json
+{
+    "action": "accept",
+    "src":    ["tag:reader"],
+    "dst":    ["calibreweb:443", "gpu-vm:13378"]
+}
+```
 
-### Rule 7 - Untrusted: minimal access
+### Rule 12 - Untrusted: a TV outside the home network
 
-The `untrusted` tier is a fixed set of individually enumerated household TVs.
-"Untrusted" is a statement about *device administration*, not about the people:
-these are appliances nobody here manages, patches or controls, so they are
-kept off every infrastructure path and get media streaming only. The tier is not a
-guest-invite mechanism - devices are tagged individually by the admin
-(`tagOwners: autogroup:admin`), and a device cannot self-assign the tag.
+"Untrusted" is a statement about device administration, not about the people: the TV stands outside
+the home network, nobody here manages or patches it, and its Android release is years past its last
+update. It gets Jellyfin and nothing else, and no rule anywhere lets another node reach it. Key
+expiry is disabled for this device on purpose, because nobody on site could re-authenticate it; the
+single grant is what carries the risk instead. The tier is not a guest-invite mechanism - devices are
+tagged individually by the admin (`tagOwners: autogroup:admin`).
+
 ```json
 {
     "action": "accept",
     "src":    ["tag:untrusted"],
-    "dst": [
-        "gpu-vm:8096",
-        "gpu-vm:13378",
-        "tag:tier2:443"
-    ]
+    "dst":    ["gpu-vm:8096"]
 }
 ```
 
-Allowed services:
+### Rule 13 - External user, through machine sharing
 
-- Jellyfin (port 8096 on gpu-vm)
-- Audiobookshelf (port 13378 on gpu-vm)
+One external user reaches Jellyfin, Audiobookshelf and Nextcloud Talk. Until 2026-09-26 that user's
+devices were members of this tailnet; now vm100 and lxc210 are shared into the user's own tailnet
+instead. Tailscale's sharing documentation: "Sharing gives the recipient access to only the shared
+machine in your tailnet, and nothing else", and the shared machine stays subject to this policy. The
+user's devices no longer sit in this network, cannot be added to it, and a rule written too broadly
+here cannot reach them.
 
-Note: `tag:tier2:443` is granted but currently unused - Calibre-Web is `tag:tier1`
-(see the Tier Model exception above), not tier2, and untrusted devices do not need
-access to it.
+```json
+{
+    "action": "accept",
+    "src":    ["<external-user-email>"],
+    "dst":    ["gpu-vm:8096", "gpu-vm:13378", "nextcloud:443"]
+}
+```
+
+The rule names the user's account rather than `autogroup:shared`, so a later share with somebody else
+does not inherit these rights. A grant to an account covers all of its devices; per-device limits
+would require keeping those devices in this tailnet, which is the arrangement this replaced.
+
+### `tag:isolated` - no rule
+
+A device carrying it can reach nothing and be reached by nothing. It exists for devices that use
+the tailnet for a Mullvad exit node only, and as a quarantine tag.
 
 ---
 
@@ -295,29 +333,52 @@ access to it.
 
 ### Mullvad Exit Nodes
 
-Selected nodes are configured to route internet traffic through Mullvad VPN exit nodes via Tailscale's built-in Mullvad integration.
+Five devices may use Tailscale's Mullvad exit nodes: both admin workstations, the operator phone,
+an end-user phone and a streaming box.
+
 ```json
 "nodeAttrs": [
-    {"target": ["<tailscale-ip-node-a>"], "attr": ["mullvad"]},
-    {"target": ["<tailscale-ip-node-b>"], "attr": ["mullvad"]}
+    {"target": ["<tailscale-ip-admin-notebook>"],   "attr": ["mullvad"]},
+    {"target": ["<tailscale-ip-admin-desktop>"],    "attr": ["mullvad"]},
+    {"target": ["<tailscale-ip-operator-phone>"],   "attr": ["mullvad"]},
+    {"target": ["<tailscale-ip-client-phone>"],     "attr": ["mullvad"]},
+    {"target": ["<tailscale-ip-streaming-box>"],    "attr": ["mullvad"]}
 ]
 ```
+
+Two things about this block were measured rather than read. The admin desktop had a Mullvad exit
+node active on 2026-09-26 with no `autogroup:internet` grant in the policy, so the attribute alone
+is enough for Mullvad, although Tailscale's own exit nodes need that grant. And the targets are
+addresses, which Tailscale's policy reference does not list as a `nodeAttrs` selector (it names tags,
+users, groups and `*`); the form was kept because it is the one that demonstrably works. Three
+targets named addresses no device held any more and were removed in the rebuild - a new device
+receiving one of them would have inherited the attribute.
 
 ---
 
 ## Access Matrix (Summary)
 
-| Source (rows) / Destination (columns) | admin | tier0 | tier1 | tier2 | monitoring | ai-stack | database | storage | client | untrusted |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **admin** | all | all | all | all | all | all | all | all | - | - |
-| **tier0** | - | all | all | all | all | all | all | all | - | - |
-| **tier1** | - | - | all | - | - | - | 5432 | 445 | - | - |
-| **tier2** | - | - | - | all | - | - | - | 445 | - | - |
-| **monitoring** | 9100 | 9100 | 9100, 443 | 9100, 8096, 13378 | 9100 | 9100, 443 | 9100, 9187 | 9100 | - | - |
-| **database** | - | - | - | - | - | - | - | - | - | - |
-| **ai-stack** | 11434 | - | - | 11434 | - | - | 5432 | 445 | - | - |
-| **client** | - | - | 443 | 443 + gpu-vm:8096,13378 | - | 443 | - | - | - | - |
-| **untrusted** | - | - | - | 443 + gpu-vm:8096,13378 | - | - | - | - | - | - |
+Rows are sources, columns destinations. Host names in a cell mean that only that service is reached.
+
+| Source | tier0 | storage | tier1 | tier2 (vm100) | ai-stack | database | monitoring | control |
+|---|---|---|---|---|---|---|---|---|
+| **monitoring** | 9100 | 9100 | 9100; 443 on all three | 9100, 8096, 13378 | 9100, 443 | 9100, 9187 | - | 9100 |
+| **control** | 22 | 22 | 22 | 22 | 22 | 22 | 22, 9443 | 22 |
+| **tier0** | - | 445 | - | - | - | - | - | - |
+| **tier1** | - | - | - | - | - | paperless: 5432 | paperless: 19532 | - |
+| **ai-stack** | - | - | - | 11434 | - | 5432 | - | - |
+| **database** | - | - | - | - | - | - | 19532 | - |
+| **tier2 and storage** | - | - | - | - | - | - | - | - |
+| **admin** | 22, 8006 | 22, 445 | 443 on all three | 22, 8096, 13378 | 443 | - | 443, 9093, 9443 | 22 |
+| **admin-mobile** | 8006 | - | nextcloud, paperless: 443 | 8096, 13378 | 443 | - | - | - |
+| **client** | - | - | nextcloud, paperless: 443; calibreweb from the notebook | 8096, 13378 | - | - | - | - |
+| **reader** | - | - | calibreweb: 443 | 13378 | - | - | - | - |
+| **untrusted** | - | - | - | 8096 | - | - | - | - |
+| **external user (shared)** | - | - | nextcloud: 443 | 8096, 13378 | - | - | - | - |
+| **isolated** | - | - | - | - | - | - | - | - |
+
+Two columns are left out because every cell in them is empty for the servers: no rule targets
+`tag:admin` except `ai-stack -> bazzite:11434`, and no rule targets any other device tag at all.
 
 ---
 
@@ -325,13 +386,14 @@ Selected nodes are configured to route internet traffic through Mullvad VPN exit
 
 Administrative access is separated from service-to-service communication.
 
-- Human operators are authenticated via Tailscale identity (user-based auth)
-- Service-to-service communication is controlled via tags
-- Administrative privileges are not granted implicitly to service tags
+- People's devices are tagged by role and reach services by host and port
+- The control node is a separate identity from the operator's devices
+- Service-to-service communication is controlled via tags, and via host aliases where a tag holds
+  several services
 - Break-glass access is documented and intentionally minimal
 
-Note: Client devices (admin workstation, admin laptop) are intentionally absent from `docs/nodes/`.
-They are documented only via their Tailscale tag assignment. Node docs for client devices are planned.
+Note: the operator's workstations are intentionally absent from `docs/nodes/`. They are documented
+through their tag and through the hardening notes in the [remediation plan](remediation-plan.md).
 
 ---
 
@@ -339,11 +401,13 @@ They are documented only via their Tailscale tag assignment. Node docs for clien
 
 For every new service that must be reachable remotely or must reach other services:
 
-1. Decide the node tag(s) for this service
-2. Update Tailscale ACL JSON (allow rules)
-3. Verify connectivity (only the intended ports/targets)
-4. Ensure the service itself binds only to Tailscale (or loopback + Tailscale proxy)
-5. Document the access model in the service doc
+1. Decide the node tag(s) for this service, and whether a host alias is needed because the tag
+   already holds another service
+2. Update the Tailscale ACL JSON (allow rules)
+3. Add a `tests` entry for the new path and for one path that must stay closed
+4. Verify connectivity with a TCP probe from the source node, both directions of the claim
+5. Ensure the service itself binds only to Tailscale (or loopback + Tailscale proxy)
+6. Document the access model in the service doc
 
 ---
 
@@ -358,6 +422,11 @@ Default rules:
 
 Both approaches are valid; choose per service based on operational needs.
 
+The ACL cannot see the LAN. Services that listen on every address - Jellyfin and Audiobookshelf by
+design, Nextcloud's Apache and sshd on most nodes by exception - stay reachable from the home
+network and, over IPv6, from any address in its prefix. The router admits nothing inbound from the
+internet (measured on 2026-09-26: no port shares, no exposed host, no MyFRITZ! shares).
+
 ---
 
 ## Policy Tests
@@ -366,67 +435,74 @@ The tailnet policy file is HuJSON and accepts a `tests` block. Each entry names 
 identity and lists destinations that must be reachable and destinations that must not be;
 when an assertion fails, Tailscale rejects the edited policy on save rather than applying it.
 
-That turns the access matrix above from a description into something enforced. Until
-2026-09-08 this model was verified exactly once, by hand, with eight TCP probes during the
-2026-08-17 audit - and every rule change since then has been unverified in the sense that
-nothing re-ran those probes. The block below is those probes written as assertions, extended
-to cover the denials the matrix implies. It is proposed rather than deployed: the policy lives
-in the admin console, so this is applied by pasting it there, and the save itself is the test
-run.
+Deployed on 2026-09-26 with the rebuilt policy: eighteen entries, one for each role and for the
+tier1 hosts individually. Until then the block was a proposal in this document, and the model had
+been verified by hand once, during the 2026-08-17 audit.
 
-Deny assertions carry the weight here. An allow that breaks announces itself the next time
-somebody uses the service; a deny that breaks is silent, and the tier model exists precisely
-to stop `tag:tier2` from reaching the database and `tag:untrusted` from reaching anything on
-`tag:tier1`.
+Deny assertions carry the weight here. An allow that breaks announces itself the next time somebody
+uses the service; a deny that breaks is silent. Where a rule's source is a host alias, the test names
+the host rather than the tag, because a test from `tag:tier1` would say nothing about which of the
+three tier1 nodes it describes.
 
 ```json
 "tests": [
-    {
-        "src": "tag:tier2",
-        "deny": ["tag:database:5432", "tag:tier1:443", "tag:monitoring:9090"],
-        "accept": ["tag:storage:445"]
-    },
-    {
-        "src": "tag:tier1",
-        "deny": ["tag:tier2:443", "tag:admin:11434"],
-        "accept": ["tag:database:5432", "tag:storage:445"]
-    },
-    {
-        "src": "tag:untrusted",
-        "deny": ["tag:tier1:443", "tag:storage:445", "tag:database:5432"],
-        "accept": ["tag:tier2:443", "gpu-vm:8096"]
-    },
-    {
-        "src": "tag:client",
-        "deny": ["tag:storage:445", "tag:database:5432"],
-        "accept": ["tag:tier1:443", "tag:tier2:443", "gpu-vm:8096"]
-    },
-    {
-        "src": "tag:monitoring",
-        "deny": ["tag:database:5432", "tag:storage:445"],
-        "accept": ["tag:database:9187", "tag:database:9100", "tag:tier1:9100", "tag:admin:9100"]
-    },
-    {
-        "src": "tag:ai-stack",
-        "deny": ["tag:tier1:443", "tag:tier2:443"],
-        "accept": ["tag:database:5432", "tag:admin:11434", "tag:storage:445"]
-    },
-    {
-        "src": "tag:database",
-        "deny": ["tag:storage:445", "tag:admin:22", "tag:tier1:443"]
-    },
-    {
-        "src": "tag:admin",
-        "accept": ["tag:tier0:22", "tag:tier1:443", "tag:database:5432", "tag:storage:445", "tag:monitoring:9093"]
-    }
+    {"src": "tag:admin",
+     "accept": ["tag:tier0:22", "tag:tier0:8006", "tag:storage:445", "tag:control:22", "tag:monitoring:9443", "nextcloud:443"],
+     "deny":   ["tag:database:5432", "tag:tier1:22", "tag:tier0:3128", "tag:admin:22", "gpu-vm:11434"]},
+    {"src": "tag:control",
+     "accept": ["tag:tier0:22", "tag:tier1:22", "tag:database:22", "tag:control:22", "tag:monitoring:9443"],
+     "deny":   ["tag:admin:22", "tag:storage:445", "tag:tier0:8006", "tag:database:5432"]},
+    {"src": "tag:monitoring",
+     "accept": ["tag:tier0:9100", "tag:control:9100", "tag:database:9187", "nextcloud:443", "gpu-vm:8096"],
+     "deny":   ["tag:database:5432", "tag:storage:445", "tag:tier0:22", "tag:admin:9100"]},
+    {"src": "tag:tier0",
+     "accept": ["tag:storage:445"],
+     "deny":   ["tag:tier1:22", "tag:database:5432", "tag:monitoring:443"]},
+    {"src": "paperless",
+     "accept": ["tag:database:5432", "tag:monitoring:19532"],
+     "deny":   ["nextcloud:443", "tag:storage:445", "tag:monitoring:22"]},
+    {"src": "nextcloud",
+     "deny":   ["tag:database:5432", "paperless:443", "tag:storage:445", "tag:monitoring:19532"]},
+    {"src": "calibreweb",
+     "deny":   ["nextcloud:443", "tag:database:5432", "tag:storage:445"]},
+    {"src": "tag:ai-stack",
+     "accept": ["tag:database:5432", "bazzite:11434", "gpu-vm:11434"],
+     "deny":   ["tag:storage:445", "nextcloud:443", "bazzite:22"]},
+    {"src": "tag:tier2",
+     "deny":   ["tag:storage:445", "tag:database:5432", "tag:tier0:22"]},
+    {"src": "tag:database",
+     "accept": ["tag:monitoring:19532"],
+     "deny":   ["tag:storage:445", "tag:monitoring:22", "tag:tier1:443"]},
+    {"src": "tag:storage",
+     "deny":   ["tag:tier0:22", "tag:database:5432"]},
+    {"src": "tag:admin-mobile",
+     "accept": ["tag:tier0:8006", "openwebui:443", "gpu-vm:8096", "paperless:443"],
+     "deny":   ["tag:tier0:22", "tag:control:22", "tag:monitoring:443", "tag:storage:445"]},
+    {"src": "tag:client",
+     "accept": ["nextcloud:443", "paperless:443", "gpu-vm:8096", "gpu-vm:13378"],
+     "deny":   ["openwebui:443", "tag:monitoring:443", "tag:tier0:8006", "tag:storage:445"]},
+    {"src": "client-notebook",
+     "accept": ["calibreweb:443"]},
+    {"src": "tag:reader",
+     "accept": ["calibreweb:443", "gpu-vm:13378"],
+     "deny":   ["gpu-vm:8096", "nextcloud:443", "paperless:443"]},
+    {"src": "tag:untrusted",
+     "accept": ["gpu-vm:8096"],
+     "deny":   ["gpu-vm:13378", "nextcloud:443", "calibreweb:443"]},
+    {"src": "tag:isolated",
+     "deny":   ["gpu-vm:8096", "tag:storage:445", "nextcloud:443"]},
+    {"src": "<external-user-email>",
+     "accept": ["gpu-vm:8096", "gpu-vm:13378", "nextcloud:443"],
+     "deny":   ["paperless:443", "calibreweb:443", "tag:storage:445", "gpu-vm:22"]}
 ]
 ```
 
-Two limits worth stating. The tests check the policy, not the fleet: a service that binds the
-wrong address is still reachable by anything the kernel lets through, which is why
-[`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md) had to answer port 445
-one layer further down. And a tag with no node carrying it passes every assertion about it
-without ever being exercised.
+The tests check the policy, not the fleet. After the policy was saved and the devices re-tagged,
+the fleet was probed as well: 70 TCP connections from the ten servers and the admin notebook, every
+allowed path open and every denied one closed, all ten nodes reachable by Ansible and all nineteen
+Prometheus targets up. A service that binds the wrong address is still reachable by anything the
+kernel lets through, which is why [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)
+had to answer port 445 one layer further down.
 
 ## Documentation Rule
 
@@ -438,8 +514,9 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-09-26 | Policy rebuilt. New tags `tag:control`, `tag:admin-mobile`, `tag:reader`, `tag:isolated`; `tag:client` narrowed to named services; `tag:gaming` and `tag:maintenance` retired. Grants by host and port; no `*` grant left; tier1 lateral access, tier0 workload access and unused SMB grants removed; journal upload added; an external user moved to machine sharing; three stale Mullvad targets dropped; eighteen tests deployed | Device-by-device review against measured flows; see the rules above |
 | 2026-09-01 | Documentation only, no policy change: Vaultwarden removed from the tier1 service lists in Rule 1c and Rule 6. The `tag:tier1` definition stays, and so does the node's tag assignment in the Tailscale console, until the container is removed in phase 2 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)) |
-| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (household TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
+| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
 | (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
 | 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
 | 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
@@ -453,4 +530,3 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 | 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443->8000, paperless_db@lxc260, E2E verified | Paperless-ngx operational and documented |
 | 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on lxc260 |
 | 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
-

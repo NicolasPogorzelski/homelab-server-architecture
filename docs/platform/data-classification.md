@@ -110,13 +110,13 @@ single host with no high availability by design; a hardware loss is bounded by p
 current hardware order has a lead time measured in weeks. The per-service objectives above assume
 functioning hardware. The recovery-oriented architecture is the accepted trade: cheap and simple in
 exchange for an outage measured in days rather than minutes, which is the correct trade for a
-platform whose consumers are one household.
+platform with a small, closed set of users.
 
 ## Data protection assessment
 
 The platform processes personal data: identity documents and correspondence in Paperless, files and
-contacts in Nextcloud, credentials in Vaultwarden, and viewing activity for two household members
-who use the media services from their own televisions.
+contacts in Nextcloud, credentials in Vaultwarden, and the viewing activity of the people
+who use the media services.
 
 **Article 2(2)(c) GDPR exempts processing "by a natural person in the course of a purely personal
 or household activity"**, and that is what this is. The assessment is recorded rather than assumed,
@@ -124,11 +124,15 @@ because the exemption is narrower than it is usually taken to be and this platfo
 two of its edges:
 
 - **It ends the moment access is granted outside the household.** Sharing a Nextcloud folder with
-  someone outside it, or opening a service to a friend, moves the processing out of the exemption -
-  and would do so silently, since nothing in the platform would behave differently.
+  someone outside it, or opening a service to anyone outside it, moves the processing out of the
+  exemption - and would do so silently, since nothing in the platform would behave differently.
+  Since 2026-09-26 the [ACL model](tailscale-acl.md) records one external user with access to
+  Jellyfin, Audiobookshelf and Nextcloud through machine sharing, access that existed before that
+  date as tailnet membership. By this document's own criterion the assessment for those three
+  services is due again and has not been redone.
 - **It never covers the security obligation in practice.** Even where the exemption applies, the
-  data belongs to identifiable people who did not choose this platform's controls. The household
-  members did not consent to a threat model; they simply watch television.
+  data belongs to identifiable people who did not choose this platform's controls. The other users
+  did not consent to a threat model; they simply use the services.
 
 Treated here as a design constraint rather than a legal question: the C1 rows are handled as though
 Article 32 applied, which is also what their loss consequences demand independently.
