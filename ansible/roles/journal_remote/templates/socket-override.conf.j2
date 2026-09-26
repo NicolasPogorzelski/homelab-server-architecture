@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+#
+# EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
+#
+# The package listens on port 19532 on every address. The empty ListenStream=
+# drops that, and the second line binds the Tailscale address only. FreeBind lets
+# systemd bind it at boot before tailscaled has assigned it, so the socket does
+# not depend on Tailscale being up first.
+[Socket]
+ListenStream=
+ListenStream={{ journal_remote_listen_address }}:{{ journal_remote_port }}
+FreeBind=yes
