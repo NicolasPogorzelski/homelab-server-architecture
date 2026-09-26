@@ -2,9 +2,11 @@
 #
 # EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
 #
-# The packaged unit listens on the wildcard. ExecStart is cleared first because
-# systemd appends otherwise and the daemon would be started twice, the second
-# time on the address the package chose.
+# The packaged unit runs with PrivateNetwork=yes and requires its socket unit,
+# so it cannot bind an address itself: it takes the listening socket systemd
+# hands it as fd 3. The address is pinned in the socket's drop-in. ExecStart is
+# cleared first because systemd appends otherwise, and --listen-http replaces
+# the package's --listen-https because the tailnet already encrypts.
 [Service]
 ExecStart=
-ExecStart=/lib/systemd/systemd-journal-remote --listen-http={{ journal_remote_listen_address }}:{{ journal_remote_port }} --output={{ journal_remote_dir }}/
+ExecStart=/lib/systemd/systemd-journal-remote --listen-http=-3 --output={{ journal_remote_dir }}/

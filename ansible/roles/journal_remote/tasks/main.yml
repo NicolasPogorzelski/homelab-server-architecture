@@ -57,15 +57,18 @@
       WantedBy=timers.target
   notify: Reload systemd
 
-- name: Create the drop-in directory
+- name: Create the drop-in directories
   ansible.builtin.file:
-    path: /etc/systemd/system/systemd-journal-remote.service.d
+    path: "/etc/systemd/system/{{ item }}.d"
     state: directory
     owner: root
     group: root
     mode: "0755"
+  loop:
+    - systemd-journal-remote.service
+    - systemd-journal-remote.socket
 
-- name: Bind the receiver to the Tailscale address
+- name: Hand the receiver its socket from systemd
   ansible.builtin.template:
     src: override.conf.j2
     dest: /etc/systemd/system/systemd-journal-remote.service.d/override.conf
@@ -76,11 +79,20 @@
     - Reload systemd
     - Restart journal-remote
 
-# The packaged socket unit is what listens on the wildcard. Leaving it enabled
-# beside a service bound to one address means systemd activates the socket
-# version on first connection and the override is bypassed - the bind rule
-# defeated by a unit nobody looked at.
-#
+# The packaged socket listens on the wildcard, and the service cannot run
+# without it: it requires the socket unit and has no network of its own. So the
+# socket stays, and its address is pinned instead.
+- name: Bind the socket to the Tailscale address
+  ansible.builtin.template:
+    src: socket-override.conf.j2
+    dest: /etc/systemd/system/systemd-journal-remote.socket.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart journal-remote
+
 # Under --check the package above was not installed, so on a first run none of
 # these units exist and systemd_service fails the play. The role is in the weekly
 # drift sweep, which runs in check mode; each unit task asks systemd first.
@@ -95,21 +107,26 @@
   failed_when: false
   check_mode: false
 
-- name: Disable the packaged wildcard socket
+# daemon_reload here rather than waiting for the handler: the socket must not
+# start, even for the seconds until the flush, without its pinned address.
+- name: Enable and start the socket
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.socket
-    enabled: false
-    state: stopped
-    masked: true
+    daemon_reload: true
+    masked: false
+    enabled: true
+    state: started
   when: "'systemd-journal-remote.socket' in journal_remote_unit_files.stdout or not ansible_check_mode"
 
 - name: Flush handlers before reading the bind back
   ansible.builtin.meta: flush_handlers
 
-- name: Enable and start the receiver
+# Enabling the service would only enable the socket again (its [Install]
+# section is Also=), so it is started, not enabled. After a reboot the socket
+# starts it on the first connection.
+- name: Start the receiver
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.service
-    enabled: true
     state: started
   when: "'systemd-journal-remote.service' in journal_remote_unit_files.stdout or not ansible_check_mode"
 

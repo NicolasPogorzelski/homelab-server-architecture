@@ -3,11 +3,28 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
-- name: Restart journal-remote
+# A socket cannot be restarted while its service holds it: systemd refuses to
+# start a socket whose service is still active. So the service stops first, the
+# socket restarts onto its new address, and the service starts on the new fd.
+# Handlers run in the order listed here. A restart proves nothing under --check,
+# and on a node without the package the units do not exist yet.
+- name: Stop journal-remote
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.service
+    state: stopped
+  listen: Restart journal-remote
+  when: not ansible_check_mode
+
+- name: Restart the journal-remote socket
+  ansible.builtin.systemd_service:
+    name: systemd-journal-remote.socket
     state: restarted
-  # A check run notifies this handler whenever a file task would change, and on
-  # a node without the package the unit does not exist yet, so the restart fails
-  # the play. A restart proves nothing under --check; the real run still does it.
+  listen: Restart journal-remote
+  when: not ansible_check_mode
+
+- name: Start journal-remote
+  ansible.builtin.systemd_service:
+    name: systemd-journal-remote.service
+    state: started
+  listen: Restart journal-remote
   when: not ansible_check_mode
