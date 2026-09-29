@@ -18,7 +18,7 @@ the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/
 ```mermaid
 flowchart TB
   Admin(["Admin devices"])
-  TVs(["Household TVs"])
+  TVs(["Remote TVs"])
 
   TS["Tailscale overlay<br/>identity-based ACL, tier model<br/>no port-forwarding, no public reverse proxy"]
 

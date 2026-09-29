@@ -30,9 +30,10 @@ Config, cache, and metadata use local persistent volumes on VM100.
 
 | Source | Port | Access |
 |---|---|---|
-| `tag:client` | 8096 | Allowed |
-| `tag:untrusted` | 8096 | Allowed |
-| `tag:admin`, `tag:tier0` | all | Allowed |
+| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:untrusted` | 8096 | Allowed |
+| One external user through machine sharing | 8096 | Allowed |
+| `tag:monitoring` | 8096 | Allowed (blackbox probe) |
+| `tag:reader`, `tag:tier0`, every other tag | 8096 | Denied |
 
 ## CUDA Watchdog
 

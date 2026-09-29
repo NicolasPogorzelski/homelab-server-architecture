@@ -59,7 +59,7 @@ still produces a valid gzip member, which restores without error into empty tabl
 port 5433 on the first of each month, asserting dump integrity, restore success and non-empty key
 tables. The MariaDB chain has a documented restore procedure but no scheduled test yet.
 
-**One source has no export at all.** Vaultwarden holds every household credential and stores them in
+**One source has no export at all.** Vaultwarden holds every credential stored on the platform and stores them in
 an SQLite file on a CIFS mount. Copying that file while the service runs is a bet on timing, not a
 backup, which is why the arrow to the share is dotted. Its data reaches the pool only as live files,
 protected by parity. That is the last open half of Tier 1 item 3.

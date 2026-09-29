@@ -73,6 +73,12 @@ OpenWebUI connects to Ollama inference backends via Tailnet.
 
 Backend URLs are configured in OpenWebUI Admin Panel -> Settings -> Connections -> Ollama API.
 
+Measured 2026-09-26 in OpenWebUI's own configuration, the list differs from this table: it holds
+`host.docker.internal:11434` (lxc230 itself, where nothing listens), vm100, and an address the admin
+desktop held before its reinstallation. The primary backend has therefore been unreachable since
+that reinstallation, and vm100 answered every request. The list is to be corrected once Ollama runs
+on the desktop again.
+
 See: [Ollama Service](./ollama.md)
 
 ---

@@ -81,7 +81,7 @@ su - devops
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up --advertise-tags=tag:admin
+sudo tailscale up --advertise-tags=tag:control
 ```
 
 Authorize the new node in the Tailscale admin console.

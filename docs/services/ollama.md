@@ -12,7 +12,7 @@ Two inference nodes are operational:
 | Node | Hardware | Role | Tag |
 |---|---|---|---|
 | VM100 | NVIDIA RTX 2070 (8GB VRAM) | Backup | `tag:tier2` |
-| admin workstation | AMD RX 7900 XT (20GB VRAM) | Primary | `tag:admin` |
+| admin desktop | AMD RX 7900 XT (20GB VRAM) | Primary, not running (see below) | `tag:admin` |
 
 ## Deployment - Current State
 
@@ -27,8 +27,11 @@ Two inference nodes are operational:
 
 ### Admin Workstation (Primary)
 
-- **Status: still pending, re-verified 2026-08-17** (no `ollama` binary and no active unit on the
-  workstation). Two months on, this is worth reading as a decision rather than a to-do: ACL Rule 5
+- **Status: still pending, re-verified 2026-09-26** on the desktop that now runs Bazzite: no
+  `ollama` process, unit or container, and nothing listening on 11434. OpenWebUI's configured
+  backend for it pointed at an address the desktop held before its reinstallation, so every request
+  since then has been served by vm100. Earlier reading, 2026-08-17 (no `ollama` binary and no
+  active unit on the workstation): Two months on, this is worth reading as a decision rather than a to-do: ACL Rule 5
   grants `tag:ai-stack` reach to `tag:admin:11434` for a backend that does not exist, and
   `tag:admin` has since grown to include more devices than it did when the rule was written. Either
   install it or drop the grant - a standing allow to a port nothing listens on is the kind of rule
@@ -84,8 +87,12 @@ Context window note: Context is configured per model via Modelfiles.
 
 | Node | Bind Address | Allowed Sources |
 |---|---|---|
-| VM100 | `<tailscale-ip-vm100>:11434` | `tag:ai-stack`, `tag:admin` |
-| admin workstation | `<tailscale-ip-admin-workstation>:11434` | `tag:ai-stack`, `tag:admin` |
+| VM100 | `<tailscale-ip-vm100>:11434` | `tag:ai-stack` |
+| admin desktop | `<tailscale-ip-admin-desktop>:11434` | `tag:ai-stack` |
+
+Since the ACL rebuild of 2026-09-26 only OpenWebUI reaches either backend; the grant names the
+admin desktop's host alias instead of `tag:admin`, so no other operator device is opened. Measured
+the same day on vm100: every request in the preceding 30 days came from lxc230.
 
 ## Known Issues / Open Items
 
