@@ -63,7 +63,8 @@ scrape_configs:
   {% endfor %}
 
   # Blackbox: service-level HTTP probes (KE-8 remediation).
-  # Jellyfin + Audiobookshelf bind directly to a port on vm100.
+  # Jellyfin + Audiobookshelf bind directly to a port on vm100; llama-server is reached
+  # through tailscale serve on the same address.
   - job_name: "blackbox-http"
     metrics_path: /probe
     params:
@@ -75,6 +76,10 @@ scrape_configs:
       - targets: ["http://{{ hostvars['vm100']['ansible_host'] }}:13378"]
         labels:
           service: audiobookshelf
+      # llama-server's router answers /health itself; the probe never loads a model.
+      - targets: ["http://{{ hostvars['vm100']['ansible_host'] }}:8080/health"]
+        labels:
+          service: llama-server
     relabel_configs:
       # The probe target (URL) starts in __address__; move it to the module param.
       - source_labels: [__address__]

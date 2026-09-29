@@ -32,7 +32,7 @@ carry the tag of the role they are used in.
 | `tag:tier0` | Hypervisor | Proxmox host |
 | `tag:storage` | Persistent data layer | vm102 |
 | `tag:tier1` | Security-critical services | lxc210 (Nextcloud), lxc211 (Paperless-ngx), lxc220 (Calibre-Web) |
-| `tag:tier2` | Application services | vm100 (Jellyfin, Audiobookshelf, Ollama fallback) |
+| `tag:tier2` | Application services | vm100 (Jellyfin, Audiobookshelf, LLM fallback) |
 | `tag:ai-stack` | AI services | lxc230 (OpenWebUI) |
 | `tag:database` | Central PostgreSQL platform service | lxc260 |
 | `tag:monitoring` | Observability stack | lxc200 |
@@ -123,11 +123,15 @@ a person's device.
         "tag:tier0:9100", "tag:storage:9100", "tag:tier2:9100", "tag:tier1:9100",
         "tag:ai-stack:9100", "tag:database:9100", "tag:control:9100",
         "tag:database:9187",
-        "gpu-vm:8096", "gpu-vm:13378",
+        "gpu-vm:8096", "gpu-vm:13378", "gpu-vm:8080",
         "nextcloud:443", "paperless:443", "calibreweb:443", "openwebui:443"
     ]
 }
 ```
+
+`gpu-vm:8080` is the `llama-server` health probe. The admin desktop's backend is not probed: the
+desktop is off much of the time, and a probe against it would page for a machine that is simply
+switched off.
 
 lxc200 also scrapes its own native exporter on its Tailscale address, port 9101. That works without
 a rule; measured 2026-09-26, both before and after the rebuild.
@@ -193,16 +197,20 @@ SQLite.
 
 ### Rule 6 - AI stack: database and inference
 
-OpenWebUI reaches its database and two Ollama backends: the admin desktop as primary and vm100 as
-fallback ([ollama.md](../services/ollama.md)).
+OpenWebUI reaches its database and two `llama-server` backends on port 8080: the admin desktop as
+primary and vm100 as fallback ([llm-inference.md](../services/llm-inference.md)).
 
 ```json
 {
     "action": "accept",
     "src":    ["tag:ai-stack"],
-    "dst":    ["tag:database:5432", "bazzite:11434", "gpu-vm:11434"]
+    "dst":    ["tag:database:5432", "bazzite:8080", "gpu-vm:8080", "gpu-vm:11434"]
 }
 ```
+
+`gpu-vm:11434` is vm100's native Ollama, OpenWebUI's only working backend until its connections are
+switched to 8080. It leaves the rule together with that service. `bazzite:11434` was dropped
+straight away, because nothing on the desktop listens there.
 
 ### Rule 7 - Admin workstations
 
@@ -362,11 +370,11 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 
 | Source | tier0 | storage | tier1 | tier2 (vm100) | ai-stack | database | monitoring | control |
 |---|---|---|---|---|---|---|---|---|
-| **monitoring** | 9100 | 9100 | 9100; 443 on all three | 9100, 8096, 13378 | 9100, 443 | 9100, 9187 | - | 9100 |
+| **monitoring** | 9100 | 9100 | 9100; 443 on all three | 9100, 8096, 13378, 8080 | 9100, 443 | 9100, 9187 | - | 9100 |
 | **control** | 22 | 22 | 22 | 22 | 22 | 22 | 22, 9443 | 22 |
 | **tier0** | - | 445 | - | - | - | - | - | - |
 | **tier1** | - | - | - | - | - | paperless: 5432 | paperless: 19532 | - |
-| **ai-stack** | - | - | - | 11434 | - | 5432 | - | - |
+| **ai-stack** | - | - | - | 8080, 11434 until Ollama is removed | - | 5432 | - | - |
 | **database** | - | - | - | - | - | - | 19532 | - |
 | **tier2 and storage** | - | - | - | - | - | - | - | - |
 | **admin** | 22, 8006 | 22, 445 | 443 on all three | 22, 8096, 13378 | 443 | - | 443, 9093, 9443 | 22 |
@@ -378,7 +386,7 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 | **isolated** | - | - | - | - | - | - | - | - |
 
 Two columns are left out because every cell in them is empty for the servers: no rule targets
-`tag:admin` except `ai-stack -> bazzite:11434`, and no rule targets any other device tag at all.
+`tag:admin` except `ai-stack -> bazzite:8080`, and no rule targets any other device tag at all.
 
 ---
 
@@ -448,13 +456,13 @@ three tier1 nodes it describes.
 "tests": [
     {"src": "tag:admin",
      "accept": ["tag:tier0:22", "tag:tier0:8006", "tag:storage:445", "tag:control:22", "tag:monitoring:9443", "nextcloud:443"],
-     "deny":   ["tag:database:5432", "tag:tier1:22", "tag:tier0:3128", "tag:admin:22", "gpu-vm:11434"]},
+     "deny":   ["tag:database:5432", "tag:tier1:22", "tag:tier0:3128", "tag:admin:22", "gpu-vm:11434", "gpu-vm:8080", "bazzite:8080"]},
     {"src": "tag:control",
      "accept": ["tag:tier0:22", "tag:tier1:22", "tag:database:22", "tag:control:22", "tag:monitoring:9443"],
      "deny":   ["tag:admin:22", "tag:storage:445", "tag:tier0:8006", "tag:database:5432"]},
     {"src": "tag:monitoring",
-     "accept": ["tag:tier0:9100", "tag:control:9100", "tag:database:9187", "nextcloud:443", "gpu-vm:8096"],
-     "deny":   ["tag:database:5432", "tag:storage:445", "tag:tier0:22", "tag:admin:9100"]},
+     "accept": ["tag:tier0:9100", "tag:control:9100", "tag:database:9187", "nextcloud:443", "gpu-vm:8096", "gpu-vm:8080"],
+     "deny":   ["tag:database:5432", "tag:storage:445", "tag:tier0:22", "tag:admin:9100", "bazzite:8080"]},
     {"src": "tag:tier0",
      "accept": ["tag:storage:445"],
      "deny":   ["tag:tier1:22", "tag:database:5432", "tag:monitoring:443"]},
@@ -466,8 +474,8 @@ three tier1 nodes it describes.
     {"src": "calibreweb",
      "deny":   ["nextcloud:443", "tag:database:5432", "tag:storage:445"]},
     {"src": "tag:ai-stack",
-     "accept": ["tag:database:5432", "bazzite:11434", "gpu-vm:11434"],
-     "deny":   ["tag:storage:445", "nextcloud:443", "bazzite:22"]},
+     "accept": ["tag:database:5432", "bazzite:8080", "gpu-vm:8080", "gpu-vm:11434"],
+     "deny":   ["tag:storage:445", "nextcloud:443", "bazzite:22", "bazzite:11434"]},
     {"src": "tag:tier2",
      "deny":   ["tag:storage:445", "tag:database:5432", "tag:tier0:22"]},
     {"src": "tag:database",
@@ -514,6 +522,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow | [llm-inference.md](../services/llm-inference.md) |
 | 2026-09-26 | Policy rebuilt. New tags `tag:control`, `tag:admin-mobile`, `tag:reader`, `tag:isolated`; `tag:client` narrowed to named services; `tag:gaming` and `tag:maintenance` retired. Grants by host and port; no `*` grant left; tier1 lateral access, tier0 workload access and unused SMB grants removed; journal upload added; an external user moved to machine sharing; three stale Mullvad targets dropped; eighteen tests deployed | Device-by-device review against measured flows; see the rules above |
 | 2026-09-01 | Documentation only, no policy change: Vaultwarden removed from the tier1 service lists in Rule 1c and Rule 6. The `tag:tier1` definition stays, and so does the node's tag assignment in the Tailscale console, until the container is removed in phase 2 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)) |
 | 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |

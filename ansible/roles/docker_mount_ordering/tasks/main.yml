@@ -27,7 +27,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: docker_mount_ordering_units | length > 0
+  when: (docker_mount_ordering_units | length > 0) or (docker_mount_ordering_required_paths | length > 0)
 
 - name: Deploy the ordering drop-in
   ansible.builtin.template:
@@ -36,7 +36,7 @@
     owner: root
     group: root
     mode: "0644"
-  when: docker_mount_ordering_units | length > 0
+  when: (docker_mount_ordering_units | length > 0) or (docker_mount_ordering_required_paths | length > 0)
   notify: Reload systemd
 
 # Deliberately no docker restart. The ordering exists for the boot sequence, and it

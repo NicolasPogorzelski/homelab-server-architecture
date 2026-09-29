@@ -55,7 +55,7 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 | `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.11.1; added 2026-08-20, replacing a hand-written unit that bound `*:9100` |
 | `node-lxc260-postgres` | LXC260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
 | `postgres` | LXC260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
-| `blackbox-http` | via `127.0.0.1:9115` | HTTP probes (`http_2xx`): jellyfin, audiobookshelf |
+| `blackbox-http` | via `127.0.0.1:9115` | HTTP probes (`http_2xx`): jellyfin, audiobookshelf, llama-server (`/health` on vm100) |
 | `blackbox-https` | via `127.0.0.1:9115` | HTTPS probes (`http_service_up`) behind `tailscale serve`: paperless, openwebui, nextcloud, calibreweb |
 
 Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../docker/monitoring/prometheus/prometheus.yml.example)

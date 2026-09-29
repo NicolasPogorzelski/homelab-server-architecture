@@ -140,10 +140,10 @@ look identical in a document that simply has no such section.
 ## Notes
 
 - All commands run from the Proxmox host via `pct exec`. No direct LXC shell required.
-- Ollama backends (admin workstation port 11434, VM100 port 11434) are not checked here -
-  they are inference-only and their absence degrades functionality without making the service
+- The inference backends (`llama-server` on the admin desktop and vm100, port 8080) are not
+  checked here - they are inference-only and their absence degrades functionality without making the service
   unavailable. Check OpenWebUI Admin -> Settings -> Connections if inference is broken but
-  the service is otherwise healthy.
+  the service is otherwise healthy, and see [LLM Inference](../../docs/services/llm-inference.md).
 - See: [OpenWebUI service docs](../../docs/services/openwebui.md)
 - See: [LXC230 node docs](../../docs/nodes/lxc230.md)
 - See: [PostgreSQL platform service](../../docs/services/postgresql-platform.md)

@@ -80,7 +80,7 @@ flowchart LR
 
 The dotted arrow is a real grant with a narrower source: the rule names the client notebook's
 address, not the tag. Two tags are missing on purpose. `tag:isolated` has no rule at all, and no rule
-anywhere has a person's device as its destination, apart from Ollama on the admin desktop in 1b.
+anywhere has a person's device as its destination, apart from the inference backend on the admin desktop in 1b.
 
 ### 1b - Service to service, and monitoring
 
@@ -97,11 +97,11 @@ flowchart LR
   AI_S["tag:ai-stack<br/>lxc230"]
 
   SERVERS["every server tag<br/>and tag:control"]
-  PROBES["nextcloud, paperless,<br/>calibreweb, openwebui 443<br/>vm100 8096, 13378"]
+  PROBES["nextcloud, paperless,<br/>calibreweb, openwebui 443<br/>vm100 8096, 13378, 8080"]
   ST_D["tag:storage<br/>vm102"]
   DB_D["tag:database<br/>lxc260"]
   MON_D["tag:monitoring<br/>lxc200"]
-  OLL["vm100 11434<br/>admin desktop 11434"]
+  OLL["vm100 8080<br/>admin desktop 8080"]
 
   MON_S -->|"9100"| SERVERS
   MON_S -->|"9187"| DB_D
@@ -113,7 +113,7 @@ flowchart LR
   PL_S -.->|"19532"| MON_D
   DB_S -.->|"19532"| MON_D
   AI_S -->|"5432"| DB_D
-  AI_S -->|"11434"| OLL
+  AI_S -->|"8080"| OLL
 
   classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff

@@ -1,0 +1,33 @@
+# llama.cpp inference server on vm100 - the always-on fallback backend for OpenWebUI.
+# Binds loopback only; the tailnet reaches it through `tailscale serve --tcp 8080`,
+# so the container never races tailscaled for its address at boot.
+#
+# Router mode: the server starts with no model loaded and loads one on the first
+# request that names it. Each subdirectory of the models directory is one model,
+# named after the directory, with its vision projector beside it.
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda-b11243  # CUDA 12 build; the cuda13 variant needs a newer driver than 580
+    container_name: llama-server
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - LLAMA_API_KEY=${LLAMA_API_KEY}
+    volumes:
+      - ${LLAMA_MODELS_DIR}:/models:ro
+    ports:
+      - "127.0.0.1:${LLAMA_PORT}:8080"
+    # One model at a time on an 8 GB card that Jellyfin shares. 32K context with a
+    # q8_0 KV cache keeps the 9B model near 6 GB; sleep after 20 minutes idle
+    # releases the VRAM entirely.
+    command: >-
+      --models-dir /models --models-max 1
+      -c 32768 -ngl 99 -fa on -ctk q8_0 -ctv q8_0
+      --sleep-idle-seconds 1200
+      --host 0.0.0.0 --port 8080
