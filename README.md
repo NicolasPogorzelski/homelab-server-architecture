@@ -23,7 +23,7 @@ flowchart TB
   TS["Tailscale overlay<br/>identity-based ACL, tier model<br/>no port-forwarding, no public reverse proxy"]
 
   subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
-    VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, Ollama"]
+    VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, llama-server"]
     LXC["7 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, Vaultwarden, PostgreSQL, Monitoring"]
     CTRL["LXC250 - Ansible control node<br/>manages the fleet, in the inventory since 2026-08-20"]
     VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
@@ -259,7 +259,7 @@ step, its failure modes and its rollback - or records that no rollback exists an
 - [Paperless-ngx](docs/services/paperless.md)
 - [Calibre-Web](docs/services/calibre-web.md)
 - [OpenWebUI](docs/services/openwebui.md)
-- [Ollama](docs/services/ollama.md)
+- [LLM Inference](docs/services/llm-inference.md)
 - [Vaultwarden](docs/services/vaultwarden.md)
 - [PostgreSQL Platform](docs/services/postgresql-platform.md)
 

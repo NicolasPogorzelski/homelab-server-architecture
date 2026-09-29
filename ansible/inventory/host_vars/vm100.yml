@@ -12,6 +12,7 @@ apt_metrics_collector: /usr/share/prometheus-node-exporter-collectors/apt.sh
 compose_projects:
   - { dest: /opt/docker/audiobookshelf, src: audiobookshelf }
   - { dest: /opt/docker/jellyfin, src: jellyfin }
+  - { dest: /opt/docker/llama-server, src: llama-server }
 
 # Automount units whose paths the Compose stacks bind. docker.service is ordered
 # after them, so a container cannot start onto a directory where autofs has not yet
@@ -21,6 +22,11 @@ docker_mount_ordering_units:
   - srv-media-serien.automount
   - srv-media-audiobooks.automount
   - srv-media-podcasts.automount
+
+# Docker's data root and containerd's image store live on the auxiliary disk, and
+# so do the model files. Without this mount the daemon must not start at all.
+docker_mount_ordering_required_paths:
+  - /mnt/vm-data
 
 # Units that can never succeed on this node. Masked by the systemd_hygiene role so
 # that every remaining failed unit on the fleet is a real fault worth alerting on.

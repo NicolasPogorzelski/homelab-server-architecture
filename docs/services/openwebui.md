@@ -7,7 +7,7 @@ for local LLM inference and serves as the future entrypoint for RAG and
 agentic workflows.
 
 - Access is Tailscale-only (no LAN, no public ingress)
-- Two inference backends operational (admin workstation + VM100)
+- Two inference backends: `llama-server` on the admin desktop (primary) and vm100 (fallback)
 - PostgreSQL platform service (lxc260) as database backend
 - Hard rule: no database files on CIFS/SMB
 
@@ -51,9 +51,15 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 | DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
 | App state / config | aux-disk | `mp1: /mnt/aux-disk/openwebui -> /var/lib/openwebui/data` |
 | Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/openwebui/containerd` + `docker-data` |
-| Uploads | MergerFS/SMB | `mp0: /mnt/smb/openwebui -> /data/openwebui` |
-| Vector store | MergerFS/SMB | `/data/openwebui/vector` (file-based only) |
-| DB backups | MergerFS/SMB | `/data/openwebui/backups` |
+| Uploads | aux-disk | `/var/lib/openwebui/data/uploads`, inside the container's only bind mount |
+| Vector store | aux-disk | `/var/lib/openwebui/data/vector_db` |
+| (unused) | MergerFS/SMB | `mp0: /mnt/smb/openwebui -> /data/openwebui` |
+
+The Compose file binds `/var/lib/openwebui/data` and nothing else, so uploads and the vector store
+live on the aux-disk with the rest of the app state. Measured 2026-09-29: 6.0 M of uploads and
+188 K of vector store there, while `/data/openwebui` holds only empty directories and a test file
+from February. The share is mounted into the container's LXC but reaches no process in it. The
+database dumps are taken on lxc260 ([PostgreSQL platform service](./postgresql-platform.md)).
 
 ### Proxmox Host Paths
 
@@ -64,22 +70,21 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 
 ## Inference Backends
 
-OpenWebUI connects to Ollama inference backends via Tailnet.
+OpenWebUI reaches two `llama-server` instances through its OpenAI API connections, each with its
+own API key. Admin Panel -> Settings -> Connections -> OpenAI API.
 
-| Node | URL | Models | Role |
+| Node | URL | Model | Role |
 |---|---|---|---|
-| admin workstation | `http://<tailscale-ip-admin-workstation>:11434` | `qwen3-32b-8k`, `qwen3-14b-64k`, `qwen3-8b-128k` | Primary |
-| VM100 | `http://<tailscale-ip-vm100>:11434` | `qwen3-8b-16k` | Backup |
+| admin desktop | `http://bazzite.<tailnet-id>.ts.net:8080/v1` | `qwen3.8-27b` | Primary |
+| vm100 | `http://gpu-vm.<tailnet-id>.ts.net:8080/v1` | `qwen3.5-9b` | Fallback |
 
-Backend URLs are configured in OpenWebUI Admin Panel -> Settings -> Connections -> Ollama API.
+Until the switch, the Ollama API connection holds the list measured on 2026-09-26:
+`host.docker.internal:11434` (lxc230 itself, where nothing listens), vm100's native Ollama, and an
+address the admin desktop held before its reinstallation. The primary has been unreachable since
+that reinstallation, and vm100 answered every request. The switch removes all three
+([rollout state](./llm-inference.md#rollout-state)).
 
-Measured 2026-09-26 in OpenWebUI's own configuration, the list differs from this table: it holds
-`host.docker.internal:11434` (lxc230 itself, where nothing listens), vm100, and an address the admin
-desktop held before its reinstallation. The primary backend has therefore been unreachable since
-that reinstallation, and vm100 answered every request. The list is to be corrected once Ollama runs
-on the desktop again.
-
-See: [Ollama Service](./ollama.md)
+See: [LLM Inference](./llm-inference.md)
 
 ---
 
@@ -92,8 +97,8 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 2. **aux-disk path exists** for local runtime state (`mp1`)
 3. **PostgreSQL reachable** on Tailnet (lxc260)
    - See: [PostgreSQL platform service](./postgresql-platform.md)
-4. **Ollama reachable** on Tailnet (admin workstation + VM100, port 11434)
-   - See: [Ollama Service](./ollama.md)
+4. **An inference backend reachable** on the tailnet (vm100 always, the admin desktop while it is on, port 8080)
+   - See: [LLM Inference](./llm-inference.md)
 
 ---
 
@@ -113,14 +118,14 @@ OpenWebUI is only healthy if all dependencies are satisfied:
 
 If CT230 (OpenWebUI) becomes unavailable:
 - AI chat interface unavailable for all users
-- Inference backends (VM100, admin workstation) are unaffected
+- Inference backends (vm100, admin desktop) are unaffected
 - PostgreSQL platform (lxc260) is unaffected
-- No data loss (database on lxc260, uploads on SMB storage)
+- No data loss (database on lxc260, uploads and vector store on the aux-disk)
 - Recovery: restart LXC230, verify all dependencies (PostgreSQL reachable, SMB mounted, aux-disk present)
 
 ## Related Documents
 
-- [Ollama Service](./ollama.md)
+- [LLM Inference](./llm-inference.md)
 - [PostgreSQL Platform](./postgresql-platform.md)
 - [Tailscale ACL](../platform/tailscale-acl.md)
 - [Loopback + Tailscale Serve](../decisions/loopback-tailscale-serve.md)

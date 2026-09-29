@@ -18,3 +18,11 @@
 #
 # Empty by default so the role is a no-op on nodes that bind nothing.
 docker_mount_ordering_units: []
+
+# Local filesystems Docker cannot run without - its data root above all. These are
+# the opposite case to the list above and get the opposite directive:
+# RequiresMountsFor= makes Docker wait for the mount and refuse to start without it.
+# A missing local disk is a fault on this node, not a remote host still booting, and
+# starting anyway would write images and containers onto the root filesystem - onto
+# the thin pool the data root was moved off.
+docker_mount_ordering_required_paths: []

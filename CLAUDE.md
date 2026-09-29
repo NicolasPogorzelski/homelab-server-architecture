@@ -456,7 +456,7 @@ This is a documentation and configuration repository - no application code, no b
 - `docs/` - Architecture, design decisions, node docs, service docs, platform docs
 - `docker/` - Docker Compose stacks and `.env.example` files, one directory per service
 - `runbooks/` - Operational procedures (must follow the runbook contract)
-- `snippets/` - Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `ollama/` (model configs), `claude/` (hooks reference)
+- `snippets/` - Reference configs, deployment source files, and helper scripts (sanitized): `postgres/` (pg-backup.sh), `scripts/` (utility + maintenance scripts), `storage/` (VM102 Samba config), `systemd/` (unit templates), `bazzite/` (llama-server Quadlet for the admin desktop), `claude/` (hooks reference)
 - `scripts/` - Repo tooling: `validate-repo.sh` (repo validator), `commit-msg-lint.sh` (git hook, conventional commits). The host's power-schedule scripts live in the `homelab_schedule` role.
 - `ansible/` - Ansible configuration, inventory, playbooks, roles
 
@@ -554,7 +554,7 @@ hidden entry and which GitHub reads just as well.
 
 Single-host Proxmox platform. No HA - recovery-oriented design.
 
-**Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and inference backends (Ollama).
+**Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and the fallback inference backend (`llama-server`); the primary runs on the admin desktop.
 
 **Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Services access storage over SMB via Tailscale, not LAN.
 
