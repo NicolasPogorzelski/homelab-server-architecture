@@ -9,6 +9,9 @@
 # Router mode: no model is resident after boot, so the GPU is free for other
 # workloads until a request arrives. The model sleeps again after 20 minutes idle.
 #
+# Qwen-VL projectors misread small images below 1024 image tokens, which llama.cpp
+# itself warns about at load; one slot is enough for one user.
+#
 # Both render nodes are passed because their numbering is not stable across boots;
 # `-dev Vulkan0` selects the discrete card, and the integrated GPU is never used.
 
@@ -23,7 +26,7 @@ AddDevice=/dev/dri/renderD129
 Volume=%h/.local/share/models:/models:ro,Z
 PublishPort=127.0.0.1:8080:8080
 Secret=llama_api_key,type=env,target=LLAMA_API_KEY
-Exec=--models-dir /models --models-max 1 -dev Vulkan0 -c 65536 -ngl 99 -fa on -ctk q8_0 -ctv q8_0 --sleep-idle-seconds 1200 --host 0.0.0.0 --port 8080
+Exec=--models-dir /models --models-max 1 -np 1 --image-min-tokens 1024 -dev Vulkan0 -c 65536 -ngl 99 -fa on -ctk q8_0 -ctv q8_0 --sleep-idle-seconds 1200 --host 0.0.0.0 --port 8080
 
 [Service]
 Restart=always

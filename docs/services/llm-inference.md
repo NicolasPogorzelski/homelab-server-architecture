@@ -11,23 +11,23 @@ desktop and an always-on fallback on vm100.
 | Node | GPU | Runtime | Model | Context | Role |
 |---|---|---|---|---|---|
 | admin desktop (Bazzite) | AMD RX 7900 XT, 20 GB | Podman Quadlet, Vulkan (RADV) | Qwen3.8-27B, UD-Q3_K_XL, with vision | 64K | Primary, runs when the desktop is on |
-| vm100 | NVIDIA RTX 2070 SUPER, 8 GB, shared with Jellyfin | Docker Compose, CUDA 12 | Qwen3.5-9B, Q4_K_M, with vision | 32K | Fallback, always on |
+| vm100 | NVIDIA RTX 2070 SUPER, 8 GB, shared with Jellyfin | Docker Compose, CUDA 12 | Qwen3.5-9B, Q4_K_M, text only | 32K | Fallback, always on |
 
 Both run the same llama.cpp build, `b11243`, from the official images
 (`server-vulkan-b11243`, `server-cuda-b11243`), with the same flags apart from context size and
-device: flash attention on, a `q8_0` KV cache, all layers on the GPU.
+device: one slot (`-np 1`), flash attention on, a `q8_0` KV cache, all layers on the GPU.
 
 **Router mode, no model resident after start.** Each instance starts with `--models-dir` and
 `--models-max 1` instead of a fixed model. It loads a model on the first request that names it and
 unloads it again after 20 minutes without a request (`--sleep-idle-seconds 1200`). Each
-subdirectory of the models directory is one model, named after the directory, with its `mmproj`
-vision projector beside it. On the desktop this is what allows a reboot straight into a game: the
+subdirectory of the models directory is one model, named after the directory; an `mmproj` vision
+projector beside it makes the model accept images. On the desktop this is what allows a reboot straight into a game: the
 GPU carries nothing of the LLM until someone asks. Measured on 2026-09-29:
 
 | Node | VRAM after start | Wake on first request | VRAM loaded |
 |---|---|---|---|
-| admin desktop | unchanged (desktop only) | 13 s from a cold page cache, 5.7 s warm | 15.5 GiB, 93 MiB in GTT |
-| vm100 (Vulkan test build) | 4 MiB | 5 s | 6.9 GiB; 5.96 GB with the CUDA build at the same context |
+| admin desktop | unchanged (desktop only) | 13 s from a cold page cache, 5.7 to 7.3 s warm | 15.5 GiB, 93 MiB in GTT |
+| vm100 | 3 MiB | 2 s; 3 s in a newly created container | 5.8 GB (5801 MiB) |
 
 `/health` is answered by the router itself and does not load a model, which is what lets the
 blackbox probe run against it without keeping the GPU occupied.
@@ -50,6 +50,11 @@ blackbox probe run against it without keeping the GPU occupied.
 
 - Compose stack [`docker/llama-server/`](../../docker/llama-server/), deployed by the
   `docker-compose-update` role like the other two stacks on the node
+- Text only: no vision projector in the models directory, so an image sent to this model is
+  refused at once (`image input is not supported`) instead of queuing. See Model Selection.
+- CUDA's compiled-kernel cache lives in `/mnt/vm-data/cuda-cache`, outside the container. CUDA
+  builds its kernels for this card on first use; measured 2026-09-29, the first request in a newly
+  created container took 114 s with an empty cache and 3 s with the kept one.
 - Models and Docker's data root on the auxiliary disk (`/mnt/vm-data`); `docker_mount_ordering`
   makes Docker refuse to start without that mount, so a slow disk cannot send image layers onto the
   system disk and its thin pool
@@ -78,8 +83,13 @@ and reading a number from an image, at 40.4 tokens/s.
 
 - **Qwen3.8-27B in Q3** rather than Q4: the Q4 weights alone are 16.9 GiB and ran only 78 to 84 %
   on the GPU next to the desktop's own use. The Unsloth dynamic Q3 fits completely with 64K context.
-- **Qwen3.5-9B in Q4** on vm100: 5.96 GB at 32K context, which leaves Jellyfin 2.2 GB for
-  transcoding.
+- **Qwen3.5-9B in Q4, text only** on vm100: 5.8 GB at 32K context, which leaves Jellyfin about
+  1.9 GB for transcoding. With the vision projector on the GPU the model took 7.1 GB and left
+  Jellyfin 0.7 GB, so a transcode starting while the model is loaded would fail. With the projector
+  on the CPU (`--no-mmproj-offload`) a full-HD screenshot took more than four minutes, against
+  3.4 s on the GPU. Images are therefore handled by the desktop only.
+- `--image-min-tokens 1024` on the desktop: below that, Qwen-VL projectors read small images
+  wrongly, which llama.cpp warns about at load. The 9B model read `VM100 = 7349` as `34` without it.
 
 ## Why llama-server, and Why Vulkan on the Desktop
 
@@ -128,7 +138,9 @@ generates faster on this card.
 
 ## Known Issues / Open Items
 
-- The first request after 20 idle minutes waits for the model to load, 5 to 13 s.
+- The first request after 20 idle minutes waits for the model to load, 2 to 13 s.
+- Images sent to the vm100 model are refused. While the desktop is off, OpenWebUI has no model
+  that reads images.
 - llama.cpp logs `failed to fit params to free device memory` on the desktop and loads anyway,
   because `-ngl 99` is set. Measured through `fdinfo`: nothing spills to system memory. The estimate
   is conservative, not the allocation.

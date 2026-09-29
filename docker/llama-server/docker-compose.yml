@@ -4,7 +4,9 @@
 #
 # Router mode: the server starts with no model loaded and loads one on the first
 # request that names it. Each subdirectory of the models directory is one model,
-# named after the directory, with its vision projector beside it.
+# named after the directory. Text only on this node: no vision projector is kept
+# beside the model, because on the GPU it leaves Jellyfin too little memory and on
+# the CPU it takes minutes per image.
 services:
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda-b11243  # CUDA 12 build; the cuda13 variant needs a newer driver than 580
@@ -19,15 +21,21 @@ services:
               capabilities: [gpu]
     environment:
       - LLAMA_API_KEY=${LLAMA_API_KEY}
+      # CUDA compiles its kernels for this card on first use. Kept outside the
+      # container, the result survives recreation: the first request after a new
+      # container takes seconds instead of two minutes.
+      - CUDA_CACHE_PATH=/cuda-cache
+      - CUDA_CACHE_MAXSIZE=1073741824
     volumes:
       - ${LLAMA_MODELS_DIR}:/models:ro
+      - ${LLAMA_CUDA_CACHE_DIR}:/cuda-cache
     ports:
       - "127.0.0.1:${LLAMA_PORT}:8080"
-    # One model at a time on an 8 GB card that Jellyfin shares. 32K context with a
-    # q8_0 KV cache keeps the 9B model near 6 GB; sleep after 20 minutes idle
-    # releases the VRAM entirely.
+    # One model and one slot at a time on an 8 GB card that Jellyfin shares. 32K
+    # context with a q8_0 KV cache keeps the 9B model near 5.8 GB; sleep after 20
+    # minutes idle releases the VRAM entirely.
     command: >-
-      --models-dir /models --models-max 1
+      --models-dir /models --models-max 1 -np 1
       -c 32768 -ngl 99 -fa on -ctk q8_0 -ctv q8_0
       --sleep-idle-seconds 1200
       --host 0.0.0.0 --port 8080
