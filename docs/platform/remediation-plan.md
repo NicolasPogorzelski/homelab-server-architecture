@@ -382,6 +382,38 @@ outside its field of view. These four are ordinary work and are ordered by expos
   months later, as a solved problem. The dead-man switch used for the hypervisor's sshd on
   2026-09-16 is the recovery pattern for it, and it is now proven.
 
+## Added by the 2026-09-30 fix-list reconciliation
+
+A list of 21 repository findings from July, kept outside this repository, was read against `main`
+and the running fleet. Eleven are closed or no longer apply, the `Watchdog` route is already
+carried under Tier 4, and these remain. None blocks anything else.
+
+- **The inference probe is merged and not applied.** `de0a073` put the `llama-server` health probe
+  on vm100's port 8080 into the `prometheus_config` template on 2026-09-29. The rendered file on
+  lxc200 was last written 2026-09-15, and its `blackbox-http` job still probes only Jellyfin and
+  Audiobookshelf, so the fallback backend is watched by nothing until the playbook runs.
+- **Alert delivery has never been tested end to end.** Every alert leaves through one Discord
+  webhook, and a revoked webhook fails without Alertmanager reporting it. Inject one alert with
+  `amtool alert add`, watch it arrive, and record the date, so the last successful test is a fact
+  rather than a guess.
+- **`serial: 1` has no failure limit.** Eight playbooks roll one host at a time and none sets
+  `max_fail_percentage`; only `preflight.yml` sets `any_errors_fatal`. What a failed third host does
+  to hosts four to eight has not been run. A throwaway play with `command: /bin/false` on one host
+  answers it, after which the limit is set on purpose. A run that stops midway also leaves the
+  earlier hosts changed, and no runbook describes that split state.
+- **A board swap would take the hypervisor's network and boot entry with it.** The bridge port is
+  `nic0`, and measured 2026-09-30 `/etc/systemd/network/` holds no `.link` file that assigns the
+  name, so it comes from somewhere this repository does not control. The boot entry lives in the
+  board's NVRAM (`Boot0000`); the fallback `\EFI\BOOT\BOOTX64.EFI` exists, but nobody chose it.
+  Find the naming source with `udevadm test-builtin net_id`, pin the name, and add both steps to
+  the hard-shutdown recovery runbook.
+- **Three wording items in documents the operator drafts.** The README roadmap marks phases
+  `Done` while their progress documents list open work; the README promises "deterministic
+  recovery" while the C1 datasets have no off-site copy; and Calibre-Web's `tag:tier1` has been
+  "being reconfirmed" since 2026-07-08.
+- **`.vault_pass` is not in `.gitignore`.** The file lives in the control node's home directory,
+  outside the working tree, so nothing can commit it today. One line keeps it that way.
+
 ## The exercise block, before Terraform
 
 Four controls that the same assessment argued against building at this scale, being built
