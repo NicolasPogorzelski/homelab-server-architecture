@@ -27,7 +27,7 @@ all:
 
     ai_stack:
       hosts:
-        vm100:  # Ollama backend
+        vm100:  # llama-server fallback backend
           ansible_host: <tailscale-ip-gpu-vm>
         lxc230:  # OpenWebUI
           ansible_host: <tailscale-ip-ai-openwebui>

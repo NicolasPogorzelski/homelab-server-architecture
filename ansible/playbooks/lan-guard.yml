@@ -3,13 +3,22 @@
 # platform needs. Roll out one node at a time with --limit; the tailnet, which
 # Ansible itself connects over, is never filtered.
 #
+# Two plays rather than `hosts: all`, as the inventory asks of every playbook that
+# changes state: the hypervisor is reached by naming it, never by sweeping.
+#
 # Playbooks run from the working tree on lxc250, not from a commit.
 # preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 
-- name: Guard every node's LAN interface with an nftables table
-  hosts: all
+- name: Guard every guest's LAN interface with an nftables table
+  hosts: guests
+  become: true
+  roles:
+    - lan_guard
+
+- name: Guard the Proxmox host's LAN interface, with its break-glass paths
+  hosts: proxmox
   become: true
   roles:
     - lan_guard
