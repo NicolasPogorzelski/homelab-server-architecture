@@ -42,7 +42,8 @@ carry the tag of the role they are used in.
 | `tag:client` | End-user devices | a phone and a notebook |
 | `tag:reader` | E-book reader | one device |
 | `tag:untrusted` | A TV outside the home network, administered by nobody here | one device |
-| `tag:isolated` | No access at all: Mullvad-only devices and quarantine | a streaming box |
+| `tag:media-player` | Streaming box at the TV: Jellyfin only | a streaming box |
+| `tag:isolated` | No access at all: Mullvad-only devices and quarantine | none since 2026-10-01 |
 
 **Exception:** Calibre-Web (lxc220) is tagged `tag:tier1`, not `tag:tier2`, despite being an
 application service by the table above. Confirmed intentional (2026-07-08). Since the rebuild the
@@ -78,7 +79,8 @@ Tags are assigned to nodes via the Tailscale admin console, and lxc250 advertise
     "tag:client":       ["autogroup:admin"],
     "tag:reader":       ["autogroup:admin"],
     "tag:untrusted":    ["autogroup:admin"],
-    "tag:isolated":     ["autogroup:admin"]
+    "tag:isolated":     ["autogroup:admin"],
+    "tag:media-player": ["autogroup:admin"]
 }
 ```
 
@@ -204,13 +206,12 @@ primary and vm100 as fallback ([llm-inference.md](../services/llm-inference.md))
 {
     "action": "accept",
     "src":    ["tag:ai-stack"],
-    "dst":    ["tag:database:5432", "bazzite:8080", "gpu-vm:8080", "gpu-vm:11434"]
+    "dst":    ["tag:database:5432", "bazzite:8080", "gpu-vm:8080"]
 }
 ```
 
-`gpu-vm:11434` is vm100's native Ollama, OpenWebUI's only working backend until its connections are
-switched to 8080. It leaves the rule together with that service. `bazzite:11434` was dropped
-straight away, because nothing on the desktop listens there.
+Port 11434 is closed on both hosts, and the tests below assert it: vm100's native Ollama was removed
+on 2026-10-01, and nothing on the desktop listens there.
 
 ### Rule 7 - Admin workstations
 
@@ -330,6 +331,23 @@ The rule names the user's account rather than `autogroup:shared`, so a later sha
 does not inherit these rights. A grant to an account covers all of its devices; per-device limits
 would require keeping those devices in this tailnet, which is the arrangement this replaced.
 
+### Rule 14 - Media player: the streaming box at the TV
+
+The streaming box gets Jellyfin over the tailnet and nothing else. Until 2026-10-01 it carried
+`tag:isolated` and reached Jellyfin over the LAN instead: in the 90 days to that date it opened 145
+Jellyfin sessions from its LAN address and none from the tailnet, read from Jellyfin's activity log
+and identified by its NVIDIA MAC prefix. Its own tag rather than a grant under `tag:isolated`,
+because that tag promises no access at all. The Mullvad attribute stays, since it is bound to the
+device's address, not to the tag.
+
+```json
+{
+    "action": "accept",
+    "src":    ["tag:media-player"],
+    "dst":    ["gpu-vm:8096"]
+}
+```
+
 ### `tag:isolated` - no rule
 
 A device carrying it can reach nothing and be reached by nothing. It exists for devices that use
@@ -374,7 +392,7 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 | **control** | 22 | 22 | 22 | 22 | 22 | 22 | 22, 9443 | 22 |
 | **tier0** | - | 445 | - | - | - | - | - | - |
 | **tier1** | - | - | - | - | - | paperless: 5432 | paperless: 19532 | - |
-| **ai-stack** | - | - | - | 8080, 11434 until Ollama is removed | - | 5432 | - | - |
+| **ai-stack** | - | - | - | 8080 | - | 5432 | - | - |
 | **database** | - | - | - | - | - | - | 19532 | - |
 | **tier2 and storage** | - | - | - | - | - | - | - | - |
 | **admin** | 22, 8006 | 22, 445 | 443 on all three | 22, 8096, 13378 | 443 | - | 443, 9093, 9443 | 22 |
@@ -383,6 +401,7 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 | **reader** | - | - | calibreweb: 443 | 13378 | - | - | - | - |
 | **untrusted** | - | - | - | 8096 | - | - | - | - |
 | **external user (shared)** | - | - | nextcloud: 443 | 8096, 13378 | - | - | - | - |
+| **media-player** | - | - | - | 8096 | - | - | - | - |
 | **isolated** | - | - | - | - | - | - | - | - |
 
 Two columns are left out because every cell in them is empty for the servers: no rule targets
@@ -474,8 +493,8 @@ three tier1 nodes it describes.
     {"src": "calibreweb",
      "deny":   ["nextcloud:443", "tag:database:5432", "tag:storage:445"]},
     {"src": "tag:ai-stack",
-     "accept": ["tag:database:5432", "bazzite:8080", "gpu-vm:8080", "gpu-vm:11434"],
-     "deny":   ["tag:storage:445", "nextcloud:443", "bazzite:22", "bazzite:11434"]},
+     "accept": ["tag:database:5432", "bazzite:8080", "gpu-vm:8080"],
+     "deny":   ["tag:storage:445", "nextcloud:443", "bazzite:22", "bazzite:11434", "gpu-vm:11434"]},
     {"src": "tag:tier2",
      "deny":   ["tag:storage:445", "tag:database:5432", "tag:tier0:22"]},
     {"src": "tag:database",
@@ -499,6 +518,9 @@ three tier1 nodes it describes.
      "deny":   ["gpu-vm:13378", "nextcloud:443", "calibreweb:443"]},
     {"src": "tag:isolated",
      "deny":   ["gpu-vm:8096", "tag:storage:445", "nextcloud:443"]},
+    {"src": "tag:media-player",
+     "accept": ["gpu-vm:8096"],
+     "deny":   ["gpu-vm:13378", "gpu-vm:22", "tag:storage:445", "nextcloud:443", "tag:monitoring:443"]},
     {"src": "<external-user-email>",
      "accept": ["gpu-vm:8096", "gpu-vm:13378", "nextcloud:443"],
      "deny":   ["paperless:443", "calibreweb:443", "tag:storage:445", "gpu-vm:22"]}
@@ -522,7 +544,9 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
-| 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow | [llm-inference.md](../services/llm-inference.md) |
+| 2026-10-01 | New `tag:media-player` with Rule 14 (`gpu-vm:8096` only) and a test; the streaming box moves to it from `tag:isolated`. Verified on vm100's packet filter: a new rule for 8096 with the device's two addresses | The box streamed over the LAN, the path that closes once vm100 stops publishing on it ([remediation plan](remediation-plan.md#added-on-2026-10-01)) |
+| 2026-10-01 | Policy applied in the console: Rule 6 grants `bazzite:8080` and `gpu-vm:8080`, monitoring `gpu-vm:8080`; `gpu-vm:11434` removed with vm100's Ollama and asserted as denied. Verified on vm100's packet filter and by probes from lxc230, lxc200 and the admin notebook: allowed paths 200, denied paths time out | The 2026-09-29 change had reached the documentation only ([llm-inference.md](../services/llm-inference.md#rollout-state)) |
+| 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow. Correction 2026-10-01: documentation only - the console policy was not changed that day, and vm100's packet filter carried no rule for 8080 until 2026-10-01 | [llm-inference.md](../services/llm-inference.md) |
 | 2026-09-26 | Policy rebuilt. New tags `tag:control`, `tag:admin-mobile`, `tag:reader`, `tag:isolated`; `tag:client` narrowed to named services; `tag:gaming` and `tag:maintenance` retired. Grants by host and port; no `*` grant left; tier1 lateral access, tier0 workload access and unused SMB grants removed; journal upload added; an external user moved to machine sharing; three stale Mullvad targets dropped; eighteen tests deployed | Device-by-device review against measured flows; see the rules above |
 | 2026-09-01 | Documentation only, no policy change: Vaultwarden removed from the tier1 service lists in Rule 1c and Rule 6. The `tag:tier1` definition stays, and so does the node's tag assignment in the Tailscale console, until the container is removed in phase 2 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)) |
 | 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
