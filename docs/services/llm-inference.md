@@ -27,7 +27,11 @@ GPU carries nothing of the LLM until someone asks. Measured on 2026-09-29:
 | Node | VRAM after start | Wake on first request | VRAM loaded |
 |---|---|---|---|
 | admin desktop | unchanged (desktop only) | 13 s from a cold page cache, 5.7 to 7.3 s warm | 15.5 GiB, 93 MiB in GTT |
-| vm100 | 3 MiB | 2 s; 3 s in a newly created container | 5.8 GB (5801 MiB) |
+| vm100 | 3 MiB | 36.5 s from a cold page cache, 2 to 3 s warm | 5.8 GB (5801 MiB) |
+
+The cold figure on vm100 was measured on 2026-10-01, on the first request after a host start: the
+log shows `load_model` at 0.08 s and `model loaded` at 36.6 s, reading the 5.7 GB file from the
+auxiliary disk. Each host start therefore costs the first chat of the day about half a minute.
 
 `/health` is answered by the router itself and does not load a model, which is what lets the
 blackbox probe run against it without keeping the GPU occupied.
@@ -36,9 +40,11 @@ blackbox probe run against it without keeping the GPU occupied.
 
 - Unit: rootless Podman Quadlet `~/.config/containers/systemd/llama-server.container`, source
   [`snippets/bazzite/llama-server.container`](../../snippets/bazzite/llama-server.container)
-- Starts without a login because linger is enabled for the user (`loginctl enable-linger`); the
-  unit hangs off `default.target`. Disabling linger silently turns the primary backend into one
-  that exists only while somebody is logged in.
+- Starts at boot without anyone at the machine. Two mechanisms both start the user manager:
+  linger (`loginctl enable-linger`) and GDM's automatic login, and the unit hangs off
+  `default.target`. Measured on the boot of 2026-09-30: boot 09:49:38, user manager 09:49:58,
+  autologin session 09:49:59, `llama-server` starting 09:50:00. Which of the two started it cannot
+  be told apart at that resolution; disabling only one of them keeps the backend.
 - Models: `~/.local/share/models/qwen3.8-27b/`, mounted read-only
 - API key: Podman secret `llama_api_key`, passed as `LLAMA_API_KEY`
 - Both render nodes are passed to the container, because their numbering is not stable across
@@ -63,17 +69,17 @@ blackbox probe run against it without keeping the GPU occupied.
 
 ## Rollout State
 
-The desktop half is live. The vm100 half is deployed from this repository and replaces the native
-Ollama 0.19 service, which stays the fallback until the new stack has passed its checks.
+Complete on 2026-10-01. Both instances serve OpenWebUI through its OpenAI API connections, the
+native Ollama on vm100 is removed together with its models, and the desktop's Ollama data and images
+are gone. The step table this section held until then listed the vm100 deployment and ACL Rule 6
+as pending. The stack was in fact already running; Rule 6 had reached this repository but not the
+policy, and vm100's packet filter carried no rule for 8080 until it was applied on 2026-10-01
+([ACL changelog](../platform/tailscale-acl.md#changelog)).
 
-| Step | State |
-|---|---|
-| Desktop: Quadlet running, all checks passed, `tailscale serve` on 8080 | Done 2026-09-29 |
-| vm100: Docker data root moved to `/mnt/vm-data`, stack deployed, `tailscale serve` on 8080 | Pending |
-| ACL Rule 6 and the monitoring grant switched to 8080 | Pending |
-| OpenWebUI: two OpenAI connections replace the Ollama connections | Pending |
-| vm100: native Ollama removed, together with its KE-18 instance | Pending, after OpenWebUI |
-| Desktop: cold boot proven | Pending, needs someone at the machine |
+Measured end to end from the OpenWebUI container on 2026-10-01, with the keys OpenWebUI stores
+(each compared by hash against its source): both models answer, warm generation at 39.3 t/s on the
+desktop and 53.4 t/s on vm100, the blackbox probe reports `probe_success 1`, and the desktop's cold
+boot is covered by the measurement in the Admin desktop section above.
 
 ## Model Selection
 
@@ -138,7 +144,8 @@ generates faster on this card.
 
 ## Known Issues / Open Items
 
-- The first request after 20 idle minutes waits for the model to load, 2 to 13 s.
+- The first request after 20 idle minutes waits for the model to load: 2 to 13 s warm, about
+  36 s on vm100 after a host start.
 - Images sent to the vm100 model are refused. While the desktop is off, OpenWebUI has no model
   that reads images.
 - llama.cpp logs `failed to fit params to free device memory` on the desktop and loads anyway,

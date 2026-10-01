@@ -18,10 +18,10 @@ agentic workflows.
 - Unprivileged Debian LXC (CT230)
 - Docker Compose at `/opt/openwebui/`
 - `.env` at `/opt/openwebui/.env` (chmod 600, gitignored)
-- Version: OpenWebUI v0.9.6 (read from `/api/version` on 2026-08-17; the entry said v0.8.10 until
-  then). Note the running container uses the floating tag `ghcr.io/open-webui/open-webui:main`,
-  not the pinned reference in `docker/openwebui/docker-compose.yml` - the version is stable only
-  because the standing `docker-compose-update` hold means nothing has pulled since 2026-06-11.
+- Version: OpenWebUI v0.9.6, running from the pinned image `ghcr.io/open-webui/open-webui:0.9.6`
+  (`docker ps`, 2026-10-01), matching `docker/openwebui/docker-compose.yml`. The admin panel offers
+  v0.11.4; the upgrade is deferred to its own unit, because it carries database migrations on
+  lxc260 and pulls new layers onto the aux-disk
 
 ---
 
@@ -78,11 +78,11 @@ own API key. Admin Panel -> Settings -> Connections -> OpenAI API.
 | admin desktop | `http://bazzite.<tailnet-id>.ts.net:8080/v1` | `qwen3.8-27b` | Primary |
 | vm100 | `http://gpu-vm.<tailnet-id>.ts.net:8080/v1` | `qwen3.5-9b` | Fallback |
 
-Until the switch, the Ollama API connection holds the list measured on 2026-09-26:
-`host.docker.internal:11434` (lxc230 itself, where nothing listens), vm100's native Ollama, and an
-address the admin desktop held before its reinstallation. The primary has been unreachable since
-that reinstallation, and vm100 answered every request. The switch removes all three
-([rollout state](./llm-inference.md#rollout-state)).
+The rest of that page, read back from the `config` table on 2026-10-01: the Ollama API is switched
+off and holds no URL, Direct Connections are off, so users cannot add endpoints of their own, and
+the base model list cache is off, so the list follows whether the desktop is running. The earlier
+Ollama connections pointed at lxc230 itself, at vm100's removed Ollama and at an address the desktop
+no longer holds ([rollout state](./llm-inference.md#rollout-state)).
 
 See: [LLM Inference](./llm-inference.md)
 

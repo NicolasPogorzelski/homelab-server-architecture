@@ -33,7 +33,7 @@ file path, not the fragment.
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
-| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - one open instance (vm100 Ollama), retired with the service |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - no open instance since 2026-10-01 |
 | [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
 | [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
 | [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
@@ -1217,7 +1217,7 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | host `node_exporter` | bind | Fixed 2026-07-28 (below) |
 | lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
 | nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
-| vm100 `ollama` | bind | Open, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Not gated; removed with the service when `llama-server` replaces it ([rollout](../services/llm-inference.md#rollout-state)) |
+| vm100 `ollama` | bind | Closed 2026-10-01 by removing the service, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Its successor binds loopback behind `tailscale serve` ([rollout](../services/llm-inference.md#rollout-state)) |
 
 **What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and
 wakes it by RTC the next working day, so every day is a cold boot. Timers that carry `Persistent=true`

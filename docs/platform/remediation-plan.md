@@ -388,10 +388,8 @@ A list of 21 repository findings from July, kept outside this repository, was re
 and the running fleet. Eleven are closed or no longer apply, the `Watchdog` route is already
 carried under Tier 4, and these remain. None blocks anything else.
 
-- **The inference probe is merged and not applied.** `de0a073` put the `llama-server` health probe
-  on vm100's port 8080 into the `prometheus_config` template on 2026-09-29. The rendered file on
-  lxc200 was last written 2026-09-15, and its `blackbox-http` job still probes only Jellyfin and
-  Audiobookshelf, so the fallback backend is watched by nothing until the playbook runs.
+- ~~**The inference probe is merged and not applied.**~~ Done 2026-10-01: `prometheus-config.yml`
+  applied after a clean `--check --diff`, and `probe_success{service="llama-server"}` reads 1.
 - **Alert delivery has never been tested end to end.** Every alert leaves through one Discord
   webhook, and a revoked webhook fails without Alertmanager reporting it. Inject one alert with
   `amtool alert add`, watch it arrive, and record the date, so the last successful test is a fact
@@ -413,6 +411,55 @@ carried under Tier 4, and these remain. None blocks anything else.
   "being reconfirmed" since 2026-07-08.
 - **`.vault_pass` is not in `.gitignore`.** The file lives in the control node's home directory,
   outside the working tree, so nothing can commit it today. One line keeps it that way.
+
+## Added on 2026-10-01
+
+Found while completing the inference rollout.
+
+- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (six) still reaches
+  vm102's LAN address, admitted by `smb_guard` on source address alone. The target replaces step 2
+  of [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md), which moved the same
+  mounts onto Tailscale: a host-only bridge `vmbr1`, no `bridge-ports`, static addresses for the host,
+  vm100 and vm102. All eight host mounts, the two backup mounts included, and vm100's four move to it
+  one at a time, each with automount and a reboot test; afterwards `smb_guard` drops 445 on `ens18`
+  entirely. Samba keeps its wildcard bind, because an explicit bind would cut the Tailscale IPv4 path.
+  That path stays a requirement: admin devices write media to vm102 over Tailscale, checked after
+  every step by mounting a share from the admin desktop and writing and deleting a file. Measured
+  2026-10-01 over that path: 94.9 MB/s up and 104.9 MB/s down with `smbclient`, a direct connection
+  over the LAN at 1 ms. Sampled every second during a repeat run (92.5 MB/s up, 104.7 MB/s down),
+  neither of vm102's two vCPUs saturated: both near 65 % busy, `tailscaled` at 84 to 93 % of one core
+  and `smbd` near 28 % during the upload, steal 0. On 1 GbE the link and the tunnel set the ceiling,
+  so more vCPUs would not raise it; at 2.5 GbE `tailscaled` would need about three cores, and the
+  CPU type (`x86-64-v2-AES` passes no AVX2 to the guest) becomes worth changing. The ACL tests
+  already describe the target (`tag:tier2 -> tag:storage:445` denied, `tag:admin` accepted), so the
+  policy does not change. It needs a decision record drafted by the operator before any live change.
+- **Media clients move to the tailnet, and vm100 stops listening on the LAN.** Jellyfin and
+  Audiobookshelf publish `0.0.0.0:8096`, `0.0.0.0:13378` and the same ports on `[::]`, measured
+  2026-10-01 with `ss -ltn`, on a node holding three global IPv6 addresses. Docker writes its own
+  iptables rules for a published port, so the IPv6 socket is held closed only by the router's default
+  refusal of inbound IPv6 - where vm102's port 445 stood before `smb_guard`. The IPv4 listener is the
+  trade-off [DD#8](../decisions/design-decisions.md#dd-8) records for LAN streaming, but almost every
+  client it serves is already a tailnet member with a grant on `gpu-vm:8096`. Jellyfin's activity log
+  for the 90 days to 2026-10-01 names three LAN clients: the streaming box (`.23`, NVIDIA MAC prefix,
+  145 sessions, last 2026-09-29), an unidentified `.64` (26, last 2026-09-27) and an unidentified
+  `.71` (21, last 2026-07-27), against 69 sessions from the tailnet. The streaming box has its grant
+  since 2026-10-01 (`tag:media-player`, ACL Rule 14); its app still has to be pointed at the tailnet
+  name, with Tailscale set to always-on. Next: identify `.64` and `.71` and move them as well, then
+  close the LAN path once the activity log shows no LAN session for several days - both services
+  publish on `127.0.0.1` only and reach the tailnet through `tailscale serve --tcp`, the pattern
+  `llama-server` uses, and a decision record replaces DD#8. Measure the streaming box's throughput
+  over Tailscale with the highest-bitrate file; client discovery (UDP 7359, DLNA) stops working and
+  clients need the address entered.
+- **`apt_metrics` installs Recommends, and two of them fail at every boot.** The collectors package
+  brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
+  and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -
+  the same two units `systemd_hygiene` has masked on lxc260 since July. Fix at the source:
+  `install_recommends: false` in `apt_metrics` and `smart_metrics`, then remove the three packages
+  through `systemd_hygiene_absent_packages`.
+- **OpenWebUI 0.9.6 to 0.11.x.** Its own unit with a rollback path: two minor versions of database
+  migrations on lxc260, and new image layers on the KE-13 aux-disk.
+- **`gpu` on vm100 has passwordless sudo.** Measured with `sudo -n true`. Check whether that is
+  recorded and intended for an interactive account.
 
 ## The exercise block, before Terraform
 

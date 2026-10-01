@@ -556,7 +556,10 @@ Single-host Proxmox platform. No HA - recovery-oriented design.
 
 **Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and the fallback inference backend (`llama-server`); the primary runs on the admin desktop.
 
-**Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Services access storage over SMB via Tailscale, not LAN.
+**Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Admin devices and the host's two backup
+mounts reach SMB over Tailscale; vm100's four media mounts and the host's six service mounts still
+use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing else - see
+`docs/decisions/smb-bind-and-lan-access.md` and the storage-network item in the remediation plan.
 
 **Service LXCs** (all Docker-in-LXC unless noted):
 - LXC200 - Monitoring (Prometheus + Grafana)
