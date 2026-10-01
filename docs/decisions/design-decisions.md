@@ -201,6 +201,12 @@ Monitoring stack isolated in LXC200.
 
 ## 8. LAN Exposure for Performance-Critical Workloads
 
+**Status 2026-10-01: no longer in force for the media services.** Jellyfin and Audiobookshelf
+publish on loopback behind `tailscale serve` since that day. The rationale below assumed overlay
+traffic is capped by the internet uplink; measured the same day, nodes on the same LAN connect
+directly and SMB over the tailnet reached 95 MB/s ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)).
+The replacing decision record is still to be written. Nextcloud remains under this entry.
+
 ### Decision
 
 Performance-critical services remain reachable from the local network:

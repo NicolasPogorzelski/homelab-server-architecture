@@ -4,7 +4,7 @@ services:
     container_name: audiobookshelf
     restart: unless-stopped
     ports:
-      - "${ABS_HOST_PORT}:80"
+      - "127.0.0.1:${ABS_HOST_PORT}:80"
     environment:
       - TZ=${TZ}
     volumes:

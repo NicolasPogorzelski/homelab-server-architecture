@@ -23,4 +23,4 @@ services:
       - ${JF_MEDIA_FILME}:/media/Filme:ro
       - ${JF_MEDIA_SERIEN}:/media/Serien:ro
     ports:
-      - "${JELLYFIN_PORT}:8096"
+      - "127.0.0.1:${JELLYFIN_PORT}:8096"
