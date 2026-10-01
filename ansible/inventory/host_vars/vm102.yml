@@ -1,3 +1,14 @@
 ---
 # Native admin user that receives the break-glass key on this host.
 breakglass_user: storage
+
+# Units this node must not run. nmbd answers NetBIOS name queries and browse
+# announcements on UDP 137/138 of every interface; no client here resolves the
+# storage node that way - they use its Tailscale name or address - and SMB itself
+# runs on 445 alone (`smb ports = 445`). Masked rather than disabled, so a package
+# upgrade cannot quietly start it again.
+systemd_hygiene_masked_units:
+  - name: nmbd.service
+    reason: >-
+      NetBIOS name service, listening on UDP 137/138 on the LAN. Nothing on the
+      platform uses NetBIOS names; `disable netbios = yes` in smb.conf goes with it.

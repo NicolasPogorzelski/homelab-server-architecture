@@ -136,8 +136,10 @@ This reduces risk of accidental modification or deletion.
 
 ## Security Posture
 
-- SMB3 only
-- Mandatory signing
+- SMB3 only, on port 445 alone
+- Mandatory signing (`server signing = required` in `testparm -s`, measured 2026-10-01)
+- No NetBIOS since 2026-10-01: `disable netbios = yes`, and `nmbd` masked through the
+  `systemd_hygiene` role, so nothing answers on UDP 137/138
 - User-based authentication
 - No anonymous access
 - No implicit subnet-wide trust beyond defined ACL model
