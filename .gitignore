@@ -96,6 +96,8 @@ docker/monitoring/alertmanager/alertmanager.yml
 # The example file is excluded from the exclusion - it is the sanitized one.
 ansible/inventory/hosts.yml*
 !ansible/inventory/hosts.yml.example
+# ansible-lint's cache, written when validate-repo.sh lints locally
+ansible/.ansible/
 
 # =====================================================
 # AI coding assistant artifacts

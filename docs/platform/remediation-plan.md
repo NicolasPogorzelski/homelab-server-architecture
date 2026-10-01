@@ -441,12 +441,14 @@ Found while completing the inference rollout.
   they join the tailnet when they are next needed. Still open: the decision record replacing
   [DD#8](../decisions/design-decisions.md#dd-8), a role owning vm100's netplan file, a reboot test of
   it, and a throughput measurement of the streaming box over the tailnet.
-- **LAN ingress guard on every node (`lan_guard`), rolled out one node at a time.** Written and
-  checked on 2026-10-01: the template passes `nft -c` for a container, vm102 and the hypervisor.
-  Order: lxc220 first and verified (SSH over the tailnet works, over the LAN refused, services up),
-  then the other containers, vm102, vm100, the hypervisor last with its break-glass sources in the
-  gitignored inventory. Each step is proven across the next cold boot. Afterwards the sentence in
-  [`sshd-listen-address.md`](../decisions/sshd-listen-address.md) that nothing enforces the
+- **LAN ingress guard on every node (`lan_guard`).** Rolled out on all eleven nodes on 2026-10-01,
+  one step at a time: lxc220, the other six containers, vm102, vm100, the hypervisor. Measured from
+  the admin notebook afterwards, fifteen service ports on every LAN address: closed everywhere
+  except SSH to the hypervisor, which admits the two admin workstations and refused lxc250 as a
+  control. New SMB connections from the hypervisor and vm100 to vm102 pass the exception, the
+  Bazzite still reaches `storage:445` over the tailnet, vm100's netconsole reaches the host, and
+  all 53 Prometheus targets stayed up. Still open: proof across a cold boot. Afterwards the
+  sentence in [`sshd-listen-address.md`](../decisions/sshd-listen-address.md) that nothing enforces the
   untrusted LAN at the host boundary needs the operator's amendment, and pinning sshd itself
   becomes the second layer rather than the only one. A restart of `nftables.service` by hand
   still flushes the table until the next boot; the unit is ordered after it for exactly that
