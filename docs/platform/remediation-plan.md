@@ -433,27 +433,14 @@ Found while completing the inference rollout.
   CPU type (`x86-64-v2-AES` passes no AVX2 to the guest) becomes worth changing. The ACL tests
   already describe the target (`tag:tier2 -> tag:storage:445` denied, `tag:admin` accepted), so the
   policy does not change. It needs a decision record drafted by the operator before any live change.
-- **Media clients move to the tailnet, and vm100 stops listening on the LAN.** Jellyfin and
-  Audiobookshelf publish `0.0.0.0:8096`, `0.0.0.0:13378` and the same ports on `[::]`, measured
-  2026-10-01 with `ss -ltn`, on a node whose LAN interface held a global and a ULA IPv6 address.
-  Docker writes its own iptables rules for a published port, so the IPv6 socket was held closed only
-  by the router's default refusal of inbound IPv6 - where vm102's port 445 stood before `smb_guard`.
-  That half is closed since 2026-10-01: `enp6s18` no longer accepts router advertisements and holds
-  no global IPv6 address ([vm100.md](../nodes/vm100.md#no-ipv6-address-on-the-lan-interface)); a
-  reboot test and a role to own the netplan file are still open. The IPv4 listener is the trade-off
-  [DD#8](../decisions/design-decisions.md#dd-8) records for LAN streaming, but almost every client it
-  serves is already a tailnet member with a grant on `gpu-vm:8096`. Jellyfin's activity log
-  for the 90 days to 2026-10-01 names three LAN clients: the streaming box (`.23`, NVIDIA MAC prefix,
-  145 sessions, last 2026-09-29), an unidentified `.64` (26, last 2026-09-27) and an unidentified
-  `.71` (21, last 2026-07-27), against 69 sessions from the tailnet. The streaming box has its grant
-  since 2026-10-01 (`tag:media-player`, ACL Rule 14); its app still has to be pointed at the tailnet
-  name, with Tailscale set to always-on - done the same day: its sessions arrive from the tailnet
-  since 08:03 UTC, read from Jellyfin's activity log. Next: identify `.64` and `.71` and move them
-  as well, then close the LAN path once the activity log shows no LAN session for several days - both services
-  publish on `127.0.0.1` only and reach the tailnet through `tailscale serve --tcp`, the pattern
-  `llama-server` uses, and a decision record replaces DD#8. Measure the streaming box's throughput
-  over Tailscale with the highest-bitrate file; client discovery (UDP 7359, DLNA) stops working and
-  clients need the address entered.
+- ~~**Media clients move to the tailnet, and vm100 stops listening on the LAN.**~~ Done 2026-10-01.
+  The streaming box moved to `tag:media-player` and streams over the tailnet; Jellyfin and
+  Audiobookshelf publish on `127.0.0.1` behind `tailscale serve --tcp`, and `enp6s18` holds no global
+  IPv6 address ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)). Two LAN clients seen in
+  Jellyfin's activity log, `.64` (last 2026-09-27) and `.71` (last 2026-07-27), were not identified;
+  they join the tailnet when they are next needed. Still open: the decision record replacing
+  [DD#8](../decisions/design-decisions.md#dd-8), a role owning vm100's netplan file, a reboot test of
+  it, and a throughput measurement of the streaming box over the tailnet.
 - **`apt_metrics` installs Recommends, and two of them fail at every boot.** The collectors package
   brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
   and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -

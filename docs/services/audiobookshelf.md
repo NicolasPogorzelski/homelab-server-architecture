@@ -20,12 +20,14 @@ Config and metadata use local persistent volumes on VM100.
 ## Access Model (Zero Trust)
 
 - No public ingress / no router port forwarding.
-- Audiobookshelf binds to `0.0.0.0:13378` for LAN streaming performance (documented trade-off).
-- Remote access is via Tailscale IP directly (WireGuard-encrypted, no TLS hostname).
-- LAN exposure is intentional and limited to port 13378 only.
+- Audiobookshelf is published on `127.0.0.1:13378` only and reaches the tailnet through
+  `tailscale serve --bg --tcp 13378 tcp://127.0.0.1:13378` on vm100. Since 2026-10-01 it is not
+  reachable from the LAN; clients use `http://gpu-vm.<tailnet-id>.ts.net:13378` or the node's
+  Tailscale IP (WireGuard-encrypted, no TLS hostname).
+- Clients appear to Audiobookshelf as `127.0.0.1`, because `tailscale serve` forwards the TCP stream.
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md) - section "Documented Exceptions"
+- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
 
 | Source | Port | Access |
 |---|---|---|

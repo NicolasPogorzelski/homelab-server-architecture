@@ -112,14 +112,15 @@ Traefik's automatic container discovery was considered:
 | LXC211 | Paperless-ngx | 8000 | 443 | paperless.<tailnet-id>.ts.net |
 | LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
 | LXC230 | OpenWebUI | 3000 | 443 | ai-openwebui.<tailnet-id>.ts.net |
+| VM100 | Jellyfin | 8096 | 8096 (TCP) | gpu-vm.<tailnet-id>.ts.net:8096 |
+| VM100 | Audiobookshelf | 13378 | 13378 (TCP) | gpu-vm.<tailnet-id>.ts.net:13378 |
+| VM100 | llama-server | 8080 | 8080 (TCP) | gpu-vm.<tailnet-id>.ts.net:8080 |
 | LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
 
 #### Documented Exceptions (no Tailscale Serve, `0.0.0.0` binding)
 
 | Node | Service | Bind Address | Port | Reason |
 |---|---|---|---|---|
-| VM100 | Jellyfin | 0.0.0.0 | 8096 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#dd-8)) |
-| VM100 | Audiobookshelf | 0.0.0.0 | 13378 | LAN streaming, bandwidth trade-off (see [DD#8](design-decisions.md#dd-8)) |
 | LXC210 | Nextcloud | 0.0.0.0 | 80, 443 | LAN upload performance for large data volumes; Apache-managed TLS |
 
 #### Nodes Without Web Services
@@ -131,14 +132,10 @@ Traefik's automatic container discovery was considered:
 
 #### Notes on Exceptions
 
-VM100 and LXC210 intentionally do not follow the loopback pattern.
-The reason in both cases is performance:
+LXC210 does not follow the loopback pattern. VM100 did not either until 2026-10-01, when Jellyfin
+and Audiobookshelf moved to loopback behind TCP forwards (see the table above and
+[vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)).
 
-- **VM100 (Media):** High-bitrate streams over LAN avoid the Tailscale overhead.
-  Remote access currently uses the Tailscale IP directly (HTTP, no TLS).
-  Tailscale Serve could be added later to provide TLS-secured remote access with a hostname,
-  without removing the LAN binding - this would require keeping the `0.0.0.0` bind instead of `127.0.0.1`.
-  Not prioritized at this time (convenience improvement, not a security improvement - see section below).
 - **LXC210 (Nextcloud):** Uploading large data volumes (e.g. multi-GB PDFs) over LAN
   is significantly faster than routing through the Tailscale overlay. Apache handles TLS termination
   on port 443 - LAN access is therefore also encrypted. Tailscale Serve is not in use here.
