@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+# Drops new inbound connections on {{ lan_guard_interface }} except the paths named below.
+# Rollback: nft delete table inet {{ lan_guard_table }}
+
+table inet {{ lan_guard_table }}
+delete table inet {{ lan_guard_table }}
+
+table inet {{ lan_guard_table }} {
+  chain lan_in {
+    type filter hook {{ lan_guard_hook }} priority {{ '-150' if lan_guard_hook == 'prerouting' else 'filter' }}; policy accept;
+
+    # Everything not arriving on the LAN interface: tailscale0, loopback, Docker bridges.
+    iifname != "{{ lan_guard_interface }}" accept
+
+    # Replies to connections this node opened: updates, image pulls, DNS, NTP.
+    ct state established,related accept
+
+    # ICMP for path MTU and diagnostics; ICMPv6 also carries neighbour discovery
+    # and the router advertisements the containers configure IPv6 from.
+    meta l4proto { icmp, ipv6-icmp } accept
+
+    # Tailscale direct connections between peers on the same LAN.
+    udp dport {{ lan_guard_tailscale_port }} accept
+
+    # DHCP client replies.
+    udp sport 67 udp dport 68 accept
+    udp sport 547 udp dport 546 accept
+
+{% for entry in lan_guard_allow %}
+    # {{ entry.reason }}
+    ip saddr { {{ entry.sources | join(', ') }} } {{ entry.proto }} dport {{ entry.port }} counter accept
+
+{% endfor %}
+    counter drop
+  }
+}

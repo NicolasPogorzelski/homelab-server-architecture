@@ -1,0 +1,46 @@
+---
+# === lan_guard ===
+#
+# Enforces "the LAN is untrusted" at every node's own boundary. On the LAN
+# interface, every new inbound connection is dropped unless an entry below or one
+# of the fixed accepts in the template names it. The tailnet is not touched: the
+# first rule of the chain accepts everything that does not arrive on the LAN
+# interface, so tailscale0, loopback and Docker's bridges pass unfiltered.
+#
+# Binding each service to its Tailscale address or to loopback stays the
+# platform's rule and the better fix where a service allows it. This role is the
+# layer underneath: it closes the wildcard binds that are still open (sshd on most
+# nodes, Apache on lxc210) and any bind a future change gets wrong, and it does so
+# without making a single service wait for Tailscale at boot.
+#
+# Never loaded through nftables.service. Its stock /etc/nftables.conf opens with
+# `flush ruleset`, which would take this table and Tailscale's chains with it; the
+# unit orders itself after nftables.service on the containers that enable it.
+
+lan_guard_enabled: true
+
+lan_guard_table: lan_guard
+lan_guard_rules_file: /etc/nftables.d/lan-guard.nft
+lan_guard_unit: lan-guard.service
+
+# The interface carrying the default route is the LAN on every node here: eth0
+# in the containers, enp6s18 on vm100, ens18 on vm102, vmbr0 on the hypervisor.
+lan_guard_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+# prerouting at priority -150 sees a packet before Docker's DNAT at -100, so a
+# published container port is filtered on its original destination port. The
+# hypervisor overrides this to `input` in group_vars/proxmox.yml: there the hook
+# must see only traffic addressed to the host, never frames bridged to guests.
+lan_guard_hook: prerouting
+
+# Tailscale's WireGuard port. Without it, peers on the same LAN fall back from a
+# direct connection to a DERP relay.
+lan_guard_tailscale_port: 41641
+
+# Additional accepts, per host or group. Each entry:
+#   proto:   tcp or udp
+#   port:    destination port
+#   sources: list of IPv4 source addresses (LAN addresses live in the gitignored
+#            inventory, never in this repository)
+#   reason:  why this path exists; rendered as a comment into the rules file
+lan_guard_allow: []

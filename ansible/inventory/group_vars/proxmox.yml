@@ -115,3 +115,23 @@ journald_system_max_use: 2G
 # runs. The apt timer itself is enabled by apt_metrics on every node including
 # this one.
 apt_metrics_masked_timers: []
+
+# The hypervisor filters at `input`, so the chain sees only traffic addressed to
+# the host and never frames bridged to a guest.
+lan_guard_hook: input
+
+# Two paths stay open on the LAN, both because they must work without Tailscale.
+# sshd from the two admin workstations is the break-glass: the host has no local
+# console while vm100 holds the only GPU, so a broken tailscaled would otherwise
+# leave nothing but a GPU swap. netconsole carries vm100's kernel messages from
+# netpoll, which runs before and beneath any userspace network daemon.
+lan_guard_allow:
+  - proto: tcp
+    port: 22
+    sources: "{{ admin_lan_ips }}"
+    reason: break-glass SSH from the two admin workstations, the host's only access without Tailscale
+  - proto: udp
+    port: 6666
+    sources:
+      - "{{ vm100_lan_ip }}"
+    reason: netconsole from vm100, kernel messages sent by netpoll without Tailscale
