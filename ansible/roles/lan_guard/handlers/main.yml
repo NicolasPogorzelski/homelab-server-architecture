@@ -1,0 +1,9 @@
+---
+# Skipped under --check: the unit file was never really written, so systemd cannot
+# find it, the same reason nft_guard records for its handler.
+- name: Reload the LAN guard
+  ansible.builtin.systemd_service:
+    name: "{{ lan_guard_unit }}"
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode

@@ -1,0 +1,123 @@
+---
+# Every accept that names sources must name real addresses. An entry whose
+# variable is missing from the inventory would render `ip saddr {  }`, which nft
+# rejects - or, worse, a typo that happens to parse. Checked before anything is
+# written, with the entry's reason in the message so the gap is obvious.
+- name: Refuse an accept entry without valid IPv4 sources
+  ansible.builtin.assert:
+    that:
+      - item.proto in ['tcp', 'udp']
+      - item.port | int > 0
+      - item.sources | length > 0
+      - item.sources | select('match', '^(\d{1,3}\.){3}\d{1,3}$') | list | length == item.sources | length
+    fail_msg: >-
+      lan_guard_allow entry for {{ item.proto | default('?') }}/{{ item.port | default('?') }}
+      ({{ item.reason | default('no reason given') }}) needs IPv4 sources; got
+      {{ item.sources | default([]) }}. LAN addresses belong in the gitignored
+      inventory (all.vars in hosts.yml), see hosts.yml.example.
+    quiet: true
+  loop: "{{ lan_guard_allow }}"
+  loop_control:
+    label: "{{ item.proto | default('?') }}/{{ item.port | default('?') }}"
+  when: lan_guard_enabled
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+  when: lan_guard_enabled
+
+# Same probe as nft_guard: a filter that cannot load leaves the LAN open while the
+# role reports success, so the node is asked before anything is written.
+- name: Check that this node can load an nftables table
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      nft add table inet lan_guard_probe
+      nft delete table inet lan_guard_probe
+  register: lan_guard_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: lan_guard_enabled
+
+- name: Refuse to deploy a filter this node cannot load
+  ansible.builtin.assert:
+    that:
+      - lan_guard_probe.rc == 0
+    fail_msg: >-
+      This node cannot create an nftables table
+      ({{ lan_guard_probe.stderr | default('no output') | trim }}). Nothing was
+      deployed.
+    success_msg: "nftables is usable on this node."
+  when: lan_guard_enabled
+
+- name: Create the nftables drop-in directory
+  ansible.builtin.file:
+    path: "{{ lan_guard_rules_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: lan_guard_enabled
+
+- name: Deploy the LAN guard rules
+  ansible.builtin.template:
+    src: lan-guard.nft.j2
+    dest: "{{ lan_guard_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+    validate: /usr/sbin/nft -c -f %s
+  notify: Reload the LAN guard
+  when: lan_guard_enabled
+
+- name: Deploy the LAN guard unit
+  ansible.builtin.template:
+    src: lan-guard.service.j2
+    dest: /etc/systemd/system/{{ lan_guard_unit }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload the LAN guard
+  when: lan_guard_enabled
+
+- name: Enable and start the LAN guard
+  ansible.builtin.systemd_service:
+    name: "{{ lan_guard_unit }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - lan_guard_enabled
+    - not ansible_check_mode
+
+- name: Flush handlers before verifying
+  ansible.builtin.meta: flush_handlers
+
+# Read the running table back rather than trusting the file on disk.
+- name: Read the loaded table back
+  ansible.builtin.command:
+    cmd: nft list table inet {{ lan_guard_table }}
+  register: lan_guard_loaded
+  changed_when: false
+  check_mode: false
+  when:
+    - lan_guard_enabled
+    - not ansible_check_mode
+
+- name: Assert the chain filters the LAN interface and ends in a drop
+  ansible.builtin.assert:
+    that:
+      - lan_guard_loaded.stdout is search('iifname != "' ~ lan_guard_interface ~ '" accept')
+      - lan_guard_loaded.stdout is search('udp dport ' ~ lan_guard_tailscale_port ~ ' accept')
+      - lan_guard_loaded.stdout is search('counter packets \d+ bytes \d+ drop')
+    fail_msg: >-
+      The loaded table does not match the template: the LAN interface accept, the
+      Tailscale port or the final drop is missing. The file was written but the
+      kernel does not carry the rule set.
+    success_msg: >-
+      {{ lan_guard_interface }} filtered at {{ lan_guard_hook }}; tailnet and loopback untouched.
+  when:
+    - lan_guard_enabled
+    - not ansible_check_mode

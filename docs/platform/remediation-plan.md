@@ -441,6 +441,16 @@ Found while completing the inference rollout.
   they join the tailnet when they are next needed. Still open: the decision record replacing
   [DD#8](../decisions/design-decisions.md#dd-8), a role owning vm100's netplan file, a reboot test of
   it, and a throughput measurement of the streaming box over the tailnet.
+- **LAN ingress guard on every node (`lan_guard`), rolled out one node at a time.** Written and
+  checked on 2026-10-01: the template passes `nft -c` for a container, vm102 and the hypervisor.
+  Order: lxc220 first and verified (SSH over the tailnet works, over the LAN refused, services up),
+  then the other containers, vm102, vm100, the hypervisor last with its break-glass sources in the
+  gitignored inventory. Each step is proven across the next cold boot. Afterwards the sentence in
+  [`sshd-listen-address.md`](../decisions/sshd-listen-address.md) that nothing enforces the
+  untrusted LAN at the host boundary needs the operator's amendment, and pinning sshd itself
+  becomes the second layer rather than the only one. A restart of `nftables.service` by hand
+  still flushes the table until the next boot; the unit is ordered after it for exactly that
+  reason.
 - **`apt_metrics` installs Recommends, and two of them fail at every boot.** The collectors package
   brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
   and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -

@@ -1,0 +1,15 @@
+---
+# Drop new inbound connections on every node's LAN interface except the paths the
+# platform needs. Roll out one node at a time with --limit; the tailnet, which
+# Ansible itself connects over, is never filtered.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Guard every node's LAN interface with an nftables table
+  hosts: all
+  become: true
+  roles:
+    - lan_guard

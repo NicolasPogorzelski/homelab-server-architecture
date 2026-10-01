@@ -12,3 +12,14 @@ systemd_hygiene_masked_units:
     reason: >-
       NetBIOS name service, listening on UDP 137/138 on the LAN. Nothing on the
       platform uses NetBIOS names; `disable netbios = yes` in smb.conf goes with it.
+
+# SMB over the LAN from the two nodes that still mount that way, the same pair
+# smb_guard admits. Both tables drop what they do not accept, so the path has to
+# be open in each. Goes away with the storage network (remediation plan).
+lan_guard_allow:
+  - proto: tcp
+    port: 445
+    sources:
+      - "{{ proxmox_host_lan_ip }}"
+      - "{{ vm100_lan_ip }}"
+    reason: SMB mounts from the hypervisor and vm100 over the LAN, until the storage network replaces them

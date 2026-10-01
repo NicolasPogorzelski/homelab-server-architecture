@@ -4,6 +4,13 @@ all:
     # LAN address of the host. Used only by the netconsole role: netpoll writes
     # frames from the kernel, so the target cannot be a Tailscale address.
     proxmox_host_lan_ip: <lan-ip-proxmox>
+    # LAN addresses the lan_guard role admits through its filter: vm100 as SMB client
+    # of vm102 and netconsole sender to the host, the admin workstations as the host's
+    # break-glass SSH sources. Both workstations need a fixed DHCP reservation.
+    vm100_lan_ip: <lan-ip-vm100>
+    admin_lan_ips:
+      - <lan-ip-admin-notebook>
+      - <lan-ip-admin-desktop>
     # Blackbox HTTPS probe targets (services behind `tailscale serve`).
     blackbox_https_targets:
       - { name: paperless,   url: "https://paperless.<tailnet-id>" }

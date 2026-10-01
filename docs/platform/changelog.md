@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-01 | New role `lan_guard`: an nftables table on every node's LAN interface drops new inbound connections except replies, ICMP, DHCP, Tailscale's UDP 41641 and named paths (SMB to vm102, break-glass SSH and netconsole to the hypervisor). The tailnet is never filtered. Rolled out node by node, state in the remediation plan. See [ansible.md](ansible.md). |
 | 2026-10-01 | NetBIOS off on vm102: `disable netbios = yes` in `smb.conf` and `nmbd` masked through `systemd_hygiene`, closing UDP 137/138 on the LAN. No client used NetBIOS names; SMB stays on 445 with mandatory signing. See [samba.md](samba.md#security-posture). |
 | 2026-10-01 | Jellyfin and Audiobookshelf publish on `127.0.0.1` only and reach the tailnet through `tailscale serve --tcp` on vm100, the pattern `llama-server` uses; nothing on the LAN reaches ports 8096 or 13378 any more. DD#8 no longer covers the media services: its premise, that overlay traffic is capped by the uplink, was measured false the same day. See [vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan). |
 | 2026-10-01 | vm100's LAN interface stops accepting IPv6 router advertisements (`60-no-ipv6-ra.yaml`), so it holds no global IPv6 address and the `[::]` listeners of Jellyfin, Audiobookshelf and sshd are no longer addressable over IPv6 from outside. All probes stayed green. The streaming box now streams over the tailnet. See [vm100.md](../nodes/vm100.md#no-ipv6-address-on-the-lan-interface). |
