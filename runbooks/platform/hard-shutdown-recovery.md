@@ -27,9 +27,12 @@ Use the first available method:
 | Priority | Method | Address | Available when |
 |---|---|---|---|
 | 1 | Proxmox WebUI (Tailscale) | `https://<tailscale-ip-proxmox-host>:8006` | Tailscale on host is connected |
-| 2 | Proxmox WebUI (LAN) | `https://<proxmox-lan-ip>:8006` | On same LAN as server |
-| 3 | SSH to Proxmox host (LAN) | `ssh root@<proxmox-lan-ip>` | LAN reachable, sshd up |
-| 4 | LXC console | WebUI -> container -> Console tab | Proxmox WebUI accessible |
+| 2 | SSH to Proxmox host (LAN) | `ssh root@<proxmox-lan-ip>` | From the admin notebook or the admin desktop only; `lan_guard` drops every other LAN source |
+| 3 | LXC console | WebUI -> container -> Console tab, or `pct enter <ctid>` from the host | Proxmox WebUI or host shell accessible |
+| 4 | Physical console via a spare GPU | [host-console-gpu-swap.md](host-console-gpu-swap.md) | Paths 1 and 2 have failed |
+
+The WebUI does not listen on the LAN (`pveproxy` binds the Tailscale address), so there is no LAN
+path to it.
 
 **Finding `<proxmox-lan-ip>`:** Open the Fritz!Box at `http://<router-lan-ip>` ->
 Heimnetz -> Netzwerk. The host appears as `server` or `pve`. Alternatively:

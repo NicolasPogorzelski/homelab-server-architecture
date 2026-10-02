@@ -214,17 +214,17 @@ through.
 
 ### Runbooks
 
-Twenty procedures under the same contract: every one states its preconditions, its verification
+21 procedures under the same contract: every one states its preconditions, its verification
 step, its failure modes and its rollback - or records that no rollback exists and why, which for
 `snapraid sync` is the whole point. Enforced by the validator, not by habit.
 
 <details>
-<summary>All twenty runbooks</summary>
+<summary>All 21 runbooks</summary>
 
 - [Runbook Index](runbooks/README.md)
 - Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md) - [MariaDB restore](runbooks/database/mariadb-restore.md)
 - Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
-- Platform: [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
+- Platform: [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [host console through a GPU swap](runbooks/platform/host-console-gpu-swap.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
 - Backup: [off-site backup with restic](runbooks/backup/offsite-backup.md) - [off-site VPS provisioning](runbooks/platform/offsite-vps-provision.md)
 - Services: [OpenWebUI health](runbooks/ai-stack/openwebui-health.md) - [Nextcloud/Paperless integration](runbooks/integration/nextcloud-paperless.md)
 

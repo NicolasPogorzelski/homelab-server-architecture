@@ -28,6 +28,7 @@ Related operational model:
 - KE-14 power-path verification: [platform/ke14-power-path-check.md](platform/ke14-power-path-check.md)
 - Annual escrow restore drill: [platform/escrow-restore-drill.md](platform/escrow-restore-drill.md)
 - Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
+- Host console through a GPU swap: [platform/host-console-gpu-swap.md](platform/host-console-gpu-swap.md)
 - LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
 - Docker data root migration to aux-disk: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
 - Guest backup and restore: [platform/guest-backup-restore.md](platform/guest-backup-restore.md)
