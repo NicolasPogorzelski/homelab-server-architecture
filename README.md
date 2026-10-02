@@ -162,6 +162,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [PostgreSQL Tailscale Boot Ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) (ordering is not readiness)
 - [pveproxy Tailscale Boot Ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) (the same race on the hypervisor)
 - [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
+- [Local AI Coding Assistant](docs/decisions/local-ai-assistant-eval.md) (model and harness evaluation for the admin workstation)
 - [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
 - [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
