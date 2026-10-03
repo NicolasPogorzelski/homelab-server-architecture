@@ -1,0 +1,16 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Start containers whose start failed at boot
+# Requires=: without the daemon there is nothing to retry, and a unit that
+# failed alongside it would report Docker's fault a second time.
+Requires=docker.service
+After=docker.service
+
+[Service]
+# exec rather than oneshot: a oneshot holds multi-user.target until it exits,
+# and this one sleeps for up to {{ (docker_boot_retry_attempts * docker_boot_retry_interval / 60) | round(1) }} minutes.
+Type=exec
+ExecStart={{ docker_boot_retry_script_dest }} {{ docker_boot_retry_attempts }} {{ docker_boot_retry_interval }}
+
+[Install]
+WantedBy=multi-user.target

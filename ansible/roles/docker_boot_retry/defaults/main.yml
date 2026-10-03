@@ -1,0 +1,26 @@
+---
+# === docker_boot_retry ===
+#
+# Starts, once per boot, the containers whose start failed. Docker's restart
+# policy does not cover them: it applies only after a container has started
+# successfully, so a start that fails in `runc` - a bind mount whose source
+# could not be mounted, for one - is final until someone intervenes.
+#
+# docker_mount_ordering cannot close this, and must not try. It orders Docker
+# after the automount triggers, which are up whether or not vm102 answers. The
+# mount behind a trigger is attempted only when runc binds the path, and if that
+# single attempt is refused, the container start fails with it. Ordering Docker
+# after the mount instead would rebuild KE-15. Retrying the start afterwards
+# leaves the daemon independent of the storage VM and still recovers the stack.
+#
+# Opt-in per host, so the role is a no-op on nodes that bind nothing remote.
+docker_boot_retry_enabled: false
+
+docker_boot_retry_script_src: "{{ playbook_dir }}/../../snippets/scripts/docker-boot-retry.sh"
+docker_boot_retry_script_dest: /usr/local/sbin/docker-boot-retry.sh
+
+# Six passes, 30 s apart: three minutes covers vm102 booting alongside vm100
+# with room to spare, and a container still down after that has a fault a
+# retry will not fix.
+docker_boot_retry_attempts: 6
+docker_boot_retry_interval: 30
