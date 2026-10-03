@@ -42,6 +42,7 @@ file path, not the fragment.
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25 |
+| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Applied 2026-10-03, unit enabled, re-check at `changed=0` |
 
 Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
 index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
@@ -2101,3 +2102,71 @@ apply, the proof is a `wakealarm armed for` line in `journalctl -b -1 -t homelab
 **References:**
 - [The scheduling entry in CLAUDE.md](../../CLAUDE.md)
 - [KE-14 - the boot SSD this host starts from](#ke-14)
+
+---
+
+<a id="ke-27"></a>
+
+## KE-27: A container whose start fails at boot stays down until someone starts it
+
+**Affected component:** vm100 - every container that binds a CIFS automount or needs the NVIDIA
+prestart hook: Jellyfin, Audiobookshelf, `llama-server`.
+
+**Symptom:**
+After a boot, Jellyfin does not answer on 8096 while the VM, Docker and every other container are up.
+`docker ps -a` shows it exited, and `docker inspect` carries the reason in `State.Error`:
+
+```text
+jellyfin Exited (128) 10 hours ago
+failed to create task for container: failed to create shim task: OCI runtime create failed: runc
+create failed: unable to start container process: error during container init: error mounting
+"/srv/media/filme" to rootfs at "/media/Filme": ... no such device
+```
+
+**Root cause:**
+`restart: unless-stopped` reacts to a container that ran and exited. A start that fails inside
+`runc create` never produces a running container, so there is nothing for the policy to react to:
+dockerd tries once while it restores its containers and then leaves it. Two different triggers have
+reached that one attempt on this node. The journal holds four instances since 2026-05-16:
+
+```text
+$ journalctl -u docker.service --since 2026-05-16 | grep "failed to start container"
+2026-08-05 22:50  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
+2026-08-24 22:55  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
+2026-09-29 10:19  error mounting "/srv/media/filme" ...      (and "/srv/media/audiobooks")
+2026-10-03 09:02  error mounting "/srv/media/filme" ...
+```
+
+The two mount failures had different causes underneath. On 2026-09-29 vm102 was unreachable
+(`cifs_mount failed w/return code = -113`, `EHOSTUNREACH`), and Audiobookshelf went down with
+Jellyfin. On 2026-10-03 vm102 was up - smbd since 08:59:33 - and logged nothing for vm100, while
+vm100's kernel reported `Send error in SessSetup = -11` (`EAGAIN`) on the film share 12 ms after
+the audiobook mount had started. The working explanation, not proven: the CIFS client carries every
+mount to one server over a single TCP connection, and the session setup for the `media-jf` user ran
+into the one for `media-abs` that was still in progress. Two users exist only since the share split
+of 2026-08-16, and the `-11` appears once in the 121 boots the journal holds.
+
+`docker_mount_ordering` does not prevent any of this, and is right not to. It orders Docker after
+the automount trigger, and a trigger existing says nothing about the mount behind it succeeding -
+the [KE-18](#ke-18) gap one layer further down. Ordering Docker after the mount itself would tie the
+daemon to vm102 being up, the [KE-15](#ke-15) failure rebuilt.
+
+**How it stayed invisible:**
+Every instance was repaired by hand the same day - a `docker start`, or a mount restarted first -
+and none was written down, so each was diagnosed from nothing. The CUDA watchdog, the one job that
+looks at Jellyfin after boot, logs `container not running - skipping` by design. The August pair
+reached this repository only as an example sentence in the glossary entry for Docker's restart
+policy.
+
+**Fix (applied to vm100 2026-10-03):**
+Role `docker_boot_retry`: a unit ordered after `docker.service` runs once per boot and starts every
+container that is exited, carries `always` or `unless-stopped`, and has a non-empty `State.Error`.
+Six passes, 30 s apart; whatever is still down after that leaves the unit `failed`, which
+`SystemdUnitFailed` reports. `docker stop` leaves `State.Error` empty, so a container stopped on
+purpose is not touched. The selection was checked against the live node, where it found nothing to
+do, and against four synthetic rows, where it picked exactly the two with a policy and an error.
+
+**Status:** Applied 2026-10-03, unit enabled, re-check at `changed=0`. Not yet proven against a real
+failure: the triggers are rare, and the first boot only shows the unit exiting 0 with nothing to
+start. The proof is a `started <name> (attempt n/6)` line in
+`journalctl -b -t docker-boot-retry` after a boot on which one of the four errors above recurs.
