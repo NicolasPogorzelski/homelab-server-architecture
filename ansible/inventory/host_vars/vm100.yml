@@ -23,6 +23,13 @@ docker_mount_ordering_units:
   - srv-media-audiobooks.automount
   - srv-media-podcasts.automount
 
+# A bind onto an automount triggers the CIFS mount once, inside runc. If vm102
+# refuses that attempt, the container start fails, and Docker's restart policy
+# never retries a start that did not succeed. Seen on 2026-09-29 (vm102
+# unreachable, Jellyfin and Audiobookshelf down) and 2026-10-03 (EAGAIN in session
+# setup, Jellyfin down). See docs/nodes/vm100.md.
+docker_boot_retry_enabled: true
+
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
 docker_mount_ordering_required_paths:

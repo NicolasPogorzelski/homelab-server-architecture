@@ -1,0 +1,30 @@
+---
+- name: Deploy the boot retry for failed container starts
+  when: docker_boot_retry_enabled
+  block:
+    - name: Deploy the retry script
+      ansible.builtin.copy:
+        src: "{{ docker_boot_retry_script_src }}"
+        dest: "{{ docker_boot_retry_script_dest }}"
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Deploy the retry service unit
+      ansible.builtin.template:
+        src: docker-boot-retry.service.j2
+        dest: /etc/systemd/system/docker-boot-retry.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    # Enabled, not started. The unit exists for the boot sequence; starting it
+    # now would sleep and then find nothing to do. Skipped in check mode for the
+    # reason jellyfin_watchdog gives: the unit file was not really written.
+    - name: Enable the retry service for the next boot
+      ansible.builtin.systemd_service:
+        name: docker-boot-retry.service
+        enabled: true
+        daemon_reload: true
+      when: not ansible_check_mode
