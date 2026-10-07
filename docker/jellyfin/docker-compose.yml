@@ -23,4 +23,7 @@ services:
       - ${JF_MEDIA_FILME}:/media/Filme:ro
       - ${JF_MEDIA_SERIEN}:/media/Serien:ro
     ports:
-      - "127.0.0.1:${JELLYFIN_PORT}:8096"
+      # Bound to vm100's Tailscale address, not to loopback behind `tailscale serve`:
+      # the serve forwarder stalled streams (KE-28). Left empty, the address would
+      # bind every interface; docker_compose_update refuses a node whose .env lacks it.
+      - "${JELLYFIN_BIND_ADDR}:${JELLYFIN_PORT}:8096"

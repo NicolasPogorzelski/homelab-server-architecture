@@ -30,6 +30,14 @@ docker_mount_ordering_units:
 # setup, Jellyfin down). See docs/nodes/vm100.md.
 docker_boot_retry_enabled: true
 
+# Jellyfin publishes on this node's Tailscale address (KE-28), so dockerd must not
+# restore its containers before that address exists - the KE-18 class. The gate is
+# fail-open after 90 s; docker_boot_retry above is the backstop if the bind still
+# fails. The drop-in also sets Restart=on-failure and RestartSec=15s on
+# docker.service, replacing the packaged Restart=always and 2 s.
+tailscale_boot_gate_units:
+  - docker.service
+
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
 docker_mount_ordering_required_paths:

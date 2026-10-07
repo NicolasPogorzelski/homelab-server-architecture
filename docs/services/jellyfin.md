@@ -21,11 +21,15 @@ Config, cache, and metadata use local persistent volumes on VM100.
 ## Access Model (Zero Trust)
 
 - No public ingress / no router port forwarding.
-- Jellyfin is published on `127.0.0.1:8096` only and reaches the tailnet through
-  `tailscale serve --bg --tcp 8096 tcp://127.0.0.1:8096` on vm100. Since 2026-10-01 it is not
-  reachable from the LAN; clients use `http://gpu-vm.<tailnet-id>.ts.net:8096` or the node's
-  Tailscale IP (WireGuard-encrypted, no TLS hostname).
-- Clients appear to Jellyfin as `127.0.0.1`, because `tailscale serve` forwards the TCP stream.
+- Jellyfin publishes on vm100's Tailscale address only (`<tailscale-ip-vm100>:8096`, set as
+  `JELLYFIN_BIND_ADDR` in the node's `.env`). Nothing on the LAN reaches it; clients use
+  `http://gpu-vm.<tailnet-id>.ts.net:8096` or the Tailscale IP (WireGuard-encrypted, no TLS
+  hostname).
+- From 2026-10-01 to 2026-10-07 it sat on loopback behind `tailscale serve --tcp 8096`. That
+  forwarder stalled streams to the streaming box, and Jellyfin moved to the direct bind
+  ([KE-28](../platform/known-errors.md#ke-28)).
+- At boot, `docker.service` waits for the Tailscale address through `tailscale_boot_gate`, with
+  `docker_boot_retry` behind it ([KE-18](../platform/known-errors.md#ke-18)).
 - Network policy enforced via Tailscale ACL (node tags + ACL JSON).
 - See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 - See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
@@ -36,6 +40,20 @@ Config, cache, and metadata use local persistent volumes on VM100.
 | One external user through machine sharing | 8096 | Allowed |
 | `tag:monitoring` | 8096 | Allowed (blackbox probe) |
 | `tag:reader`, `tag:tier0`, every other tag | 8096 | Denied |
+
+## Subtitle Extraction
+
+When a client asks for an embedded subtitle as a separate stream, Jellyfin runs ffmpeg over the
+whole file and extracts every subtitle track at once, into `/config/data/subtitles/`. On a 4K remux
+that means reading tens of gigabytes over CIFS before the first frame: measured 2026-10-07, a 46 GB
+film ran at about 110 MB/s for five minutes, and the client gave up long before. The server option
+`EnableSubtitleExtraction` in `encoding.xml` is already `false` and does not stop it.
+
+- The lever is the client: subtitle mode "None" in the user profile and in Moonfin. "Only forced"
+  is not enough, because the 4K files carry a German track flagged as forced.
+- An extraction keeps running after the client closes, and it saturates the read path for every
+  other stream until it ends.
+- Extracted tracks are cached, so a second start of the same file is immediate.
 
 ## CUDA Watchdog
 

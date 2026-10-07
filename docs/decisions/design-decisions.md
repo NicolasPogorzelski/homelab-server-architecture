@@ -206,6 +206,9 @@ publish on loopback behind `tailscale serve` since that day. The rationale below
 traffic is capped by the internet uplink; measured the same day, nodes on the same LAN connect
 directly and SMB over the tailnet reached 95 MB/s ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)).
 The replacing decision record is still to be written. Nextcloud remains under this entry.
+That measurement did not cover the path the streams then took: `tailscale serve --tcp` stalled
+Jellyfin streams, and Jellyfin binds the Tailscale address directly since 2026-10-07
+([KE-28](../platform/known-errors.md#ke-28)).
 
 ### Decision
 

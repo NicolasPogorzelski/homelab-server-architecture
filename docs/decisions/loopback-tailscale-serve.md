@@ -80,6 +80,12 @@ Binding services directly to the Tailscale interface IP was considered:
 - No centralized access logging via `tailscale serve status`
 - Harder to reason about - loopback-only is a clearer security boundary
 
+Since 2026-10-07 Jellyfin binds this way anyway. A `--tcp` forward ends the client's connection in
+`tailscaled`'s userspace TCP stack and opens a second one to loopback, and long high-bitrate streams
+stalled in between ([KE-28](../platform/known-errors.md#ke-28)). The direct bind leaves TCP to the
+kernel. Its cost is the boot race of [KE-18](../platform/known-errors.md#ke-18), closed with the
+same gate the fleet's exporters use.
+
 ### Traefik with Docker Integration
 
 Traefik's automatic container discovery was considered:
@@ -112,7 +118,6 @@ Traefik's automatic container discovery was considered:
 | LXC211 | Paperless-ngx | 8000 | 443 | paperless.<tailnet-id>.ts.net |
 | LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
 | LXC230 | OpenWebUI | 3000 | 443 | ai-openwebui.<tailnet-id>.ts.net |
-| VM100 | Jellyfin | 8096 | 8096 (TCP) | gpu-vm.<tailnet-id>.ts.net:8096 |
 | VM100 | Audiobookshelf | 13378 | 13378 (TCP) | gpu-vm.<tailnet-id>.ts.net:13378 |
 | VM100 | llama-server | 8080 | 8080 (TCP) | gpu-vm.<tailnet-id>.ts.net:8080 |
 | LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
@@ -129,6 +134,12 @@ Traefik's automatic container discovery was considered:
 |---|---|
 | LXC250 | DevOps workstation, SSH access only |
 | lxc260 | PostgreSQL platform service, Tailscale IP binding only (port 5432) |
+
+#### Direct Tailscale IP Binding
+
+| Node | Service | Bind Address | Port | Reason |
+|---|---|---|---|---|
+| VM100 | Jellyfin | `<tailscale-ip-vm100>` | 8096 | High-bitrate streams at 60-100 Mbit/s stalled inside the serve TCP forwarder ([KE-28](../platform/known-errors.md#ke-28)) |
 
 #### Notes on Exceptions
 
