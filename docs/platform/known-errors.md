@@ -1220,6 +1220,7 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
 | nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
 | vm100 `ollama` | bind | Closed 2026-10-01 by removing the service, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Its successor binds loopback behind `tailscale serve` ([rollout](../services/llm-inference.md#rollout-state)) |
+| lxc200 `blackbox-exporter` | resolver | Found 2026-10-07: the container copied `resolv.conf` at boot before tailscaled wrote it, kept the LAN router as resolver, and four `ServiceDown` alerts fired for services that answered. Fixed by naming the MagicDNS resolver in the compose file |
 | vm100 `docker.service` (Jellyfin) | bind | Opened 2026-10-07 when Jellyfin moved off `tailscale serve` ([KE-28](#ke-28)). Gated by `tailscale_boot_gate`, `docker_boot_retry` behind it; cold boot pending |
 
 **What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and

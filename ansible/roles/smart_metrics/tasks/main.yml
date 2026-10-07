@@ -15,12 +15,16 @@
       condition and export nothing, without failing.
   when: not smart_metrics_smartctl.stat.exists
 
+# Without Recommends, for the reason apt_metrics gives. smartctl is the one
+# recommended package this role needs, and the task above asserts it rather
+# than relying on apt to have pulled it in.
 - name: Install the collector package and sponge
   ansible.builtin.apt:
     name:
       - "{{ smart_metrics_package }}"
       - "{{ smart_metrics_sponge_package }}"
     state: present
+    install_recommends: false
     update_cache: true
     cache_valid_time: 3600
 

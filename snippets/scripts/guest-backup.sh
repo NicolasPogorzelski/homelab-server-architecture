@@ -47,8 +47,10 @@ BACKUP_DIR="/mnt/vzdump"
 # of it and nothing compares the two. The same shape once left lxc250 out of
 # the fstrim array and out of `hosts: all`.
 #
-# Recheck this line against `pct list` when the fleet changes.
-GUESTS=(250 240 260 210 211 200 220 230 102)
+# Recheck this line against `pct list` when the fleet changes. lxc240 is not
+# listed because the container no longer exists; its archives stay in the dump
+# directory, because vzdump prunes per guest and only within that guest's run.
+GUESTS=(250 260 210 211 200 220 230 102)
 
 # Retention is expressed in time, not in a number of files. The distinction is
 # not pedantic: the PostgreSQL retention reads `-mtime +7`, which means seven

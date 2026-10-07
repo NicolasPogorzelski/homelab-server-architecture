@@ -81,6 +81,13 @@ services:
     image: prom/blackbox-exporter:v0.28.0  # pinned to running version (2026-06-17)
     container_name: blackbox-exporter
     network_mode: host
+    # Probes address services by MagicDNS name. Docker copies the node's
+    # resolv.conf when the container starts, which at boot can be before
+    # tailscaled has written it, leaving the LAN router as resolver until the
+    # next restart (KE-18). Naming Tailscale's fixed resolver makes the lookup
+    # independent of that order; it answers as soon as tailscaled is up.
+    dns:
+      - 100.100.100.100
     command:
       - '--config.file=/etc/blackbox_exporter/config.yml'
       - '--web.listen-address=${BB_BIND_ADDRESS}:${BB_PORT}'
