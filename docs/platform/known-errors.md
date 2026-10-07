@@ -33,7 +33,7 @@ file path, not the fragment.
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
-| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - no open instance since 2026-10-01 |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - vm100 `docker.service` gated 2026-10-07, cold boot pending |
 | [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
 | [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
 | [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
@@ -43,6 +43,7 @@ file path, not the fragment.
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25 |
 | [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Applied 2026-10-03, unit enabled, re-check at `changed=0` |
+| [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 by binding the Tailscale address; boot gate pending a cold boot |
 
 Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
 index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
@@ -1219,6 +1220,7 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
 | nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
 | vm100 `ollama` | bind | Closed 2026-10-01 by removing the service, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Its successor binds loopback behind `tailscale serve` ([rollout](../services/llm-inference.md#rollout-state)) |
+| vm100 `docker.service` (Jellyfin) | bind | Opened 2026-10-07 when Jellyfin moved off `tailscale serve` ([KE-28](#ke-28)). Gated by `tailscale_boot_gate`, `docker_boot_retry` behind it; cold boot pending |
 
 **What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and
 wakes it by RTC the next working day, so every day is a cold boot. Timers that carry `Persistent=true`
@@ -2170,3 +2172,90 @@ do, and against four synthetic rows, where it picked exactly the two with a poli
 failure: the triggers are rare, and the first boot only shows the unit exiting 0 with nothing to
 start. The proof is a `started <name> (attempt n/6)` line in
 `journalctl -b -t docker-boot-retry` after a boot on which one of the four errors above recurs.
+
+<a id="ke-28"></a>
+
+## KE-28: Jellyfin streams stalled inside the `tailscale serve` TCP forwarder
+
+**Affected component:** vm100 - Jellyfin on 8096, from 2026-10-01 to 2026-10-07, while it was
+published on `127.0.0.1` behind `tailscale serve --tcp 8096`. The client was Moonfin on the
+streaming box (`tag:media-player`), connected directly over the LAN, not through a relay.
+
+**Symptom:**
+Playback loads and never starts, or starts and stops after a few seconds. The library browses
+normally. Jellyfin's log shows the client giving up:
+
+```text
+[10:11:10] Playback stopped reported by app "Moonfin for Android TV" "2.6.0" playing "<episode>". Stopped at "3890" ms
+```
+
+In the afternoon instance the attempts did not reach Jellyfin's log at all: no entry between
+10:51:41 and the fix at 15:34, through several starts, while `/health` on loopback answered `200`
+in 3 ms and `tailscale ping` to the box answered in 1 ms over the LAN.
+
+**Root cause:**
+`tailscale serve --tcp` ends the client's connection in `tailscaled`'s own userspace TCP stack, the
+netstack, and copies the bytes into a second connection to loopback. The stream stopped between the
+two. Both ends of the loopback connection during the stall, unchanged over three readings four
+seconds apart:
+
+```text
+$ ss -tnp | grep 52868
+ESTAB 0       4116981 127.0.0.1:8096   127.0.0.1:52868 users:(("docker-proxy",pid=1896,fd=9))
+ESTAB 5865362 0       127.0.0.1:52868  127.0.0.1:8096  users:(("tailscaled",pid=851,fd=39))
+```
+
+`tailscaled` held 5.8 MB of video it had received and was not reading (`Recv-Q`). In the same
+windows it turned away the box's new connections:
+
+```text
+tailscaled[851]: netstack: decrementing connsInFlightByClient[<tailscale-ip-shield>] because the packet was not handled; new value is 0
+```
+
+Counted per hour on 2026-10-07: 52 at 10:00, 2 at 11:00, 8 at 15:00 - the two failing windows and
+the working one between them, plus 395 lines dropped by the journal's rate limit. Which limit inside
+the netstack tripped was not established.
+
+Two things made the morning instance look like something else. The first starts of an episode and
+of a 46 GB film each triggered a whole-file subtitle extraction (see
+[jellyfin.md](../services/jellyfin.md#subtitle-extraction)), and one stream ran cleanly for 26
+minutes at 64-99 Mbit/s during the morning, which was read at the time as clearing the forwarder.
+The afternoon stall happened with no extraction running and no ffmpeg process at all.
+
+**Why the rollout did not catch it:**
+The change of 2026-10-01 was justified by an SMB transfer at 95 MB/s between two tailnet nodes.
+That transfer ran over the kernel path through `tailscale0`, not through `serve`, so the measurement
+never touched the forwarder the media streams were about to use. `llama-server` had used the same
+forwarder for a week without trouble; its requests are kilobytes.
+
+**Fix (applied 2026-10-07, 15:34):**
+
+```text
+# tailscale serve --tcp=8096 off
+# (compose) ports: "<tailscale-ip-vm100>:${JELLYFIN_PORT}:8096"
+# docker compose up -d
+$ ss -tlnp | grep 8096
+LISTEN 0 4096 <tailscale-ip-vm100>:8096 0.0.0.0:* users:(("docker-proxy",pid=45518,fd=8))
+```
+
+`tailscaled` runs in kernel mode on vm100 with a TUN device, so the address is a kernel address and
+the kernel carries TCP; `tailscaled` only encrypts. The repository carries the address as
+`JELLYFIN_BIND_ADDR` in the node's `.env`. The bind brings Jellyfin into [KE-18](#ke-18):
+`docker.service` started 0.6 s after `tailscaled`'s first DERP contact at the boot of 2026-10-07.
+It now carries the `tailscale_boot_gate` drop-in, with `docker_boot_retry` ([KE-27](#ke-27)) as the
+backstop.
+
+**Verification (2026-10-07, 15:38-15:39, same box, same episode):**
+
+| | Through `serve` (10:19) | Direct bind (15:38) |
+|---|---|---|
+| Throughput to the box | 64-99 Mbit/s | 62-95 Mbit/s |
+| `tailscaled` CPU | 90-154 % | 49-82 % |
+| New `connsInFlight` lines | 8 in the 15:00 hour | none after 15:27:40 |
+
+The halved CPU at the same rate is the second TCP stack leaving the path.
+
+**Status:** Resolved 2026-10-07 by binding the Tailscale address. Open: the `docker.service` gate
+proven by a cold boot (`systemctl show docker -p ActiveEnterTimestamp` after `uptime -s`, Jellyfin
+up without a `docker-boot-retry` line), and a measurement of three concurrent 4K streams.
+Audiobookshelf and `llama-server` still use the forwarder; neither has shown the fault.
