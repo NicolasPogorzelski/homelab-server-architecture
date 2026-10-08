@@ -2,8 +2,8 @@
 
 This diagram shows how services are accessed and how public ingress is prevented.
 
-**Reading the arrows:** a solid arrow is a path that reaches a service. The dotted arrow is the one
-that does not exist - it marks the absent ingress, not a restricted one.
+**Reading the arrows:** a solid arrow is a path that reaches a service. A dotted arrow is one that
+does not exist - it marks an absent ingress, not a restricted one.
 
 This page answers "what is reachable from where". For "which rule allows it, on which port", see
 [View 1 of the logical architecture](diagram.md#view-1---access-policy), which draws the ACL itself.
@@ -27,7 +27,6 @@ flowchart LR
     Jellyfin[Jellyfin]
     ABS[Audiobookshelf]
     Nextcloud[Nextcloud]
-    Vaultwarden[Vaultwarden]
     Paperless[Paperless-ngx]
     CalibreWeb[Calibre-Web]
     Monitoring[Monitoring<br/>Grafana + Prometheus]
@@ -35,16 +34,14 @@ flowchart LR
     DevOps[DevOps Workstation]
   end
 
-  %% LAN exposure (media only)
-  LAN --> Jellyfin
-  LAN --> ABS
+  %% LAN exposure: none since 2026-10-01 (lan_guard on every node)
+  LAN -.-> Services
 
   %% Tailscale exposure (all services)
   TS --> Jellyfin
   TS --> ABS
   TS --> Nextcloud
   TS --> Paperless
-  TS --> Vaultwarden
   TS --> CalibreWeb
   TS --> Monitoring
   TS --> DevOps
@@ -59,19 +56,20 @@ flowchart LR
 ## What the diagram does not show
 
 The picture above is the intended model, and it is accurate at the network boundary. It is not a
-claim about how the individual services bind, and the 2026-08-17 audit measured the difference.
+claim about how the individual services bind.
 
-Several services listen on wildcard addresses on nodes that carry a routable IPv6: Apache on lxc210
-(`*:80`, `*:443`), sshd on ten of eleven nodes, `rpcbind` on lxc210 (`0.0.0.0:111` and `[::]:111`),
-and `coolwsd` on `*:9983`. So for those, what prevents reachability from outside is the absence of
-a forwarding rule on the router, not the binding itself. One entry left this list on 2026-08-20:
-lxc250's node_exporter bound `*:9100` until the role took the unit over and pinned it to the
-Tailscale address.
+Measured 2026-10-08 with `ss -ltn` on every node, these still listen on wildcard addresses: sshd on
+nine of ten nodes (lxc250 pins its Tailscale address), Apache on lxc210 (`*:80`, `*:443`),
+`coolwsd` on lxc210 (`*:9983`), and Samba on vm102 (`0.0.0.0:445`, for a reason the service cannot
+avoid). What stops a LAN device from reaching them is the `lan_guard` nftables table on each node's
+LAN interface, in place since 2026-10-01: it drops new inbound connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100 and
+the hypervisor, and break-glass SSH and netconsole to the hypervisor. The
+router's missing forwarding rules still keep the internet out. Neither of the two is the binding
+itself.
+
 The platform's own binding rule - bind the Tailscale address, or bind loopback and publish through
 `tailscale serve` - holds for every service that was installed deliberately, and not for the ones the
-distribution brought along.
-
-That gap is tracked rather than hidden: see the deferred items in the
+distribution brought along. That gap is tracked in the
 [remediation plan](../platform/remediation-plan.md) and the binding rule in
 [networking](../platform/networking.md). It is recorded here because this is the page a reader
 arrives at when they want to know what is exposed, and a diagram alone would answer that question

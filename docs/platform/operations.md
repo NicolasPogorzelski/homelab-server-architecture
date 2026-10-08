@@ -22,14 +22,13 @@ See: [Known Errors & Workarounds](./known-errors.md)
   - **LXC211**: Paperless-ngx (document management, Docker in LXC)
   - **LXC220**: Calibre-Web (Docker in LXC)
   - **LXC230**: OpenWebUI (AI stack entrypoint)
-  - **LXC240**: Vaultwarden (Docker in LXC)
   - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
   - **LXC260**: PostgreSQL platform service (centralized database)
 
 ### Trust Boundaries
 
 - **Public Internet:** no direct exposure, no router port-forwarding
-- **LAN:** limited exposure (media services intentionally LAN-reachable for performance)
+- **LAN:** no service exposure since 2026-10-01; `lan_guard` admits only SMB to vm102 from vm100 and the hypervisor, and break-glass SSH to the hypervisor
 - **Overlay network (Tailscale):** identity-based access for administration and remote usage
 - **Storage boundary:** strong segmentation at SMB layer (RW vs RO consumer identities)
 
@@ -117,14 +116,10 @@ It is an abstraction layer to keep service paths stable while disks are added/re
 
 ### 2.3 Service Data (Current State)
 
-- **Vaultwarden**: SQLite (`/opt/vaultwarden/db.sqlite3*`) + RSA keys
-  - Protection today: SnapRAID parity and nothing else. There is no export and no version history.
-    This entry read "filesystem-level backups (and/or scheduled copy to backup folder)" until
-    2026-08-17, which described an intention rather than a job that exists.
-  - Parity is not backup: it protects against losing a disk, not against deletion, corruption or
-    ransomware, because the next sync writes the damage into the parity.
-  - A consistent export is the last open half of Tier 1 #3 in the
-    [remediation plan](remediation-plan.md). See [`lxc240.md`](../nodes/lxc240.md).
+- **Vaultwarden**: withdrawn 2026-09-01, container destroyed 2026-09-29. Its data stays on the
+  share, under parity only, until phase 2 of the
+  [decommissioning decision](../decisions/vaultwarden-decommission.md). See
+  [`lxc240.md`](../nodes/lxc240.md).
 - **Nextcloud**:
   - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)
   - DB is local MariaDB (inside the container), dumped nightly to a dedicated share since
@@ -314,16 +309,16 @@ Backups reside on SMB and are isolated from runtime failure.
 - No router port-forwarding
 - Internal services bind to loopback where possible
 - Infrastructure services bind to Tailscale only
-- LAN exposure is limited to performance-critical media workloads and explicitly justified
+- No service is exposed on the LAN; storage traffic between nodes is the only LAN path, and it is named
 
-**These are the rules, not a description of the current state.** Measured 2026-08-17, the fleet
+**These are the rules, not a description of the current state.** Measured 2026-10-08, the fleet
 deviates in several places that are documented on the nodes themselves rather than summarised here:
-sshd binds the wildcard everywhere except lxc250, Apache on lxc210 binds `*:80`/`*:443`, Samba on
-vm102 binds `0.0.0.0:445` for a reason it cannot avoid, and Jellyfin and Audiobookshelf are LAN-bound
-by design. Every node carries a routable IPv6 address, so a wildcard bind is reachable from outside
-unless the router blocks it - which is what the
-[SMB bind decision](../decisions/smb-bind-and-lan-access.md) established for port 445 and answered
-with a kernel filter. The open ones are tracked in the [remediation plan](remediation-plan.md).
+sshd binds the wildcard everywhere except lxc250, Apache on lxc210 binds `*:80`/`*:443` and
+`coolwsd` `*:9983`, and Samba on vm102 binds `0.0.0.0:445` for a reason it cannot avoid. None of
+them is reachable from the LAN, because the `lan_guard` table drops the connection before it reaches
+the socket - the answer the [SMB bind decision](../decisions/smb-bind-and-lan-access.md) first gave
+for port 445, applied fleet-wide on 2026-10-01. The binds themselves are tracked in the
+[remediation plan](remediation-plan.md).
 
 ### 5.2 Zero-Trust Overlay (Tailscale)
 

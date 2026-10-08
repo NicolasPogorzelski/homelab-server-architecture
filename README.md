@@ -4,8 +4,8 @@
 
 [![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
 
-A single-host Proxmox platform: ten guests, Zero-Trust access over Tailscale, ten of eleven nodes
-managed by Ansible - the eleventh is a service withdrawn from use in September 2026.
+A single-host Proxmox platform: nine guests, Zero-Trust access over Tailscale, and every node -
+the hypervisor and the control node included - managed by Ansible.
 
 Built and operated by Nicolas Pogorzelski. Claims here are checked against the running system, and
 the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/security-controls.md)
@@ -18,26 +18,28 @@ the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/
 ```mermaid
 flowchart TB
   Admin(["Admin devices"])
-  TVs(["Remote TVs"])
+  TVs(["TV devices"])
 
   TS["Tailscale overlay<br/>identity-based ACL, tier model<br/>no port-forwarding, no public reverse proxy"]
 
   subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
+    PVE["Hypervisor<br/>Proxmox VE, an Ansible node since 2026-08-21"]
     VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, llama-server"]
-    LXC["7 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, Vaultwarden, PostgreSQL, Monitoring"]
+    LXC["6 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, PostgreSQL, Monitoring"]
     CTRL["LXC250 - Ansible control node<br/>manages the fleet, in the inventory since 2026-08-20"]
     VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
   end
 
   Admin --> TS
-  TVs -->|LAN, media ports only| VM100
+  TVs -->|Jellyfin only| TS
   TS --> VM100
   TS --> LXC
   TS --> CTRL
+  CTRL -->|SSH| PVE
   CTRL -->|SSH| VM100
   CTRL -->|SSH| LXC
   CTRL -->|SSH| VM102
-  VM102 -->|SMB, mounted by VM100 itself| VM100
+  VM102 -->|SMB over the LAN, mounted by VM100 itself| VM100
   VM102 -->|SMB, mounted by the host, bound into the LXCs| LXC
 
   classDef access fill:#0b3d6b,stroke:#0b3d6b,color:#ffffff
@@ -45,15 +47,17 @@ flowchart TB
   classDef storage fill:#6a4a9c,stroke:#6a4a9c,color:#ffffff
   classDef control fill:#8a5a00,stroke:#8a5a00,color:#ffffff
   class TS,Admin,TVs access
-  class VM100,LXC compute
+  class PVE,VM100,LXC compute
   class VM102 storage
   class CTRL control
 ```
 
 Every arrow follows what is delivered - a request to the service it reaches, storage to the node
 that mounts it, configuration to the node it configures. The same rule holds across all the detailed
-views. Worth reading for what is missing: no configuration arrow points into LXC250. It configures
-the nine other nodes and belongs to no inventory group itself.
+views. Worth reading for what is missing: no arrow from a device reaches a node over the LAN. Since
+2026-10-01 every node drops new inbound LAN connections, and the only service paths left there are SMB
+from vm100 and the hypervisor to vm102, and break-glass SSH to the hypervisor. LXC250 configures itself
+as well as the nine other nodes; that arrow is left out of the picture.
 
 Four detailed views follow from here: the [logical architecture](docs/architecture/diagram.md) -
 access policy by Tailscale tag, the three storage layers, and monitoring coverage by exporter class
@@ -67,7 +71,7 @@ access policy by Tailscale tag, the three storage layers, and monitoring coverag
 | Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
 | Compute | Docker on VM100 | GPU-enabled workloads |
 | Services | Unprivileged LXCs | Isolation and segmentation |
-| Configuration | Ansible | Declarative management of every guest; roles, inventory, vault |
+| Configuration | Ansible | Declarative management of every node; roles, inventory, vault |
 | Access | Tailscale | Identity-based remote access (Zero Trust) |
 | Monitoring | Prometheus + Grafana | Observability layer |
 
@@ -131,7 +135,7 @@ support. This paragraph asserted that every runbook carried such a record until 
 | 3 | Monitoring - Prometheus, Grafana, Alertmanager | Done |
 | 4 | Zero Trust Networking - Tailscale, ACL design | Done |
 | 5 | Ansible - playbooks, roles, vault, hardening | Done |
-| 5.5 | Identity - LDAP directory and OIDC provider, [decision](docs/decisions/identity-before-terraform.md) | Scheduled 2026-09-25 to 2026-09-27 |
+| 5.5 | Identity - LDAP directory and OIDC provider, [decision](docs/decisions/identity-before-terraform.md) | Planned; the weekend scheduled for it, 2026-09-25 to 2026-09-27, did not start it |
 | 6 | Terraform - IaC on AWS (free tier) + Proxmox provisioning | Planned |
 | 7 | Kubernetes - k3s in the homelab | Planned |
 | 8 | Cloud depth (AWS) + Python | Planned |
@@ -167,7 +171,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
 - [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
 - [Hypervisor Panic Policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) (a machine with no way in should not survive an oops)
-- [sshd Binding](docs/decisions/sshd-listen-address.md) (ten of eleven nodes break the rule, so it is a fleet decision)
+- [sshd Binding](docs/decisions/sshd-listen-address.md) (nine of ten nodes break the rule, so it is a fleet decision)
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 - [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
@@ -179,7 +183,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Data Classification](docs/platform/data-classification.md) (classification, recovery objectives, data protection assessment)
 - [HA Mechanics](docs/platform/ha-mechanics.md) (what Proxmox HA does, measured on one node, and why it stays off)
 - [Remediation Plan](docs/platform/remediation-plan.md) (open work ordered by loss risk and dependency)
-- [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 20 entries with root causes)
+- [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 28 entries with root causes)
 - [Platform Changelog](docs/platform/changelog.md) (every change with the measurement that verified it)
 
 ### Platform
@@ -234,7 +238,7 @@ step, its failure modes and its rollback - or records that no rollback exists an
 ### Nodes
 
 <details>
-<summary>Ten guests, one document each</summary>
+<summary>Nine guests and one withdrawn, one document each</summary>
 
 - [VM100 - GPU / Compute](docs/nodes/vm100.md) (Docker, NVIDIA, Jellyfin, Audiobookshelf)
 - [VM102 - Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
@@ -243,7 +247,7 @@ step, its failure modes and its rollback - or records that no rollback exists an
 - [LXC211 - Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
 - [LXC220 - Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
 - [LXC230 - OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
-- [LXC240 - Vaultwarden](docs/nodes/lxc240.md) (Docker in LXC, secrets tier)
+- [LXC240 - Vaultwarden](docs/nodes/lxc240.md) (withdrawn 2026-09-01, container destroyed 2026-09-29)
 - [LXC250 - DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
 - [LXC260 - PostgreSQL](docs/nodes/lxc260.md) (centralized platform database)
 
@@ -261,7 +265,7 @@ step, its failure modes and its rollback - or records that no rollback exists an
 - [Calibre-Web](docs/services/calibre-web.md)
 - [OpenWebUI](docs/services/openwebui.md)
 - [LLM Inference](docs/services/llm-inference.md)
-- [Vaultwarden](docs/services/vaultwarden.md)
+- [Vaultwarden](docs/services/vaultwarden.md) (withdrawn 2026-09-01)
 - [PostgreSQL Platform](docs/services/postgresql-platform.md)
 
 </details>
