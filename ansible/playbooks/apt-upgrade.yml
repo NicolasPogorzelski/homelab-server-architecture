@@ -38,11 +38,14 @@
         state: restarted
       when: "'tailscale' in packages_pending.stdout"
 
+    # container-getty@.service is excluded by name: Proxmox rewrites it at every
+    # container start (/dev/pts/%I -> /dev/tty%I, PVE/LXC/Setup/Base.pm), so its
+    # checksum differs on every LXC and a reinstall is undone at the next start.
     - name: Collect dpkg integrity results
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          dpkg --verify 2>&1 | grep -v ' c /' || true
+          dpkg --verify 2>&1 | grep -v ' c /' | grep -v ' /lib/systemd/system/container-getty@\.service$' || true
         executable: /bin/bash
       register: dpkg_verify
       changed_when: false
