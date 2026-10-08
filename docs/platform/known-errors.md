@@ -603,24 +603,34 @@ data-roots of LXC200/211/220/230/260 again - and VM100's `scsi1` data disk - bec
 no alternative target exists: the MergerFS pool on VM102 has a low-hundreds-of-GB free, and the LVM
 thin pool on the boot SSD has no headroom.
 
-**Degradation stopped after the first two weeks and has been static since.** SMART re-reads
-(identify the disk by `by-id`, not by kernel letter - see the note in [KE-14](#ke-14)):
+**Degradation paused for two months and then took a second step.** SMART re-reads (identify the
+disk by `by-id`, not by kernel letter - see the note in [KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 |
-|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 |
-| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | **21** | 21 | 21 |
+| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 | 2026-09-15 | 2026-10-08 |
+|---|---|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** |
+| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | **21** | 21 | 21 | 21 | 21 |
+
+The 2026-09-15 column is the first sample `smart_metrics` exported; the step to 8168 is in the
+Prometheus history at 2026-09-20 21:02, read back on 2026-10-08 with a range query at a six-hour
+step. Nothing recorded it at the time, and whether `SmartAttributeDegrading` fired for it was not
+established from that query. `Reported_Uncorrect` did not move, so no read has failed since July:
+the 488 new sectors moved `Offline_Uncorrectable` with them, which points at the drive's own
+offline scan rather than a failed read by a consumer.
 
 `Reported_Uncorrect` rose by 3 in the first fortnight back in service and has **not moved in the
 35 days since**. The 8 sectors that left `pending` were rewritten and proved usable; none were
 reallocated, so the drive's spare pool is untouched and the remaining 7680 sectors hold data
 that cannot be read back.
 
-**Static is not safe, and it is not "recovered".** Those 7680 sectors are still unreadable; the
-drive has simply not been asked to read them again. What the flat curve does change is urgency:
-replacement is a planned task, not an emergency. Do not read `smartctl -H` as a second
+**Static was never safe, and it is no longer static.** The pending sectors are still unreadable;
+the drive has simply not been asked to read them again. The September step does not make this an
+emergency - `Reported_Uncorrect` is flat and the image pulls of 2026-10-08 wrote to all five
+data-roots with the counters reading 21 / 8168 / 8168 before and after - but it removes the premise
+that lifted the `docker-compose-update` hold on 2026-09-05, which was a disk unchanged since July.
+Replacement stays a planned task with a shorter horizon. Do not read `smartctl -H` as a second
 opinion - measured again 2026-08-13, it returns `PASSED` on this disk, because
 `Current_Pending_Sector` normalises to `VALUE=054` against `THRESH=000` and can therefore never
 trip the self-assessment. The textfile collector on the host inherits that blindness verbatim:
@@ -802,6 +812,19 @@ the 2026-08-20 audit and recorded only in the remediation plan until now. The en
 media as a cause on the strength of the error signature, which still holds; age is not the same
 claim as media failure, and leaving it out of the entry that names every other excluded cause made
 the exclusion look broader than it is.
+
+**Load, not boot, measured 2026-10-08.** The day's updates produced four bursts, all `READ`, all
+`DID_SOFT_ERROR` with `cmd_age` around 26 s, none outside an I/O-heavy step:
+
+| Time | Lines | Running at the time |
+|---|---|---|
+| 13:45 | 6 | image pulls on five containers |
+| 14:26 | 10 | fleet `apt-upgrade.yml` |
+| 14:46 | 10 | fleet `apt-upgrade.yml` |
+| 15:36 | 1 | hypervisor `dist-upgrade` |
+
+No write failed, and no filesystem, thin-pool or device-mapper error followed. The entry's title
+says boot-time; the fault is load-driven, and the boot window is simply the most reliable load.
 
 **Incidental correction:** all nine disks are attached to the Proxmox host. VM102 reaches
 six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART
@@ -1467,6 +1490,20 @@ static CD-rip logs out of the audiobook archive - files that never change and we
 problem. The rule is exclude what changes, not what shares a suffix; an over-broad exclude
 silently reduces coverage, which is the failure mode this whole entry is about, one layer up.
 
+### Recurrence on 2026-10-08
+
+Same symptom after the morning boot, different file: the sync's catch-up ran at the same boot as
+the PostgreSQL dump's, and the dump renamed its `*.partial` once verified, so a file the sync had
+scanned was gone before it was read:
+
+```
+Missing file '/mnt/disk02/Postgres-Backups/pg_dumpall_20261008_102227.sql.gz.partial'.
+WARNING! You cannot modify data disk during a sync.
+```
+
+`*.partial` is excluded since that day; the MariaDB dump uses the same pattern. The finished
+dumps stay in the array.
+
 ### The finding that outlives the incident
 
 `diff` also reported `Vaultwarden/db.sqlite3-shm` and `-wal` inside the array. Those are SQLite side
@@ -1729,7 +1766,10 @@ access, an immediate reboot is strictly better than a machine that is alive and 
   later file in `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for
   ten seconds rather than zero, and the decision not to arm `softdog`, are in
   [the panic and watchdog decision](../decisions/hypervisor-panic-and-watchdog.md).
-- Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **pending.**
+- Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **installed 2026-10-08** with the PVE 9.2
+  upgrade, and pinned with `proxmox-boot-tool kernel pin`, because 9.2 makes the 7.0 kernel line the
+  default and a driver change under the open [KE-14](#ke-14) diagnosis would make its measurements
+  incomparable. Active from the first boot after that date.
 - `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
   window and physical presence.
 - Arm `softdog` - **decided against 2026-09-11**, with the conditions for revisiting written down
@@ -2033,6 +2073,26 @@ scheduled run, because `guest_backup_failed_guests` is written by the job and by
 Note what the archive does not hold: `mp0` is a bind mount of `/mnt/smb/vaultwarden` and `vzdump`
 reports `excluding bind mount point mp0 ... (not a volume)`, so this is a copy of the machine,
 not of its data.
+
+**Second instance, lxc210, found 2026-10-08** while preparing the Nextcloud upgrade. The
+application tree under `/var/www/nextcloud` held 13,944 files owned by host UID 1000, among them
+`index.php`, `lib/` and `updater/`, plus 8,228 with host GID 101000:
+
+```
+# find /proc/<pid>/root/var/www/nextcloud -xdev -printf '%u:%g\n' | sort | uniq -c
+  17182 100033:100033
+   8228 100033:ns-uid1000
+  13944 media:media
+```
+
+Inside the container those read as `nobody:nogroup`, so the web server could execute the code and
+the updater, running as `www-data`, could not replace it. This instance did not break the backup,
+because the files were world-readable and `tar` read them under the map; the archive stores them as
+65534. It had a second cost the lxc240 case did not: a process on the hypervisor running as `media`
+could rewrite the PHP that Nextcloud executes. Fixed by `chown -h 100033:100033` from the host
+over every path with host UID 1000 or GID 1000/101000, after a fresh `vzdump 210`; afterwards all
+39,354 entries read `100033:100033`, `occ integrity:check-core` was clean, and the upgrade to 34
+ran on that tree.
 
 ---
 

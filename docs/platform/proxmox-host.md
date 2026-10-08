@@ -6,7 +6,9 @@ Unlike the node docs in `docs/nodes/`, this covers host-level configuration that
 
 ## Runtime Characteristics
 
-- OS: Proxmox VE (Debian-based)
+- OS: Proxmox VE 9.2 on Debian 13 (trixie); boots kernel 6.17.13 pinned with
+  `proxmox-boot-tool kernel pin`, while 9.2 defaults to the 7.0 kernel line (reason in the
+  [remediation plan](remediation-plan.md#added-on-2026-10-08))
 - Tailscale hostname: server
 - Tailscale variable: `proxmox_host_tailscale_ip` (see `ansible/inventory/hosts.yml.example`)
 - Managed nodes: VM100, VM102, LXC200-LXC260
@@ -20,7 +22,6 @@ VMs and LXCs start in dependency order after the hypervisor is up:
 | 1 | VM102 | 30s | Storage (SMB must be reachable before dependents) |
 | 2 | LXC200, LXC260 | 20s | Monitoring, PostgreSQL platform |
 | 3 | LXC210, LXC211 | 20s | Nextcloud, Paperless |
-| 4 | LXC240 | 20s | Vaultwarden |
 | 5 | LXC220, LXC230 | 20s | Calibre-Web, OpenWebUI |
 | 6 | VM100 | 40s | Compute / GPU media |
 
@@ -219,9 +220,19 @@ change means the live configuration drifted, and that is the finding. Only after
 `systemd-hygiene.yml` and `node-exporter.yml` follow - the first is harmless here because its unit
 lists default to empty, the second replaces a hand-written unit with an identical generated one.
 
-**Deliberately still out of scope:** package updates. `apt-upgrade.yml` targets `lxcs` and `vms`, and
-a Proxmox host upgrade is not an ordinary `apt upgrade` - it touches the kernel, the enterprise
-repository and the guest stack, and belongs in a window somebody is watching.
+**Package updates stay outside Ansible.** `apt-upgrade.yml` targets `lxcs` and `vms`; a Proxmox
+host upgrade touches the kernel and the guest stack and belongs in a window somebody is watching.
+The upgrade of 2026-10-08 (9.1.4 to 9.2.21, 268 packages) ran as a transient unit, so that the SSH
+session dropping when `tailscaled` restarts cannot kill `dpkg` halfway:
+
+```bash
+systemd-run --unit=host-upgrade-<date> /root/host-upgrade.sh   # apt-get dist-upgrade with --force-confold
+journalctl -u host-upgrade-<date>
+```
+
+It removed `samba-ad-dc`, `winbind` and their libraries, present since the installation and used
+by nothing; their removal also took `winbind` out of `/etc/nsswitch.conf`. Running guests keep the
+old QEMU and LXC binaries until they are next started.
 
 To run the schedule role against the host, once the group exists:
 
@@ -324,7 +335,7 @@ belonging to the platform - it is noticed by a person.
 | Host OS on `pve-root` | Guest configs in `/etc/pve`, the eight hand-deployed host artefacts, the schedule that powers the machine down and wakes it |
 | `pve/data` thin pool | Every VM and LXC root disk. One 62.5 GB pool, at 82.78 % on 2026-08-20, with `lvm_vg_free_bytes` at zero - so `lvextend` is not an available remedy |
 | Boot SSD ([KE-14](known-errors.md#ke-14)) | Both of the above at once. It is a single consumer drive with 58,540 power-on hours, behind the HBA whose boot-window I/O errors remain unexplained |
-| Auxiliary disk ([KE-13](known-errors.md#ke-13)) | Docker engine state for five containers and vm100's second disk. Degraded, in service under protest, with 7680 unreadable sectors |
+| Auxiliary disk ([KE-13](known-errors.md#ke-13)) | Docker engine state for five containers and vm100's second disk. Degraded, in service under protest, with 8168 unreadable sectors |
 | Tailscale identity | Every service address. Nodes are reached by MagicDNS name, not by LAN address, and the LAN path is deliberately not a fallback |
 
 What survives a total loss of the machine, and what does not:

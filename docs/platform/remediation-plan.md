@@ -109,7 +109,7 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 
 | # | Item | Unblocks |
 |---|---|---|
-| 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with 7680 unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
+| 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with 8168 unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
 | 6 | [KE-14](known-errors.md#ke-14) physical verification - 12 V rail, cable reseat, HBA temperature, PSU age | Not delivery-blocked. Needs only host downtime, which the nightly RTC cycle already provides. Written up as [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) on 2026-09-11, because four bullet points restated in three documents had not once become a scheduled step. The runbook also records the PSU, which is the A.7.11 gap in [`physical-controls.md`](physical-controls.md) |
 | 7 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
 
@@ -469,9 +469,9 @@ Found while completing the inference rollout.
   masks. Writing it found the role's removal guard blind (it matched `Remv`, apt prints `Purg`).
   Open until `apt-metrics.yml` and `systemd-hygiene.yml` are applied and the thirteen
   `SystemdUnitFailed` alerts clear.
-- **OpenWebUI 0.9.6 to 0.11.x.** Pinned to 0.11.4 on 2026-10-08 with the other image updates of
-  that day; open until it is applied after a dump of `openwebui_db`, which is the rollback path
-  because the migrations support no downgrade.
+- ~~**OpenWebUI 0.9.6 to 0.11.x.**~~ Done 2026-10-08: 0.11.4, applied after a dump of
+  `openwebui_db`, which is the rollback path because the migrations support no downgrade. The
+  first start took about seven minutes past the migrations before the port answered.
 - **`gpu` on vm100 has passwordless sudo.** Closed 2026-10-07, together with the same rule for
   `storage` on vm102 - see the break-glass item under "Added on 2026-10-07".
 
@@ -537,6 +537,31 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   an API key on the node and a session query in the script, or stop restarting and alert instead,
   which trades silent interruptions for visible ones. Either is a change to `jellyfin_watchdog`
   and its own unit of work.
+
+- **Nextcloud cannot reach the two Paperless ingest shares.** Its log carries
+  `Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 27 times a
+  day, and `Error while getting file info` alongside, for as far back as the log reaches
+  (2026-09-29). A document dropped into either external-storage folder does not reach the
+  consumption directory, and nothing alerts. Not caused by the upgrade to 34 and not yet
+  diagnosed; the first thing to rule out is the `smb_guard` table on vm102, which admits TCP/445 over
+  the LAN only from vm100 and the hypervisor.
+
+- **Nextcloud 35 needs PHP 8.3, so it needs Debian 13 on lxc210.** 34.0.4 is the last major that
+  runs on Debian 12's PHP 8.2 (`lib/versioncheck.php` of each tag), and `occ setupchecks` already
+  flags 8.2 as deprecated. 34 is supported until 2027-06. Same check lists a mimetype migration
+  (`occ maintenance:repair --include-expensive`), which walks every file on the CIFS data
+  directory and belongs in its own window.
+
+- **Jellyfin 12 is prepared, not applied.** 10.11.11 receives no further releases. 12.x migrates the
+  database with no way back except a restore, requires a full library scan afterwards, removes
+  the global subtitle settings in favour of per-library ones, and ignores `X-Emby-Token` - the
+  last is handled, `jellyfin_user_prefs` sends the `Authorization` header since 2026-10-08. Before
+  the image changes: a copy of `/config`, a check that no two of the six user names differ only by
+  case, and a statement from Moonfin about 12.x, which no source gave on 2026-10-08.
+
+- **The hypervisor boots 6.17.13, pinned, while 9.2 defaults to 7.0.** Pinned on 2026-10-08 so the
+  [KE-14](known-errors.md#ke-14) measurements stay comparable across the power-path check. Release
+  the pin with `proxmox-boot-tool kernel unpin` once that check has a result.
 
 ## The exercise block, before Terraform
 

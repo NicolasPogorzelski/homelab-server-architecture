@@ -59,7 +59,7 @@ component was operationally known on the storage side while being absent from th
 
 ## Runtime Configuration (Sanitized)
 
-- Nextcloud version: 31.x
+- Nextcloud version: 34.0.4, the last major that runs on Debian 12's PHP 8.2; 35 needs PHP 8.3
 - Data directory: `/mnt/nextcloud` (mounted storage)
 - DB type: `mysql`, database: `nextcloud`
 - Redis: `127.0.0.1:6379` (local Redis instance)
@@ -67,7 +67,9 @@ component was operationally known on the storage side while being absent from th
 
 ## Data / Storage Integration
 
-- Nextcloud application code: `/var/www/nextcloud`
+- Nextcloud application code: `/var/www/nextcloud`, owned by `www-data` throughout. Until
+  2026-10-08 most of it belonged to host UID 1000, which the updater cannot write; see
+  [KE-25](../platform/known-errors.md#ke-25)
 - Persistent user data: CIFS-mounted storage at `/mnt/nextcloud`
 - Ownership model: mapped to `www-data` inside the unprivileged container (UID/GID mapping via mount options)
 
