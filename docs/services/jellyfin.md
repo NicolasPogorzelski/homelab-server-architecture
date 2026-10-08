@@ -49,8 +49,10 @@ that means reading tens of gigabytes over CIFS before the first frame: measured 
 film ran at about 110 MB/s for five minutes, and the client gave up long before. The server option
 `EnableSubtitleExtraction` in `encoding.xml` is already `false` and does not stop it.
 
-- The lever is the client: subtitle mode "None" in the user profile and in Moonfin. "Only forced"
-  is not enough, because the 4K files carry a German track flagged as forced.
+- The lever is the subtitle mode. "Default" plays any track the file flags as default, and many
+  4K episodes carry a German forced track flagged that way; "Only forced" selects the same track.
+  Every profile is held at "None" by the `jellyfin_user_prefs` role. Moonfin has a subtitle
+  setting of its own, which belongs at "None" too and is not something the server can see.
 - An extraction keeps running after the client closes, and it saturates the read path for every
   other stream until it ends.
 - Extracted tracks are cached, so a second start of the same file is immediate.
@@ -100,6 +102,32 @@ Because the watchdog is a systemd unit, a failing run now raises the fleet-wide
 [snippets/scripts/jellyfin-cuda-watchdog.sh](../../snippets/scripts/jellyfin-cuda-watchdog.sh)
 
 ---
+
+## Moonfin Direct Play
+
+Moonfin's built-in player on the Android TV box stops a small set of 4K remuxes three to five
+seconds after the start, with German audio only. Measured 2026-10-07 on one episode:
+
+| Player | German audio | English audio |
+|---|---|---|
+| Moonfin built-in, direct play | stops at 3-5 s, every start | plays |
+| External player (JustPlayer) | plays to the end, subtitles switchable | not tried |
+| Jellyfin Web, transcoded without subtitle streams | plays | not tried |
+
+- While the player stands still, the server sends nothing, reads nothing from vm102 and runs no
+  ffmpeg, and the session reports the subtitle index as none. The stop is inside the client.
+- Ruled out by measurement: the German audio track (codec, bitrate, 2.002 s start offset and packet
+  timing identical to an episode that plays), interleaving (audio within about 3 MB of its video in
+  both), storage and network load.
+- What the stopping files share: ten subtitle tracks including text (SRT) tracks, with the German
+  text track flagged default and the German tracks flagged forced. Files with four image-only
+  tracks and no forced flag play in German.
+- Not yet established: which property the player reacts to. Clearing the flags in the file and
+  retrying proved nothing, because the server was not made to re-read the file and still
+  described the tracks as forced to the client. The test that decides it is to clear the flags,
+  refresh the item's metadata, and start again in German.
+- An external player is not the fix: the built-in player is what carries playback sync and
+  trickplay previews.
 
 ## Failure Impact
 

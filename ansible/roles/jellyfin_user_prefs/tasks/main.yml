@@ -1,0 +1,46 @@
+---
+# Read-only, so it runs under --check as well: the drift sweep needs the
+# comparison, not only the write. no_log because the module echoes its
+# headers, and the API key is one of them.
+- name: Read every Jellyfin user and its configuration
+  ansible.builtin.uri:
+    url: "{{ jellyfin_user_prefs_url }}/Users"
+    headers:
+      X-Emby-Token: "{{ jellyfin_user_prefs_api_key }}"
+    return_content: true
+  register: jellyfin_user_prefs_users
+  check_mode: false
+  no_log: true
+
+- name: Select the users whose subtitle mode differs
+  ansible.builtin.set_fact:
+    jellyfin_user_prefs_drifted: >-
+      {{ jellyfin_user_prefs_users.json
+         | rejectattr('Configuration.SubtitleMode', 'equalto', jellyfin_user_prefs_subtitle_mode)
+         | list }}
+
+# The write below is hidden by no_log, so this task is where a run says what it
+# changes, and where --check reports drift.
+- name: Report the users whose subtitle mode is changed
+  ansible.builtin.debug:
+    msg: >-
+      SubtitleMode -> {{ jellyfin_user_prefs_subtitle_mode }} for
+      {{ jellyfin_user_prefs_drifted | map(attribute='Name') | join(', ') }}
+  changed_when: true
+  when: jellyfin_user_prefs_drifted | length > 0
+
+# The endpoint replaces the whole configuration object, so the current one is
+# sent back with the one field changed rather than a partial body.
+- name: Set the subtitle mode
+  ansible.builtin.uri:
+    url: "{{ jellyfin_user_prefs_url }}/Users/Configuration?userId={{ item.Id }}"
+    method: POST
+    headers:
+      X-Emby-Token: "{{ jellyfin_user_prefs_api_key }}"
+    body_format: json
+    body: "{{ item.Configuration | combine({'SubtitleMode': jellyfin_user_prefs_subtitle_mode}) }}"
+    status_code: 204
+  loop: "{{ jellyfin_user_prefs_drifted }}"
+  changed_when: true
+  no_log: true
+  when: not ansible_check_mode

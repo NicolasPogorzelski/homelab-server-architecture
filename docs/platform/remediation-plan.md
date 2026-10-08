@@ -487,6 +487,13 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   `vzdump-lxc-240-*` archives, which no prune run will touch now. The record itself needs the
   operator's amendment.
 
+- **Embedded subtitles on 4K remuxes are extracted on demand, over CIFS.** A client that asks for
+  one track makes Jellyfin read the whole file, measured at about five minutes for a 30 GB episode,
+  and the client gives up. All profiles are held at subtitle mode "None" since 2026-10-07, which
+  costs the automatic translation of foreign-language scenes. The durable fix is to extract the
+  text tracks once into sidecar `.srt` files beside the media, which Jellyfin serves without
+  touching the container; it writes into the archive on vm102 and is its own unit of work.
+
 - **The journal receiver on lxc200 rotates every few seconds.** Its log reads `Journal header limits
   reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
   2026-09-26. Part of the `journal-central` exercise; whether the vacuum timer keeps up with that
