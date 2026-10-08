@@ -18,10 +18,9 @@ agentic workflows.
 - Unprivileged Debian LXC (CT230)
 - Docker Compose at `/opt/openwebui/`
 - `.env` at `/opt/openwebui/.env` (chmod 600, gitignored)
-- Version: OpenWebUI v0.9.6, running from the pinned image `ghcr.io/open-webui/open-webui:0.9.6`
-  (`docker ps`, 2026-10-01), matching `docker/openwebui/docker-compose.yml`. The admin panel offers
-  v0.11.4; the upgrade is deferred to its own unit, because it carries database migrations on
-  lxc260 and pulls new layers onto the aux-disk
+- Version: OpenWebUI v0.11.4, pinned in `docker/openwebui/docker-compose.yml`. Versions 0.10 and
+  0.11 migrate the database on lxc260 and support no downgrade, so a rollback is a restore of the
+  `openwebui_db` database from a dump taken before the image changes, together with the previous pin
 
 ---
 

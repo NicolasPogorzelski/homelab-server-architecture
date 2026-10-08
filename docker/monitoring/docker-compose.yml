@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.12.0  # pinned to running version (2026-06-17)
+    image: prom/prometheus:v3.15.0  # pinned; released 2026-09-25
     container_name: prometheus
     network_mode: host
     command:
@@ -20,7 +20,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: grafana/grafana:13.0.2  # pinned to running version (2026-06-17)
+    image: grafana/grafana:13.2.3  # pinned; released 2026-09-29
     container_name: grafana
     network_mode: host
     env_file:
@@ -35,7 +35,7 @@ services:
         max-file: "3"
 
   alertmanager:
-    image: prom/alertmanager:v0.32.2  # pinned to running version (2026-06-17)
+    image: prom/alertmanager:v0.34.1  # pinned; released 2026-09-17
     container_name: alertmanager
     network_mode: host
     command:
@@ -58,7 +58,7 @@ services:
         max-file: "3"
 
   node-exporter:
-    image: prom/node-exporter:v1.11.1  # pinned to running version (2026-06-17)
+    image: prom/node-exporter:v1.12.1  # pinned; released 2026-07-14
     container_name: node-exporter
     network_mode: host
     pid: host
@@ -78,7 +78,7 @@ services:
         max-file: "3"
 
   blackbox-exporter:
-    image: prom/blackbox-exporter:v0.28.0  # pinned to running version (2026-06-17)
+    image: prom/blackbox-exporter:v0.28.0  # pinned; v0.29.0 is younger than seven days
     container_name: blackbox-exporter
     network_mode: host
     # Probes address services by MagicDNS name. Docker copies the node's

@@ -1,6 +1,6 @@
 services:
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15  # pinned to running version (2026-06-17)
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.2.1  # pinned; released 2026-09-20. v3 needs the env changes in the paperless_env role
     container_name: paperless
     restart: unless-stopped
     depends_on:
@@ -23,14 +23,14 @@ services:
       - paperless-data:/usr/src/paperless/data
 
   redis:
-    image: redis:7.4.9-alpine  # pinned to running version (2026-07-08)
+    image: redis:7.4.11-alpine  # pinned; released 2026-09-21
     container_name: paperless-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:8.33.0  # pinned to running version (2026-07-08)
+    image: gotenberg/gotenberg:8.37.0  # pinned; released 2026-09-11, the minor Paperless v3 ships with
     container_name: paperless-gotenberg
     restart: unless-stopped
     command:
@@ -39,8 +39,9 @@ services:
       - "--chromium-allow-list=file:///tmp/.*"
 
   tika:
-    # digest pin: the image's version label (26.04) is the Ubuntu base, not a valid Tika tag
-    image: apache/tika@sha256:90b7fa1dc018434075fce9e1d9b88b1e3d0ea6979d0cf86e116c79a8073ae973  # pinned to running digest (2026-06-17)
+    # Tag and digest: the tag names the version, the digest is what is pulled.
+    # 3.3.1.0 is the Tika release Paperless v3's own compose example pins.
+    image: apache/tika:3.3.1.0@sha256:90b7fa1dc018434075fce9e1d9b88b1e3d0ea6979d0cf86e116c79a8073ae973
     container_name: paperless-tika
     restart: unless-stopped
 

@@ -1,12 +1,14 @@
 ---
 # Read-only, so it runs under --check as well: the drift sweep needs the
 # comparison, not only the write. no_log because the module echoes its
-# headers, and the API key is one of them.
+# headers, and the API key is one of them. The key travels in the
+# `Authorization: MediaBrowser` header because Jellyfin 12 ignores the legacy
+# `X-Emby-Token` form unless legacy authorization is switched back on.
 - name: Read every Jellyfin user and its configuration
   ansible.builtin.uri:
     url: "{{ jellyfin_user_prefs_url }}/Users"
     headers:
-      X-Emby-Token: "{{ jellyfin_user_prefs_api_key }}"
+      Authorization: 'MediaBrowser Token="{{ jellyfin_user_prefs_api_key }}"'
     return_content: true
   register: jellyfin_user_prefs_users
   check_mode: false
@@ -36,7 +38,7 @@
     url: "{{ jellyfin_user_prefs_url }}/Users/Configuration?userId={{ item.Id }}"
     method: POST
     headers:
-      X-Emby-Token: "{{ jellyfin_user_prefs_api_key }}"
+      Authorization: 'MediaBrowser Token="{{ jellyfin_user_prefs_api_key }}"'
     body_format: json
     body: "{{ item.Configuration | combine({'SubtitleMode': jellyfin_user_prefs_subtitle_mode}) }}"
     status_code: 204

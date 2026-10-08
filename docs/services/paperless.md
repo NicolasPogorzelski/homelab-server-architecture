@@ -134,14 +134,14 @@ Documents are ingested via Nextcloud External Storage into per-user consumption 
 1. User uploads document in Nextcloud (External Storage folder)
 2. Nextcloud writes file to SMB share (`Paperless-ingest-user1` or `Paperless-ingest-user2`)
 3. File lands in `/data/paperless/consumption/user1/` or `/data/paperless/consumption/user2/`
-4. Paperless consumer polls directory every 30 seconds (`PAPERLESS_CONSUMER_POLLING=30`)
+4. Paperless consumer polls directory every 30 seconds (`PAPERLESS_CONSUMER_POLLING_INTERVAL=30`)
 5. Workflow matches subdirectory path and assigns document owner
 6. Document is OCR-processed, classified, and stored
 
 ### Consumer Settings
 
 - `PAPERLESS_CONSUMER_RECURSIVE=true` - required for subdirectory scanning
-- `PAPERLESS_CONSUMER_POLLING=30` - inotify does not work on CIFS/SMB mounts
+- `PAPERLESS_CONSUMER_POLLING_INTERVAL=30` - inotify does not work on CIFS/SMB mounts
 
 ### Workflows
 
@@ -225,6 +225,31 @@ Bulk imports (thousands of documents) can exhaust available resources and crash 
 Temporary resource scaling via Proxmox may be required.
 
 See: [LXC211 Troubleshooting](../nodes/lxc211.md#troubleshooting) for details and recommended values.
+
+### Version 3
+
+The upstream [v3 migration guide](https://github.com/paperless-ngx/paperless-ngx/blob/main/docs/migration-v3.md)
+renames or removes settings, and two of the removals fail silently here:
+
+- `PAPERLESS_CONSUMER_POLLING` became `PAPERLESS_CONSUMER_POLLING_INTERVAL`. Without the new name
+  the consumer falls back to inotify, which sees nothing on the CIFS consumption directory, so
+  documents would wait in the inbox with no error anywhere.
+- `PAPERLESS_DBSSLMODE` is replaced by `PAPERLESS_DB_OPTIONS=sslmode=require`. The old name still
+  works with a deprecation warning, and will not in a later release.
+
+Both are rendered by the `paperless_env` role. Apply that role before the image changes: its
+handler recreates the container, and recreating it during v3's first start would interrupt the
+database migrations. v3 can only be reached from 2.20.15.
+
+Defaults that changed and are left at upstream's value:
+
+- Duplicates are accepted and flagged in the UI instead of rejected. Rejecting them again needs
+  `PAPERLESS_CONSUMER_DELETE_DUPLICATES=true`, which also deletes the duplicate file from the inbox.
+- An archive version is produced only for documents without a text layer
+  (`PAPERLESS_ARCHIVE_FILE_GENERATION=auto`). Scans from the inbox have none, so they are archived
+  as before; born-digital PDFs are no longer duplicated.
+- The full-text index moved from Whoosh to Tantivy and is rebuilt on the first start. Searches
+  return incomplete results until that finishes.
 
 ---
 
