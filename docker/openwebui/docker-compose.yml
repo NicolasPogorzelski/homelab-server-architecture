@@ -1,6 +1,6 @@
 services:
   openwebui:
-    image: ghcr.io/open-webui/open-webui:0.9.6  # pinned to running app version (2026-07-08, verified via /api/version + tag exists in registry)
+    image: ghcr.io/open-webui/open-webui:0.11.4  # pinned; released 2026-09-21. Carries database migrations with no downgrade path
     container_name: openwebui
     restart: unless-stopped
     ports:

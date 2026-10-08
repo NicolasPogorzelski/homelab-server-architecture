@@ -469,8 +469,9 @@ Found while completing the inference rollout.
   masks. Writing it found the role's removal guard blind (it matched `Remv`, apt prints `Purg`).
   Open until `apt-metrics.yml` and `systemd-hygiene.yml` are applied and the thirteen
   `SystemdUnitFailed` alerts clear.
-- **OpenWebUI 0.9.6 to 0.11.x.** Its own unit with a rollback path: two minor versions of database
-  migrations on lxc260, and new image layers on the KE-13 aux-disk.
+- **OpenWebUI 0.9.6 to 0.11.x.** Pinned to 0.11.4 on 2026-10-08 with the other image updates of
+  that day; open until it is applied after a dump of `openwebui_db`, which is the rollback path
+  because the migrations support no downgrade.
 - **`gpu` on vm100 has passwordless sudo.** Closed 2026-10-07, together with the same rule for
   `storage` on vm102 - see the break-glass item under "Added on 2026-10-07".
 

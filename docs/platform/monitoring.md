@@ -44,16 +44,16 @@ Remote access is provided via Tailscale (Serve or Tailnet-bound proxy). The serv
 |---|---|---|
 | `prometheus` | `127.0.0.1:9090` | Prometheus self-scrape |
 | `node-lxc200-monitoring` | `127.0.0.1:9100` | node_exporter as Docker container (loopback); resources only, no unit state |
-| `node-lxc200-monitoring-systemd` | LXC200 Tailscale IP`:9101` | systemd binary, v1.11.1, native beside the container; the target that gives `SystemdUnitFailed` its eleventh node |
+| `node-lxc200-monitoring-systemd` | LXC200 Tailscale IP`:9101` | systemd binary, v1.12.1, native beside the container; the target that gives `SystemdUnitFailed` its eleventh node |
 | `node-proxmox-host` | Proxmox host Tailscale IP`:9100` | systemd + textfile collector (`smartmon.prom`, `lvm-thin.prom`, `guest-backup.prom`) |
-| `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.11.1; textfile collector enabled (`snapraid_sync.prom`, `snapraid_scrub.prom`) |
-| `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc210-nextcloud` | LXC210 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc211-paperless` | LXC211 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc220-calibreweb` | LXC220 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc230-openwebui` | LXC230 Tailscale IP`:9100` | systemd binary, v1.11.1 |
-| `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.11.1; added 2026-08-20, replacing a hand-written unit that bound `*:9100` |
-| `node-lxc260-postgres` | LXC260 Tailscale IP`:9100` | systemd binary, v1.11.1 |
+| `node-vm102-storage` | VM102 Tailscale IP`:9100` | systemd binary, v1.12.1; textfile collector enabled (`snapraid_sync.prom`, `snapraid_scrub.prom`) |
+| `node-vm100-gpu` | VM100 Tailscale IP`:9100` | systemd binary, v1.12.1 |
+| `node-lxc210-nextcloud` | LXC210 Tailscale IP`:9100` | systemd binary, v1.12.1 |
+| `node-lxc211-paperless` | LXC211 Tailscale IP`:9100` | systemd binary, v1.12.1 |
+| `node-lxc220-calibreweb` | LXC220 Tailscale IP`:9100` | systemd binary, v1.12.1 |
+| `node-lxc230-openwebui` | LXC230 Tailscale IP`:9100` | systemd binary, v1.12.1 |
+| `node-lxc250-devops` | LXC250 Tailscale IP`:9100` | systemd binary, v1.12.1; added 2026-08-20, replacing a hand-written unit that bound `*:9100` |
+| `node-lxc260-postgres` | LXC260 Tailscale IP`:9100` | systemd binary, v1.12.1 |
 | `postgres` | LXC260 Tailscale IP`:9187` | postgres_exporter v0.19.1, `pg_stat_*` via loopback |
 | `blackbox-http` | via `127.0.0.1:9115` | HTTP probes (`http_2xx`): jellyfin, audiobookshelf, llama-server (`/health` on vm100) |
 | `blackbox-https` | via `127.0.0.1:9115` | HTTPS probes (`http_service_up`) behind `tailscale serve`: paperless, openwebui, nextcloud, calibreweb |
