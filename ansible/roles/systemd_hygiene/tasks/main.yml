@@ -4,9 +4,10 @@
 # the platform (systemd_hygiene_group_units, per group). They are combined once
 # here so the five tasks below have a single thing to loop over - and so adding
 # a third source later touches one line, not five.
-- name: Combine the per-host and per-group unit lists
+- name: Combine the per-host and per-group lists
   ansible.builtin.set_fact:
     systemd_hygiene_units: "{{ systemd_hygiene_group_units + systemd_hygiene_masked_units }}"
+    systemd_hygiene_packages: "{{ systemd_hygiene_group_absent_packages + systemd_hygiene_absent_packages }}"
 
 # Two kinds of unit need two different treatments, and using the wrong one fails
 # loudly rather than silently:
@@ -112,18 +113,23 @@
 # packages apt would take with it, and that list is the entire point of the task.
 - name: Simulate the package removal  # noqa: command-instead-of-module
   ansible.builtin.command:
-    cmd: apt-get -s -o Debug::NoLocking=1 remove --purge {{ systemd_hygiene_absent_packages | map(attribute='name') | join(' ') }}
+    cmd: apt-get -s -o Debug::NoLocking=1 remove --purge {{ systemd_hygiene_packages | map(attribute='name') | join(' ') }}
   register: systemd_hygiene_removal_plan
   changed_when: false
   check_mode: false
-  when: systemd_hygiene_absent_packages | length > 0
+  when: systemd_hygiene_packages | length > 0
 
+# `remove --purge` reports each package as `Purg`, not `Remv`, so a filter on
+# `Remv` alone read an empty list on every run this role has made and the guard
+# below could never refuse anything. The name is cut out with two plain
+# replacements rather than a backreference, whose escaping inside a folded
+# YAML scalar and a Jinja string reached re.sub as a literal backslash-digit.
 - name: Refuse a removal that would take anything else with it
   ansible.builtin.assert:
     that:
       - systemd_hygiene_unplanned_removals | length == 0
     fail_msg: >-
-      Removing {{ systemd_hygiene_absent_packages | map(attribute='name') | join(', ') }}
+      Removing {{ systemd_hygiene_packages | map(attribute='name') | join(', ') }}
       would also remove {{ systemd_hygiene_unplanned_removals | join(', ') }}.
       Nothing was changed. Decide about those packages explicitly before rerunning.
     success_msg: >-
@@ -131,18 +137,19 @@
   vars:
     systemd_hygiene_unplanned_removals: >-
       {{ systemd_hygiene_removal_plan.stdout_lines
-         | select('match', '^Remv ')
-         | map('regex_replace', '^Remv ([^ ]+).*$', '\\1')
-         | difference(systemd_hygiene_absent_packages | map(attribute='name') | list) }}
-  when: systemd_hygiene_absent_packages | length > 0
+         | select('match', '^(Remv|Purg) ')
+         | map('regex_replace', '^(Remv|Purg) ', '')
+         | map('regex_replace', ' .*$', '')
+         | difference(systemd_hygiene_packages | map(attribute='name') | list) }}
+  when: systemd_hygiene_packages | length > 0
 
 - name: Remove packages whose presence is the fault
   ansible.builtin.apt:
-    name: "{{ systemd_hygiene_absent_packages | map(attribute='name') | list }}"
+    name: "{{ systemd_hygiene_packages | map(attribute='name') | list }}"
     state: absent
     purge: true
     autoremove: false
-  when: systemd_hygiene_absent_packages | length > 0
+  when: systemd_hygiene_packages | length > 0
 
 # Unmask before deleting the symlink: systemd knows the unit as masked until told
 # otherwise, and a bare `rm` would leave that state in its head until a reload.

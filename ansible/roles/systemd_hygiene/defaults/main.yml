@@ -46,6 +46,12 @@ systemd_hygiene_group_units: []
 # answer, which is why this list is read per node rather than copied across.
 systemd_hygiene_absent_packages: []
 
+# The same, for a package whose reason is a property of a group rather than of one
+# node. Concatenated with the per-host list in tasks/main.yml, for the reason
+# systemd_hygiene_group_units gives: a host that set its own list would otherwise
+# silently drop the group's entries.
+systemd_hygiene_group_absent_packages: []
+
 # Units that were masked by this role and no longer need to be, because the package
 # that shipped them is gone. Unmasked and their leftover symlink removed, so the
 # node does not keep a mask for a unit that no longer exists - a stale mask is

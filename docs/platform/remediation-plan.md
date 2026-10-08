@@ -463,13 +463,34 @@ Found while completing the inference rollout.
 - **`apt_metrics` installs Recommends, and two of them fail at every boot.** The collectors package
   brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
   and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -
-  the same two units `systemd_hygiene` has masked on lxc260 since July. Fix at the source:
-  `install_recommends: false` in `apt_metrics` and `smart_metrics`, then remove the three packages
-  through `systemd_hygiene_absent_packages`.
+  the same two units `systemd_hygiene` has masked on lxc260 since July. Fixed in the repository on
+  2026-10-07: both roles install without Recommends, and `systemd_hygiene_group_absent_packages` in
+  `group_vars/guests.yml` removes them and their two libraries from every guest, retiring lxc260's
+  masks. Writing it found the role's removal guard blind (it matched `Remv`, apt prints `Purg`).
+  Open until `apt-metrics.yml` and `systemd-hygiene.yml` are applied and the thirteen
+  `SystemdUnitFailed` alerts clear.
 - **OpenWebUI 0.9.6 to 0.11.x.** Its own unit with a rollback path: two minor versions of database
   migrations on lxc260, and new image layers on the KE-13 aux-disk.
 - **`gpu` on vm100 has passwordless sudo.** Measured with `sudo -n true`. Check whether that is
   recorded and intended for an interactive account.
+
+## Added on 2026-10-07
+
+Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
+
+- **lxc240 was destroyed ahead of its phase 2.** `vzdestroy:240` ran on 2026-09-29, two months
+  before the date in the [decommission record](../decisions/vaultwarden-decommission.md), and
+  nothing in this repository recorded it. The weekly guest backup then failed on the missing CTID,
+  exactly as that record predicted. `240` is out of `GUESTS` since 2026-10-07. Still open from the
+  same phase: the data on the share, the `snapraid_maintenance` excludes, the `storage_permissions`
+  entry, `ansible/inventory/host_vars/lxc240.yml`, the node in the Tailscale console, and the three
+  `vzdump-lxc-240-*` archives, which no prune run will touch now. The record itself needs the
+  operator's amendment.
+
+- **The journal receiver on lxc200 rotates every few seconds.** Its log reads `Journal header limits
+  reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
+  2026-09-26. Part of the `journal-central` exercise; whether the vacuum timer keeps up with that
+  churn has not been measured.
 
 ## The exercise block, before Terraform
 

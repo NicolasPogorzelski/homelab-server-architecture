@@ -30,17 +30,15 @@ postgres_tenants: []
 # so the service account never needed to read its own credential.
 postgres_exporter_manage_env: true
 
-# Units that can never succeed on this node. Masked by the systemd_hygiene role so
-# that every remaining failed unit on the fleet is a real fault worth alerting on.
-systemd_hygiene_masked_units:
+# Masked by the systemd_hygiene role until the packages that ship them were removed
+# fleet-wide (group_vars/guests.yml). The leftover mask symlinks go with them.
+systemd_hygiene_retired_units:
   - name: nvmf-autoconnect.service
     reason: >-
-      Connects NVMe-over-Fabrics subsystems at boot. An LXC has no block-device
-      namespace of its own and no NVMe-oF target; the unit cannot succeed here.
+      Shipped by nvme-cli, which no guest installs any more.
   - name: openipmi.service
     reason: >-
-      Loads IPMI kernel drivers to talk to a baseboard management controller.
-      There is no BMC reachable from inside a container.
+      Shipped by openipmi, which no guest installs any more.
 
 # Ships this node's journal to the receiver on lxc200. EXERCISE, not a control
 # this platform needs - see docs/decisions/exercise-scope-before-terraform.md.

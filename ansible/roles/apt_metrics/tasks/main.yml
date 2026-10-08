@@ -13,12 +13,17 @@
 - name: Flush handlers so the mask is in force before apt runs
   ansible.builtin.meta: flush_handlers
 
+# Without Recommends. The collectors package recommends ipmitool, nvme-cli and
+# smartmontools for collectors this role masks, and ipmitool brings openipmi,
+# whose init script fails at every boot on a node without a BMC. apt_info.py
+# needs only python3-apt, which is a hard dependency.
 - name: Install the collector package and sponge
   ansible.builtin.apt:
     name:
       - "{{ apt_metrics_package }}"
       - "{{ apt_metrics_sponge_package }}"
     state: present
+    install_recommends: false
     update_cache: true
     cache_valid_time: 3600
 

@@ -1,0 +1,29 @@
+---
+# Packages removed on every guest by the systemd_hygiene role, which concatenates
+# this list with the per-host systemd_hygiene_absent_packages.
+#
+# The tools came in as Recommends of prometheus-node-exporter-collectors when
+# apt_metrics installed it on 2026-09-25, the libraries as their dependencies;
+# apt_metrics now installs without Recommends. lxc260 has carried the same set
+# since April. vm100 never received them (Ubuntu's collectors package recommends
+# none of them), so the list is a no-op there.
+systemd_hygiene_group_absent_packages:
+  - name: openipmi
+    reason: >-
+      Loads IPMI kernel drivers to talk to a baseboard management controller.
+      No guest has one, and its init script fails at every boot.
+  - name: libopenipmi0
+    reason: >-
+      The library openipmi brought with it. openipmi is its only dependent.
+  - name: ipmitool
+    reason: >-
+      Recommended for the IPMI sensor collector, whose timer apt_metrics masks.
+      It recommends openipmi, which is how that package arrived.
+  - name: libfreeipmi17
+    reason: >-
+      The library ipmitool depends on. ipmitool is its only dependent.
+  - name: nvme-cli
+    reason: >-
+      Ships nvmf-autoconnect.service, which connects NVMe-over-Fabrics targets at
+      boot. No guest uses NVMe-oF, and in a container the unit fails at every
+      boot; the NVMe collector that would use the tool is masked.
