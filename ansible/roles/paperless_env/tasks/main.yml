@@ -33,6 +33,9 @@
       Refusing to write an .env that would break CSRF origin checking.
     success_msg: 'Serve URL derived from tailscaled: {{ paperless_serve_url }}'
 
+# diff: false because the file holds the database password and the secret key,
+# and --diff prints unchanged lines as context: a run that changed only the
+# polling setting would still have shown both in the terminal.
 - name: Deploy paperless .env
   ansible.builtin.template:
     src: paperless.env.j2
@@ -40,4 +43,5 @@
     owner: root
     group: root
     mode: "0600"
+  diff: false
   notify: Restart paperless
