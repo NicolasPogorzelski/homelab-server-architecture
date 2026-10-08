@@ -471,8 +471,8 @@ Found while completing the inference rollout.
   `SystemdUnitFailed` alerts clear.
 - **OpenWebUI 0.9.6 to 0.11.x.** Its own unit with a rollback path: two minor versions of database
   migrations on lxc260, and new image layers on the KE-13 aux-disk.
-- **`gpu` on vm100 has passwordless sudo.** Measured with `sudo -n true`. Check whether that is
-  recorded and intended for an interactive account.
+- **`gpu` on vm100 has passwordless sudo.** Closed 2026-10-07, together with the same rule for
+  `storage` on vm102 - see the break-glass item under "Added on 2026-10-07".
 
 ## Added on 2026-10-07
 
@@ -494,7 +494,27 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   text tracks once into sidecar `.srt` files beside the media, which Jellyfin serves without
   touching the container; it writes into the archive on vm102 and is its own unit of work.
 
-- **The journal receiver on lxc200 rotates every few seconds.** Its log reads `Journal header limits
+- **The break-glass accounts on vm100 and vm102 were root by key alone.** `/etc/sudoers.d/ansible-apt`
+  granted `gpu` and `storage` `NOPASSWD: ALL`, left over from the first Ansible runs in April,
+  before the `ansible` user existed. On 2026-10-07 a diagnostic session on the admin workstation used it to
+  run `sudo -n grep -rh` across `/srv` on vm100, read the media archive over CIFS at 187 MB/s for
+  half an hour, and stalled every Jellyfin stream; it had kept running after the workstation shut
+  down, reparented to PID 1. Removed on both VMs the same day, after checking both accounts hold a
+  password and sit in `sudo`; the `breakglass` role now removes the file and fails on any remaining
+  `NOPASSWD` rule for the account. Swept: no other node carries such a rule for a human account.
+  Still open, in order of weight:
+  - `gpu` is in the `docker` and `lxd` groups, each of which is root without sudo. Removing
+    `NOPASSWD` stops an accident, not a session that looks for root. `storage` on vm102 has
+    neither. Decide whether the break-glass account needs `docker` at all.
+  - Automated sessions on the admin workstation authenticate with the break-glass key. A separate,
+    restricted key and account for automated sessions, the way Ansible has `ansible`, would keep the
+    break-glass path for people.
+  - Diagnostics on vm100 and vm102 must not read the archive: no recursive search under `/srv`,
+    `/mnt/smb` or `/mnt/mergerfs`, and no decoding of media files while somebody is watching. The
+    same evening an `ffmpeg -t 600` run for diagnosis read four minutes of one file and did the same
+    in miniature.
+
+ Its log reads `Journal header limits
   reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
   2026-09-26. Part of the `journal-central` exercise; whether the vacuum timer keeps up with that
   churn has not been measured.

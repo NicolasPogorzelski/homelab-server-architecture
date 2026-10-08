@@ -56,6 +56,9 @@ film ran at about 110 MB/s for five minutes, and the client gave up long before.
 - An extraction keeps running after the client closes, and it saturates the read path for every
   other stream until it ends.
 - Extracted tracks are cached, so a second start of the same file is immediate.
+- Anything else that reads the archive has the same effect. Diagnose from `/opt/docker/jellyfin/.env`,
+  `docker inspect` and `ffprobe`, never with a recursive search under `/srv` or by decoding a file
+  while it is being watched.
 
 ## CUDA Watchdog
 
