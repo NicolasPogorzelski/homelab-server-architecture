@@ -674,8 +674,8 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
 - **Jellyfin CUDA access loss intermittent (KE-10):** hardware transcoding stops randomly; root
   cause unconfirmed (NVML connection goes stale). Workaround: `docker restart jellyfin`. Watchdog
   automates this but does not fix the root cause. See `docs/platform/known-errors.md#ke-10`.
-  It last fired on 2026-08-07 and 2026-08-10 (watchdog journal, read 2026-08-13) - the fault is
-  live, not historical, and each occurrence is absorbed silently, so nothing alerts.
+  The journal holds 16 restarts between 2026-08-14 and 2026-10-08 (read 2026-10-08); each is
+  absorbed silently, so nothing alerts, and each ends every running stream, direct play included.
 - **postgres_exporter on LXC260 - bind fixed and unit adopted 2026-07-10.** It had bound `*:9187`
   (LAN-exposed) because the hand-written unit's `ExecStart` carried no `--web.listen-address`. The
   deferred design question ("drop-in or full lifecycle?") answered itself once measured: the unit
