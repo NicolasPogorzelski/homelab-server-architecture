@@ -99,7 +99,7 @@ primarily as software.
 | A.7.10 Storage media | Gap | No media handling procedure. The pending secrets escrow (Tier 1 #1) is the first item that forces one to exist. |
 | A.7.11 Supporting utilities | Gap, and live | The leading hypothesis for [KE-14](known-errors.md#ke-14) - recurring I/O errors on the disk carrying every guest root filesystem - is a sagging 12 V rail. Power quality is an unverified suspicion in an open incident, and no uninterruptible supply is documented. |
 | A.7.13 Equipment maintenance | Partial | SnapRAID scrub and sync run on timers with runbooks. SMART data is collected but, as measured, does not export the attributes that would have caught the failing disk - see [`operations.md`](operations.md). |
-| A.7.14 Secure disposal or re-use | Gap, and imminent | The aux-disk is scheduled for replacement and carries application data including personal documents. Nothing currently specifies that it must be erased before it leaves the flat, and its 7680 unreadable sectors mean a software overwrite cannot be assumed to have covered every block. Added to the [remediation plan](remediation-plan.md). |
+| A.7.14 Secure disposal or re-use | Gap, and imminent | The aux-disk is scheduled for replacement and carries application data including personal documents. Nothing currently specifies that it must be erased before it leaves the flat, and its 8168 unreadable sectors mean a software overwrite cannot be assumed to have covered every block. Added to the [remediation plan](remediation-plan.md). |
 
 ## Technological controls (A.8)
 

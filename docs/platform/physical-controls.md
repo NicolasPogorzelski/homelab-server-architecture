@@ -38,7 +38,7 @@ out to matter here twice - see below.
 | A.7.11 | Supporting utilities | **Weak, and it is load-bearing** | A consumer UPS of unrecorded age and capacity, never tested under load and never tested for runtime. [KE-14](known-errors.md#ke-14) suspects the power path already |
 | A.7.12 | Cabling security | Partial | Internal cabling reseated once during the KE-13 diagnosis; nothing is documented about it |
 | A.7.13 | Equipment maintenance | Partial | Reactive. Dust and thermals are checked when something else brings the case open |
-| A.7.14 | Secure disposal or re-use | **Open with a deadline** | The KE-13 disk leaves the flat when it is replaced, carrying C1 data on 7680 sectors a software overwrite cannot be assumed to reach. Degauss or destroy; nothing else is honest |
+| A.7.14 | Secure disposal or re-use | **Open with a deadline** | The KE-13 disk leaves the flat when it is replaced, carrying C1 data on 8168 sectors a software overwrite cannot be assumed to reach. Degauss or destroy; nothing else is honest |
 | A.7.10 | Storage media | Partial | Disks are not encrypted at rest - see the paragraph below, which is the one entry here that is a decision rather than an omission |
 
 ## Encryption at rest: not implemented, and why that is a choice

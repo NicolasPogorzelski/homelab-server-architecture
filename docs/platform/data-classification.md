@@ -143,7 +143,7 @@ Unresolved, and named here so it stops being invisible. There is no retention pe
 not for documents, not for logs, not for backups beyond the 7-day dump rotation, and not for the
 monitoring history. There is likewise no deletion procedure for media leaving the flat, which
 becomes concrete at the next hardware replacement: the failing aux-disk holds C1 application data
-and cannot be assumed erasable by software, since 7680 of its sectors are unreadable.
+and cannot be assumed erasable by software, since 8168 of its sectors are unreadable.
 
 Both are tracked in the [remediation plan](remediation-plan.md) rather than solved here.
 

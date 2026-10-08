@@ -19,14 +19,12 @@ notes there and keep this section short.
 - **KE-13 - aux-disk media failure.** The auxiliary disk is back in service under protest pending a
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
   The standing hold on `docker-compose-update` was lifted on 2026-09-05; see the entry below for
-  what carries that decision. **Correction (measured
-  2026-07-28):** the earlier "still degrades slowly" no longer holds. `Reported_Uncorrect` rose
-  18 -> 21 between 2026-06-25 and 2026-07-09 and has been static at 21 since (re-measured
-  2026-08-13), with `Current_Pending_Sector` static at 7680 - thirty-five further days in service
-  with no new uncorrectable error. Static is not safe (those 7680 sectors still hold unreadable data, and
-  `smartctl -H PASSED` is meaningless here: `Current_Pending_Sector` normalises to 054 against
-  threshold 000 and can never trip the self-assessment), but the failure is not accelerating, so
-  the replacement is a planned task rather than an emergency.
+  what carries that decision. `Reported_Uncorrect` rose 18 -> 21 by 2026-07-09 and has not moved
+  since. `Current_Pending_Sector` held at 7680 from July and stepped to 8168 on 2026-09-20,
+  found in the Prometheus history on 2026-10-08 and recorded nowhere until then; it read 8168
+  before and after that day's image pulls. `smartctl -H PASSED` is meaningless here:
+  `Current_Pending_Sector` normalises to 051 against threshold 000 and can never trip the
+  self-assessment. Not an emergency, but no longer the static disk the 2026-09-05 lift assumed.
 - **KE-18 - Tailscale readiness races (class entry, added 2026-07-28).** Four instances, all fixed:
   lxc260 PostgreSQL (KE-9), host `pveproxy` (KE-12), host `node_exporter` and lxc210
   `tailscale-cert-refresh` (both 2026-07-28). The host `node_exporter` case was a **regression from
@@ -229,7 +227,8 @@ reviewing the prose on the way past.
   from an empty file without AI or copied snippets - AI is used only to review
   afterwards. The goal is active recall, not recognition; the struggle is the point.
 
-OS context: Proxmox host + Debian 12 LXCs. The admin workstation runs an immutable
+OS context: Proxmox VE 9.2 host on Debian 13 (trixie), Debian 12 LXCs and vm102, Ubuntu 22.04 on
+vm100. The admin workstation runs an immutable
 Fedora/rpm-ostree-based OS. Commands must be OS-specific - no generic "Linux commands" when
 behavior differs.
 
@@ -877,22 +876,24 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
   last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
-  `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) during the boot window only.
+  `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
+  and on 2026-10-08 four bursts during image pulls and package upgrades, all reads.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
   Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
   The boot SSD (`scsi 9:0:0:0`, never a fixed kernel letter) carries every VM and LXC root disk,
   so an `EIO` into the thin pool during guest start could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
-- **aux-disk is back in service with 7680 unreadable sectors (KE-13), replacement pending:**
+- **aux-disk is back in service with 8168 unreadable sectors (KE-13), replacement pending:**
   it carries the Docker data-roots of LXC200/211/220/230/260 and VM100's `scsi1` disk
-  (allocated). `Reported_Uncorrect` rose 18 -> 21 between the 2026-06-25 incident and 2026-07-09,
-  but has been static at 21 since (re-read 2026-07-28), as has `Current_Pending_Sector` at 7680.
-  The failure is not accelerating; see the KE-13 note in Current Status for why that is not the same
-  as safe. Nothing on `/mnt/aux-disk` has an off-site copy.
+  (allocated). `Reported_Uncorrect` has held at 21 since 2026-07-09; `Current_Pending_Sector`
+  held at 7680 until it stepped to 8168 on 2026-09-20. See the KE-13 note in Current Status.
+  Nothing on `/mnt/aux-disk` has an off-site copy.
 - **The `docker-compose-update` hold is lifted (2026-09-05).** It had stood since 2026-07-09 on the
   grounds that pulling images writes gigabytes of fresh layers onto a failing disk. Three
-  measurements moved the balance. The disk has been static at `Reported_Uncorrect 21` and
+  measurements moved the balance. The disk had been static at `Reported_Uncorrect 21` and
   `Current_Pending_Sector 7680` since 2026-07-09 - sixty-two days in service with no new
-  uncorrectable error. The cost of the hold was counted for the first time on 2026-08-15: 139
+  uncorrectable error. The second of those stopped holding on 2026-09-20 (8168), which nobody
+  noticed for eighteen days; the first still holds, and the supervised pulls of 2026-10-08 left
+  both counters where they were. The cost of the hold was counted for the first time on 2026-08-15: 139
   fixable critical CVEs and 2162 high, running because the disk could not take new layers. And
   since 2026-09-09 the degradation the hold was compensating for is finally observable, because
   `smart_metrics` exports the per-attribute counters and `SmartAttributeDegrading` fires on growth

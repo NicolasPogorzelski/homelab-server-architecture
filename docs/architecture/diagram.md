@@ -193,7 +193,7 @@ per container class.
 
 Red marks hardware with an open fault rather than a design flaw: the boot SSD throws intermittent
 transport-layer I/O errors ([KE-14](../platform/known-errors.md#ke-14), root cause unconfirmed), and
-aux-disk holds 7680 unreadable sectors and is awaiting replacement
+aux-disk holds 8168 unreadable sectors and is awaiting replacement
 ([KE-13](../platform/known-errors.md#ke-13)). What each of them takes down if it goes is the subject
 of [failure domains](failure-domains.md).
 

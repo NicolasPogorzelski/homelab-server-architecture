@@ -24,7 +24,7 @@ flowchart TB
     NCDB["lxc210: Nextcloud MariaDB"]
   end
 
-  subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, 7680 unreadable sectors"]
+  subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, 8168 unreadable sectors"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260"]
     MONDATA["lxc200 mp0: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
     JELLY["vm100 scsi1 - jellyfin-data, 300 GB raw"]
@@ -64,11 +64,11 @@ item 1 of the [remediation plan](../platform/remediation-plan.md) and not item 6
 Identify this disk by `9:0:0:0` or by `by-id`, never by its kernel letter - it enumerated as `sdc`
 for a month of documentation and as `sda` on 2026-08-13.
 
-**aux-disk.** Back in service under protest with 7680 unreadable sectors and `Reported_Uncorrect`
-static at 21 since 2026-07-09 ([KE-13](../platform/known-errors.md#ke-13)). Static is not safe: those
-sectors still hold data that cannot be read, and `smartctl -H` reports PASSED regardless, because
-`Current_Pending_Sector` normalises to 054 against a threshold of 000 and can never trip the
-self-assessment.
+**aux-disk.** Back in service under protest with 8168 unreadable sectors, up from 7680 in a single
+step on 2026-09-20, and `Reported_Uncorrect` at 21 since 2026-07-09
+([KE-13](../platform/known-errors.md#ke-13)). Those sectors still hold data that cannot be read, and
+`smartctl -H` reports PASSED regardless, because `Current_Pending_Sector` normalises to 051 against
+a threshold of 000 and can never trip the self-assessment.
 
 Most of its contents are the least valuable on the platform - container images and Docker state,
 class C3, rebuildable from the compose files. Two things on it are not. The first is the monitoring
