@@ -5,6 +5,11 @@
 node_exporter_user: node_exporter
 
 node_exporter_version: "1.12.1"
+# SHA-256 of node_exporter-<version>.linux-amd64.tar.gz, copied from the
+# release's sha256sums.txt. Kept in the repository rather than fetched beside
+# the archive, so a replaced release asset fails the download instead of being
+# installed on every node. Changes together with the version above.
+node_exporter_sha256: b51d8a76aa2a9156a55d501aca6276fae09e262259a5e4e831d2c2222f084e63
 node_exporter_port: 9100
 
 # Split out of the download URL so the release host can be repointed at an internal

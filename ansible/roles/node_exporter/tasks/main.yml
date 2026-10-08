@@ -52,6 +52,7 @@
       ansible.builtin.get_url:
         url: "{{ node_exporter_release_base }}/v{{ node_exporter_version }}/{{ node_exporter_dist }}.tar.gz"
         dest: /tmp/{{ node_exporter_dist }}.tar.gz
+        checksum: "sha256:{{ node_exporter_sha256 }}"
         mode: "0644"
 
     - name: Unarchive node_exporter
