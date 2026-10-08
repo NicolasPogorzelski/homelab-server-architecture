@@ -542,9 +542,15 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   `Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 27 times a
   day, and `Error while getting file info` alongside, for as far back as the log reaches
   (2026-09-29). A document dropped into either external-storage folder does not reach the
-  consumption directory, and nothing alerts. Not caused by the upgrade to 34 and not yet
-  diagnosed; the first thing to rule out is the `smb_guard` table on vm102, which admits TCP/445 over
-  the LAN only from vm100 and the hypervisor.
+  consumption directory, and nothing alerts. Not caused by the upgrade to 34. Measured the same
+  day: both mounts connect to `storage`, which resolves to vm102's LAN address, and
+  `files_external:verify` returns `status: error` for both. vm102 admits TCP/445 over the LAN only
+  from vm100 and the hypervisor - in `lan_guard` since 2026-10-01 (its drop counter at 31,114 after
+  one boot) and in `smb_guard` since 2026-07-14 - and lxc210 does not see vm102 in the tailnet at
+  all. The path has most likely been dead since July. Repair through Tailscale, not with a LAN
+  exception: an ACL grant from lxc210's tag to vm102 on TCP/445, the mounts pointed at vm102's
+  tailnet name, then `files_external:verify 4` and `5`. Or remove both mounts if nobody used them
+  in three months, which is the question to answer first.
 
 - **Nextcloud 35 needs PHP 8.3, so it needs Debian 13 on lxc210.** 34.0.4 is the last major that
   runs on Debian 12's PHP 8.2 (`lib/versioncheck.php` of each tag), and `occ setupchecks` already
