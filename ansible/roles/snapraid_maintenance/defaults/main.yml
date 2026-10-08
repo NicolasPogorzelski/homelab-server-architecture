@@ -85,5 +85,10 @@ snapraid_excludes:
   - "*.sqlite3-wal"
   - "*.db-shm"
   - "*.db-wal"
+  # Database dumps while they are written. pg-backup.sh and its MariaDB sibling
+  # write *.partial and rename it once verified, and after a power-down their
+  # catch-up runs at the same boot as the sync's own, so the file the sync
+  # scanned is gone before it is read. The finished dump is protected as usual.
+  - "*.partial"
   # App cache, refreshed on a cycle and regenerable.
   - "/Nextcloud/appdata_*/richdocuments/remoteData/"
