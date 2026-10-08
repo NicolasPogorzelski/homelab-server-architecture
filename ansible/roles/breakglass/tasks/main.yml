@@ -37,3 +37,50 @@
     # and handed to Jinja as a value.
     breakglass_key_separator: "\n"
   when: breakglass_pubkeys | length > 0
+
+# Removing the passwordless rule leaves the `sudo` group as the account's only
+# way to root, and that path asks for the account's password. An account whose
+# password is locked or unset would lose root entirely, so the run stops there.
+- name: Read the break-glass account's password status  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: passwd -S {{ breakglass_user }}
+  register: breakglass_passwd_status
+  changed_when: false
+  check_mode: false
+
+- name: Refuse to remove passwordless sudo from an account without a usable password
+  ansible.builtin.assert:
+    that:
+      - breakglass_passwd_status.stdout.split()[1] == 'P'
+    fail_msg: >-
+      {{ breakglass_user }} has password status
+      {{ breakglass_passwd_status.stdout.split()[1] }}, not P. Without a password the
+      account would have no way to root once the NOPASSWD rule is gone. Set one first.
+    quiet: true
+
+- name: Remove sudoers files that grant the break-glass account root without a password
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ breakglass_retired_sudoers_files }}"
+
+# The file list above names the one rule that was found. This reads what sudo
+# itself resolves, so a NOPASSWD rule added later under any other name fails the
+# run, and the weekly drift sweep with it.
+- name: Read the break-glass account's effective sudo rules  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: sudo -l -U {{ breakglass_user }}
+  register: breakglass_sudo_rules
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Refuse any remaining passwordless sudo rule for the break-glass account
+  ansible.builtin.assert:
+    that:
+      - "'NOPASSWD' not in breakglass_sudo_rules.stdout"
+    fail_msg: >-
+      {{ breakglass_user }} still has a NOPASSWD rule:
+      {{ breakglass_sudo_rules.stdout_lines | select('search', 'NOPASSWD') | list }}
+    quiet: true
+  when: not ansible_check_mode
