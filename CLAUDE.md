@@ -566,11 +566,13 @@ use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing 
 - LXC211 - Paperless-ngx
 - LXC220 - Calibre-Web
 - LXC230 - OpenWebUI (AI stack entrypoint)
-- LXC240 - Vaultwarden (secrets tier)
+- LXC240 - Vaultwarden, withdrawn 2026-09-01 and container destroyed 2026-09-29; data on the share until phase 2
 - LXC250 - DevOps workstation (Git, Ansible, IaC - no user-facing services)
 - LXC260 - PostgreSQL (centralized platform database; all services that need a DB use this)
 
-**Access model:** Zero Trust via Tailscale. No public ingress, no port-forwarding, LAN is untrusted. Nodes are grouped into tags (`tag:tier0`, `tag:tier1`, `tag:tier2`, `tag:monitoring`, `tag:database`, `tag:ai-stack`, etc.) with explicit ACL rules. The ACL policy lives in the Tailscale admin console; `docs/platform/tailscale-acl.md` mirrors the intended model.
+**Access model:** Zero Trust via Tailscale. No public ingress, no port-forwarding, LAN is untrusted:
+since 2026-10-01 the `lan_guard` role drops new inbound LAN connections on every node, except SMB to
+vm102 from vm100 and the host, and break-glass SSH and netconsole to the host. Nodes are grouped into tags (`tag:tier0`, `tag:tier1`, `tag:tier2`, `tag:monitoring`, `tag:database`, `tag:ai-stack`, etc.) with explicit ACL rules. The ACL policy lives in the Tailscale admin console; `docs/platform/tailscale-acl.md` mirrors the intended model.
 
 **Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces.
 
@@ -780,15 +782,11 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
   design decision; do not bolt it onto an unrelated pass.
 
-- **lxc200 monitors the fleet but not itself - decided 2026-09-11, not yet built:**
-  `node-exporter.yml` runs against `all:!lxc200`, because lxc200's node_exporter is a Docker
-  container that cannot see the host's systemd units. The answer is a second, native exporter on a
-  different port rather than a privileged container or a bind-mounted systemd socket - see
-  `docs/decisions/lxc200-systemd-visibility.md`. It adds a scrape target, so it belongs in the
-  same session as that config change. lxc250 was the second until 2026-08-20, for the different reason that nothing
-  scraped it; it is in the inventory and scraped since. The Proxmox host was the
-  second blind spot until 2026-07-14 and is now covered. Needs its own design decision (privileged
-  container with `/run/systemd` bind-mounted, or a native node_exporter alongside the container).
+- **lxc200 runs two node exporters, on purpose (applied 2026-09-15):** the Docker container on
+  `127.0.0.1:9100` cannot see the node's systemd units, so a native exporter from the
+  `node_exporter` role binds the Tailscale address on `:9101` and Prometheus scrapes it as
+  `node-lxc200-monitoring-systemd`. With it no node is outside `SystemdUnitFailed`. See
+  `docs/decisions/lxc200-systemd-visibility.md`, whose status line still reads "not yet applied".
 - **The Proxmox host's `node_exporter` is hand-managed and would be lost on a rebuild
   (2026-07-14):** it now runs `--collector.systemd` (it had only the textfile collector, so a
   failed unit on the *hypervisor* reached no alert - the gap that would have made

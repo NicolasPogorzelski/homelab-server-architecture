@@ -37,7 +37,13 @@ Nodes are grouped into logical tiers to reduce lateral movement:
 Access between tiers is explicitly controlled via ACL policies.
 
 ## LAN Access
-Certain performance-sensitive services (e.g., media streaming) are additionally reachable in the local network. This is a deliberate trade-off between security and performance under a defined threat model.
+
+No service is reachable from the LAN since 2026-10-01. Media streaming was the last exception, and
+it ended when Jellyfin and Audiobookshelf moved off the LAN
+([vm100](../nodes/vm100.md#no-media-ports-on-the-lan)). The `lan_guard` nftables table on every
+node's LAN interface drops new inbound connections; the named exceptions are SMB to vm102 from
+vm100 and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The tailnet is never
+filtered by it. See [ansible.md](ansible.md) for the role.
 
 ## Design Goal
 

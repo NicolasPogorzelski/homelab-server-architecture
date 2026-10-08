@@ -43,16 +43,17 @@ behalf.
 ```mermaid
 flowchart LR
   accTitle: Tailscale ACL - access granted to people's devices
-  accDescr: Operator workstations, operator phone, end-user devices, e-book reader, a remote TV and an external user through machine sharing, each with the services and ports it may reach.
+  accDescr: Operator workstations, operator phone, end-user devices, e-book reader, a remote TV, a streaming box and an external user through machine sharing, each with the services and ports it may reach.
 
   ADMIN_S["tag:admin<br/>operator workstations"]
   MOBILE_S["tag:admin-mobile<br/>operator phone"]
   CLIENT_S["tag:client<br/>phone and notebook"]
   READER_S["tag:reader<br/>e-book reader"]
   UNTRUST_S["tag:untrusted<br/>remote TV"]
+  PLAYER_S["tag:media-player<br/>streaming box"]
   EXTERNAL_S["external user<br/>machine sharing"]
 
-  INFRA["host 22, 8006<br/>vm102 22, 445<br/>lxc250 22<br/>lxc200 443, 9093, 9443"]
+  INFRA["host 22, 8006<br/>vm102 22, 445<br/>vm100 22<br/>lxc250 22<br/>lxc200 443, 9093, 9443"]
   PVE["host 8006"]
   NC["nextcloud 443"]
   PL["paperless 443"]
@@ -68,12 +69,13 @@ flowchart LR
   CLIENT_S -.->|"notebook only"| CW
   READER_S --> CW & ABS
   UNTRUST_S --> JF
+  PLAYER_S --> JF
   EXTERNAL_S --> NC & JF & ABS
 
   classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff
   classDef untrust fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class ADMIN_S,MOBILE_S,CLIENT_S,READER_S,EXTERNAL_S src
+  class ADMIN_S,MOBILE_S,CLIENT_S,READER_S,PLAYER_S,EXTERNAL_S src
   class INFRA,PVE,NC,PL,CW,OW,JF,ABS dst
   class UNTRUST_S untrust
 ```
@@ -167,13 +169,13 @@ flowchart TB
     SAMBA["Samba - segmented shares"]
   end
 
-  THIN -->|"every VM and LXC root disk"| GUESTS["10 guests<br/>including lxc210's MariaDB and lxc250's vault password"]
+  THIN -->|"every VM and LXC root disk"| GUESTS["9 guests<br/>including lxc210's MariaDB and lxc250's vault password"]
   DISKS --> MERGER
   DISKS -.->|"parity covers the data disks"| PARITY
   MERGER --> SAMBA
   SAMBA -->|"CIFS, mounted by vm100 itself"| VM100["vm100"]
   SAMBA -->|"CIFS, mounted by the host"| HOSTCIFS["Proxmox CIFS mounts<br/>bind-mounted into the containers"]
-  HOSTCIFS -->|"application data"| CIFSLXC["lxc210, lxc211, lxc220,<br/>lxc230, lxc240, lxc260"]
+  HOSTCIFS -->|"application data"| CIFSLXC["lxc210, lxc211, lxc220,<br/>lxc230, lxc260"]
   DOCKERROOTS -->|"Docker engine state"| DOCKERLXC["lxc200, lxc211, lxc220,<br/>lxc230, lxc260"]
   JELLYRAW --> VM100
 
@@ -185,9 +187,9 @@ flowchart TB
   class GUESTS,VM100,CIFSLXC,DOCKERLXC,HOSTCIFS consumer
 ```
 
-The two container groups at the bottom are deliberately not the same set. Six containers receive
+The two container groups at the bottom are deliberately not the same set. Five containers receive
 application data over the host's CIFS mounts; five keep their Docker engine state on aux-disk. Four
-appear in both, lxc200 only in the second, lxc210 and lxc240 only in the first - which is why a
+appear in both, lxc200 only in the second, lxc210 only in the first - which is why a
 question like "what does this container lose if that disk dies" has to be asked per node rather than
 per container class.
 
@@ -201,8 +203,8 @@ of [failure domains](failure-domains.md).
 
 ## View 3 - Monitoring coverage
 
-Prometheus on lxc200 with 14 scrape jobs over 19 targets, one of which is Prometheus scraping
-itself and is not drawn. The arrows follow the metrics, which is the delivery direction. The
+Prometheus on lxc200 with 15 scrape jobs over 20 targets, measured 2026-10-08; one of them is
+Prometheus scraping itself and is not drawn. The arrows follow the metrics, which is the delivery direction. The
 connection is opened the other way, because Prometheus pulls - View 1 shows that direction, as the
 monitoring tag reaching outward on ports 9100, 9187 and the probe ports.
 
@@ -211,19 +213,19 @@ Coverage is drawn by exporter class rather than as one uniform arrow, because it
 ```mermaid
 flowchart LR
   accTitle: Monitoring coverage by exporter class
-  accDescr: node_exporter, postgres_exporter and blackbox probes delivering metrics to Prometheus on lxc200, with the two coverage gaps marked.
+  accDescr: node_exporter, postgres_exporter and blackbox probes delivering metrics to Prometheus on lxc200, with the one partial exporter marked.
 
   subgraph targets["node_exporter - systemd binary with --collector.systemd"]
-    HOST["Proxmox host<br/>+ textfile: smart.prom, lvm-thin.prom"]
+    HOST["Proxmox host<br/>+ textfile: smartmon, lvm-thin, guest-backup, apt"]
     VM102["vm102<br/>+ textfile: snapraid_sync, snapraid_scrub"]
     VM100["vm100"]
-    NODES["lxc210, lxc211, lxc220,<br/>lxc230, lxc240, lxc260"]
+    NODES["lxc210, lxc211, lxc220,<br/>lxc230, lxc250, lxc260"]
+    LXC200NATIVE["lxc200<br/>second, native exporter on 9101"]
   end
 
   LXC200SELF["lxc200 node_exporter<br/>Docker container on loopback<br/>cannot see the host's systemd units"]
   PGEXP["postgres_exporter on lxc260<br/>pg_stat via loopback"]
-  BLACKBOX["blackbox_exporter probes<br/>2 HTTP + 5 Serve-HTTPS endpoints"]
-  LXC250["lxc250<br/>node_exporter on the Tailscale address<br/>in the inventory and scraped since 2026-08-20"]
+  BLACKBOX["blackbox_exporter probes<br/>3 HTTP + 4 Serve-HTTPS endpoints"]
 
   PROM["Prometheus + Alertmanager on lxc200"]
 
@@ -231,24 +233,20 @@ flowchart LR
   LXC200SELF -->|"metrics, no systemd units"| PROM
   PGEXP -->|"metrics"| PROM
   BLACKBOX -->|"probe results"| PROM
-  LXC250 -.->|"no scrape target exists"| PROM
 
   classDef ok fill:#1f6f43,stroke:#14512f,color:#ffffff
   classDef partial fill:#8a5a00,stroke:#5f3e00,color:#ffffff
-  classDef gap fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class HOST,VM102,VM100,NODES,PGEXP,BLACKBOX ok
+  class HOST,VM102,VM100,NODES,LXC200NATIVE,PGEXP,BLACKBOX ok
   class LXC200SELF partial
-  class LXC250 gap
   class PROM ok
 ```
 
-One gap remains, and the second one closed on 2026-08-20. lxc200 is scraped - its own exporter
-runs as a Docker container on loopback - but a container cannot see the host's systemd units, so
-`SystemdUnitFailed` covers everything on that node except the node itself. lxc250 used to be the
-other case, and a different one: it belonged to no inventory group, the template rendered no target
-for it, and the exporter it did run bound `*:9100` and was read by nobody. It is in `lxcs` and
-`guests` now, the role owns its unit, and the target reports `up`. The remaining gap is tracked in
-the [remediation plan](../platform/remediation-plan.md).
+No node is outside `SystemdUnitFailed` any more. lxc200 was the last: its first exporter runs as a
+Docker container on loopback and cannot see the node's systemd units, which is why it is drawn as
+partial. Since 2026-09-15 a native exporter on the node's Tailscale address, port 9101, reports
+them ([decision](../decisions/lxc200-systemd-visibility.md)). lxc250 closed on 2026-08-20, when it
+joined the inventory and the role replaced a hand-written exporter that bound `*:9100` and was read
+by nobody.
 
 Note also what the blackbox probes add. `NodeDown` says a node answers; a probe says the service on
 it answers. The first run of these probes found Paperless and OpenWebUI returning 502 behind a

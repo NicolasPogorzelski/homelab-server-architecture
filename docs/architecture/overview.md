@@ -26,7 +26,6 @@ This page describes the shape of the platform. It does not repeat the document i
 - LXC211 - Paperless-ngx (document management, Docker in LXC)
 - LXC220 - Calibre-Web (Docker in LXC)
 - LXC230 - OpenWebUI (AI stack entrypoint, Docker in LXC)
-- LXC240 - Vaultwarden (Docker in LXC, secrets tier)
 - LXC250 - DevOps (central management workstation; Git, Ansible, IaC)
 - LXC260 - PostgreSQL (centralized platform database)
 
@@ -42,16 +41,16 @@ Two of these carry a qualification that belongs next to them rather than in a do
 might not reach.
 
 **No public exposure** is true at the network boundary and not at the socket. Several services bind
-wildcard addresses on nodes that carry a routable IPv6, so what prevents reachability from outside
-is the absence of a forwarding rule on the router. The measured list is in
-[the exposure model](exposure-diagram.md).
+wildcard addresses, so what keeps them unreachable is a filter rather than the bind: the router's
+missing forwarding rules against the internet, and since 2026-10-01 the `lan_guard` table on every
+node against the LAN. The measured list is in [the exposure model](exposure-diagram.md).
 
 **Reboot-safe** is the design intent and was not the behaviour. Ordering a unit after `tailscaled`
 does not wait for an address, which produced the same fault four times
 ([KE-18](../platform/known-errors.md#ke-18)); a plain fstab entry for a share served by a guest the
 host has not started yet is attempted once and never retried
 ([KE-15](../platform/known-errors.md#ke-15)). Both classes are fixed where they were found, and
-KE-18 still has one open instance.
+every known KE-18 instance has been proven by a cold boot.
 
 ## Networking Layer
 

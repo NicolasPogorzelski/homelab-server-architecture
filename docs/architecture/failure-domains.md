@@ -20,23 +20,24 @@ flowchart TB
   subgraph boot["boot SSD - scsi 9:0:0:0, LSI SAS2008 HBA - KE-14 open"]
     ROOTS["pve-data thin pool<br/>every VM and LXC root disk"]
     PVEROOT["pve-root and /boot/efi"]
-    SECRETS["lxc250: vault password, real inventory,<br/>automation SSH key - one copy"]
+    SECRETS["lxc250: vault password, real inventory,<br/>automation SSH key - escrowed off the platform"]
     NCDB["lxc210: Nextcloud MariaDB"]
   end
 
   subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, 8168 unreadable sectors"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260"]
+    VZDUMP["guest backups - weekly vzdump archives"]
     MONDATA["lxc200 mp0: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
     JELLY["vm100 scsi1 - jellyfin-data, 300 GB raw"]
   end
 
   subgraph storagevm["vm102 - the storage VM, one failure domain in itself"]
-    ARCHIVE["archive pool: Vaultwarden vault, Paperless documents,<br/>Nextcloud files, media library"]
+    ARCHIVE["archive pool: Paperless documents, Nextcloud files,<br/>database dumps, media library"]
     PARITY["SnapRAID parity - covers disk loss only"]
   end
 
-  boot --> L1["Total platform loss.<br/>No guest starts. Vault password gone,<br/>so every vaulted secret is undecryptable."]
-  auxd --> L2["Five containers lose their Docker state,<br/>vm100 loses its second disk,<br/>and the monitoring history goes with them.<br/>Rebuildable from compose files - the history is not."]
+  boot --> L1["Total platform loss.<br/>No guest starts. Rebuild from the escrowed<br/>secrets and the repository."]
+  auxd --> L2["Five containers lose their Docker state,<br/>vm100 loses its second disk,<br/>and the monitoring history and every guest backup go with them.<br/>Rebuildable from compose files - the history is not."]
   storagevm --> L3["All persistent service data unreachable.<br/>Parity does not survive VM loss,<br/>deletion, corruption or ransomware."]
 
   classDef sick fill:#7a1f1f,stroke:#571414,color:#ffffff
@@ -44,22 +45,24 @@ flowchart TB
   classDef content fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   class L1,L3 sick
   class L2 warn
-  class ROOTS,PVEROOT,SECRETS,NCDB,DROOTS,MONDATA,JELLY,ARCHIVE,PARITY content
+  class ROOTS,PVEROOT,SECRETS,NCDB,DROOTS,VZDUMP,MONDATA,JELLY,ARCHIVE,PARITY content
 ```
 
 ## What each domain means in practice
 
 **Boot SSD.** It carries `/boot/efi`, `pve-root` and the whole `pve-data` thin pool, which is to say
-every root disk on the platform. It also throws intermittent `DID_SOFT_ERROR` bursts inside the boot
-window and only there - transport-layer faults at the SAS2008 HBA, media and firmware causes
-excluded, leading hypothesis a sagging 12 V rail under peak boot draw
+every root disk on the platform. It also throws intermittent `DID_SOFT_ERROR` bursts under I/O
+load - the boot window, and on 2026-10-08 four bursts during image pulls and package upgrades.
+These are transport-layer faults at the SAS2008 HBA, media and firmware causes excluded, leading
+hypothesis a sagging 12 V rail under peak draw
 ([KE-14](../platform/known-errors.md#ke-14), unconfirmed and awaiting physical verification).
 
 The asymmetry worth noticing is not the disk, it is what sits on it. Two datasets on this device are
 [classified C1](../platform/data-classification.md): lxc250's vault password with the real inventory
-and the automation SSH key, in a single copy with no escrow, and Nextcloud's MariaDB. The database
-half now has a nightly verified dump onto vm102; the secrets half has nothing, which is why it is
-item 1 of the [remediation plan](../platform/remediation-plan.md) and not item 6.
+and the automation SSH key, and Nextcloud's MariaDB. The database half has a nightly verified dump
+onto vm102 and a monthly restore test. The secrets half has been escrowed since 2026-08-20, in an
+external password manager and on paper off site, which closed item 1 of the
+[remediation plan](../platform/remediation-plan.md).
 
 Identify this disk by `9:0:0:0` or by `by-id`, never by its kernel letter - it enumerated as `sdc`
 for a month of documentation and as `sda` on 2026-08-13.
@@ -71,7 +74,7 @@ step on 2026-09-20, and `Reported_Uncorrect` at 21 since 2026-07-09
 a threshold of 000 and can never trip the self-assessment.
 
 Most of its contents are the least valuable on the platform - container images and Docker state,
-class C3, rebuildable from the compose files. Two things on it are not. The first is the monitoring
+class C3, rebuildable from the compose files. Three things on it are not. The first is the monitoring
 history: lxc200 binds `/mnt/aux-disk/monitoring` to `/data`, so the Prometheus time series, the
 Grafana state and the Alertmanager state all live here. That is C3 by classification and has no
 backup at all, which is defensible right up to the moment somebody wants to know whether a metric
@@ -82,6 +85,10 @@ The second is not about data at all. vm100's
 snapshotted, so vm100 has no rollback path at all. That is the reason a live CIFS unmount on that node
 in [KE-20](../platform/known-errors.md#ke-20) could only be ended with `qm stop`, and the reason
 making vm100 snapshottable is the precondition for investigating it.
+
+The third is the weekly guest backup: `/mnt/vzdump` is bound onto this disk, so the only restorable
+copy of the guest root disks shares a failure domain with the Docker state it would be needed to
+rebuild. See [backup and recovery](backup-flow.md).
 
 The `docker-compose-update` hold followed from this disk - the role pulls new images and writes
 gigabytes of fresh layers onto a failing drive - and was lifted on 2026-09-05 against sixty-two
@@ -105,7 +112,7 @@ The Proxmox host itself is a single point of failure in the ordinary sense - one
 cluster - but it is not listed above, because its loss is a hardware-replacement problem rather than
 a data problem: the guests live on the disks, and the disks are the three domains above. The
 distinction matters when planning. A dead mainboard costs money and a weekend; a dead boot SSD
-without an escrowed vault password costs data that cannot be recreated by any amount of either.
+rolls every guest back to its last weekly backup and Nextcloud's database to its last nightly dump.
 
 ## Related
 

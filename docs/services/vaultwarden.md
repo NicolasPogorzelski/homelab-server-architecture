@@ -1,7 +1,7 @@
 # Vaultwarden (LXC240)
 
-**Withdrawn from service on 2026-09-01.** The guest is stopped, `onboot` is cleared, and the scrape
-target and HTTPS probe are gone. Data on the share is retained until 2026-11-30. Reasoning and the
+**Withdrawn from service on 2026-09-01.** The scrape target and HTTPS probe are gone, and the
+container was destroyed on 2026-09-29. Data on the share is retained until 2026-11-30. Reasoning and the
 second phase: [decommissioning decision](../decisions/vaultwarden-decommission.md).
 
 What follows describes the service as it ran.

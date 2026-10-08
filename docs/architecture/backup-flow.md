@@ -4,47 +4,53 @@ What is copied, to where, how often, and - drawn as deliberately as the rest - w
 all. The arrows follow the payload, as everywhere else on this site: a dump moves from the database
 that produced it to the share that stores it.
 
-Red is not decoration here. It marks the two ends of this picture that do not exist yet, both of
-them open items in [Tier 1 of the remediation plan](../platform/remediation-plan.md).
+Red is not decoration here. It marks the one end of this picture that does not exist yet, the
+off-site copy, an open item in [Tier 1 of the remediation plan](../platform/remediation-plan.md).
+Orange marks a copy that exists but sits on the failing aux-disk
+([KE-13](../platform/known-errors.md#ke-13)).
 
 ```mermaid
 flowchart LR
   accTitle: Backup flows and the gaps in them
-  accDescr: PostgreSQL and MariaDB dumps to SMB shares on vm102 protected by parity, with the missing Vaultwarden export and the missing off-site copy marked as gaps.
+  accDescr: PostgreSQL and MariaDB dumps to SMB shares on vm102 protected by parity, each with a monthly restore test, weekly guest backups onto the aux-disk, and the missing off-site copy marked as a gap.
 
   PG["lxc260 PostgreSQL<br/>pg_dumpall, 03:00 daily"]
   MDB["lxc210 Nextcloud MariaDB<br/>mariadb-dump, 03:30 daily"]
-  VW["lxc240 Vaultwarden<br/>SQLite on CIFS"]
+  GUESTS["9 guest root disks<br/>vzdump, Saturday 11:00 weekly"]
   NCF["Nextcloud files"]
   PPD["Paperless documents"]
 
   subgraph vm102["vm102 archive pool - everything here is covered by SnapRAID parity, and by nothing else"]
     PGSHARE["postgres-backups share<br/>verified, ~8 day retention"]
     DBSHARE["db-backups share<br/>verified, ~8 day retention"]
-    LIVE["live data<br/>Vaultwarden, Nextcloud files, Paperless documents"]
+    LIVE["live data<br/>Nextcloud files, Paperless documents"]
   end
 
+  VZDUMP["/mnt/vzdump on the aux-disk"]
   RESTORE["monthly restore test<br/>throwaway cluster on port 5433"]
+  MRESTORE["monthly restore test<br/>throwaway database"]
   OFFSITE["off-site copy<br/>does not exist"]
 
   PG -->|"dump"| PGSHARE
   MDB -->|"dump"| DBSHARE
-  VW -.->|"no consistent export exists"| DBSHARE
   NCF --> LIVE
   PPD --> LIVE
-  VW --> LIVE
+  GUESTS -->|"snapshot mode"| VZDUMP
 
   PGSHARE -->|"newest dump, 1st of the month"| RESTORE
+  DBSHARE -->|"newest dump, 15th of the month"| MRESTORE
   vm102 -.-> OFFSITE
 
   classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   classDef store fill:#6a4a9c,stroke:#4c3570,color:#ffffff
   classDef ok fill:#1f6f43,stroke:#14512f,color:#ffffff
+  classDef warn fill:#8a5a00,stroke:#5f3e00,color:#ffffff
   classDef gap fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class PG,MDB,NCF,PPD src
-  class PGSHARE,DBSHARE,LIVE,PAR store
-  class RESTORE ok
-  class VW,OFFSITE gap
+  class PG,MDB,NCF,PPD,GUESTS src
+  class PGSHARE,DBSHARE,LIVE store
+  class RESTORE,MRESTORE ok
+  class VZDUMP warn
+  class OFFSITE gap
 ```
 
 ## What the picture is saying
@@ -55,19 +61,26 @@ the verification runs *before* the retention delete, so a failed run can never r
 healthy predecessor. Only the marker check catches the case that matters: a dump killed halfway
 still produces a valid gzip member, which restores without error into empty tables.
 
-**One chain is validated end to end.** The PostgreSQL dump is restored into a throwaway cluster on
-port 5433 on the first of each month, asserting dump integrity, restore success and non-empty key
-tables. The MariaDB chain has a documented restore procedure but no scheduled test yet.
+**Both chains are validated end to end.** The PostgreSQL dump is restored into a throwaway cluster
+on port 5433 on the first of each month, asserting dump integrity, restore success and non-empty key
+tables. The MariaDB dump is restored into a throwaway database on the fifteenth, first passed on
+2026-09-17; the live database is not touched by either.
 
-**One source has no export at all.** Vaultwarden holds every credential stored on the platform and stores them in
-an SQLite file on a CIFS mount. Copying that file while the service runs is a bet on timing, not a
-backup, which is why the arrow to the share is dotted. Its data reaches the pool only as live files,
-protected by parity. That is the last open half of Tier 1 item 3.
+**The guest backup shares a disk with what it would rebuild.** `guest_backup` writes a weekly
+`vzdump` of nine guests (vm100 excluded on purpose) to `/mnt/vzdump`, which is bound onto the
+aux-disk. A restore was verified on 2026-08-21. See the
+[guest backup runbook](../../runbooks/platform/guest-backup-restore.md).
 
-**Nothing leaves the site.** Every arrow above ends inside the flat. The archive pool holds the
-backups and the primary data of three services, so a fire, a theft or an encryption event takes the
-originals and the copies in one move. The only dataset with a genuine off-site copy is this
-repository, because it is on GitHub and on two workstations.
+Vaultwarden is no longer drawn. It was withdrawn on 2026-09-01 and its container destroyed on
+2026-09-29; its data stays on the pool, under parity only, until phase 2 of the
+[decommissioning decision](../decisions/vaultwarden-decommission.md) removes it.
+
+**No running job copies anything off site.** Every arrow above ends inside the flat. The archive
+pool holds the backups and the primary data of two services, so a fire, a theft or an encryption
+event takes the originals and the copies in one move. What exists elsewhere is point in time: this
+repository on GitHub and two workstations, the escrowed secrets, and two irregular disk copies listed
+in [data classification](../platform/data-classification.md), none of which covers the archive
+pool.
 
 ## Parity is not backup, and this is where that bites
 
@@ -78,8 +91,8 @@ Every dotted parity arrow above therefore protects against exactly one failure m
 [KE-19](../platform/known-errors.md#ke-19) sharpened this once already: `db.sqlite3-shm` and `-wal`
 sat in the array next to the main Vaultwarden database, so parity captured the three files at
 different moments - an inconsistent set from which a reconstruction can be corrupt. The side files
-are excluded now. `db.sqlite3` itself deliberately stays in, because imperfect protection beats none
-until the export exists.
+are excluded now. `db.sqlite3` itself stays in until the data is removed, the service being stopped
+and the file therefore no longer changing.
 
 ## The guards, and the blind spot they share
 
@@ -88,6 +101,10 @@ until the export exists.
 | `PostgreSQLBackupStale` | no dump newer than 25 h | an outage in which the host is off |
 | `MariaDBBackupStale` | same rule, lxc210's metric | the same |
 | `PostgreSQLRestoreTestStale` | no successful restore test for 40 days | - |
+| `MariaDBRestoreTestStale` | the same, for the MariaDB chain | - |
+| `DatabaseBackupMetricsMissing` | either backup timestamp is absent, when both staleness rules are silent | - |
+| `GuestBackupStale` | last guest backup run older than 10 days | - |
+| `GuestBackupPartial` | at least one guest failed in the last run | - |
 
 The first two share a failure domain with what they guard. Prometheus runs on the host that powers
 down every night, so during a multi-day outage there is no scrape at all, and by the time Prometheus
