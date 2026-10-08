@@ -1,0 +1,22 @@
+---
+# === jellyfin_user_prefs ===
+#
+# Asserts per-user playback preferences on the Jellyfin server through its API,
+# for every profile that exists, so a profile added later inherits them.
+#
+# The subtitle mode is the only preference managed. "Default" plays any subtitle
+# track the file flags as default, and many of the 4K remuxes carry a German
+# forced track flagged that way. A client that receives it asks for the track as
+# a separate stream, and Jellyfin answers by extracting every subtitle track from
+# the whole file over CIFS - tens of gigabytes before the first frame, so the
+# client gives up after a few seconds. "None" leaves subtitles to a manual
+# choice. See docs/services/jellyfin.md#subtitle-extraction.
+jellyfin_user_prefs_subtitle_mode: "None"
+
+# Jellyfin binds the node's Tailscale address, which is also how the inventory
+# reaches vm100, so the role calls the API from the node itself.
+jellyfin_user_prefs_url: "http://{{ ansible_host }}:8096"
+
+# An API key created for this role in the Jellyfin dashboard, not a user token:
+# a key carries no session and survives a password change.
+jellyfin_user_prefs_api_key: "{{ vault_jellyfin_api_key }}"
