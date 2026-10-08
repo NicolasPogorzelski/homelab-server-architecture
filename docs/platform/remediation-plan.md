@@ -490,7 +490,9 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 - **Embedded subtitles on 4K remuxes are extracted on demand, over CIFS.** A client that asks for
   one track makes Jellyfin read the whole file, measured at about five minutes for a 30 GB episode,
   and the client gives up. All profiles are held at subtitle mode "None" since 2026-10-07, which
-  costs the automatic translation of foreign-language scenes. The durable fix is to extract the
+  costs the automatic translation of foreign-language scenes in clients that request subtitles
+  from the server; Moonfin in direct play reads them from the file and is unaffected (measured
+  2026-10-08, [jellyfin.md](../services/jellyfin.md#subtitle-extraction)). The durable fix is to extract the
   text tracks once into sidecar `.srt` files beside the media, which Jellyfin serves without
   touching the container; it writes into the archive on vm102 and is its own unit of work.
 
@@ -518,6 +520,22 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
   2026-09-26. Part of the `journal-central` exercise; whether the vacuum timer keeps up with that
   churn has not been measured.
+
+## Added on 2026-10-08
+
+- **Moonfin passthrough is disabled on the streaming box until upstream fixes #1775.** With audio
+  bitstreamed, a refresh-rate switch hung five of seven starts; with PCM, six of six played. The
+  interim costs object audio and moves dynamic range control into the client's decoder. Revert
+  steps and the measurement are in
+  [jellyfin.md](../services/jellyfin.md#moonfin-direct-play). Nothing in the fleet changed; the
+  setting lives on the box.
+
+- **The CUDA watchdog restarts Jellyfin under running streams.** It fired at 2026-10-08 11:29 and
+  ended a direct-play stream that used no GPU ([KE-10](known-errors.md#ke-10)). Two directions,
+  undecided: hold the restart while sessions are active and none of them transcodes, which needs
+  an API key on the node and a session query in the script, or stop restarting and alert instead,
+  which trades silent interruptions for visible ones. Either is a change to `jellyfin_watchdog`
+  and its own unit of work.
 
 ## The exercise block, before Terraform
 
@@ -793,6 +811,6 @@ adoption itself does not either: it needs a `proxmox` group in the inventory, no
 - **Alertmanager routing and per-tier dashboards.** The alerts exist; only delivery is crude.
 - **Molecule.** Out of scope for the current learning arc, per the roadmap.
 - **KE-3, KE-11, KE-17.** Non-blocking, or no confirmed root cause to act on.
-- **[KE-10](known-errors.md#ke-10) (Jellyfin CUDA loss).** Deferred, but note it is *active*, not
-  historical - the watchdog restarted Jellyfin on 2026-08-07 and 2026-08-10. The workaround
-  absorbs each occurrence silently, which is why it looks dormant.
+- **[KE-10](known-errors.md#ke-10) (Jellyfin CUDA loss).** Deferred, but active: 16 watchdog
+  restarts between 2026-08-14 and 2026-10-08. The workaround absorbs each occurrence silently,
+  which is why it looks dormant, and each one ends the streams that are running at the time.

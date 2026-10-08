@@ -469,11 +469,16 @@ Restores hardware transcoding immediately.
 in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
 [`snippets/scripts/jellyfin-cuda-watchdog.sh`](../../snippets/scripts/jellyfin-cuda-watchdog.sh).
 
-**Status:** Known, unresolved - automated restart workaround deployed. **The fault is active, not
-historical: the watchdog last restarted Jellyfin on 2026-08-07 06:10 and 2026-08-10 10:44**
-(journal of `jellyfin-cuda-watchdog.service` on vm100, read 2026-08-13). Every occurrence is
-absorbed silently by the workaround, so the only record that the root cause is still live is that
-journal - no alert fires, because from the outside the service recovers.
+**Status:** Known, unresolved - automated restart workaround deployed. The fault is active: the
+watchdog journal on vm100 holds 30 restarts between 2026-05-29 and 2026-10-08, 16 of them after
+the 2026-08-13 reading, the latest at 2026-10-08 11:29 (`journalctl -t jellyfin-cuda-watchdog |
+grep "CUDA access lost"`, read 2026-10-08). Every occurrence is absorbed by the workaround, so that
+journal is the only record and no alert fires.
+
+The workaround is not free. A restart ends every running stream, direct play included, and the
+script restarts without looking for active sessions. The 2026-10-08 restart was observed from the
+client side: a direct-play stream to the streaming box stopped at 11:29:20, ten seconds after the
+watchdog fired, when Docker's stop timeout ran out and the container was killed.
 
 **References:**
 - [VM100 node doc](../nodes/vm100.md)
