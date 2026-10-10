@@ -85,7 +85,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing` |
 | `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified` |
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
-| `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified` |
+| `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified`, `PrometheusRuleEvaluationFailing` |
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
 | `heartbeat` | `Watchdog` |
 | `blackbox` | `ServiceDown` |

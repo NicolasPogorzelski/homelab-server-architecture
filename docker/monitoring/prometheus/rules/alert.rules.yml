@@ -615,6 +615,20 @@ groups:
           summary: "Loaded alert rules could not be compared"
           description: "The last sweep could not read /api/v1/rules from the monitoring node, so nothing is checking that Prometheus loaded what the repository holds."
 
+      # Loaded is not the same as working. A rule whose expression errors at
+      # evaluation - a join that turns many-to-many, a function on the wrong type -
+      # produces no result, which a rule written as `> 0` cannot tell from health.
+      # Prometheus counts each failure per group; any in fifteen minutes is a rule
+      # that is currently blind.
+      - alert: PrometheusRuleEvaluationFailing
+        expr: sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rules in {{ $labels.rule_group }} fail to evaluate"
+          description: "Prometheus counted evaluation failures in {{ $labels.rule_group }} within 15 minutes, so at least one rule there returns nothing whatever the fleet does. The reason is in the rule's lastError on /api/v1/rules or in the Prometheus container log."
+
   - name: kernel
     rules:
       # Added 2026-08-20 after a kernel oops cascade wedged the hypervisor for
