@@ -379,9 +379,10 @@ outside its field of view. These four are ordinary work and are ordered by expos
   gate already proven on lxc250, and `systemctl enable --now ssh.socket` through `pct exec` as the
   way back. `ssh_hardening` now hands the port from the socket to `ssh.service` wherever
   `ssh_hardening_listen_address` is set and reads the bind back from `ss`, failing the run if
-  anything but the Tailscale address listens on 22. All six socket-activated containers carry
-  the pin and the gate in their `host_vars`, to be applied one node at a time with a
-  `pct reboot` between, after the merge. vm100, vm102 and the hypervisor are not part of this
+  anything but the Tailscale address listens on 22. Applied 2026-10-10 to all six socket-activated
+  containers, one at a time, each followed by `pct reboot`: afterwards `ssh.socket` disabled,
+  `ssh.service` enabled, the Tailscale address alone on 22, Ansible reaching the node, PostgreSQL
+  and Nextcloud's services back. A drift sweep after the last one reported nothing. vm100, vm102 and the hypervisor are not part of this
   step, and lxc250 keeps its hand-written line in `sshd_config` until the role adopts it. The
   decision record still reads "neither is chosen" and needs the operator's amendment. The finding as written:
 - **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
@@ -519,7 +520,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   password and sit in `sudo`; the `breakglass` role now removes the file and fails on any remaining
   `NOPASSWD` rule for the account. Swept: no other node carries such a rule for a human account.
   Still open, in order of weight:
-  - `gpu` is in the `docker` and `lxd` groups, each of which is root without sudo - built 2026-10-10: `breakglass` removes the account from `docker`, `lxd`, `libvirt` and `disk` where it is a member, applied after the merge; `sudo docker` with a password remains. A check run shows the removal as skipped rather than changed, so the drift sweep does not see this one. Removing
+  - `gpu` is in the `docker` and `lxd` groups, each of which is root without sudo - built 2026-10-10: `breakglass` removes the account from `docker`, `lxd`, `libvirt` and `disk` where it is a member, applied the same day (`id -nG gpu` no longer lists either); `sudo docker` with a password remains. A check run shows the removal as skipped rather than changed, so the drift sweep does not see this one. Removing
     `NOPASSWD` stops an accident, not a session that looks for root. `storage` on vm102 has
     neither. Decide whether the break-glass account needs `docker` at all.
   - Automated sessions on the admin workstation authenticate with the break-glass key. A separate,
@@ -544,8 +545,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   [jellyfin.md](../services/jellyfin.md#moonfin-direct-play). Nothing in the fleet changed; the
   setting lives on the box.
 
-- ~~**The CUDA watchdog restarts Jellyfin under running streams.**~~ Decided and built 2026-10-10,
-  applied after the merge. The operator's direction: restart only when no stream needs to be
+- ~~**The CUDA watchdog restarts Jellyfin under running streams.**~~ Decided, built and applied
+  2026-10-10; first run 13:16 with `jellyfin_cuda_ok 1`. The operator's direction: restart only when no stream needs to be
   protected. With CUDA gone the watchdog now restarts when nothing plays or a video transcode is
   among the sessions, and holds while only direct streams play; it polls every minute instead of
   every thirty, and `JellyfinCudaLost` makes a held or failed restart visible
@@ -687,7 +688,8 @@ fleet held no failed unit, no firing alert and no dead scrape target, and both d
 current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
 item 4 above; these are the rest.
 
-- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** Measured: `*:22` on
+- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** Since 2026-10-10 on
+  three of ten: the containers are pinned, vm100, vm102 and the hypervisor are not. Measured: `*:22` on
   lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
   host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name
   vm100 as the exception to a rule the fleet otherwise follows; it is the other way round, and the
