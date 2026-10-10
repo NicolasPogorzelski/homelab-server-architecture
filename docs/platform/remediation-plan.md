@@ -739,8 +739,11 @@ item 4 above; these are the rest.
   for a month and enumerated as `sda` ([KE-14](known-errors.md#ke-14)) - so the label that survives
   a reboot is the one worth alerting with. The series stay inside the tailnet and reach this
   repository nowhere.
-- **VM100's unsnapshottable disk holds 18 GB.** Its `scsi1` is a 300 GB raw file on directory
-  storage, and `/mnt/vm-data` inside the guest is 7 % used. The constraint recorded in `CLAUDE.md`
+- ~~**VM100's unsnapshottable disk holds 18 GB.**~~ Converted 2026-10-10: `qm disk move 100 scsi1
+  appdata_aux-disk --format qcow2`, online, in about 90 minutes with no I/O error on the KE-13 disk;
+  139 GiB were allocated by then, not 18. A test snapshot with `--vmstate 0` succeeded and was
+  deleted. The old raw file is `unused0` until the new disk has run a few days. Its `scsi1` was a
+  300 GB raw file on directory storage, and `/mnt/vm-data` inside the guest was 7 % used. The constraint recorded in `CLAUDE.md`
   is real; the migration it blocks is an order of magnitude smaller than the disk's nominal size
   suggests.
 - ~~**A second copy of the real inventory sits on lxc250.**~~ Done 2026-10-10: the stale working tree and a world-readable `hosts.yml` backup in `~/inventory-backups` deleted; the zip and the stray clone were already gone. The pre-sanitization git bundle stays on purpose, private, as its README says. `backup-hsa-20260709-premerge-abort/`,

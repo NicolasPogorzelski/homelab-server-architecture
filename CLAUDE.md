@@ -804,15 +804,14 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   override at all. The general lesson is about the warning, not the flag - a documented trap
   outlives its fix, keeps being repeated, and quietly deters the work it was meant to protect.
   See the host-adoption design decision (pending).
-- **VM100 cannot be rolled back - no snapshot is possible (found 2026-08-16):** its `scsi1` is a
-  300 GB raw file on directory storage, a format Proxmox cannot snapshot, and that storage sits on
-  the failing KE-13 disk. The thin pool holding `scsi0` is at 84 % with no free space at all in the
-  volume group, so growing it is not an option either. Every change to this VM is therefore more
-  expensive than it looks: there is no way back except a restore that does not exist. This became
-  concrete when a live CIFS unmount froze the guest with no evidence recorded
-  ([KE-20](docs/platform/known-errors.md#ke-20)) and only `qm stop` recovered it. Making VM100
-  snapshottable - moving that disk to snapshot-capable storage, off the KE-13 disk - is the
-  precondition for investigating KE-20 and for any non-trivial maintenance on this node.
+- **VM100 can be snapshotted since 2026-10-10, and that is all it can do.** Its `scsi1` was a
+  300 GB raw file on directory storage, a format Proxmox cannot snapshot, so the VM had no rollback
+  path at all - the reason KE-20's live CIFS unmount could only end in `qm stop`. It is qcow2 on the
+  same storage now, converted online with `qm disk move`, and a test snapshot with `--vmstate 0`
+  succeeded with the GPU passed through. Take one before any non-trivial change and delete it after:
+  a snapshot lives in the same files on the same disks, the KE-13 disk among them, so it is a way
+  back from a bad change and not a backup. vm100 is still excluded from the guest backup. The old
+  raw file stays attached as `unused0` until the qcow2 disk has run for a few days.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sat 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
   a generic path bound onto whichever disk currently holds the role. Eight of nine guests: vm100 is
