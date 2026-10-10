@@ -613,10 +613,15 @@ disk by `by-id`, not by kernel letter - see the note in [KE-14](#ke-14)):
 | `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 |
 | `Reported_Uncorrect` | 18 | **21** | 21 | 21 | 21 | 21 |
 
-The 2026-09-15 column is the first sample `smart_metrics` exported; the step to 8168 is in the
-Prometheus history at 2026-09-20 21:02, read back on 2026-10-08 with a range query at a six-hour
-step. Nothing recorded it at the time, and whether `SmartAttributeDegrading` fired for it was not
-established from that query. `Reported_Uncorrect` did not move, so no read has failed since July:
+The 2026-09-15 column is the first sample `smart_metrics` exported. The step is in the Prometheus
+history on 2026-09-20, read back at one-minute resolution on 2026-10-10: the first sample of that
+evening's boot, 20:17, already read 7848, and 20:30 read 8168. Nothing recorded it at the time.
+`SmartAttributeDegrading` could not have told it apart: the rule watched each kernel letter rather
+than each disk, and the aux-disk and an IronWolf traded `/dev/sdi` and `/dev/sdb` between boots, so
+over the thirty days to 2026-10-10 it spent at least 163 hours in alert on rises no disk made.
+Re-keyed by serial number that day; replayed over the same history it fires for this step until
+2026-09-21 21:24, and for nothing else.
+`Reported_Uncorrect` did not move, so no read has failed since July:
 the 488 new sectors moved `Offline_Uncorrectable` with them, which points at the drive's own
 offline scan rather than a failed read by a consumer.
 

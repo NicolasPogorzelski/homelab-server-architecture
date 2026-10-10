@@ -665,27 +665,73 @@ groups:
 
   - name: smart
     rules:
+      # The three error counters re-keyed by serial number. smartmon labels
+      # every attribute with `disk`, the kernel letter, and the letters move
+      # between boots: one `disk="/dev/sdi"` series alternates between the
+      # KE-13 aux-disk and an IronWolf reading 0, so any window over it sees a
+      # rise that no disk made. Raw value and device_info come from the same
+      # textfile, so the join is consistent even when a boot still serves the
+      # file the previous boot wrote.
+      #
+      # A daytime reboot is shorter than the five-minute lookback, so for a few
+      # minutes after it two device_info series share one letter and a plain
+      # join fails as many-to-many. This map keeps only the newest per letter.
+      - record: disk:smartmon_device_info:latest
+        expr: |
+          smartmon_device_info
+          and on (instance, disk, serial_number)
+            topk by (instance, disk) (1, timestamp(smartmon_device_info))
+      - record: serial:smartmon_reported_uncorrect_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_reported_uncorrect_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+      - record: serial:smartmon_current_pending_sector_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_current_pending_sector_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+      - record: serial:smartmon_offline_uncorrectable_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_offline_uncorrectable_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+
       # Growth, not level. Three of the nine disks would trip a level-based rule
       # the day it was written - the KE-13 aux-disk alone reports 21 reported
-      # uncorrectable errors and 7680 pending sectors - and a rule that is red
-      # from the first day is a rule people learn to scroll past. What nobody
-      # could see until now is the thing that actually matters: whether those
-      # numbers are still moving. They were read by hand on four dates between
-      # 2026-06-25 and 2026-08-13 to answer that question.
+      # uncorrectable errors and thousands of pending sectors - and a rule that
+      # is red from the first day is a rule people learn to scroll past. The
+      # question that matters is whether those numbers are still moving.
       #
+      # Above the 25-hour minimum rather than increase(): these raw values are
+      # gauges, and a pending count that falls when the drive rewrites a sector
+      # would read to increase() as a counter reset followed by a full rise.
       # 25h, not 24h: the host powers down overnight, so a 24-hour window can
       # close entirely inside a period with no scrapes in it.
+      #
+      # The join after the `or` only puts the current kernel letter and the model
+      # on the alert, so the summary names something a person can find.
       - alert: SmartAttributeDegrading
         expr: |
-          (increase(smartmon_reported_uncorrect_raw_value[25h]) > 0)
-          or (increase(smartmon_current_pending_sector_raw_value[25h]) > 0)
-          or (increase(smartmon_offline_uncorrectable_raw_value[25h]) > 0)
+          (
+            (serial:smartmon_reported_uncorrect_raw_value:max
+              > min_over_time(serial:smartmon_reported_uncorrect_raw_value:max[25h]))
+            or (serial:smartmon_current_pending_sector_raw_value:max
+              > min_over_time(serial:smartmon_current_pending_sector_raw_value:max[25h]))
+            or (serial:smartmon_offline_uncorrectable_raw_value:max
+              > min_over_time(serial:smartmon_offline_uncorrectable_raw_value:max[25h]))
+          )
+          * on (instance, serial_number) group_left (disk, device_model)
+            max by (instance, serial_number, disk, device_model) (disk:smartmon_device_info:latest)
         for: 15m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.disk }} on {{ $labels.instance }} gained unreadable sectors in the last day"
-          description: "A SMART error counter on {{ $labels.disk }} rose within 25 hours. The disk is degrading now, not historically. Read `smartctl -A` on the host and match the device against smartmon_device_info - the kernel letter is not stable across boots."
+          summary: "{{ $labels.device_model }} ({{ $labels.disk }} at this boot) on {{ $labels.instance }} gained unreadable sectors in the last day"
+          description: "A SMART error counter on serial {{ $labels.serial_number }} rose above its 25-hour minimum and now reads {{ $value }}. The disk is degrading now, not historically. Read `smartctl -A` on the host via /dev/disk/by-id - the kernel letter in this alert is only valid until the next boot."
 
       # A level rule is right for this one: every disk on this host reads 0, and
       # the first reallocation is the event worth waking up for. Reallocation
