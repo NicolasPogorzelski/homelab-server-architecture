@@ -860,14 +860,16 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **sshd binds the wildcard on nine of ten nodes - decided 2026-09-11.** This entry named vm100
+- **sshd binds the wildcard on nine of ten nodes - decided 2026-09-11, route chosen 2026-10-10.** This entry named vm100
   as the exception until the 2026-08-17 sweep measured the opposite: lxc250 is the only node that
   pins `ListenAddress`, and every other node, both VMs and the hypervisor included, binds `*:22`
   dual-stack on hosts carrying a routable IPv6 address. Password auth is off everywhere since
   2026-07-09, so the acute risk stays closed. `ssh_hardening` now owns `ListenAddress` behind
   `ssh_hardening_listen_address`, empty by default, and refuses to write it unless the node also
   declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list cleared.
-  Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
+  Six containers are socket-activated, where `ListenAddress` is inert; for them the role turns
+  `ssh.socket` off and lets `ssh.service` bind, and their `host_vars` carry the pin. Applied one
+  node at a time with `pct reboot` between, `pct exec` being the recovery path; the hypervisor
   last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,

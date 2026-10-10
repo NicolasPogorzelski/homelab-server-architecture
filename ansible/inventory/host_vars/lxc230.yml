@@ -3,3 +3,14 @@
 # src = subdir under repo docker/ that docker-compose-update syncs from.
 compose_projects:
   - { dest: /opt/openwebui, src: openwebui }
+
+# === sshd bound to the Tailscale address only ===
+# docs/decisions/sshd-listen-address.md; the reasoning is in lxc220's host_vars,
+# the first node it ran on. ssh_hardening disables `ssh.socket` where the bind is
+# pinned, and asserts the two gate lines before it writes the bind.
+tailscale_boot_gate_units:
+  - ssh.service
+
+tailscale_boot_gate_clear_restart_prevent: true
+
+ssh_hardening_listen_address: "{{ ansible_host }}"

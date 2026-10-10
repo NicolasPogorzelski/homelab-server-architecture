@@ -372,9 +372,18 @@ outside its field of view. These four are ordinary work and are ordered by expos
   mean anything, and a dump nobody has restored is an assumption. The pattern exists: mirror
   `postgresql_restore_test` into a throwaway instance, assert non-empty key tables, export the
   metric, add the staleness rule.
-- **The sshd binding decision, first node done 2026-09-17.** lxc220 carries the gate and the
-  pinned bind; nine nodes still hold `*:22`. Continue one per session, containers before the
-  hypervisor. The finding as written:
+- **The sshd binding decision: socket activation off, decided 2026-10-10.** The pin applied to
+  lxc220 on 2026-09-17 bound nothing, because the node was socket-activated, and it was withdrawn.
+  Of the two ways the [decision](../decisions/sshd-listen-address.md) left open, the operator chose
+  turning `ssh.socket` off over pinning the socket: one service model across the fleet, the boot
+  gate already proven on lxc250, and `systemctl enable --now ssh.socket` through `pct exec` as the
+  way back. `ssh_hardening` now hands the port from the socket to `ssh.service` wherever
+  `ssh_hardening_listen_address` is set and reads the bind back from `ss`, failing the run if
+  anything but the Tailscale address listens on 22. All six socket-activated containers carry
+  the pin and the gate in their `host_vars`, to be applied one node at a time with a
+  `pct reboot` between, after the merge. vm100, vm102 and the hypervisor are not part of this
+  step, and lxc250 keeps its hand-written line in `sshd_config` until the role adopts it. The
+  decision record still reads "neither is chosen" and needs the operator's amendment. The finding as written:
 - **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
   appears only as the empty default in the role, and every node still binds `*:22`, measured. The
   decision of 2026-09-11 calls for one node per session with the containers first
