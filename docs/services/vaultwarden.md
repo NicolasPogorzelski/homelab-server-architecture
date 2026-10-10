@@ -1,8 +1,9 @@
 # Vaultwarden (LXC240)
 
 **Withdrawn from service on 2026-09-01.** The scrape target and HTTPS probe are gone, and the
-container was destroyed on 2026-09-29. Data on the share is retained until 2026-11-30. Reasoning and the
-second phase: [decommissioning decision](../decisions/vaultwarden-decommission.md).
+container was destroyed on 2026-09-29. The data on the share was destroyed on 2026-10-10, with the
+share itself; only the cold archive from the withdrawal remains. Reasoning:
+[decommissioning decision](../decisions/vaultwarden-decommission.md).
 
 What follows describes the service as it ran.
 

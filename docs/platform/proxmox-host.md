@@ -234,6 +234,12 @@ It removed `samba-ad-dc`, `winbind` and their libraries, present since the insta
 by nothing; their removal also took `winbind` out of `/etc/nsswitch.conf`. Running guests keep the
 old QEMU and LXC binaries until they are next started.
 
+The host runs no Samba server and sends no mail. `samba` itself was removed on 2026-10-10; the
+client packages Proxmox's CIFS storage needs stay and follow normal upgrades, with no hold.
+Postfix remains as the local mailer the PVE packages require: `/etc/aliases.db` exists so local
+delivery works, and PVE's `mail-to-root` notification endpoint is disabled, so nothing leaves the
+host by SMTP. Alerts reach a person through Alertmanager only.
+
 To run the schedule role against the host, once the group exists:
 
 ```bash
@@ -277,8 +283,12 @@ Verified after: fresh connection as root, `sshd -T` reporting `passwordauthentic
 counter-test with `PubkeyAuthentication=no` answered `Permission denied (publickey)` - the server
 no longer offers a password path at all. Ten guests running, zero failed units.
 
-Residual, not fixed here: root's `authorized_keys` on this host holds eight keys and nothing manages
-the set. The VMs have the `breakglass` role enforcing theirs with `exclusive: true`.
+Residual: nothing manages root's `authorized_keys` on this host. It is a symlink to
+`/etc/pve/priv/authorized_keys` on the cluster filesystem and holds four keys - the host's own
+`root@server`, the two admin workstations and the control node - after a key for a retired desktop
+and two duplicates were removed on 2026-10-10 (copy of the old file in `/root`). The VMs have the
+`breakglass` role enforcing theirs with `exclusive: true`; a role here has to write through the
+symlink and keep the host's own key.
 
 ## Storage definitions (cleaned 2026-08-17)
 

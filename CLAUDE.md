@@ -129,7 +129,7 @@ notes there and keep this section short.
   inventory as part of `lxcs` and `guests`, the exporter is the role's and binds the Tailscale
   address, Prometheus scrapes it (`node-lxc250-devops`, `up`), and 850 `node_systemd_unit_state`
   series mean `SystemdUnitFailed` finally covers it. The sshd drop-in is adopted into the
-  `tailscale_boot_gate` role, pending a cold boot to verify. Step (3), `preflight.yml`, is
+  `tailscale_boot_gate` role, cold-boot confirmed 2026-08-20. Step (3), `preflight.yml`, is
   untouched.
 - **Nextcloud's MariaDB has no backup, and parity is not backup (found 2026-08-15).** The nightly
   `pg_dumpall` covers lxc260 only; Nextcloud's database runs *inside* lxc210 and no role, script,
@@ -148,9 +148,9 @@ notes there and keep this section short.
   `mariadb_backup` role, script and runbook now exist and are live since 2026-08-15 - share
   provisioned on vm102, host fstab entry, `mp1` bind, `pct reboot 210`, playbook applied, first
   verified dump on the share (2.2 MB, one completion marker), metric scraped, `MariaDBBackupStale`
-  promoted and inactive. Nextcloud files are still parity-only, and **Vaultwarden still has no
-  consistent export** - an SQLite file copied from a live CIFS mount is a gamble on timing, not a
-  backup. That is now the last open half of Tier 1 #3 before the off-site question itself.
+  promoted and inactive. Nextcloud files are still parity-only. Vaultwarden never got its
+  consistent export and no longer needs one: the service is withdrawn and its share data destroyed
+  (2026-10-10), so Tier 1 #3 is the off-site question itself.
 - **Deferred to the hardware-replacement window:** the `is_mountpoint 1` storage fix and the
   storage-migration design discussion. Host-side SMART monitoring and the `homelab_schedule`
   role left this list on 2026-09-15 and 2026-09-16 respectively; both waited on the hypervisor
@@ -566,7 +566,7 @@ use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing 
 - LXC211 - Paperless-ngx
 - LXC220 - Calibre-Web
 - LXC230 - OpenWebUI (AI stack entrypoint)
-- LXC240 - Vaultwarden, withdrawn 2026-09-01 and container destroyed 2026-09-29; data on the share until phase 2
+- LXC240 - Vaultwarden, withdrawn 2026-09-01, container destroyed 2026-09-29, share data destroyed 2026-10-10
 - LXC250 - DevOps workstation (Git, Ansible, IaC - no user-facing services)
 - LXC260 - PostgreSQL (centralized platform database; all services that need a DB use this)
 
@@ -585,7 +585,6 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   inside the rootfs is a different fault and needs its own diagnosis - see
   [KE-22](docs/platform/known-errors.md#ke-22), where this entry supplied the wrong answer for
   eleven days.
-- **LXC240 (Vaultwarden):** SQLite on CIFS is a known limitation, documented as tech debt.
 - **Grafana admin password:** only read on first container start. Reset via
   `grafana-cli admin reset-admin-password`.
 - **Tailscale Serve HTTPS/HTTP mismatch:** fix with `tailscale serve off` + reconfigure.
@@ -763,10 +762,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a systemd timer + `Persistent=true` (fires an overdue run at the next boot). A failed timer
   unit now also raises `SystemdUnitFailed`; a cron failure never did. **Any daily job on this
   fleet must be a timer with `Persistent=true`, not a cron entry** - the host is not up at night.
-  Restore validation is no longer absent - a full-cluster restore into a throwaway cluster passed
-  on 2026-08-13 (procedure and result in the runbook's Verification section) - but it is still
-  **manual and unscheduled**, and the dumps are never checked for readability at write time.
-  The `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
+  Restore validation runs monthly through the `postgresql_restore_test` role, and `pg-backup.sh`
+  verifies each dump before it renames it, so the retention arithmetic in the Current Status entry
+  is the one that applies: 7 days of dumps against a test that can detect a bad one up to 31 days
+  late.
 
 - **`tailscale cert` on disk needs a reload, not just a renewal (KE-16):** on nodes that read
   `/var/lib/tailscale/certs/*.crt` directly (only lxc210 - everything else goes through
@@ -805,28 +804,23 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   override at all. The general lesson is about the warning, not the flag - a documented trap
   outlives its fix, keeps being repeated, and quietly deters the work it was meant to protect.
   See the host-adoption design decision (pending).
-- **VM100 cannot be rolled back - no snapshot is possible (found 2026-08-16):** its `scsi1` is a
-  300 GB raw file on directory storage, a format Proxmox cannot snapshot, and that storage sits on
-  the failing KE-13 disk. The thin pool holding `scsi0` is at 84 % with no free space at all in the
-  volume group, so growing it is not an option either. Every change to this VM is therefore more
-  expensive than it looks: there is no way back except a restore that does not exist. This became
-  concrete when a live CIFS unmount froze the guest with no evidence recorded
-  ([KE-20](docs/platform/known-errors.md#ke-20)) and only `qm stop` recovered it. Making VM100
-  snapshottable - moving that disk to snapshot-capable storage, off the KE-13 disk - is the
-  precondition for investigating KE-20 and for any non-trivial maintenance on this node.
+- **VM100 can be snapshotted since 2026-10-10, and that is all it can do.** Its `scsi1` was a
+  300 GB raw file on directory storage, a format Proxmox cannot snapshot, so the VM had no rollback
+  path at all - the reason KE-20's live CIFS unmount could only end in `qm stop`. It is qcow2 on the
+  same storage now, converted online with `qm disk move`, and a test snapshot with `--vmstate 0`
+  succeeded with the GPU passed through. Take one before any non-trivial change and delete it after:
+  a snapshot lives in the same files on the same disks, the KE-13 disk among them, so it is a way
+  back from a bad change and not a backup. vm100 is still excluded from the guest backup. The old
+  raw file stays attached as `unused0` until the qcow2 disk has run for a few days.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sat 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
-  a generic path bound onto whichever disk currently holds the role. Nine of ten guests, and the two
-  exceptions this entry used to name were both wrong by 2026-09-15: vm100 is excluded on purpose,
-  lxc220 backs up cleanly in 73 s, and lxc240 has been in the list since the drift fix of
-  2026-09-09 - which is when it started failing. Its rootfs carries eight paths under
-  `/home/media` owned by host UID 1000, outside the `100000-165535` map `lxc-usernsexec` reads
-  with, so `tar` exited 2 and took the whole run with it; the container's description announces
-  exactly that pinning and its config holds no `lxc.idmap` line
-  ([KE-25](docs/platform/known-errors.md#ke-25)). Fixed 2026-09-15 by `chown`, verified by a
-  single `vzdump 240` at exit 0. Two preconditions the role cannot assert and the runbook
-  therefore carries: a VM's passthrough disks
-  need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
+  a generic path bound onto whichever disk currently holds the role. Eight of nine guests: vm100 is
+  excluded on purpose. One guest that `vzdump` cannot back up marks the unit failed while the
+  others are still written - host-UID files outside the container's ID map did that to lxc240
+  ([KE-25](docs/platform/known-errors.md#ke-25)), and so did its place in the list after the
+  container was destroyed - so `GuestBackupPartial` names a real gap rather than a lost week.
+  Two preconditions the role cannot assert and the runbook therefore carries: a VM's passthrough
+  disks need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
   storage accepting a container rootfs is the thin pool, so a restore test uses the *smallest*
   archive. Restore verified 2026-08-21 via `pct mount` without starting the clone - it carries the
   original's Tailscale node key. **The target is the KE-13 disk and there is no off-site copy.**
@@ -864,17 +858,19 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **sshd binds the wildcard on ten of eleven nodes - decided 2026-09-11.** This entry named vm100
+- **sshd binds the wildcard on nine of ten nodes - decided 2026-09-11, route chosen 2026-10-10.** This entry named vm100
   as the exception until the 2026-08-17 sweep measured the opposite: lxc250 is the only node that
   pins `ListenAddress`, and every other node, both VMs and the hypervisor included, binds `*:22`
   dual-stack on hosts carrying a routable IPv6 address. Password auth is off everywhere since
   2026-07-09, so the acute risk stays closed. `ssh_hardening` now owns `ListenAddress` behind
   `ssh_hardening_listen_address`, empty by default, and refuses to write it unless the node also
   declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list cleared.
-  Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
+  Six containers are socket-activated, where `ListenAddress` is inert; for them the role turns
+  `ssh.socket` off and lets `ssh.service` bind, and their `host_vars` carry the pin. Applied one
+  node at a time with `pct reboot` between, `pct exec` being the recovery path; the hypervisor
   last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
-  `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
+  `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
   and on 2026-10-08 four bursts during image pulls and package upgrades, all reads.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
   Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).

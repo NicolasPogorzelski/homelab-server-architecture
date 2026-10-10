@@ -6,12 +6,17 @@
     update_cache: true
     cache_valid_time: 3600
 
+# Owner and group are the ones systemd itself enforces: the packaged unit carries
+# `LogsDirectory=journal/remote` with `User=systemd-journal-remote`, and systemd
+# chowns that directory to the service's user and primary group at every start.
+# Anything else here is undone at the next boot and reported as drift by the
+# sweep after it.
 - name: Create the directory the received journals land in
   ansible.builtin.file:
     path: "{{ journal_remote_dir }}"
     state: directory
     owner: systemd-journal-remote
-    group: systemd-journal
+    group: systemd-journal-remote
     mode: "0755"
 
 # The ceiling. systemd-journal-remote reads no size limit on systemd 252, which

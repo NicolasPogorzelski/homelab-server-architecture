@@ -142,6 +142,31 @@ pct exec 260 -- systemctl status postgresql --no-pager
 | Proxmox WebUI unreachable via Tailscale | Tailscale on Proxmox host not connected | Use LAN IP for WebUI; `ssh root@<proxmox-lan-ip>` -> `systemctl restart tailscaled` |
 | Container filesystem errors on boot | fsck required after unclean unmount | Container will auto-fsck; check `journalctl -u pve-container@<ctid>` for outcome; manual `fsck` rarely needed |
 | `ansible all -m ping` shows some UNREACHABLE | Tailscale on affected node not yet connected | Wait 30-60 s; retry ping; or check `pct exec <ctid> -- tailscale status` |
+| Host boots, no network at all, after a mainboard or network card swap | The Proxmox installer pinned the bridge port by MAC address (`/usr/local/lib/systemd/network/50-pmx-nic0.link`); the new card does not match, keeps a name like `enp3s0`, and `vmbr0`'s `bridge-ports nic0` points at nothing | See *After a board or network card swap* below |
+
+### After a board or network card swap
+
+Not yet performed on this host; the commands are the vendor's, the order is reasoned.
+
+The host has no console once Linux runs: `vfio-pci` claims the only GPU at module load for vm100,
+so after GRUB the screen stays dark. Without network, that leaves GRUB.
+
+1. In the GRUB menu press `e` on the default entry, append `modprobe.blacklist=vfio_pci` to the
+   `linux` line and boot with `Ctrl-x`. The host keeps the GPU, a login prompt appears, and vm100
+   fails to start, which is expected for this boot.
+2. Log in as root. `ip -br link` shows the new card under its predictable name.
+3. Move the old pin away and pin the new card to the old name, which `/etc/network/interfaces`
+   and `vmbr0` already use:
+
+   ```bash
+   mv /usr/local/lib/systemd/network/50-pmx-nic0.link /root/
+   pve-network-interface-pinning generate --interface <new-name> --target-name nic0
+   reboot
+   ```
+
+4. The normal boot brings `nic0`, `vmbr0` and vm100 back. A new board also has no `proxmox` UEFI
+   entry; it boots through the fallback `\EFI\BOOT\BOOTX64.EFI`, which exists. Recreate the entry
+   once the host is up if the firmware's own boot order needs it (`efibootmgr -v` shows both).
 
 ---
 

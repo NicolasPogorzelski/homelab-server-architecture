@@ -348,6 +348,23 @@ device's address, not to the tag.
 }
 ```
 
+### Rule 15 - Nextcloud: the Paperless ingest shares
+
+Nextcloud's External Storage writes uploads into two SMB shares on vm102 that land in Paperless's
+consumption directory ([nextcloud.md](../services/nextcloud.md#external-storage-paperless-integration)).
+The rebuild of 2026-09-26 left this flow out, and its test asserted the opposite; with the LAN path
+closed by `smb_guard`, both mounts had failed since at least 2026-09-29. The grant is the one
+service, not `tag:tier1`, and the mounts address vm102 by its full MagicDNS name, because the short
+name `storage` also resolves on the LAN.
+
+```json
+{
+    "action": "accept",
+    "src":    ["nextcloud"],
+    "dst":    ["tag:storage:445"]
+}
+```
+
 ### `tag:isolated` - no rule
 
 A device carrying it can reach nothing and be reached by nothing. It exists for devices that use
@@ -391,7 +408,7 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 | **monitoring** | 9100 | 9100 | 9100; 443 on all three | 9100, 8096, 13378, 8080 | 9100, 443 | 9100, 9187 | - | 9100 |
 | **control** | 22 | 22 | 22 | 22 | 22 | 22 | 22, 9443 | 22 |
 | **tier0** | - | 445 | - | - | - | - | - | - |
-| **tier1** | - | - | - | - | - | paperless: 5432 | paperless: 19532 | - |
+| **tier1** | - | nextcloud: 445 | - | - | - | paperless: 5432 | paperless: 19532 | - |
 | **ai-stack** | - | - | - | 8080 | - | 5432 | - | - |
 | **database** | - | - | - | - | - | - | 19532 | - |
 | **tier2 and storage** | - | - | - | - | - | - | - | - |
@@ -493,7 +510,8 @@ three tier1 nodes it describes.
      "accept": ["tag:database:5432", "tag:monitoring:19532"],
      "deny":   ["nextcloud:443", "tag:storage:445", "tag:monitoring:22"]},
     {"src": "nextcloud",
-     "deny":   ["tag:database:5432", "paperless:443", "tag:storage:445", "tag:monitoring:19532"]},
+     "accept": ["tag:storage:445"],
+     "deny":   ["tag:database:5432", "paperless:443", "tag:monitoring:19532"]},
     {"src": "calibreweb",
      "deny":   ["nextcloud:443", "tag:database:5432", "tag:storage:445"]},
     {"src": "tag:ai-stack",
@@ -548,6 +566,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-10-10 | Rule 15 grants `nextcloud` -> `tag:storage:445`, and its test moves from deny to accept. Written in the repository; the console policy is applied by the operator. | Nextcloud's ingest mounts to Paperless had no path since the 2026-09-26 rebuild: the flow was not in the measured set, and `smb_guard` closes the LAN route. |
 | 2026-10-01 | New `tag:media-player` with Rule 14 (`gpu-vm:8096` only) and a test; the streaming box moves to it from `tag:isolated`. Verified on vm100's packet filter: a new rule for 8096 with the device's two addresses | The box streamed over the LAN, the path that closes once vm100 stops publishing on it ([remediation plan](remediation-plan.md#added-on-2026-10-01)) |
 | 2026-10-01 | Policy applied in the console: Rule 6 grants `bazzite:8080` and `gpu-vm:8080`, monitoring `gpu-vm:8080`; `gpu-vm:11434` removed with vm100's Ollama and asserted as denied. Verified on vm100's packet filter and by probes from lxc230, lxc200 and the admin notebook: allowed paths 200, denied paths time out | The 2026-09-29 change had reached the documentation only ([llm-inference.md](../services/llm-inference.md#rollout-state)) |
 | 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow. Correction 2026-10-01: documentation only - the console policy was not changed that day, and vm100's packet filter carried no rule for 8080 until 2026-10-01 | [llm-inference.md](../services/llm-inference.md) |

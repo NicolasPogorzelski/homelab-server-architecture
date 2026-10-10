@@ -1,35 +1,24 @@
 # Prometheus Rules
 
-This directory contains Prometheus alerting rules loaded via `rule_files` in `prometheus.yml`.
+`alert.rules.yml` holds every alerting and recording rule Prometheus on lxc200 loads. The
+`prometheus_config` role deploys it to `/opt/monitoring/prometheus/rules/` and gates the swap on
+`promtool check rules`.
 
-Active rules (`alert.rules.yml`):
+The catalogue of alerts, grouped as in the file, is the alerting table in
+[`monitoring.md`](../../../../docs/platform/monitoring.md#alerting). `validate-repo.sh` Check 38 keeps
+that table and this file in step, so it is the place to read rather than a list here.
 
-`node` group:
-- `NodeDown` - target unreachable for >2m (critical)
-- `DiskSpaceCritical` - filesystem <15% free for >5m (warning). Excludes `cifs` (a remote view of
-  storage another node owns), `fuse.mergerfs`, and the archive member disks - see the `storage`
-  group.
-- `HighMemoryUsage` - memory >90% for >5m (warning)
-- `PostgreSQLBackupStale` - no successful pg_dumpall in >25h (warning; requires textfile collector on CT260)
-- `MariaDBBackupStale` - no successful mariadb-dump in >25h (warning; requires textfile collector on CT210).
-  Covers Nextcloud's own database, which the PostgreSQL dump never touched.
+## Tests
 
-`postgres` group (requires `postgres_exporter` on CT260):
-- `PostgreSQLDown` - `pg_up == 0` for >2m (critical)
-- `PostgreSQLConnectionsHigh` - active connections >80% of `max_connections` for >5m (warning)
+`tests/` holds `promtool` unit tests for rules whose behaviour is not obvious from the expression.
+They are not deployed: the role copies `alert.rules.yml` alone, and Prometheus loads
+`rules/*.yml` without descending into subdirectories.
 
-`storage` group:
-- `ArchivePoolLowSpace` - MergerFS pool below 100 GiB absolute free for >1h (warning). The
-  archive is meant to fill, so a percentage threshold is meaningless on multi-terabyte; what matters is
-  whether the next write fits. Write consumers (Nextcloud, Paperless, Vaultwarden, `pg_dumpall`
-  to `/mnt/backups`) hit `ENOSPC` long before read consumers notice.
+```bash
+cd docker/monitoring/prometheus/rules/tests
+podman run --rm -v "$PWD/..:/r:ro,Z" -w /r/tests --entrypoint promtool \
+  docker.io/prom/prometheus:v3.15.0 test rules smart.test.yml
+```
 
-`systemd` group (requires `node_exporter --collector.systemd`):
-- `SystemdUnitFailed` - any unit in `failed` state for >15m (warning). No exception list: units
-  that can never succeed on a node are masked or removed by the `systemd_hygiene` Ansible role.
-  `.mount` units are in scope - node_exporter's stock `unit-exclude` drops them, and the fault
-  this rule was written for (KE-15) is a mount fault.
-
-Planned (`smart` group, not yet implemented):
-- SMART disk health alerts - requires `smartctl_exporter` on the Proxmox host. All nine disks
-  are attached there; VM102 sees only virtio-SCSI devices and cannot read SMART (see KE-14).
+Use the image tag the monitoring stack pins, so the test runs the PromQL engine that evaluates
+the rules in production.

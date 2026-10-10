@@ -81,10 +81,10 @@ backup at all, which is defensible right up to the moment somebody wants to know
 was already drifting last month.
 
 The second is not about data at all. vm100's
-`scsi1` is a raw file on directory storage, and a raw file on directory storage cannot be
-snapshotted, so vm100 has no rollback path at all. That is the reason a live CIFS unmount on that node
-in [KE-20](../platform/known-errors.md#ke-20) could only be ended with `qm stop`, and the reason
-making vm100 snapshottable is the precondition for investigating it.
+`scsi1` was a raw file on directory storage, which cannot be snapshotted, so vm100 had no rollback
+path - the reason a live CIFS unmount on that node in [KE-20](../platform/known-errors.md#ke-20)
+could only be ended with `qm stop`. Converted to qcow2 on 2026-10-10, the VM can be snapshotted; the
+snapshot shares this disk, so it covers a bad change and not the disk's loss.
 
 The third is the weekly guest backup: `/mnt/vzdump` is bound onto this disk, so the only restorable
 copy of the guest root disks shares a failure domain with the Docker state it would be needed to

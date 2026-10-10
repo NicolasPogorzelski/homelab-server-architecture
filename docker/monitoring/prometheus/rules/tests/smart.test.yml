@@ -1,0 +1,77 @@
+# promtool unit tests for the `smart` group in ../alert.rules.yml.
+# Run from this directory:
+#   podman run --rm -v "$PWD/..:/r:ro,Z" -w /r/tests --entrypoint promtool \
+#     docker.io/prom/prometheus:v3.15.0 test rules smart.test.yml
+# The 1m interval matters: input samples spaced wider than the five-minute
+# lookback make every series vanish between samples, and an alert with `for:`
+# then never leaves `pending`.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  # Case 1: letters swap across an overnight gap between a bad disk (8168) and a good one (0). No real rise.
+  - interval: 1m
+    input_series:
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="AUX",device_model="Barracuda"}'
+        values: '1x599 _x600 1x599'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdb",serial_number="IW",device_model="IronWolf"}'
+        values: '1x599 _x600 1x599'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdb",serial_number="AUX",device_model="Barracuda"}'
+        values: '_x600 1x599 _x600'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="IW",device_model="IronWolf"}'
+        values: '_x600 1x599 _x600'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdi"}'
+        values: '8168x599 0x599 8168x599'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdb"}'
+        values: '0x599 8168x599 0x599'
+    alert_rule_test:
+      - {eval_time: 12h, alertname: SmartAttributeDegrading, exp_alerts: []}
+      - {eval_time: 29h, alertname: SmartAttributeDegrading, exp_alerts: []}
+  # Case 2: real rise 7680 -> 8168 fires, naming the disk by model and current letter.
+  - interval: 1m
+    input_series:
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="AUX",device_model="Barracuda"}'
+        values: '1x2000'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdi"}'
+        values: '7680x600 8168x1400'
+    alert_rule_test:
+      - eval_time: 11h
+        alertname: SmartAttributeDegrading
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: h, serial_number: AUX, disk: /dev/sdi, device_model: Barracuda}
+            exp_annotations:
+              summary: "Barracuda (/dev/sdi at this boot) on h gained unreadable sectors in the last day"
+              description: "A SMART error counter on serial AUX rose above its 25-hour minimum and now reads 8168. The disk is degrading now, not historically. Read `smartctl -A` on the host via /dev/disk/by-id - the kernel letter in this alert is only valid until the next boot."
+      - {eval_time: 36h, alertname: SmartAttributeDegrading, exp_alerts: []}
+  # Case 3: a fall (sectors rewritten) does not fire.
+  - interval: 1m
+    input_series:
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="AUX",device_model="Barracuda"}'
+        values: '1x1000'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdi"}'
+        values: '8168x500 8000x500'
+    alert_rule_test:
+      - {eval_time: 10h, alertname: SmartAttributeDegrading, exp_alerts: []}
+  # Case 4: a daytime reboot swaps the letters with no gap; the old series stay inside the lookback.
+  - interval: 1m
+    input_series:
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="AUX",device_model="Barracuda"}'
+        values: '1x599'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdb",serial_number="IW",device_model="IronWolf"}'
+        values: '1x599'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdb",serial_number="AUX",device_model="Barracuda"}'
+        values: '_x600 1x599'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdi",serial_number="IW",device_model="IronWolf"}'
+        values: '_x600 1x599'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdi"}'
+        values: '8168x599 0x599'
+      - series: 'smartmon_current_pending_sector_raw_value{instance="h",disk="/dev/sdb"}'
+        values: '0x599 8168x599'
+    alert_rule_test:
+      - {eval_time: 10h2m, alertname: SmartAttributeDegrading, exp_alerts: []}
+      - {eval_time: 12h, alertname: SmartAttributeDegrading, exp_alerts: []}
+    promql_expr_test:
+      - expr: serial:smartmon_current_pending_sector_raw_value:max
+        eval_time: 10h2m
+        exp_samples:
+          - {labels: 'serial:smartmon_current_pending_sector_raw_value:max{instance="h",serial_number="AUX"}', value: 8168}
+          - {labels: 'serial:smartmon_current_pending_sector_raw_value:max{instance="h",serial_number="IW"}', value: 0}

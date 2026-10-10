@@ -89,7 +89,7 @@
 
 # A template rather than inline `content:` since 2026-09-11, so the optional
 # ListenAddress can be a conditional block without leaving a stray blank line in
-# the rendered file on the nine nodes that do not set it. The rendered output for
+# the rendered file on the nodes that do not set it. The rendered output for
 # an unset variable is byte-identical to what the copy task produced, which is why
 # this change reports no drift.
 #
@@ -122,3 +122,61 @@
     regexp: ^#?PermitRootLogin
     line: PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config
+
+# A pinned bind needs sshd to own its listening socket. Under socket activation
+# systemd holds `*:22` from `ssh.socket` and hands sshd an accepted connection, so
+# sshd never binds anything and never reads ListenAddress - which is how lxc220
+# carried a pinned drop-in for three weeks while still listening on every address.
+# Where the bind is pinned, the socket therefore goes and the service owns the port,
+# the arrangement lxc250, vm100, vm102 and the hypervisor already run.
+#
+# Order matters. The socket has to stop before the service starts: a specific
+# address cannot be bound on :22 while systemd holds the wildcard. Between the two
+# steps nothing listens, which refuses new connections for a moment and drops no
+# established one - ssh.service carries `KillMode=process`, and Ansible's own
+# session runs over a multiplexed connection that is already open. If the service
+# then fails to start, the node has no sshd; recovery is `pct exec` from the
+# hypervisor, which is why this runs one node at a time.
+- name: Hand the listening socket from systemd back to sshd
+  ansible.builtin.systemd_service:
+    name: ssh.socket
+    enabled: false
+    state: stopped
+  when: ssh_hardening_listen_address | length > 0
+
+# Restarted, not started, on the run that removes the socket: an ssh.service the
+# socket already launched is running on the inherited `*:22` descriptor, and
+# stopping the socket does not take that descriptor away from it. Later runs find
+# the socket inactive and only make sure the service is up, so they report no
+# change.
+- name: Run sshd as a standing service that binds its own address
+  ansible.builtin.systemd_service:
+    name: ssh.service
+    enabled: true
+    state: "{{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'started' }}"
+  when: ssh_hardening_listen_address | length > 0
+
+# Read the bind back from the kernel rather than trusting the configuration file,
+# the failure this block exists for: a drop-in that says one thing while the node
+# listens on another.
+- name: Read which addresses listen on port 22
+  ansible.builtin.command:
+    cmd: ss -Hltn 'sport = :22'
+  register: ssh_hardening_listeners
+  changed_when: false
+  check_mode: false
+  when: ssh_hardening_listen_address | length > 0 and not ansible_check_mode
+
+- name: Refuse to finish while sshd still listens beyond the pinned address
+  ansible.builtin.assert:
+    that:
+      - ssh_hardening_listeners.stdout_lines | length > 0
+      - ssh_hardening_listeners.stdout_lines
+        | map('split') | map(attribute=3)
+        | reject('equalto', ssh_hardening_listen_address ~ ':22') | list | length == 0
+    fail_msg: >-
+      Port 22 listeners are {{ ssh_hardening_listeners.stdout_lines | map('split') | map(attribute=3) | list }},
+      expected only {{ ssh_hardening_listen_address }}:22.
+    success_msg: "sshd listens on {{ ssh_hardening_listen_address }}:22 only."
+    quiet: true
+  when: ssh_hardening_listen_address | length > 0 and not ansible_check_mode

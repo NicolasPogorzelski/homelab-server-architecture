@@ -188,7 +188,7 @@ except Exception:
 for g in d.get("data", {}).get("groups", []):
     for r in g.get("rules", []):
         n = r.get("name")
-        if n:
+        if n and r.get("type") == "alerting":
             print(n)
 ' 2>/dev/null | sort -u || true)"
 

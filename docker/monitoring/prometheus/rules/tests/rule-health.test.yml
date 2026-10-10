@@ -1,0 +1,21 @@
+# promtool unit tests for PrometheusRuleEvaluationFailing in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'prometheus_rule_evaluation_failures_total{rule_group="/etc/prometheus/rules/alert.rules.yml;smart",instance="localhost:9090"}'
+        values: '0x30 1 2 3 3x60'
+      - series: 'prometheus_rule_evaluation_failures_total{rule_group="/etc/prometheus/rules/alert.rules.yml;node",instance="localhost:9090"}'
+        values: '0x100'
+    alert_rule_test:
+      - {eval_time: 20m, alertname: PrometheusRuleEvaluationFailing, exp_alerts: []}
+      - eval_time: 35m
+        alertname: PrometheusRuleEvaluationFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, rule_group: "/etc/prometheus/rules/alert.rules.yml;smart"}
+            exp_annotations:
+              summary: "Rules in /etc/prometheus/rules/alert.rules.yml;smart fail to evaluate"
+              description: "Prometheus counted evaluation failures in /etc/prometheus/rules/alert.rules.yml;smart within 15 minutes, so at least one rule there returns nothing whatever the fleet does. The reason is in the rule's lastError on /api/v1/rules or in the Prometheus container log."
+      - {eval_time: 60m, alertname: PrometheusRuleEvaluationFailing, exp_alerts: []}

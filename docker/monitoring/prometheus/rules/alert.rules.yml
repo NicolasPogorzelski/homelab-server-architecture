@@ -79,23 +79,30 @@ groups:
       # red. That happened. From 2026-09-18 Prometheus scraped Debian's packaged
       # exporter on lxc260, which reads a different textfile directory, and
       # pg_backup_last_success_timestamp was absent for six days while the dumps
-      # kept landing. The job matchers give each absence its own label set, so one
-      # missing series does not hide the other under `or`.
+      # kept landing. The restore tests share the gap and the same job labels, and
+      # absent() keeps only the matcher labels, so each absence is tagged with its
+      # metric name: otherwise two missing series on one job are one result under
+      # `or`, and the second hides behind the first.
       - alert: DatabaseBackupMetricsMissing
         expr: |
-          absent(pg_backup_last_success_timestamp{job="node-lxc260-postgres"})
-          or absent(mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"})
+          label_replace(absent(pg_backup_last_success_timestamp{job="node-lxc260-postgres"}),
+            "metric", "pg_backup_last_success_timestamp", "", "")
+          or label_replace(absent(mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"}),
+            "metric", "mariadb_backup_last_success_timestamp", "", "")
+          or label_replace(absent(pg_restore_test_last_success_timestamp{job="node-lxc260-postgres"}),
+            "metric", "pg_restore_test_last_success_timestamp", "", "")
+          or label_replace(absent(mariadb_restore_test_last_success_timestamp{job="node-lxc210-nextcloud"}),
+            "metric", "mariadb_restore_test_last_success_timestamp", "", "")
         for: 30m
         labels:
           severity: warning
         annotations:
-          summary: "A database backup metric is not being reported ({{ $labels.job }})"
-          description: "The backup timestamp for {{ $labels.job }} is absent, so its staleness rule cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never written it."
+          summary: "{{ $labels.metric }} is not being reported ({{ $labels.job }})"
+          description: "{{ $labels.metric }} is absent on {{ $labels.job }}, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."
 
       # 40 days, against a monthly schedule: one missed run is slack, two is a
-      # fault. Note this rule cannot fire while the metric has never been written
-      # at all -- an absent series produces no result -- which it shares with
-      # PostgreSQLBackupStale above. The first successful run arms it.
+      # fault. An absent series produces no result here, so a test that has never
+      # succeeded is reported by DatabaseBackupMetricsMissing instead.
       - alert: PostgreSQLRestoreTestStale
         expr: (time() - pg_restore_test_last_success_timestamp) > 3456000
         for: 0m
@@ -608,6 +615,20 @@ groups:
           summary: "Loaded alert rules could not be compared"
           description: "The last sweep could not read /api/v1/rules from the monitoring node, so nothing is checking that Prometheus loaded what the repository holds."
 
+      # Loaded is not the same as working. A rule whose expression errors at
+      # evaluation - a join that turns many-to-many, a function on the wrong type -
+      # produces no result, which a rule written as `> 0` cannot tell from health.
+      # Prometheus counts each failure per group; any in fifteen minutes is a rule
+      # that is currently blind.
+      - alert: PrometheusRuleEvaluationFailing
+        expr: sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rules in {{ $labels.rule_group }} fail to evaluate"
+          description: "Prometheus counted evaluation failures in {{ $labels.rule_group }} within 15 minutes, so at least one rule there returns nothing whatever the fleet does. The reason is in the rule's lastError on /api/v1/rules or in the Prometheus container log."
+
   - name: kernel
     rules:
       # Added 2026-08-20 after a kernel oops cascade wedged the hypervisor for
@@ -665,27 +686,73 @@ groups:
 
   - name: smart
     rules:
+      # The three error counters re-keyed by serial number. smartmon labels
+      # every attribute with `disk`, the kernel letter, and the letters move
+      # between boots: one `disk="/dev/sdi"` series alternates between the
+      # KE-13 aux-disk and an IronWolf reading 0, so any window over it sees a
+      # rise that no disk made. Raw value and device_info come from the same
+      # textfile, so the join is consistent even when a boot still serves the
+      # file the previous boot wrote.
+      #
+      # A daytime reboot is shorter than the five-minute lookback, so for a few
+      # minutes after it two device_info series share one letter and a plain
+      # join fails as many-to-many. This map keeps only the newest per letter.
+      - record: disk:smartmon_device_info:latest
+        expr: |
+          smartmon_device_info
+          and on (instance, disk, serial_number)
+            topk by (instance, disk) (1, timestamp(smartmon_device_info))
+      - record: serial:smartmon_reported_uncorrect_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_reported_uncorrect_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+      - record: serial:smartmon_current_pending_sector_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_current_pending_sector_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+      - record: serial:smartmon_offline_uncorrectable_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_offline_uncorrectable_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
+
       # Growth, not level. Three of the nine disks would trip a level-based rule
       # the day it was written - the KE-13 aux-disk alone reports 21 reported
-      # uncorrectable errors and 7680 pending sectors - and a rule that is red
-      # from the first day is a rule people learn to scroll past. What nobody
-      # could see until now is the thing that actually matters: whether those
-      # numbers are still moving. They were read by hand on four dates between
-      # 2026-06-25 and 2026-08-13 to answer that question.
+      # uncorrectable errors and thousands of pending sectors - and a rule that
+      # is red from the first day is a rule people learn to scroll past. The
+      # question that matters is whether those numbers are still moving.
       #
+      # Above the 25-hour minimum rather than increase(): these raw values are
+      # gauges, and a pending count that falls when the drive rewrites a sector
+      # would read to increase() as a counter reset followed by a full rise.
       # 25h, not 24h: the host powers down overnight, so a 24-hour window can
       # close entirely inside a period with no scrapes in it.
+      #
+      # The join after the `or` only puts the current kernel letter and the model
+      # on the alert, so the summary names something a person can find.
       - alert: SmartAttributeDegrading
         expr: |
-          (increase(smartmon_reported_uncorrect_raw_value[25h]) > 0)
-          or (increase(smartmon_current_pending_sector_raw_value[25h]) > 0)
-          or (increase(smartmon_offline_uncorrectable_raw_value[25h]) > 0)
+          (
+            (serial:smartmon_reported_uncorrect_raw_value:max
+              > min_over_time(serial:smartmon_reported_uncorrect_raw_value:max[25h]))
+            or (serial:smartmon_current_pending_sector_raw_value:max
+              > min_over_time(serial:smartmon_current_pending_sector_raw_value:max[25h]))
+            or (serial:smartmon_offline_uncorrectable_raw_value:max
+              > min_over_time(serial:smartmon_offline_uncorrectable_raw_value:max[25h]))
+          )
+          * on (instance, serial_number) group_left (disk, device_model)
+            max by (instance, serial_number, disk, device_model) (disk:smartmon_device_info:latest)
         for: 15m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.disk }} on {{ $labels.instance }} gained unreadable sectors in the last day"
-          description: "A SMART error counter on {{ $labels.disk }} rose within 25 hours. The disk is degrading now, not historically. Read `smartctl -A` on the host and match the device against smartmon_device_info - the kernel letter is not stable across boots."
+          summary: "{{ $labels.device_model }} ({{ $labels.disk }} at this boot) on {{ $labels.instance }} gained unreadable sectors in the last day"
+          description: "A SMART error counter on serial {{ $labels.serial_number }} rose above its 25-hour minimum and now reads {{ $value }}. The disk is degrading now, not historically. Read `smartctl -A` on the host via /dev/disk/by-id - the kernel letter in this alert is only valid until the next boot."
 
       # A level rule is right for this one: every disk on this host reads 0, and
       # the first reallocation is the event worth waking up for. Reallocation
@@ -829,3 +896,20 @@ groups:
         annotations:
           summary: "Service {{ $labels.service }} is down"
           description: "blackbox probe for {{ $labels.service }} ({{ $labels.instance }}) reports probe_success=0 for more than 3 minutes. A node can be up while its service is not answering (see KE-8)."
+
+  - name: jellyfin
+    rules:
+      # Written by jellyfin-cuda-watchdog.sh on vm100 every minute (KE-10). A lost
+      # CUDA context is normally gone within a minute: the watchdog restarts
+      # Jellyfin as soon as no stream plays or a video transcode is among them.
+      # Ten minutes of 0 means one of two things, and the held gauge says which:
+      # direct streams are keeping the restart back, or a restart did not bring
+      # CUDA back, which the restart workaround cannot fix.
+      - alert: JellyfinCudaLost
+        expr: jellyfin_cuda_ok == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Jellyfin has no CUDA access on {{ $labels.instance }}"
+          description: "nvidia-smi fails inside the Jellyfin container. If jellyfin_watchdog_restart_held is 1, the restart waits for direct streams to end and transcoding is unavailable until then; if it is 0, the watchdog has restarted Jellyfin and CUDA did not come back."

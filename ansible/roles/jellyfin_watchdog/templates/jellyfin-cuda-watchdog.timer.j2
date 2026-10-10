@@ -8,6 +8,7 @@ Description=Poll Jellyfin CUDA health every {{ jellyfin_watchdog_oninterval }}
 # the host was off needs no catch-up.
 OnBootSec={{ jellyfin_watchdog_onbootsec }}
 OnUnitActiveSec={{ jellyfin_watchdog_oninterval }}
+AccuracySec={{ jellyfin_watchdog_accuracysec }}
 Unit=jellyfin-cuda-watchdog.service
 
 [Install]

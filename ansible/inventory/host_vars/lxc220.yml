@@ -5,47 +5,17 @@
 compose_projects:
   - { dest: /srv/calibreweb, src: calibre-web }
 
-# === sshd pinned to the Tailscale address, first node of the rollout ===
-#
-# The decision of 2026-09-11 (docs/decisions/sshd-listen-address.md) found ten of
-# eleven nodes binding `*:22` and called for one node per session, containers
-# first, with `pct exec 220` as the recovery path. It was executed on no node
-# until 2026-09-17, which is how a decision turns into a solved problem nobody
-# solved.
-#
-# This node is first because it costs least if it goes wrong: one read-mostly
-# service, no other node depends on it, and the container can be entered from the
-# hypervisor without SSH at all.
-#
-# The gate is not optional decoration next to the bind. sshd binding an address
-# that does not exist yet at boot exits 255, and Debian's ssh.service carries
-# RestartPreventExitStatus=255, so the restart backstop is inert unless that list
-# is cleared - which is why ssh_hardening asserts both of the lines below before
-# it will write a ListenAddress at all.
+# === sshd bound to the Tailscale address only ===
+# docs/decisions/sshd-listen-address.md. This node was socket-activated, and under
+# `ssh.socket` sshd never binds anything, so ListenAddress alone was inert here;
+# ssh_hardening now disables the socket wherever the bind is pinned and lets
+# ssh.service own the port. The gate is what makes the pin survive a boot: sshd
+# exits 255 on a bind to an address tailscaled has not assigned yet, and Debian's
+# unit refuses to restart on 255 unless that list is cleared. ssh_hardening
+# asserts both gate lines before it writes the bind.
 tailscale_boot_gate_units:
   - ssh.service
 
 tailscale_boot_gate_clear_restart_prevent: true
 
-# NOT SET, and the reason is a measurement rather than caution. Applied here on
-# 2026-09-17, the line landed in sshd_config.d and changed nothing: this node is
-# socket-activated, `ssh.socket` is enabled, and under socket activation systemd
-# owns the listening socket. sshd never binds anything itself, so `ListenAddress`
-# is inert and the node went on serving `*:22` with a configuration file claiming
-# otherwise.
-#
-# Measured across the fleet the same day: lxc200, lxc210, lxc211, lxc220, lxc230
-# and lxc260 are socket-activated; vm100, vm102, lxc250 and the hypervisor are
-# not. That is why lxc250 could pin its bind in August and why the decision's
-# "containers first" ordering is exactly backwards - containers are where the
-# mechanism does not work.
-#
-# Pinning a socket-activated node needs `ListenStream=` cleared and re-set on
-# `ssh.socket`, and the boot gate has to move to the socket unit with it, or
-# socket activation has to be turned off on that node. Which of the two is a
-# decision, not an implementation detail, and it belongs in
-# docs/decisions/sshd-listen-address.md before any node is changed.
-#
-# The boot gate above stays. It is correct regardless of which answer wins, and
-# it is what makes either survivable.
-# ssh_hardening_listen_address: "{{ ansible_host }}"
+ssh_hardening_listen_address: "{{ ansible_host }}"

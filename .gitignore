@@ -7,6 +7,11 @@
 *.env
 *.env.*
 
+# The Ansible vault password lives in the control node's home, outside the tree.
+# This keeps a copy that ever lands inside it out of git.
+.vault_pass
+**/.vault_pass
+
 **/.env
 **/.env.*
 **/*.env
