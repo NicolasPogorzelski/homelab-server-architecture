@@ -563,6 +563,34 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   [KE-14](known-errors.md#ke-14) measurements stay comparable across the power-path check. Release
   the pin with `proxmox-boot-tool kernel unpin` once that check has a result.
 
+## Added on 2026-10-10
+
+- ~~**Host mail half arrives, and nothing needs it.**~~ Done 2026-10-10. Nobody configured mail
+  here: Proxmox installs Postfix as its local mailer and asks for an address for `root@pam` at
+  installation. PVE's own notifications went straight to that address - 96 messages since
+  2026-08-21, one per guest and `vzdump` run, all accepted by the recipient's server - while mail
+  to the local `root`, which smartd and cron write, was deferred because `/etc/aliases.db` had
+  never been built. Nothing on either path was unique: smartd writes to the journal and
+  `smart_metrics` alerts on growth, package updates are `apt_metrics`, guest backups report
+  through `GuestBackupPartial` and `GuestBackupStale`. So there is one alert channel now:
+  `newaliases`, the 19 queued messages deleted, and PVE's built-in `mail-to-root` endpoint
+  disabled. Verified with a test message to `root`: delivered locally to `proxmox-mail-forward`,
+  which logged `skipping disabled target 'mail-to-root'`, no `postfix/smtp` line, queue empty.
+
+- ~~**The hypervisor held a Samba server nothing used, back from security updates.**~~ Done
+  2026-10-10. `samba`, `samba-common` and `samba-common-bin` sat on `apt-mark hold` at 4.22.6,
+  installed by hand on 2025-12-27 before vm102 took over file serving, while their libraries had
+  moved to 4.22.11 on 2026-10-08. `smbd` and `nmbd` were disabled and nothing depended on the
+  server package. Hold lifted, `samba` removed, the rest upgraded: every Samba package now at
+  4.22.11, `apt-mark showhold` empty. Proxmox's CIFS storage keeps `smbclient` and the libraries;
+  `pvesm status` reported all storages active and all eight `/mnt/smb` mounts resolved as `cifs`
+  afterwards. The old `smb.conf`, which still defined two shares of its own, is kept as
+  `/root/smb.conf.pre-removal-2026-10-10`.
+
+- **The external heartbeat is the larger gap.** Both items above were about telling somebody
+  when the host is up and something is wrong. Nothing tells anybody when the host, or lxc200, is
+  down - see the external heartbeat under Tier 4, built in the repository and live nowhere.
+
 ## The exercise block, before Terraform
 
 Four controls that the same assessment argued against building at this scale, being built
