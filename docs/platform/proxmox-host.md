@@ -277,8 +277,11 @@ Verified after: fresh connection as root, `sshd -T` reporting `passwordauthentic
 counter-test with `PubkeyAuthentication=no` answered `Permission denied (publickey)` - the server
 no longer offers a password path at all. Ten guests running, zero failed units.
 
-Residual, not fixed here: root's `authorized_keys` on this host holds eight keys and nothing manages
-the set. The VMs have the `breakglass` role enforcing theirs with `exclusive: true`.
+Residual, not fixed here: nothing manages root's `authorized_keys` on this host. It is a symlink
+to `/etc/pve/priv/authorized_keys` on the cluster filesystem, it carries the host's own
+`root@server` key beside the admin and control-node keys, and two admin keys appear twice. The VMs
+have the `breakglass` role enforcing theirs with `exclusive: true`; a role here has to write through
+the symlink and keep the host's own key.
 
 ## Storage definitions (cleaned 2026-08-17)
 

@@ -2,8 +2,9 @@
 
 ## Problem
 
-[KE-14](../../docs/platform/known-errors.md#ke-14) is a recurring burst of `DID_SOFT_ERROR` against
-the boot SSD, confined to the boot window. The media has been excluded, so has the HBA firmware.
+[KE-14](../../docs/platform/known-errors.md#ke-14) is a recurring burst of failed commands against
+the boot SSD, reported as `DID_SOFT_ERROR` or `DID_TIME_OUT`, in the boot window and under I/O load
+later in the day. The media has been excluded, so has the HBA firmware.
 The leading hypothesis is a sagging 12 V rail, and it has been the leading hypothesis for months
 because verifying it needs somebody in front of the machine rather than in front of a terminal.
 
@@ -35,7 +36,12 @@ enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or a `by-id` p
 
 ```bash
 # On the host, before the shutdown window:
-journalctl -k --since "-7d" | grep -iE 'DID_SOFT_ERROR|I/O error|reset' | tail -40
+journalctl -k --since "-7d" | grep -iE 'DID_(SOFT_ERROR|TIME_OUT)|I/O error|reset' | tail -40
+# Failed commands per boot and host byte; both codes are the same fault.
+for b in 0 -1 -2 -3 -4; do
+  echo "boot $b: $(journalctl -k -b $b | grep -E '9:0:0:0: .*FAILED Result' \
+    | grep -oE 'hostbyte=DID_[A-Z_]+' | sort | uniq -c | tr '\n' ' ')"
+done
 smartctl -a /dev/disk/by-id/<boot-ssd-by-id> | head -40
 uptime -s
 ```
@@ -100,7 +106,8 @@ The check is complete when all four of these are written into
 4. A boot-window journal read from the first boot after the work:
 
    ```bash
-   journalctl -k -b 0 | grep -iE 'DID_SOFT_ERROR|I/O error' | head -20
+   journalctl -k -b 0 | grep -E '9:0:0:0: .*FAILED Result' \
+     | grep -oE 'hostbyte=DID_[A-Z_]+' | sort | uniq -c
    ```
 
 One clean boot proves nothing - the fault is intermittent and has skipped boots before. Read the

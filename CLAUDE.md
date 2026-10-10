@@ -763,10 +763,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a systemd timer + `Persistent=true` (fires an overdue run at the next boot). A failed timer
   unit now also raises `SystemdUnitFailed`; a cron failure never did. **Any daily job on this
   fleet must be a timer with `Persistent=true`, not a cron entry** - the host is not up at night.
-  Restore validation is no longer absent - a full-cluster restore into a throwaway cluster passed
-  on 2026-08-13 (procedure and result in the runbook's Verification section) - but it is still
-  **manual and unscheduled**, and the dumps are never checked for readability at write time.
-  The `-mtime +7` retention means a single bad dump plus a week of silence loses everything.
+  Restore validation runs monthly through the `postgresql_restore_test` role, and `pg-backup.sh`
+  verifies each dump before it renames it, so the retention arithmetic in the Current Status entry
+  is the one that applies: 7 days of dumps against a test that can detect a bad one up to 31 days
+  late.
 
 - **`tailscale cert` on disk needs a reload, not just a renewal (KE-16):** on nodes that read
   `/var/lib/tailscale/certs/*.crt` directly (only lxc210 - everything else goes through
@@ -816,17 +816,13 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   precondition for investigating KE-20 and for any non-trivial maintenance on this node.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sat 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
-  a generic path bound onto whichever disk currently holds the role. Nine of ten guests, and the two
-  exceptions this entry used to name were both wrong by 2026-09-15: vm100 is excluded on purpose,
-  lxc220 backs up cleanly in 73 s, and lxc240 has been in the list since the drift fix of
-  2026-09-09 - which is when it started failing. Its rootfs carries eight paths under
-  `/home/media` owned by host UID 1000, outside the `100000-165535` map `lxc-usernsexec` reads
-  with, so `tar` exited 2 and took the whole run with it; the container's description announces
-  exactly that pinning and its config holds no `lxc.idmap` line
-  ([KE-25](docs/platform/known-errors.md#ke-25)). Fixed 2026-09-15 by `chown`, verified by a
-  single `vzdump 240` at exit 0. Two preconditions the role cannot assert and the runbook
-  therefore carries: a VM's passthrough disks
-  need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
+  a generic path bound onto whichever disk currently holds the role. Eight of nine guests: vm100 is
+  excluded on purpose. One guest that `vzdump` cannot back up marks the unit failed while the
+  others are still written - host-UID files outside the container's ID map did that to lxc240
+  ([KE-25](docs/platform/known-errors.md#ke-25)), and so did its place in the list after the
+  container was destroyed - so `GuestBackupPartial` names a real gap rather than a lost week.
+  Two preconditions the role cannot assert and the runbook therefore carries: a VM's passthrough
+  disks need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
   storage accepting a container rootfs is the thin pool, so a restore test uses the *smallest*
   archive. Restore verified 2026-08-21 via `pct mount` without starting the clone - it carries the
   original's Tailscale node key. **The target is the KE-13 disk and there is no off-site copy.**
@@ -864,7 +860,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **sshd binds the wildcard on ten of eleven nodes - decided 2026-09-11.** This entry named vm100
+- **sshd binds the wildcard on nine of ten nodes - decided 2026-09-11.** This entry named vm100
   as the exception until the 2026-08-17 sweep measured the opposite: lxc250 is the only node that
   pins `ListenAddress`, and every other node, both VMs and the hypervisor included, binds `*:22`
   dual-stack on hosts carrying a routable IPv6 address. Password auth is off everywhere since
@@ -874,7 +870,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   Rollout is one node per session: LXCs first, `pct exec` being the recovery path; the hypervisor
   last or never. See `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
-  `DID_SOFT_ERROR` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
+  `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
   and on 2026-10-08 four bursts during image pulls and package upgrades, all reads.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
   Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
