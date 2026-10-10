@@ -66,11 +66,26 @@ film ran at about 110 MB/s for five minutes, and the client gave up long before.
 ## CUDA Watchdog
 
 Jellyfin intermittently loses CUDA access at runtime (see [KE-10](../platform/known-errors.md#ke-10)).
-A watchdog script checks GPU availability every 30 minutes and restarts the container if access is lost.
+A watchdog script checks GPU availability every minute and restarts the container once access is
+lost - but not under a stream that does not need the GPU. A restart ends every running stream,
+direct play included; on 2026-10-08 one found CUDA lost at 11:29:08 and stopped a direct-play
+stream to the box. So with CUDA gone the script asks Jellyfin's `/Sessions` who is playing:
 
-The restart ends every running stream, including direct play that never touches the GPU. The
-script does not look for active sessions. On 2026-10-08 it found CUDA lost at 11:29:08, Docker
-killed the container after its 10 s stop timeout, and a direct-play stream to the box stopped.
+| Sessions playing | Action |
+|---|---|
+| none | restart |
+| at least one transcodes video (`TranscodingInfo.IsVideoDirect` false) | restart; that stream already depends on the lost GPU |
+| only direct play or direct stream | hold, look again next minute |
+| API does not answer | restart |
+
+The API key is the one `jellyfin_user_prefs` uses, deployed to a root-only header file that `curl`
+reads with `-H @file`, so it never appears on a command line. The field names are Jellyfin's
+session model; a held restart with a real video transcode running has not been observed yet.
+
+State goes to the textfile collector: `jellyfin_cuda_ok`, `jellyfin_watchdog_restart_held` and
+`jellyfin_watchdog_last_restart_timestamp_seconds`. `JellyfinCudaLost` fires after ten minutes of
+`jellyfin_cuda_ok == 0`, which is either a restart held for direct streams or one that did not
+bring CUDA back.
 
 ### Deploy on VM100
 
@@ -87,11 +102,14 @@ ansible-playbook playbooks/jellyfin-watchdog.yml                  # apply
 
 ```
 OnBootSec=5min
-OnUnitActiveSec=30min
+OnUnitActiveSec=1min
+AccuracySec=5s
 ```
 
 The first poll waits 5 minutes after boot so Docker and the NVIDIA runtime have
-settled; restarting a half-started container is worse than checking it late.
+settled; restarting a half-started container is worse than checking it late. One minute keeps a
+held restart within a minute of the last direct stream ending, and `AccuracySec` stops systemd
+from coalescing the timer to its one-minute default accuracy.
 `Persistent=` is deliberately absent - it applies only to `OnCalendar=` timers, and
 a poll missed while the host was powered off has nothing to catch up on.
 

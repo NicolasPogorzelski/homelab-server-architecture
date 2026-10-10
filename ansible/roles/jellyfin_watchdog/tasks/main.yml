@@ -7,6 +7,37 @@
     group: root
     mode: "0750"
 
+- name: Create the watchdog's configuration directory
+  ansible.builtin.file:
+    path: "{{ jellyfin_watchdog_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Point the watchdog at Jellyfin
+  ansible.builtin.copy:
+    dest: "{{ jellyfin_watchdog_config_dir }}/env"
+    content: |
+      # Managed by the jellyfin_watchdog Ansible role.
+      JELLYFIN_URL={{ jellyfin_watchdog_url }}
+    owner: root
+    group: root
+    mode: "0600"
+
+# no_log and no diff: the file is the API key. `--diff` prints a changed file's
+# content, which is how a dry run once put the Paperless database password on
+# a terminal.
+- name: Give the watchdog its API key as a curl header file
+  ansible.builtin.copy:
+    dest: "{{ jellyfin_watchdog_config_dir }}/auth-header"
+    content: "Authorization: MediaBrowser Token=\"{{ jellyfin_watchdog_api_key }}\"\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
 - name: Deploy the watchdog service unit
   ansible.builtin.template:
     src: jellyfin-cuda-watchdog.service.j2

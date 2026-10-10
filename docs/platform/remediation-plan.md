@@ -540,12 +540,13 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   [jellyfin.md](../services/jellyfin.md#moonfin-direct-play). Nothing in the fleet changed; the
   setting lives on the box.
 
-- **The CUDA watchdog restarts Jellyfin under running streams.** It fired at 2026-10-08 11:29 and
-  ended a direct-play stream that used no GPU ([KE-10](known-errors.md#ke-10)). Two directions,
-  undecided: hold the restart while sessions are active and none of them transcodes, which needs
-  an API key on the node and a session query in the script, or stop restarting and alert instead,
-  which trades silent interruptions for visible ones. Either is a change to `jellyfin_watchdog`
-  and its own unit of work.
+- ~~**The CUDA watchdog restarts Jellyfin under running streams.**~~ Decided and built 2026-10-10,
+  applied after the merge. The operator's direction: restart only when no stream needs to be
+  protected. With CUDA gone the watchdog now restarts when nothing plays or a video transcode is
+  among the sessions, and holds while only direct streams play; it polls every minute instead of
+  every thirty, and `JellyfinCudaLost` makes a held or failed restart visible
+  ([jellyfin.md](../services/jellyfin.md#cuda-watchdog)). Not yet observed: a held restart with a
+  real transcode, which is when the `IsVideoDirect` reading meets real data.
 
 - **Nextcloud cannot reach the two Paperless ingest shares.** Its log carries
   `Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 27 times a

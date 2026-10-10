@@ -896,3 +896,20 @@ groups:
         annotations:
           summary: "Service {{ $labels.service }} is down"
           description: "blackbox probe for {{ $labels.service }} ({{ $labels.instance }}) reports probe_success=0 for more than 3 minutes. A node can be up while its service is not answering (see KE-8)."
+
+  - name: jellyfin
+    rules:
+      # Written by jellyfin-cuda-watchdog.sh on vm100 every minute (KE-10). A lost
+      # CUDA context is normally gone within a minute: the watchdog restarts
+      # Jellyfin as soon as no stream plays or a video transcode is among them.
+      # Ten minutes of 0 means one of two things, and the held gauge says which:
+      # direct streams are keeping the restart back, or a restart did not bring
+      # CUDA back, which the restart workaround cannot fix.
+      - alert: JellyfinCudaLost
+        expr: jellyfin_cuda_ok == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Jellyfin has no CUDA access on {{ $labels.instance }}"
+          description: "nvidia-smi fails inside the Jellyfin container. If jellyfin_watchdog_restart_held is 1, the restart waits for direct streams to end and transcoding is unavailable until then; if it is 0, the watchdog has restarted Jellyfin and CUDA did not come back."

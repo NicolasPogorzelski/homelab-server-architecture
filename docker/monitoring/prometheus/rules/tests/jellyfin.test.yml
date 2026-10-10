@@ -1,0 +1,21 @@
+# promtool unit tests for JellyfinCudaLost in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+# A restart that brings CUDA back within a few minutes stays quiet; ten minutes
+# without it fires, whether the restart is held or failed.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'jellyfin_cuda_ok{instance="vm100"}'
+        values: '1x10 0x2 1x20 0x30'
+    alert_rule_test:
+      - {eval_time: 20m, alertname: JellyfinCudaLost, exp_alerts: []}
+      - {eval_time: 38m, alertname: JellyfinCudaLost, exp_alerts: []}
+      - eval_time: 45m
+        alertname: JellyfinCudaLost
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: vm100}
+            exp_annotations:
+              summary: "Jellyfin has no CUDA access on vm100"
+              description: "nvidia-smi fails inside the Jellyfin container. If jellyfin_watchdog_restart_held is 1, the restart waits for direct streams to end and transcoding is unavailable until then; if it is 0, the watchdog has restarted Jellyfin and CUDA did not come back."
