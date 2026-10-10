@@ -33,7 +33,7 @@ file path, not the fragment.
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
-| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - vm100 `docker.service` gated 2026-10-07, cold boot pending |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - vm100 `docker.service` gated 2026-10-07, cold-boot confirmed 2026-10-10 |
 | [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
 | [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
 | [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
@@ -43,7 +43,7 @@ file path, not the fragment.
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25 |
 | [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Applied 2026-10-03, unit enabled, re-check at `changed=0` |
-| [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 by binding the Tailscale address; boot gate pending a cold boot |
+| [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 by binding the Tailscale address; boot gate cold-boot confirmed 2026-10-10 |
 
 Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
 index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
@@ -1254,7 +1254,7 @@ the poll waited 11 s before the name resolved - inside the window the gate exist
 | nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
 | vm100 `ollama` | bind | Closed 2026-10-01 by removing the service, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Its successor binds loopback behind `tailscale serve` ([rollout](../services/llm-inference.md#rollout-state)) |
 | lxc200 `blackbox-exporter` | resolver | Found 2026-10-07: the container copied `resolv.conf` at boot before tailscaled wrote it, kept the LAN router as resolver, and four `ServiceDown` alerts fired for services that answered. Fixed by naming the MagicDNS resolver in the compose file |
-| vm100 `docker.service` (Jellyfin) | bind | Opened 2026-10-07 when Jellyfin moved off `tailscale serve` ([KE-28](#ke-28)). Gated by `tailscale_boot_gate`, `docker_boot_retry` behind it; cold boot pending |
+| vm100 `docker.service` (Jellyfin) | bind | Opened 2026-10-07 when Jellyfin moved off `tailscale serve` ([KE-28](#ke-28)). Gated by `tailscale_boot_gate`, `docker_boot_retry` behind it; cold-boot confirmed 2026-10-10: boot 08:42:40, gate found the address after 0 s, `docker` active 08:43:57 with `NRestarts=0`, no `docker-boot-retry` line, all three containers up |
 
 **What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and
 wakes it by RTC the next working day, so every day is a cold boot. Timers that carry `Persistent=true`
@@ -2326,7 +2326,8 @@ backstop.
 
 The halved CPU at the same rate is the second TCP stack leaving the path.
 
-**Status:** Resolved 2026-10-07 by binding the Tailscale address. Open: the `docker.service` gate
-proven by a cold boot (`systemctl show docker -p ActiveEnterTimestamp` after `uptime -s`, Jellyfin
-up without a `docker-boot-retry` line), and a measurement of three concurrent 4K streams.
+**Status:** Resolved 2026-10-07 by binding the Tailscale address. The `docker.service` gate is
+proven by the cold boot of 2026-10-10: `docker` became active at 08:43:57 after a boot at 08:42:40,
+Jellyfin came up with no `docker-boot-retry` line. Open: a measurement of three concurrent 4K
+streams.
 Audiobookshelf and `llama-server` still use the forwarder; neither has shown the fault.

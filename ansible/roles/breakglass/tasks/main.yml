@@ -84,3 +84,20 @@
       {{ breakglass_sudo_rules.stdout_lines | select('search', 'NOPASSWD') | list }}
     quiet: true
   when: not ansible_check_mode
+
+# The NOPASSWD checks above make root cost a password. Membership in a group that
+# grants root by other means would make that cost optional, so the account leaves
+# such groups. `ansible.builtin.user` can only set the full group list, which
+# would also remove groups this role has no opinion about, hence gpasswd per group.
+- name: Read the break-glass account's groups  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: id -nG {{ breakglass_user }}
+  register: breakglass_groups
+  changed_when: false
+  check_mode: false
+
+- name: Remove the break-glass account from groups that grant root without sudo
+  ansible.builtin.command:
+    cmd: gpasswd -d {{ breakglass_user }} {{ item }}
+  loop: "{{ breakglass_root_equivalent_groups | intersect(breakglass_groups.stdout.split()) }}"
+  changed_when: true

@@ -13,3 +13,13 @@ breakglass_pubkeys: []
 # group, behind its password.
 breakglass_retired_sudoers_files:
   - /etc/sudoers.d/ansible-apt
+
+# Groups whose members are root without sudo: the Docker socket and LXD each hand
+# out a root shell to anyone who can talk to them, so a password on sudo protects
+# nothing while the account sits in either. libvirt and disk are listed for the
+# same reason; a node that has none of them is unaffected.
+breakglass_root_equivalent_groups:
+  - docker
+  - lxd
+  - libvirt
+  - disk

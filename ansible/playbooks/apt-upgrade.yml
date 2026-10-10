@@ -7,6 +7,9 @@
 - name: Upgrade apt LXCs
   hosts: lxcs
   serial: 1
+  # Any failed host stops the roll. serial: 1 alone does that; this keeps it
+  # when the batch grows, where one failure in a batch would otherwise not stop it.
+  max_fail_percentage: 0
   become: true
 
   tasks:
@@ -63,6 +66,9 @@
 - name: Upgrade apt VMs
   hosts: vms
   serial: 1
+  # Any failed host stops the roll. serial: 1 alone does that; this keeps it
+  # when the batch grows, where one failure in a batch would otherwise not stop it.
+  max_fail_percentage: 0
   become: true
 
   tasks:

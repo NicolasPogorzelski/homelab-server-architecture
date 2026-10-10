@@ -265,6 +265,21 @@ From roadmap item 7 (SSH hardening) onwards, all playbooks are tested with `--ch
 ansible-playbook playbooks/<name>.yml --check --diff
 ```
 
+## Rolling Playbooks and a Stopped Run
+
+Eight playbooks roll one host at a time (`serial: 1`) and set `max_fail_percentage: 0`, so the
+first failed host ends the run and the hosts after it are not touched. Measured on 2026-10-10 with
+a play that failed on its first of three hosts: the other two never started. `serial: 1` already
+behaves that way; the explicit limit keeps it if the batch is ever widened.
+
+A stopped run leaves the fleet split: the hosts before the failure carry the change, the failed
+host may carry part of it, the rest carry none. Do not start the same run again to see what
+happens. Read the recap for the failed host and task, fix the cause, dry-run the failed host with
+`--check --diff --limit <host>`, apply it there, and then rerun the playbook without `--limit`:
+the hosts already done report `ok`, which is the proof that they match. A change that must not
+stay half-rolled - a key rotation, a sudo rule - is reverted on the earlier hosts by the previous
+commit's version of the same playbook rather than by hand.
+
 ## Related Documents
 
 - [LXC250 - DevOps Workstation](../nodes/lxc250.md)

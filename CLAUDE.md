@@ -129,7 +129,7 @@ notes there and keep this section short.
   inventory as part of `lxcs` and `guests`, the exporter is the role's and binds the Tailscale
   address, Prometheus scrapes it (`node-lxc250-devops`, `up`), and 850 `node_systemd_unit_state`
   series mean `SystemdUnitFailed` finally covers it. The sshd drop-in is adopted into the
-  `tailscale_boot_gate` role, pending a cold boot to verify. Step (3), `preflight.yml`, is
+  `tailscale_boot_gate` role, cold-boot confirmed 2026-08-20. Step (3), `preflight.yml`, is
   untouched.
 - **Nextcloud's MariaDB has no backup, and parity is not backup (found 2026-08-15).** The nightly
   `pg_dumpall` covers lxc260 only; Nextcloud's database runs *inside* lxc210 and no role, script,

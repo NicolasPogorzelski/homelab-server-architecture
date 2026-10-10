@@ -8,5 +8,8 @@
   hosts: database
   become: true
   serial: 1
+  # Any failed host stops the roll. serial: 1 alone does that; this keeps it
+  # when the batch grows, where one failure in a batch would otherwise not stop it.
+  max_fail_percentage: 0
   roles:
     - postgresql_restore_test
