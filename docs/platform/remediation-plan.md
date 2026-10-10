@@ -552,14 +552,14 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   ([jellyfin.md](../services/jellyfin.md#cuda-watchdog)). Not yet observed: a held restart with a
   real transcode, which is when the `IsVideoDirect` reading meets real data.
 
-- **Nextcloud cannot reach the two Paperless ingest shares.** Its log carries
-  `Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 27 times a
-  day, and `Error while getting file info` alongside, for as far back as the log reaches
-  (2026-09-29). A document dropped into either external-storage folder does not reach the
-  consumption directory, and nothing alerts. Not caused by the upgrade to 34 and not yet
-  diagnosed; the first thing to rule out is the `smb_guard` table on vm102, which admits TCP/445 over
-  the LAN only from vm100 and the hypervisor.
-
+- **Nextcloud cannot reach the two Paperless ingest shares - diagnosed 2026-10-10.** On lxc210 the
+  mount host `storage` resolves to vm102's LAN address, where `smb_guard` admits port 445 from
+  vm100 and the hypervisor only; over the tailnet the ACL rebuilt on 2026-09-26 left the flow out
+  and its test asserted a deny, so lxc210 does not even see vm102 as a peer. Measured from lxc210:
+  445 closed on both paths. The fix keeps the feature and the LAN closed: ACL Rule 15
+  (`nextcloud` -> `tag:storage:445`, written in [tailscale-acl.md](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares)),
+  then both mounts switched to vm102's full MagicDNS name. The console change is the operator's;
+  the mount change follows it.
 - **Nextcloud 35 needs PHP 8.3, so it needs Debian 13 on lxc210.** 34.0.4 is the last major that
   runs on Debian 12's PHP 8.2 (`lib/versioncheck.php` of each tag), and `occ setupchecks` already
   flags 8.2 as deprecated. 34 is supported until 2027-06. Same check lists a mimetype migration

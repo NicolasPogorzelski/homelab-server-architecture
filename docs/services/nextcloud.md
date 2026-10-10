@@ -129,6 +129,10 @@ user's consumption subdirectory.
 | 4 | Operator | Paperless-ingest-user1 | `/mnt/mergerfs/Paperless/consumption/user1` |
 | 5 | user2 | Paperless-ingest-user2 | `/mnt/mergerfs/Paperless/consumption/user2` |
 
+- Host: vm102's full MagicDNS name, `storage.<tailnet-id>.ts.net`, over the tailnet. The short
+  name `storage` also resolves on the LAN, where `smb_guard` on vm102 refuses lxc210; the tailnet
+  path needs [ACL Rule 15](../platform/tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares).
+  Both mounts failed from at least 2026-09-29 until that rule existed.
 - SMB user: `paperless-ingest` (global credentials, not per-session)
 - Auth method: global credentials stored in Nextcloud config (not session-based)
 - Files uploaded here are consumed and deleted by Paperless within ~30 seconds
