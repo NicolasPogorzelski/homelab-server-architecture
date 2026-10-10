@@ -1,0 +1,41 @@
+# promtool unit tests for DatabaseBackupMetricsMissing in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+# Each case leaves some of the four database metrics out and expects one alert
+# per missing metric, including two on the same job.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'pg_backup_last_success_timestamp{job="node-lxc260-postgres"}'
+        values: '1x100'
+      - series: 'mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"}'
+        values: '1x100'
+      - series: 'pg_restore_test_last_success_timestamp{job="node-lxc260-postgres"}'
+        values: '1x100'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: DatabaseBackupMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc210-nextcloud, metric: mariadb_restore_test_last_success_timestamp}
+            exp_annotations:
+              summary: "mariadb_restore_test_last_success_timestamp is not being reported (node-lxc210-nextcloud)"
+              description: "mariadb_restore_test_last_success_timestamp is absent on node-lxc210-nextcloud, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."
+  - interval: 1m
+    input_series:
+      - series: 'mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"}'
+        values: '1x100'
+      - series: 'mariadb_restore_test_last_success_timestamp{job="node-lxc210-nextcloud"}'
+        values: '1x100'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: DatabaseBackupMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc260-postgres, metric: pg_backup_last_success_timestamp}
+            exp_annotations:
+              summary: "pg_backup_last_success_timestamp is not being reported (node-lxc260-postgres)"
+              description: "pg_backup_last_success_timestamp is absent on node-lxc260-postgres, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."
+          - exp_labels: {severity: warning, job: node-lxc260-postgres, metric: pg_restore_test_last_success_timestamp}
+            exp_annotations:
+              summary: "pg_restore_test_last_success_timestamp is not being reported (node-lxc260-postgres)"
+              description: "pg_restore_test_last_success_timestamp is absent on node-lxc260-postgres, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."

@@ -104,9 +104,11 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
   host-is-off blind spot as the PostgreSQL rule above, for the same structural reason. It covers
   Nextcloud's own database, which the nightly `pg_dumpall` never touched - a gap that existed
   unnoticed until the 2026-08-15 data classification looked for it.
-- `DatabaseBackupMetricsMissing` fires when either backup timestamp is absent, the case in which
-  both staleness rules read as nothing rather than red. From 2026-09-18 to 2026-09-24 Prometheus
-  scraped Debian's packaged exporter on lxc260, which reads a different textfile directory, and
+- `DatabaseBackupMetricsMissing` fires when any of the four database timestamps is absent - both
+  backups and both restore tests - the case in which the staleness rule reading it is nothing
+  rather than red. Each absence carries a `metric` label, so two on one node stay two alerts.
+  From 2026-09-18 to 2026-09-24 Prometheus scraped Debian's packaged exporter on lxc260, which
+  reads a different textfile directory, and
   `pg_backup_last_success_timestamp` was absent while the dumps kept landing. Both staleness rules
   carry `for: 15m` since the same day, because the first evaluation after a night powered down can
   precede the timer's catch-up run.

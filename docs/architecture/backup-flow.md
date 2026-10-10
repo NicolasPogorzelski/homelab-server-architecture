@@ -102,7 +102,7 @@ and the file therefore no longer changing.
 | `MariaDBBackupStale` | same rule, lxc210's metric | the same |
 | `PostgreSQLRestoreTestStale` | no successful restore test for 40 days | - |
 | `MariaDBRestoreTestStale` | the same, for the MariaDB chain | - |
-| `DatabaseBackupMetricsMissing` | either backup timestamp is absent, when both staleness rules are silent | - |
+| `DatabaseBackupMetricsMissing` | a backup or restore-test timestamp is absent, when its staleness rule is silent | - |
 | `GuestBackupStale` | last guest backup run older than 10 days | - |
 | `GuestBackupPartial` | at least one guest failed in the last run | - |
 

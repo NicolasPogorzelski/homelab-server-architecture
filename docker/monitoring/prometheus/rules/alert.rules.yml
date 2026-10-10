@@ -79,23 +79,30 @@ groups:
       # red. That happened. From 2026-09-18 Prometheus scraped Debian's packaged
       # exporter on lxc260, which reads a different textfile directory, and
       # pg_backup_last_success_timestamp was absent for six days while the dumps
-      # kept landing. The job matchers give each absence its own label set, so one
-      # missing series does not hide the other under `or`.
+      # kept landing. The restore tests share the gap and the same job labels, and
+      # absent() keeps only the matcher labels, so each absence is tagged with its
+      # metric name: otherwise two missing series on one job are one result under
+      # `or`, and the second hides behind the first.
       - alert: DatabaseBackupMetricsMissing
         expr: |
-          absent(pg_backup_last_success_timestamp{job="node-lxc260-postgres"})
-          or absent(mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"})
+          label_replace(absent(pg_backup_last_success_timestamp{job="node-lxc260-postgres"}),
+            "metric", "pg_backup_last_success_timestamp", "", "")
+          or label_replace(absent(mariadb_backup_last_success_timestamp{job="node-lxc210-nextcloud"}),
+            "metric", "mariadb_backup_last_success_timestamp", "", "")
+          or label_replace(absent(pg_restore_test_last_success_timestamp{job="node-lxc260-postgres"}),
+            "metric", "pg_restore_test_last_success_timestamp", "", "")
+          or label_replace(absent(mariadb_restore_test_last_success_timestamp{job="node-lxc210-nextcloud"}),
+            "metric", "mariadb_restore_test_last_success_timestamp", "", "")
         for: 30m
         labels:
           severity: warning
         annotations:
-          summary: "A database backup metric is not being reported ({{ $labels.job }})"
-          description: "The backup timestamp for {{ $labels.job }} is absent, so its staleness rule cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never written it."
+          summary: "{{ $labels.metric }} is not being reported ({{ $labels.job }})"
+          description: "{{ $labels.metric }} is absent on {{ $labels.job }}, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."
 
       # 40 days, against a monthly schedule: one missed run is slack, two is a
-      # fault. Note this rule cannot fire while the metric has never been written
-      # at all -- an absent series produces no result -- which it shares with
-      # PostgreSQLBackupStale above. The first successful run arms it.
+      # fault. An absent series produces no result here, so a test that has never
+      # succeeded is reported by DatabaseBackupMetricsMissing instead.
       - alert: PostgreSQLRestoreTestStale
         expr: (time() - pg_restore_test_last_success_timestamp) > 3456000
         for: 0m
