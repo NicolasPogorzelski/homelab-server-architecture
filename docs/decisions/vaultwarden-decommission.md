@@ -74,7 +74,7 @@ Container definition, root disk and the data on the share stay.
 what it leaves in configuration: the `snapraid_maintenance` exclude rules for its side files, the
 `storage_permissions` entry for its directory, `240` from the `GUESTS` array in
 `guest-backup.sh`, which is the line that put it there on the same day this decision was written,
-`ansible/inventory/host_vars/lxc240.yml`, which is inert but still on disk, and the node itself in
+lxc240's `host_vars` file, which is inert but still on disk, and the node itself in
 the Tailscale console, whose `tag:tier1` assignment and node key outlive the stopped guest.
 Left in, the weekly job runs against a CTID that no longer exists, and a `pct start 240` would put
 a tier1 node back on the tailnet with nothing to re-authorise. Ninety days is long enough to

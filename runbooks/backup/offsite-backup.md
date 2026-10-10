@@ -23,7 +23,7 @@ and is about 41 GB. Two source nodes:
 
 | Node | What it sends | Why it is separate |
 |---|---|---|
-| vm102 | Nextcloud files, Paperless documents, both dump sets, the retained Vaultwarden archive | The archive pool is local here; the Proxmox host sees it over CIFS |
+| vm102 | Nextcloud files, Paperless documents, both dump sets | The archive pool is local here; the Proxmox host sees it over CIFS |
 | lxc250 | The vault password, the real inventory and the automation SSH key | Without these no other restore can be performed, and they exist in one copy on a failing SSD |
 
 Each node uses a repository and an append-only account of its own. One repository shared by

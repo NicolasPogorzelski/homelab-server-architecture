@@ -39,7 +39,7 @@ most if lost, and a second axis would add ceremony without changing any decision
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
 | Ansible vault password, real inventory, automation SSH key | lxc250 home directory, on the boot SSD | C1 | No | None. One copy. |
-| Vaultwarden vault - withdrawn 2026-09-01, retained until 2026-11-30 | `/mnt/smb/vaultwarden`, 677 KB | C1 while retained | Yes | Cold archive taken at shutdown, checksummed, held in two locations. The service that wrote it is gone ([decision](../decisions/vaultwarden-decommission.md)) |
+| Vaultwarden vault - withdrawn 2026-09-01, share data destroyed 2026-10-10 | Cold archive only, 112 KB compressed | C1 while retained | Yes | Cold archive taken at shutdown, checksummed, held in two locations. The service that wrote it is gone ([decision](../decisions/vaultwarden-decommission.md)) |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
 | Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |

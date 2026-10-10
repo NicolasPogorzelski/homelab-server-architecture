@@ -148,9 +148,9 @@ notes there and keep this section short.
   `mariadb_backup` role, script and runbook now exist and are live since 2026-08-15 - share
   provisioned on vm102, host fstab entry, `mp1` bind, `pct reboot 210`, playbook applied, first
   verified dump on the share (2.2 MB, one completion marker), metric scraped, `MariaDBBackupStale`
-  promoted and inactive. Nextcloud files are still parity-only, and **Vaultwarden still has no
-  consistent export** - an SQLite file copied from a live CIFS mount is a gamble on timing, not a
-  backup. That is now the last open half of Tier 1 #3 before the off-site question itself.
+  promoted and inactive. Nextcloud files are still parity-only. Vaultwarden never got its
+  consistent export and no longer needs one: the service is withdrawn and its share data destroyed
+  (2026-10-10), so Tier 1 #3 is the off-site question itself.
 - **Deferred to the hardware-replacement window:** the `is_mountpoint 1` storage fix and the
   storage-migration design discussion. Host-side SMART monitoring and the `homelab_schedule`
   role left this list on 2026-09-15 and 2026-09-16 respectively; both waited on the hypervisor
@@ -566,7 +566,7 @@ use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing 
 - LXC211 - Paperless-ngx
 - LXC220 - Calibre-Web
 - LXC230 - OpenWebUI (AI stack entrypoint)
-- LXC240 - Vaultwarden, withdrawn 2026-09-01 and container destroyed 2026-09-29; data on the share until phase 2
+- LXC240 - Vaultwarden, withdrawn 2026-09-01, container destroyed 2026-09-29, share data destroyed 2026-10-10
 - LXC250 - DevOps workstation (Git, Ansible, IaC - no user-facing services)
 - LXC260 - PostgreSQL (centralized platform database; all services that need a DB use this)
 
@@ -585,7 +585,6 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   inside the rootfs is a different fault and needs its own diagnosis - see
   [KE-22](docs/platform/known-errors.md#ke-22), where this entry supplied the wrong answer for
   eleven days.
-- **LXC240 (Vaultwarden):** SQLite on CIFS is a known limitation, documented as tech debt.
 - **Grafana admin password:** only read on first container start. Reset via
   `grafana-cli admin reset-admin-password`.
 - **Tailscale Serve HTTPS/HTTP mismatch:** fix with `tailscale serve off` + reconfigure.

@@ -116,9 +116,9 @@ It is an abstraction layer to keep service paths stable while disks are added/re
 
 ### 2.3 Service Data (Current State)
 
-- **Vaultwarden**: withdrawn 2026-09-01, container destroyed 2026-09-29. Its data stays on the
-  share, under parity only, until phase 2 of the
-  [decommissioning decision](../decisions/vaultwarden-decommission.md). See
+- **Vaultwarden**: withdrawn 2026-09-01, container destroyed 2026-09-29, data on the share and
+  the share itself removed 2026-10-10; only the cold archive of the
+  [decommissioning decision](../decisions/vaultwarden-decommission.md) remains. See
   [`lxc240.md`](../nodes/lxc240.md).
 - **Nextcloud**:
   - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)

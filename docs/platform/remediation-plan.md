@@ -488,15 +488,19 @@ Found while completing the inference rollout.
 
 Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 
-- **lxc240 was destroyed ahead of its phase 2.** `vzdestroy:240` ran on 2026-09-29, two months
-  before the date in the [decommission record](../decisions/vaultwarden-decommission.md), and
-  nothing in this repository recorded it. The weekly guest backup then failed on the missing CTID,
-  exactly as that record predicted. `240` is out of `GUESTS` since 2026-10-07. Still open from the
-  same phase: the data on the share, the `snapraid_maintenance` excludes, the `storage_permissions`
-  entry, `ansible/inventory/host_vars/lxc240.yml`, the node in the Tailscale console, and the three
-  `vzdump-lxc-240-*` archives, which no prune run will touch now. The record itself needs the
-  operator's amendment.
-
+- ~~**lxc240 was destroyed ahead of its phase 2.**~~ Phase 2 done 2026-10-10, also ahead of the
+  2026-11-30 date in the [decommission record](../decisions/vaultwarden-decommission.md), on the
+  operator's decision. `vzdestroy:240` had run on 2026-09-29 without a record, and the weekly guest
+  backup then failed on the missing CTID until `240` left `GUESTS` on 2026-10-07. Removed on
+  2026-10-10: the 728 KB of data on the share and the `[Vaultwarden]` share with its Samba and
+  Linux accounts on vm102, the hypervisor's `/mnt/smb/vaultwarden` fstab entry, mount point and
+  credentials file - which the record did not list - the three `vzdump-lxc-240-*` archives with
+  their logs, lxc240's `host_vars` file, the Vaultwarden compose stack under `docker/`, the
+  `storage_permissions` entry and the share in the sanitized `smb.conf` snippet. `smb.conf` and
+  `fstab` were copied to `/root` first. The generic SQLite side-file excludes in
+  `snapraid_maintenance` stay; they never named Vaultwarden. Open: the node in the Tailscale
+  console, the cold archive from phase 1 (`/root` on the hypervisor and an off-site workstation),
+  and the operator's amendment to the record.
 - **Embedded subtitles on 4K remuxes are extracted on demand, over CIFS.** A client that asks for
   one track makes Jellyfin read the whole file, measured at about five minutes for a 30 GB episode,
   and the client gives up. All profiles are held at subtitle mode "None" since 2026-10-07, which
