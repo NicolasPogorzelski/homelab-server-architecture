@@ -3,7 +3,7 @@
 ## Problem
 
 OpenWebUI depends on three independent layers that can fail separately:
-SMB and local mounts on the Proxmox host, the Docker Compose stack on CT230,
+the aux-disk mount on the Proxmox host, the Docker Compose stack on CT230,
 and the PostgreSQL database connection on CT260 over Tailnet.
 A failure in any layer may render the service unavailable while the others
 remain healthy, making a structured check sequence necessary.
@@ -13,7 +13,6 @@ remain healthy, making a structured check sequence necessary.
 - Proxmox host shell or SSH session active
 - CT230 is running: `pct status 230` -> `status: running`
 - CT260 is running: `pct status 260` -> `status: running`
-- VM102 is running and Samba is active (required for SMB mounts)
 
 ---
 
@@ -21,41 +20,27 @@ remain healthy, making a structured check sequence necessary.
 
 ### 1. Mounts (Proxmox host)
 
-Verify both host-side paths are mounted before checking inside the container.
+Verify the host-side path is mounted before checking inside the container.
 
 ```bash
-# mp0 - SMB (uploads, vector store, backups)
-findmnt -t cifs /mnt/smb/openwebui
-
-# mp1 - local block storage (app state, logs)
+# mp1 - local block storage (app state, uploads, vector store, Docker engine data)
 findmnt /mnt/aux-disk/openwebui
 ```
 
-Expected: both commands print a single mount entry. No output = mount missing.
-
-If `mp0` is missing, trigger the autofs mount:
-```bash
-ls /mnt/smb/openwebui
-findmnt -t cifs /mnt/smb/openwebui
-```
-
-See: [SMB autofs trigger runbook](../storage/smb-autofs-trigger.md)
+Expected: a single mount entry. No output = mount missing.
 
 ---
 
 ### 2. Mounts (inside CT230)
 
-Confirm the LXC bind-mounts are visible from inside the container.
+Confirm the LXC bind-mount is visible from inside the container.
 
 ```bash
-# mp0 - should list uploads/, vector/, backups/
-pct exec 230 -- ls /data/openwebui
-
-# mp1 - should list OpenWebUI app state directories
+# mp1 - should list data/, containerd/, docker-data/
 pct exec 230 -- ls /var/lib/openwebui
 ```
 
-Expected: both directories non-empty. Empty or "No such file" = bind-mount not propagated.
+Expected: directory non-empty. Empty or "No such file" = bind-mount not propagated.
 
 ---
 
@@ -118,9 +103,8 @@ pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000
 
 | Symptom | Likely Cause | Action |
 |---|---|---|
-| `findmnt` returns no output for `/mnt/smb/openwebui` | autofs not triggered or VM102 Samba down | `ls /mnt/smb/openwebui` to trigger; verify VM102 |
 | `findmnt` returns no output for `/mnt/aux-disk/openwebui` | aux disk not mounted on Proxmox host | Check `findmnt /mnt/aux-disk` on Proxmox host |
-| `ls /data/openwebui` empty inside CT230 | Host SMB mount active but LXC bind-mount not propagated | `pct stop 230 && pct start 230` |
+| `ls /var/lib/openwebui` empty inside CT230 | Host mount came up after the LXC started | `pct stop 230 && pct start 230` |
 | Container in `exited` state | App crash or OOM | `docker compose logs --tail 50` for error; check `dmesg` for OOM |
 | Container in `restarting` loop | DB unreachable at startup or config error | Check step 4 first; then inspect logs |
 | `nc` to CT260:5432 fails | Tailscale down on CT230 or CT260, or ACL blocking | `pct exec 230 -- tailscale status`; verify tag:ai-stack -> tag:database ACL rule 5 |
