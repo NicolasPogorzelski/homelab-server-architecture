@@ -42,9 +42,7 @@ The decision prioritizes operational predictability over theoretical performance
 ### Read-Write Shares (Service Identities)
 
 - Nextcloud -> /mnt/mergerfs/Nextcloud
-- Vaultwarden -> /mnt/mergerfs/Vaultwarden
 - Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
-- openwebui -> /mnt/mergerfs/openwebui
 - Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
 - DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210, added
   2026-08-15; a share of its own rather than a directory inside the Nextcloud export, so whatever

@@ -52,17 +52,15 @@ SQLite locking semantics are not reliable on CIFS/SMB network filesystems.
 | Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/openwebui/containerd` + `docker-data` |
 | Uploads | aux-disk | `/var/lib/openwebui/data/uploads`, inside the container's only bind mount |
 | Vector store | aux-disk | `/var/lib/openwebui/data/vector_db` |
-| (unused) | MergerFS/SMB | `mp0: /mnt/smb/openwebui -> /data/openwebui` |
 
 The Compose file binds `/var/lib/openwebui/data` and nothing else, so uploads and the vector store
 live on the aux-disk with the rest of the app state. Measured 2026-09-29: 6.0 M of uploads and
-188 K of vector store there, while `/data/openwebui` holds only empty directories and a test file
-from February. The share is mounted into the container's LXC but reaches no process in it. The
-database dumps are taken on lxc260 ([PostgreSQL platform service](./postgresql-platform.md)).
+188 K of vector store there. The SMB share the LXC once carried as `mp0` held only empty
+directories and a test file from February and reached no process; it was removed on 2026-10-11
+with its host mount and its Samba account. The database dumps are taken on lxc260 ([PostgreSQL platform service](./postgresql-platform.md)).
 
 ### Proxmox Host Paths
 
-- SMB mount (autofs): `/mnt/smb/openwebui`
 - Local block storage: `/mnt/aux-disk/openwebui`
 
 ---
