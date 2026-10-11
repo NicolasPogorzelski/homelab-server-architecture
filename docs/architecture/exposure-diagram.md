@@ -59,7 +59,7 @@ The picture above is the intended model, and it is accurate at the network bound
 claim about how the individual services bind.
 
 Measured 2026-10-08 with `ss -ltn` on every node, these still listen on wildcard addresses: sshd on
-nine of ten nodes (lxc250 pins its Tailscale address), Apache on lxc210 (`*:80`, `*:443`),
+three of ten nodes since the containers were pinned on 2026-10-10 (vm100, vm102, the hypervisor), Apache on lxc210 (`*:80`, `*:443`),
 `coolwsd` on lxc210 (`*:9983`), and Samba on vm102 (`0.0.0.0:445`, for a reason the service cannot
 avoid). What stops a LAN device from reaching them is the `lan_guard` nftables table on each node's
 LAN interface, in place since 2026-10-01: it drops new inbound connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100 and
