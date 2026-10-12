@@ -82,7 +82,7 @@ Reference config: [`docker/monitoring/prometheus/prometheus.yml.example`](../../
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
-| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing` |
+| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale` |
 | `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified` |
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified`, `PrometheusRuleEvaluationFailing` |

@@ -321,7 +321,10 @@ unnoticed for so long is worth keeping: two backup jobs *did* run nightly and *w
 the question "are there backups" had a confident answer. Both dump databases. Neither produces a
 machine.
 
-VM100 is excluded - reproducible from its compose stack, and roughly triples a run.
+VM100 is included since 2026-10-12 with its root disk only; its data disk on the auxiliary disk
+carries `backup=0`. The host's own configuration has a daily archive beside the guest archives, and
+`platform-restore.sh` rebuilds the platform from both - see
+[platform restore](../../runbooks/platform/platform-restore.md).
 
 The target is `/mnt/vzdump`, a generic mountpoint the host binds to whichever disk currently
 holds the role. Changing disks is therefore an fstab edit. The role refuses to deploy unless that

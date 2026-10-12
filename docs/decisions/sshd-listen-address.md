@@ -2,6 +2,12 @@
 
 ## Status
 
+**Amended 2026-10-12, in the evening: vm102 is done.** Pinned from its `host_vars` and applied by
+reload, the first run of the corrected role on a node that was never socket-activated: the
+handler ran before the read-back and the assert passed on the first attempt. `ss` shows the
+Tailscale address alone on 22, `NRestarts=0`; the boot gate meets its first cold start at the next
+power-on. What remains is the hypervisor, which step 4 below leaves open.
+
 **Amended 2026-10-12, later the same day: vm100 is done.** Pinned from its `host_vars` behind a
 snapshot, then rebooted: the Tailscale address alone on 22 and `NRestarts=0`. The run exposed an
 ordering fault in `ssh_hardening` that the containers could not show. On a node that was never

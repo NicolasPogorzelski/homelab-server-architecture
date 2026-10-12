@@ -39,3 +39,18 @@ guest_backup_persistent: true
 # this job finishing.
 guest_backup_nice: 10
 guest_backup_ionice: 7
+
+# === Host configuration backup and the restore script ===
+# host-config-backup.sh archives what no guest archive carries - fstab, CIFS
+# credentials, vfio and kernel arguments, storage definitions, the Tailscale
+# identity - to the backup target and to the boot disk. platform-restore.sh is
+# deployed beside it so that every archive also carries the tool that reads it.
+# See runbooks/platform/platform-restore.md.
+guest_backup_host_config_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/host-config-backup.sh"
+guest_backup_host_config_backup_script_dest: /usr/local/sbin/host-config-backup.sh
+guest_backup_platform_restore_script_src: "{{ playbook_dir }}/../../snippets/scripts/platform-restore.sh"
+guest_backup_platform_restore_script_dest: /usr/local/sbin/platform-restore.sh
+
+# Daily: the archive is about 13 MB and three seconds of work, and a guest
+# configuration changed on a Tuesday should not wait for Saturday.
+guest_backup_host_config_backup_oncalendar: "*-*-* 10:15:00"

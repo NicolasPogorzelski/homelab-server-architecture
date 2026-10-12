@@ -6,9 +6,9 @@ Running services on other nodes are not affected - LXC250 is not in the data pat
 ## Preconditions
 
 - Proxmox host is accessible via console or SSH
-- GitHub SSH key is available offline (backup) or a new key will be generated
 - Tailscale admin console is accessible to authorize the new node
-- `github.com/OperatorPogorzelski/dotfiles` is accessible
+- `github.com/NicolasPogorzelski/dotfiles` is reachable over HTTPS; the node needs no GitHub
+  credential, because every repository it clones is public and it never pushes
 
 ---
 
@@ -131,29 +131,23 @@ sudo passwd -l devops
 
 ---
 
-## 5. SSH key for GitHub
+## 5. SSH key for Ansible
 
 ```bash
 ssh-keygen -t ed25519 -C "devops@lxc250" -f ~/.ssh/id_ed25519
-cat ~/.ssh/id_ed25519.pub
 ```
 
-Add the public key to GitHub: Settings -> SSH and GPG keys -> New SSH key.
-
-Verify:
-
-```bash
-ssh -T git@github.com
-```
-
-Expected output: `Hi OperatorPogorzelski! You've successfully authenticated...`
+This is the key Ansible connects with (`ansible.cfg` names none, so the default applies). It is
+not registered on GitHub: since 2026-10-12 the node holds no GitHub credential and fetches over
+HTTPS. A restore from the guest backup brings the original key back, which the fleet's `ansible`
+accounts already trust; a new key has to be distributed with `bootstrap.yml` first.
 
 ---
 
 ## 6. dotfiles
 
 ```bash
-git clone git@github.com:OperatorPogorzelski/dotfiles.git ~/git/dotfiles
+git clone https://github.com/NicolasPogorzelski/dotfiles.git ~/git/dotfiles
 cd ~/git/dotfiles
 ./validate.sh
 ./bootstrap.sh
@@ -166,9 +160,9 @@ cd ~/git/dotfiles
 ## 7. Clone repos
 
 ```bash
-git clone git@github.com:OperatorPogorzelski/homelab-server-architecture.git \
+git clone https://github.com/NicolasPogorzelski/homelab-server-architecture.git \
   ~/git/homelab-server-architecture
-git clone git@github.com:OperatorPogorzelski/devops-til.git \
+git clone https://github.com/NicolasPogorzelski/devops-til.git \
   ~/git/devops-til
 ```
 
@@ -181,7 +175,7 @@ git --version
 ansible --version
 claude --version
 tailscale status
-ssh -T git@github.com
+git -C ~/git/homelab-server-architecture fetch origin
 git -C ~/git/homelab-server-architecture log --oneline -3
 ```
 
@@ -199,9 +193,9 @@ then `sudo systemctl restart ssh`.
 **Tailscale auth loop**
 Run `sudo tailscale up --force-reauth` and re-authorize in the admin console.
 
-**GitHub SSH auth fails**
-Verify the public key is added to GitHub. Check `~/.ssh/config` if using a
-non-default key path. Run `ssh -vT git@github.com` for verbose output.
+**`git fetch` asks for credentials**
+The remote is an SSH URL or the repository went private. `git remote -v` must show
+`https://github.com/...`; a private repository does not belong on this node.
 
 **bootstrap.sh fails on Claude Code install**
 The installer requires internet access. Verify with `curl -I https://claude.ai`.

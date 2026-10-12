@@ -114,7 +114,8 @@ notes there and keep this section short.
   `tailscale-cert-refresh.sh` over the live KE-18 fix and the symptom would have surfaced ~2 months
   later as an expired certificate. Agreed plan, in order: (1) escrow `~/.vault_pass` +
   `hosts.yml` in Vaultwarden and demote the GitHub key to a read-only deploy key (no repo change,
-  irreversible-loss risk, do first); (2) branch `feat/lxc250-ansible-adoption` - add to `lxcs`
+  irreversible-loss risk, do first; since 2026-10-12 the node holds no GitHub credential at all and
+  fetches over HTTPS); (2) branch `feat/lxc250-ansible-adoption` - add to `lxcs`
   with `prometheus_label: devops`, re-render prometheus config, adopt the hand-written
   `ssh.service.d/override.conf` into a role and convert it to the `wait-for-tailscale-ip.sh` gate
   (it is an unlisted fifth KE-18 instance, currently surviving on a retry loop, not a readiness
@@ -814,12 +815,14 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   same storage now, converted online with `qm disk move`, and a test snapshot with `--vmstate 0`
   succeeded with the GPU passed through. Take one before any non-trivial change and delete it after:
   a snapshot lives in the same files on the same disks, the KE-13 disk among them, so it is a way
-  back from a bad change and not a backup. vm100 is still excluded from the guest backup. The old
+  back from a bad change and not a backup. vm100's root disk is in the guest backup since 2026-10-12. The old
   raw file was deleted with `qm disk unlink` on 2026-10-12, after two days on the qcow2 disk.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sat 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
-  a generic path bound onto whichever disk currently holds the role. Eight of nine guests: vm100 is
-  excluded on purpose. One guest that `vzdump` cannot back up marks the unit failed while the
+  a generic path bound onto whichever disk currently holds the role. All nine guests since
+  2026-10-12, vm100 with its root disk only. Since the same day the host's own configuration has a
+  daily archive too, and `platform-restore.sh` rebuilds the platform from both onto a fresh
+  install - see `runbooks/platform/platform-restore.md`. One guest that `vzdump` cannot back up marks the unit failed while the
   others are still written - host-UID files outside the container's ID map did that to lxc240
   ([KE-25](docs/platform/known-errors.md#ke-25)), and so did its place in the list after the
   container was destroyed - so `GuestBackupPartial` names a real gap rather than a lost week.
@@ -862,15 +865,16 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **sshd binds the Tailscale address on all seven containers and vm100, the wildcard on two nodes.**
-  Measured 2026-10-12 with `ss -Hltn sport = :22` on every node: the containers and vm100 listen on
-  their Tailscale address alone, vm102 and the hypervisor on `0.0.0.0:22` and `[::]:22`. Six of
+- **sshd binds the Tailscale address on every node but the hypervisor.**
+  Measured 2026-10-12 with `ss -Hltn sport = :22` on every node: the containers, vm100 and vm102
+  listen on their Tailscale address alone, the hypervisor on `0.0.0.0:22` and `[::]:22`. Six of
   the containers were socket-activated, where `ListenAddress` is inert; `ssh_hardening` turns
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
-  cleared. All six passed a `pct reboot` with the pin, vm100 a `qm reboot` on 2026-10-12. lxc250
-  still pins by a hand-written line in `sshd_config`, outside the role. vm102 and the hypervisor
-  are next, one per session, the hypervisor last or never - it has no console once Linux runs. `lan_guard` already refuses 22
+  cleared. All six passed a `pct reboot` with the pin, vm100 a `qm reboot` on 2026-10-12, vm102
+  a reload the same day with its first cold boot still to come. lxc250 still pins by a hand-written
+  line in `sshd_config`, outside the role. The hypervisor is last or never - it has no console
+  once Linux runs. `lan_guard` already refuses 22
   from the LAN on every node except the hypervisor, which admits the two admin workstations, so
   this is the second layer. See
   `docs/decisions/sshd-listen-address.md` before touching any node.

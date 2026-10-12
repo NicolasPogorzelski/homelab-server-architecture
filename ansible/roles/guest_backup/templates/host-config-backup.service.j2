@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Archive the host configuration the guests depend on
+RequiresMountsFor={{ guest_backup_dir }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart={{ guest_backup_host_config_backup_script_dest }}

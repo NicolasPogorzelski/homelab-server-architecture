@@ -25,6 +25,8 @@ Related operational model:
 ---
 
 ## Platform
+- Platform restore onto a fresh Proxmox host: [platform/platform-restore.md](platform/platform-restore.md)
+- Boot SSD replacement: [platform/boot-ssd-replacement.md](platform/boot-ssd-replacement.md)
 - KE-14 power-path verification: [platform/ke14-power-path-check.md](platform/ke14-power-path-check.md)
 - Annual escrow restore drill: [platform/escrow-restore-drill.md](platform/escrow-restore-drill.md)
 - Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
