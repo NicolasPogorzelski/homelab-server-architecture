@@ -618,7 +618,8 @@ history on 2026-09-20, read back at one-minute resolution on 2026-10-10: the fir
 evening's boot, 20:17, already read 7848, and 20:30 read 8168. Nothing recorded it at the time.
 `SmartAttributeDegrading` could not have told it apart: the rule watched each kernel letter rather
 than each disk, and the aux-disk and an IronWolf traded `/dev/sdi` and `/dev/sdb` between boots, so
-over the thirty days to 2026-10-10 it spent at least 163 hours in alert on rises no disk made.
+over the thirty days to 2026-10-10 it was in alert during 151 hours, 125 of them outside this one
+real step.
 Re-keyed by serial number that day; replayed over the same history it fires for this step until
 2026-09-21 21:24, and for nothing else.
 `Reported_Uncorrect` did not move, so no read has failed since July:

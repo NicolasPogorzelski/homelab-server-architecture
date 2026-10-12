@@ -556,7 +556,7 @@ Single-host Proxmox platform. No HA - recovery-oriented design.
 **Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and the fallback inference backend (`llama-server`); the primary runs on the admin desktop.
 
 **Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Admin devices and the host's two backup
-mounts reach SMB over Tailscale; vm100's four media mounts and the host's six service mounts still
+mounts reach SMB over Tailscale; vm100's four media mounts and the host's four service mounts still
 use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing else - see
 `docs/decisions/smb-bind-and-lan-access.md` and the storage-network item in the remediation plan.
 
@@ -865,9 +865,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
   cleared. All six passed a `pct reboot` with the pin. lxc250 still pins by a hand-written line in
-  `sshd_config`, outside the role. The three VMs and the host are next, one per session, the
+  `sshd_config`, outside the role. vm100, vm102 and the hypervisor are next, one per session, the
   hypervisor last or never - it has no console once Linux runs. `lan_guard` already refuses 22
-  from the LAN on every node, so this is the second layer. See
+  from the LAN on every node except the hypervisor, which admits the two admin workstations, so
+  this is the second layer. See
   `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,

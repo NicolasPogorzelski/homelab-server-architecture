@@ -236,7 +236,7 @@ old QEMU and LXC binaries until they are next started.
 
 The host runs no Samba server and sends no mail. `samba` itself was removed on 2026-10-10; the
 client packages Proxmox's CIFS storage needs stay and follow normal upgrades, with no hold.
-Postfix remains as the local mailer the PVE packages require: `/etc/aliases.db` exists so local
+Postfix remains as the mail transport agent `proxmox-ve` depends on (Postfix or any other): `/etc/aliases.db` exists so local
 delivery works, and PVE's `mail-to-root` notification endpoint is disabled, so nothing leaves the
 host by SMTP. Alerts reach a person through Alertmanager only.
 

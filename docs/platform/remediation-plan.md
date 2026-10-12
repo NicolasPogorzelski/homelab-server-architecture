@@ -426,11 +426,11 @@ carried under Tier 4, and these remain. None blocks anything else.
 
 Found while completing the inference rollout.
 
-- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (six) still reaches
+- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (four) still reaches
   vm102's LAN address, admitted by `smb_guard` on source address alone. The target replaces step 2
   of [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md), which moved the same
   mounts onto Tailscale: a host-only bridge `vmbr1`, no `bridge-ports`, static addresses for the host,
-  vm100 and vm102. All eight host mounts, the two backup mounts included, and vm100's four move to it
+  vm100 and vm102. All six host mounts, the two backup mounts included, and vm100's four move to it
   one at a time, each with automount and a reboot test; afterwards `smb_guard` drops 445 on `ens18`
   entirely. Samba keeps its wildcard bind, because an explicit bind would cut the Tailscale IPv4 path.
   That path stays a requirement: admin devices write media to vm102 over Tailscale, checked after
@@ -583,7 +583,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 - ~~**Host mail half arrives, and nothing needs it.**~~ Done 2026-10-10. Nobody configured mail
   here: Proxmox installs Postfix as its local mailer and asks for an address for `root@pam` at
   installation. PVE's own notifications went straight to that address - 96 messages since
-  2026-08-21, one per guest and `vzdump` run, all accepted by the recipient's server - while mail
+  2026-08-21, all accepted by the recipient's server, nearly all of them on the days the guest
+  backup ran - while mail
   to the local `root`, which smartd and cron write, was deferred because `/etc/aliases.db` had
   never been built. Nothing on either path was unique: smartd writes to the journal and
   `smart_metrics` alerts on growth, package updates are `apt_metrics`, guest backups report
@@ -594,7 +595,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 
 - ~~**The hypervisor held a Samba server nothing used, back from security updates.**~~ Done
   2026-10-10. `samba`, `samba-common` and `samba-common-bin` sat on `apt-mark hold` at 4.22.6,
-  installed by hand on 2025-12-27 before vm102 took over file serving, while their libraries had
+  installed by hand on 2025-12-27, while their libraries had
   moved to 4.22.11 on 2026-10-08. `smbd` and `nmbd` were disabled and nothing depended on the
   server package. Hold lifted, `samba` removed, the rest upgraded: every Samba package now at
   4.22.11, `apt-mark showhold` empty. Proxmox's CIFS storage keeps `smbclient` and the libraries;
@@ -688,7 +689,7 @@ fleet held no failed unit, no firing alert and no dead scrape target, and both d
 current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
 item 4 above; these are the rest.
 
-- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** Since 2026-10-10 on
+- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** <!-- historical-count --> Since 2026-10-10 on
   three of ten: the containers are pinned, vm100, vm102 and the hypervisor are not. Measured: `*:22` on
   lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
   host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name
