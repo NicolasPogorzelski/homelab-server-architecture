@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-12 | vm102: `storage_permissions` creates every share directory on every MergerFS branch. A dump landing on a new branch had made MergerFS recreate `DB-Backups` there without its setgid bit, which `mkdir` cannot carry over; the check caught it the same day and it was repaired. See [storage permissions](storage-permissions.md#configuration-management). |
 | 2026-10-12 | The KE-14 boot SSD is replaced in the second half of October, for capacity at 110 GiB of volume group, and the per-boot error count before and after is the test; the power-path check waits on its result. The 6.17.13 kernel pin is released now, so the kernel and the drive do not change together. See [KE-14](known-errors.md#ke-14). |
 | 2026-10-12 | Wording: decisions stated directly rather than through a narrator, devices named after their tag (admin phone, admin workstations), and the Nextcloud ingest mount's user written as `user1`, matching its share. Check 45 holds the house style. |
 | 2026-10-12 | `listener_metrics` allows `tailscaled` on any UDP port rather than on 41641 alone. Its portmapper asks the router for a UPnP or PCP mapping from a short-lived wildcard socket on a random port, which the second round of checks caught on vm100. The allow file takes `proto * process` for that case and refuses the form without a process. See the [remediation plan](remediation-plan.md#added-on-2026-10-12). |

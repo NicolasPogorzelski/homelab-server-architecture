@@ -38,6 +38,38 @@
       to be hand-maintained, which is how the aux branch was missed in the first
       place.
 
+# MergerFS creates a share directory on a branch only when a write first lands
+# there (category.create=mfs), by cloning the path with mkdir(2). mkdir keeps the
+# 0777 bits of the requested mode and sets setgid only under a setgid parent, and
+# a branch root has none, so every cloned share directory arrives without it
+# (man 2 mkdir). Creating each share on each branch in advance means there is
+# nothing to clone, and every subdirectory then inherits setgid from its share.
+# Existing directories are left alone: the matrix modes are maxima, and a stricter
+# directory is not drift. Entries from the node's .local.conf are not covered.
+- name: Record the branch paths
+  ansible.builtin.set_fact:
+    storage_permissions_branches: >-
+      {{ storage_permissions_ctl.stdout.split(':') | map('regex_replace', '=.*$', '') | list }}
+
+- name: Read which share directories exist on which branch
+  ansible.builtin.stat:
+    path: "{{ item.0 }}/{{ item.1.name }}"
+  loop: "{{ storage_permissions_branches | product(storage_permissions_entries) | list }}"
+  loop_control:
+    label: "{{ item.1.name }}"
+  register: storage_permissions_share_dirs
+
+- name: Create the share directories a branch does not have yet
+  ansible.builtin.file:
+    path: "{{ item.item.0 }}/{{ item.item.1.name }}"
+    state: directory
+    owner: "{{ item.item.1.owner if item.item.1.owner != '-' else omit }}"
+    group: "{{ item.item.1.group }}"
+    mode: "{{ item.item.1.dir_mode }}"
+  loop: "{{ storage_permissions_share_dirs.results | rejectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.item.1.name }}"
+
 - name: Deploy the storage permission check script
   ansible.builtin.copy:
     src: "{{ storage_permissions_script_src }}"
