@@ -633,6 +633,16 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   sweep, which would have seen nothing here before, because no role owned the unit. Swept the other
   eight guests and the hypervisor with `ss -Hltn` the same morning: no other wildcard listener
   beyond the documented ones.
+- **Nothing measured the binding rule, so the MariaDB socket was found by a scan, four days late.**
+  The weekly snapshot saw it: the diff of 2026-10-10 carries `-127.0.0.1:3306`, `+*:3306` and
+  `+mariadb.socket enabled` for lxc210, among 107 changed lines that week, and nobody read them;
+  `FleetSnapshotStale` only says whether the diff was written. `listener_metrics` now classifies every listening socket on all ten nodes every 15 minutes
+  and exports the ones outside loopback and the overlay; `ListenerOutsideBindingRule` fires after
+  30 minutes. The exceptions that stand today - Samba and sshd on vm102, Apache and `coolwsd` on
+  lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
+  decision behind each, so removing one is the last step of executing that decision. Two more are
+  allowed on every node, `tailscaled`'s WireGuard socket and the DHCP client, since neither can
+  bind to the overlay it serves.
 
 ## The exercise block, before Terraform
 

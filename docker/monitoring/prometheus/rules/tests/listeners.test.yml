@@ -1,0 +1,44 @@
+# promtool unit tests for the listeners group in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  # A wildcard listener present for thirty minutes fires; one that goes away
+  # after twenty, as after a restart during an upgrade, does not.
+  - interval: 1m
+    input_series:
+      - series: 'node_listener_outside_binding_rule{job="node-lxc210-nextcloud",proto="tcp",address="*",port="3306",process="mariadbd"}'
+        values: '1x60'
+      - series: 'node_listener_outside_binding_rule{job="node-lxc260-postgres",proto="tcp",address="0.0.0.0",port="5432",process="postgres"}'
+        values: '1x20 _x40'
+    alert_rule_test:
+      - {eval_time: 15m, alertname: ListenerOutsideBindingRule, exp_alerts: []}
+      - eval_time: 45m
+        alertname: ListenerOutsideBindingRule
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc210-nextcloud, proto: tcp, address: "*", port: "3306", process: mariadbd}
+            exp_annotations:
+              summary: "mariadbd listens on *:3306/tcp (node-lxc210-nextcloud)"
+              description: "A socket outside loopback and the Tailscale overlay that the node's listener_metrics_allowed does not name. Either bind it correctly or record the decision that allows it."
+
+  # A node that is scraped but never reported is missing; the containerised
+  # exporter on lxc200 is excluded on purpose.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="node-vm102-storage"}'
+        values: '1x40'
+      - series: 'up{job="node-lxc200-monitoring"}'
+        values: '1x40'
+      - series: 'up{job="node-vm100-gpu"}'
+        values: '1x40'
+      - series: 'node_listener_check_timestamp_seconds{job="node-vm100-gpu"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: ListenerMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-vm102-storage}
+            exp_annotations:
+              summary: "No listener metrics from node-vm102-storage"
+              description: "The node is scraped and exports no node_listener_check_timestamp_seconds. Run listener-metrics.yml against it."
+      - {eval_time: 35m, alertname: ListenerMetricsStale, exp_alerts: []}

@@ -576,7 +576,7 @@ use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing 
 since 2026-10-01 the `lan_guard` role drops new inbound LAN connections on every node, except SMB to
 vm102 from vm100 and the host, and break-glass SSH and netconsole to the host. Nodes are grouped into tags (`tag:tier0`, `tag:tier1`, `tag:tier2`, `tag:monitoring`, `tag:database`, `tag:ai-stack`, etc.) with explicit ACL rules. The ACL policy lives in the Tailscale admin console; `docs/platform/tailscale-acl.md` mirrors the intended model.
 
-**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces.
+**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces. Measured on every node by `listener_metrics`; an exception goes into the node's `listener_metrics_allowed` with the decision that permits it, or `ListenerOutsideBindingRule` fires.
 
 ## Known Technical Debt & Gotchas
 

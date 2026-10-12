@@ -23,3 +23,9 @@ lan_guard_allow:
       - "{{ proxmox_host_lan_ip }}"
       - "{{ vm100_lan_ip }}"
     reason: SMB mounts from the hypervisor and vm100 over the LAN, until the storage network replaces them
+
+# Exceptions to the binding rule that listener_metrics reports. Each names its
+# decision; remove the line when the decision is executed.
+listener_metrics_allowed:
+  - { proto: tcp, port: 445, reason: "Samba cannot bind tailscale0; smb_guard filters instead - docs/decisions/smb-bind-and-lan-access.md" }
+  - { proto: tcp, port: 22, reason: "sshd pin pending, step 2 of docs/decisions/sshd-listen-address.md" }
