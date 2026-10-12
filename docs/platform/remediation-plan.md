@@ -339,7 +339,9 @@ A review from the DevOps and DevSecOps seats, against the running fleet rather t
 documents. Everything the existing machinery watches came back clean, so what follows is what sits
 outside its field of view. These four are ordinary work and are ordered by exposure.
 
-- **Nothing on this platform measures its patch level.** Measured: the hypervisor has 228 packages
+- ~~**Nothing on this platform measures its patch level.**~~ Done 2026-09-17: `apt_metrics` exports
+  `apt_upgrades_pending` from ten targets and `AptSecurityUpdatesPending` reads it; read back on
+  2026-10-12 with no security update pending anywhere. The finding as written: Measured: the hypervisor has 228 packages
   pending, 55 of them security; vm102 has 62 pending and 23 security; lxc220 has 13 and 7. The
   remaining nodes were current. `unattended_upgrades` targets exactly one node, vm100, and there is
   no metric and no rule anywhere for pending updates - `apt-upgrade.yml` is excluded from the drift
@@ -351,7 +353,9 @@ outside its field of view. These four are ordinary work and are ordered by expos
   Only then the policy question, which is different per node class: the Debian containers can take
   the same origin-restricted `unattended_upgrades` vm100 has, while the hypervisor holds `pve-*`
   packages and a kernel upgrade there costs eleven guests.
-- **lxc250 answers LLMNR and mDNS on the LAN.** `systemd-resolved` holds four sockets on
+- ~~**lxc250 answers LLMNR and mDNS on the LAN.**~~ Done 2026-09-17, by stopping and disabling
+  `systemd-resolved` rather than by the drop-in proposed below; `ss -Hlun` on 2026-10-12 shows nothing
+  on 5353 or 5355. The finding as written: `systemd-resolved` holds four sockets on
   `0.0.0.0:5355` and `[::]:5355`, `resolvectl` reports `+LLMNR +mDNS`, and nothing in this
   repository sets either - both stand at their compiled defaults. It is the only node on the fleet
   with that listener, and it is the node that holds hypervisor root, the only `~/.vault_pass`, the
@@ -365,7 +369,9 @@ outside its field of view. These four are ordinary work and are ordered by expos
   owned by the `nsswitch` role, proven by `resolvectl status` and an empty
   `ss -tulnp | grep 5355`. Worth checking the administrator workstation for the same default; the
   sweep only sees the fleet.
-- **MariaDB has a backup and no proven way back.** PostgreSQL carries write-time verification, a
+- ~~**MariaDB has a backup and no proven way back.**~~ Done: `mariadb_restore_test` and
+  [`mariadb-restore.md`](../../runbooks/database/mariadb-restore.md) exist, and the test wrote its
+  metric for the first time on 2026-10-10, see the item of that date. The finding as written: PostgreSQL carries write-time verification, a
   monthly restore into a throwaway cluster, `PostgreSQLRestoreTestStale` at 40 days and a restore
   runbook. MariaDB, live since 2026-08-15, has the dump, `MariaDBBackupStale` and a backup runbook,
   and neither a restore test nor a restore runbook. It is the half that makes Nextcloud's files
@@ -668,6 +674,11 @@ teach, which is the part worth keeping:
   pinned to tags where every other action here is pinned to a SHA. Named in its header rather
   than left to be found.
 
+**Applied since, measured 2026-10-12.** `auditd` is active on the hypervisor, `journal-central`
+receives on lxc200 from lxc211 and lxc260, `fleet_snapshot` carries the `dpkg --verify`
+projection, and `sbom.yml` runs on its schedule. High availability stayed at reading, as intended.
+Of the four operational items only the sshd rollout remains, on vm100, vm102 and the hypervisor.
+
 **This block is the end of maintenance mode.** When these four and the four items above have been
 applied and verified, the Terraform track begins - after the
 identity track below, which was inserted on 2026-09-24.
@@ -699,6 +710,11 @@ lxc250 are closed, with no listener on 5353 or 5355. The sshd bind is pinned on 
 
 Whatever of step 3 is not done on 2026-09-27 moves to the small open items, except the minimum,
 which gates Terraform like the block does.
+
+**Not started, read 2026-10-12.** None of the three days took place: there is no identity node, no
+role and no changelog entry after the scheduling one of 2026-09-24. The start condition is met -
+the block is done but for the sshd rollout - so the dates above are the only part that is out of
+date. A new weekend needs choosing; the thin pool stands at 66 % and has room for the node.
 
 ## Added by the 2026-08-20 repository and fleet audit
 
