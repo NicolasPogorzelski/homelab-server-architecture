@@ -24,8 +24,19 @@ lan_guard_allow:
       - "{{ vm100_lan_ip }}"
     reason: SMB mounts from the hypervisor and vm100 over the LAN, until the storage network replaces them
 
+# === sshd bound to the Tailscale address only ===
+# docs/decisions/sshd-listen-address.md, step 2. vm102 was never socket-activated,
+# so ListenAddress binds as written. sshd exits 255 on a bind to an address
+# tailscaled has not assigned yet, and the packaged unit refuses to restart on 255
+# unless that list is cleared. The way back is the Proxmox console, as `storage`;
+# this VM cannot be snapshotted, its pool disks are passed through.
+tailscale_boot_gate_units:
+  - ssh.service
+tailscale_boot_gate_clear_restart_prevent: true
+
+ssh_hardening_listen_address: "{{ ansible_host }}"
+
 # Exceptions to the binding rule that listener_metrics reports. Each names its
 # decision; remove the line when the decision is executed.
 listener_metrics_allowed:
   - { proto: tcp, port: 445, reason: "Samba cannot bind tailscale0; smb_guard filters instead - docs/decisions/smb-bind-and-lan-access.md" }
-  - { proto: tcp, port: 22, reason: "sshd pin pending, step 2 of docs/decisions/sshd-listen-address.md" }
