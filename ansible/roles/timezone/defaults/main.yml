@@ -7,7 +7,6 @@
 # Europe/Berlin rather than UTC, although UTC was the majority: the hypervisor is
 # what powers this platform up and down, homelab-setwake.sh programs an RTC wake in
 # local time, and every incident note in this repository is written in local time.
-# The machine follows the operator here, not the other way round.
 #
 # Checked before choosing: no timer on this fleet falls between 02:00 and 03:00,
 # the hour that does not exist in March and happens twice in October. A future

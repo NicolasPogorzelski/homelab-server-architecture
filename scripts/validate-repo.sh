@@ -1109,7 +1109,7 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 # three lines and raised the total by one - a check that names the defects
 # correctly and then understates how many there are.
 # Ignored files are skipped, the same way Check 24 skips them. `*.local.md` is
-# the operator's private scratch space and git does not track it, so a broken
+# private scratch space and git does not track it, so a broken
 # row there would fail the run and name a file that is not part of the
 # repository - a commit gate answering for something no commit can contain.
 echo "Check 36: markdown table rows stay on one line"
@@ -1559,11 +1559,37 @@ ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
 : > "${ERROR_LOG}"
 
 # =============================================================================
+# Check 45: house style - the platform is the subject
+# =============================================================================
+# Added 2026-10-12. The documentation states what the platform does and what was
+# decided, without a narrator and without a first person, and names devices after
+# their tag (admin phone, admin workstations). Refused: "the operator" and
+# "operator's", and "operator" as a device label. Allowed: the generic role, as in
+# "a single-operator homelab" or "an operator with a console". CLAUDE.md and
+# .claude/ are excluded; they address an assistant, for which the operator is a
+# real party.
+echo "Check 45: house style - the platform is the subject"
+
+while read -r rel; do
+    [[ -f "${REPO_ROOT}/${rel}" ]] || continue
+    { grep -noiP "\bthe operator\b|\boperator's\b|\boperators?[ -](phone|workstations?|devices?)\b" \
+        "${REPO_ROOT}/${rel}" || true; } | while read -r match; do
+        echo "  Narrated operator: ${rel}:${match}"
+        echo "x" >> "${ERROR_LOG}"
+    done
+done < <(git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard \
+             -- ':!CLAUDE.md' ':!.claude/' ':!scripts/validate-repo.sh' \
+         | grep -E '\.(md|ya?ml|sh|j2|conf|py|json|example|cfg)$')
+
+ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+: > "${ERROR_LOG}"
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 44"
+echo "Checks run: 45"
 if [[ "${ERRORS}" -gt 0 ]]; then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1

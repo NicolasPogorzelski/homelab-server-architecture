@@ -69,8 +69,8 @@
 # with no SSH and is reachable only by `pct exec` or a console - and on the
 # hypervisor, by neither.
 #
-# So the role refuses the half-configuration rather than trusting the operator to
-# remember the other half. The two settings are safe together and dangerous alone,
+# So the role refuses the half-configuration rather than trusting whoever edits the
+# inventory to remember the other half. The two settings are safe together and dangerous alone,
 # and this repository has recorded five instances of the failure they prevent.
 - name: Refuse a pinned bind without the boot gate that makes it survivable
   ansible.builtin.assert:

@@ -43,10 +43,10 @@ behalf.
 ```mermaid
 flowchart LR
   accTitle: Tailscale ACL - access granted to people's devices
-  accDescr: Operator workstations, operator phone, end-user devices, e-book reader, a remote TV, a streaming box and an external user through machine sharing, each with the services and ports it may reach.
+  accDescr: Admin workstations, admin phone, end-user devices, e-book reader, a remote TV, a streaming box and an external user through machine sharing, each with the services and ports it may reach.
 
-  ADMIN_S["tag:admin<br/>operator workstations"]
-  MOBILE_S["tag:admin-mobile<br/>operator phone"]
+  ADMIN_S["tag:admin<br/>admin workstations"]
+  MOBILE_S["tag:admin-mobile<br/>admin phone"]
   CLIENT_S["tag:client<br/>phone and notebook"]
   READER_S["tag:reader<br/>e-book reader"]
   UNTRUST_S["tag:untrusted<br/>remote TV"]

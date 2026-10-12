@@ -37,8 +37,8 @@ carry the tag of the role they are used in.
 | `tag:database` | Central PostgreSQL platform service | lxc260 |
 | `tag:monitoring` | Observability stack | lxc200 |
 | `tag:control` | Ansible control node | lxc250 |
-| `tag:admin` | Operator workstations | admin notebook, admin desktop |
-| `tag:admin-mobile` | Operator phone | one device |
+| `tag:admin` | Admin workstations | admin notebook, admin desktop |
+| `tag:admin-mobile` | Admin phone | one device |
 | `tag:client` | End-user devices | a phone and a notebook |
 | `tag:reader` | E-book reader | one device |
 | `tag:untrusted` | A TV outside the home network, administered by nobody here | one device |
@@ -51,7 +51,7 @@ tag decides less than it did: every grant to a tier1 service names the host, so 
 services are reachable independently of each other.
 
 **Why lxc250 has its own tag.** Until 2026-09-26 the control node shared `tag:admin` with the
-operator's devices, and `tag:admin:*` connected all of them on every port. The node that holds the
+admin workstations, and `tag:admin:*` connected all of them on every port. The node that holds the
 vault password, the Ansible key and root on the hypervisor was reachable on every port from a phone,
 and could itself reach every port on the workstations. A human endpoint and an automation server are
 two identities with two jobs; each now gets only its own.
@@ -239,7 +239,7 @@ the path into them.
 Not granted: PostgreSQL from a workstation (nothing in the repository uses it), SPICE on 3128
 (consoles open in the browser through 8006), and any path between two admin devices.
 
-### Rule 8 - Operator phone
+### Rule 8 - Admin phone
 
 The phone held `tag:admin` so that the host could be shut down from it. It now reaches the Proxmox
 interface and the services its owner uses, and nothing else. The Proxmox side is meant to match: a
@@ -376,14 +376,14 @@ the tailnet for a Mullvad exit node only, and as a quarantine tag.
 
 ### Mullvad Exit Nodes
 
-Five devices may use Tailscale's Mullvad exit nodes: both admin workstations, the operator phone,
+Five devices may use Tailscale's Mullvad exit nodes: both admin workstations, the admin phone,
 an end-user phone and a streaming box.
 
 ```json
 "nodeAttrs": [
     {"target": ["<tailscale-ip-admin-notebook>"],   "attr": ["mullvad"]},
     {"target": ["<tailscale-ip-admin-desktop>"],    "attr": ["mullvad"]},
-    {"target": ["<tailscale-ip-operator-phone>"],   "attr": ["mullvad"]},
+    {"target": ["<tailscale-ip-admin-phone>"],   "attr": ["mullvad"]},
     {"target": ["<tailscale-ip-client-phone>"],     "attr": ["mullvad"]},
     {"target": ["<tailscale-ip-streaming-box>"],    "attr": ["mullvad"]}
 ]
@@ -431,12 +431,12 @@ Two columns are left out because every cell in them is empty for the servers: no
 Administrative access is separated from service-to-service communication.
 
 - People's devices are tagged by role and reach services by host and port
-- The control node is a separate identity from the operator's devices
+- The control node is a separate identity from the admin devices
 - Service-to-service communication is controlled via tags, and via host aliases where a tag holds
   several services
 - Break-glass access is documented and intentionally minimal
 
-Note: the operator's workstations are intentionally absent from `docs/nodes/`. They are documented
+Note: the admin workstations are intentionally absent from `docs/nodes/`. They are documented
 through their tag and through the hardening notes in the [remediation plan](remediation-plan.md).
 
 ---
@@ -566,7 +566,7 @@ Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" sect
 
 | Date | Change | Reason |
 |---|---|---|
-| 2026-10-10 | Rule 15 grants `nextcloud` -> `tag:storage:445`, and its test moves from deny to accept. Written in the repository; the console policy is applied by the operator. | Nextcloud's ingest mounts to Paperless had no path since the 2026-09-26 rebuild: the flow was not in the measured set, and `smb_guard` closes the LAN route. |
+| 2026-10-10 | Rule 15 grants `nextcloud` -> `tag:storage:445`, and its test moves from deny to accept. Written in the repository; the console policy is applied by hand. | Nextcloud's ingest mounts to Paperless had no path since the 2026-09-26 rebuild: the flow was not in the measured set, and `smb_guard` closes the LAN route. |
 | 2026-10-01 | New `tag:media-player` with Rule 14 (`gpu-vm:8096` only) and a test; the streaming box moves to it from `tag:isolated`. Verified on vm100's packet filter: a new rule for 8096 with the device's two addresses | The box streamed over the LAN, the path that closes once vm100 stops publishing on it ([remediation plan](remediation-plan.md#added-on-2026-10-01)) |
 | 2026-10-01 | Policy applied in the console: Rule 6 grants `bazzite:8080` and `gpu-vm:8080`, monitoring `gpu-vm:8080`; `gpu-vm:11434` removed with vm100's Ollama and asserted as denied. Verified on vm100's packet filter and by probes from lxc230, lxc200 and the admin notebook: allowed paths 200, denied paths time out | The 2026-09-29 change had reached the documentation only ([llm-inference.md](../services/llm-inference.md#rollout-state)) |
 | 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow. Correction 2026-10-01: documentation only - the console policy was not changed that day, and vm100's packet filter carried no rule for 8080 until 2026-10-01 | [llm-inference.md](../services/llm-inference.md) |

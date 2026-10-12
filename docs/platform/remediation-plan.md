@@ -380,8 +380,8 @@ outside its field of view. These four are ordinary work and are ordered by expos
   metric, add the staleness rule.
 - **The sshd binding decision: socket activation off, decided 2026-10-10.** The pin applied to
   lxc220 on 2026-09-17 bound nothing, because the node was socket-activated, and it was withdrawn.
-  Of the two ways the [decision](../decisions/sshd-listen-address.md) left open, the operator chose
-  turning `ssh.socket` off over pinning the socket: one service model across the fleet, the boot
+  Of the two ways the [decision](../decisions/sshd-listen-address.md) left open, turning
+  `ssh.socket` off won over pinning the socket: one service model across the fleet, the boot
   gate already proven on lxc250, and `systemctl enable --now ssh.socket` through `pct exec` as the
   way back. `ssh_hardening` now hands the port from the socket to `ssh.service` wherever
   `ssh_hardening_listen_address` is set and reads the bind back from `ss`, failing the run if
@@ -406,7 +406,7 @@ carried under Tier 4, and these remain. None blocks anything else.
 
 - ~~**The inference probe is merged and not applied.**~~ Done 2026-10-01: `prometheus-config.yml`
   applied after a clean `--check --diff`, and `probe_success{service="llama-server"}` reads 1.
-- ~~**Alert delivery has never been tested end to end.**~~ Tested 2026-10-10: `amtool alert add AlertDeliveryTest` on lxc200 moved `alertmanager_notifications_total{integration="discord"}` from 9 to 10 with every failure reason at 0; arrival in the channel is the operator's to confirm. Repeat it after any change to the receiver. Every alert leaves through one Discord
+- ~~**Alert delivery has never been tested end to end.**~~ Tested 2026-10-10: `amtool alert add AlertDeliveryTest` on lxc200 moved `alertmanager_notifications_total{integration="discord"}` from 9 to 10 with every failure reason at 0; arrival in the channel itself is checked there, by eye. Repeat it after any change to the receiver. Every alert leaves through one Discord
   webhook, and a revoked webhook fails without Alertmanager reporting it. Inject one alert with
   `amtool alert add`, watch it arrive, and record the date, so the last successful test is a fact
   rather than a guess.
@@ -421,7 +421,7 @@ carried under Tier 4, and these remain. None blocks anything else.
   board's NVRAM (`Boot0000`); the fallback `\EFI\BOOT\BOOTX64.EFI` exists, but nobody chose it.
   Find the naming source with `udevadm test-builtin net_id`, pin the name, and add both steps to
   the hard-shutdown recovery runbook.
-- ~~**Three wording items in documents the operator drafts.**~~ Done 2026-10-12: the README defines
+- ~~**Three wording items in the hand-drafted documents.**~~ Done 2026-10-12: the README defines
   what `Done` means for a phase and no longer calls recovery deterministic, and Calibre-Web's tier
   is settled in `CLAUDE.md`, because per-host grants made the tag a label. The finding as written:
   The README roadmap marks phases
@@ -451,7 +451,7 @@ Found while completing the inference rollout.
   so more vCPUs would not raise it; at 2.5 GbE `tailscaled` would need about three cores, and the
   CPU type (`x86-64-v2-AES` passes no AVX2 to the guest) becomes worth changing. The ACL tests
   already describe the target (`tag:tier2 -> tag:storage:445` denied, `tag:admin` accepted), so the
-  policy does not change. It needs a decision record drafted by the operator before any live change.
+  policy does not change. It needs a decision record, drafted blank-file-first, before any live change.
 - ~~**Media clients move to the tailnet, and vm100 stops listening on the LAN.**~~ Done 2026-10-01.
   The streaming box moved to `tag:media-player` and streams over the tailnet; Jellyfin and
   Audiobookshelf publish on `127.0.0.1` behind `tailscale serve --tcp`, and `enp6s18` holds no global
@@ -475,7 +475,7 @@ Found while completing the inference rollout.
   loaded on all eleven nodes, the same scan found the same single open port, the hypervisor's SMB
   mounts reconnected through the exception, and netconsole frames arrived. Still open: the
   sentence in [`sshd-listen-address.md`](../decisions/sshd-listen-address.md) that nothing enforces the
-  untrusted LAN at the host boundary needs the operator's amendment, and pinning sshd itself
+  untrusted LAN at the host boundary needs an amendment, and pinning sshd itself
   becomes the second layer rather than the only one. A restart of `nftables.service` by hand
   still flushes the table until the next boot; the unit is ordered after it for exactly that
   reason.
@@ -499,8 +499,8 @@ Found while completing the inference rollout.
 Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 
 - ~~**lxc240 was destroyed ahead of its phase 2.**~~ Phase 2 done 2026-10-10, also ahead of the
-  2026-11-30 date in the [decommission record](../decisions/vaultwarden-decommission.md), on the
-  operator's decision. `vzdestroy:240` had run on 2026-09-29 without a record, and the weekly guest
+  2026-11-30 date in the [decommission record](../decisions/vaultwarden-decommission.md).
+  `vzdestroy:240` had run on 2026-09-29 without a record, and the weekly guest
   backup then failed on the missing CTID until `240` left `GUESTS` on 2026-10-07. Removed on
   2026-10-10: the 728 KB of data on the share and the `[Vaultwarden]` share with its Samba and
   Linux accounts on vm102, the hypervisor's `/mnt/smb/vaultwarden` fstab entry, mount point and
@@ -510,7 +510,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   `fstab` were copied to `/root` first. The generic SQLite side-file excludes in
   `snapraid_maintenance` stay; they never named Vaultwarden. Open: the node in the Tailscale
   console, the cold archive from phase 1 (`/root` on the hypervisor and an off-site workstation),
-  and the operator's amendment to the record.
+  and the amendment to the record.
 - **Embedded subtitles on 4K remuxes are extracted on demand, over CIFS.** A client that asks for
   one track makes Jellyfin read the whole file, measured at about five minutes for a 30 GB episode,
   and the client gives up. All profiles are held at subtitle mode "None" since 2026-10-07, which
@@ -555,7 +555,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   setting lives on the box.
 
 - ~~**The CUDA watchdog restarts Jellyfin under running streams.**~~ Decided, built and applied
-  2026-10-10; first run 13:16 with `jellyfin_cuda_ok 1`. The operator's direction: restart only when no stream needs to be
+  2026-10-10; first run 13:16 with `jellyfin_cuda_ok 1`. The rule: restart only when no stream needs to be
   protected. With CUDA gone the watchdog now restarts when nothing plays or a video transcode is
   among the sessions, and holds while only direct streams play; it polls every minute instead of
   every thirty, and `JellyfinCudaLost` makes a held or failed restart visible
@@ -568,8 +568,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   and its test asserted a deny, so lxc210 does not even see vm102 as a peer. Measured from lxc210:
   445 closed on both paths. The fix keeps the feature and the LAN closed: ACL Rule 15
   (`nextcloud` -> `tag:storage:445`, written in [tailscale-acl.md](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares)),
-  then both mounts switched to vm102's full MagicDNS name. The console change is the operator's;
-  the mount change follows it.
+  then both mounts switched to vm102's full MagicDNS name. The console change comes first; the
+  mount change follows it.
 - **Nextcloud 35 needs PHP 8.3, so it needs Debian 13 on lxc210.** 34.0.4 is the last major that
   runs on Debian 12's PHP 8.2 (`lib/versioncheck.php` of each tag), and `occ setupchecks` already
   flags 8.2 as deprecated. 34 is supported until 2027-06. Same check lists a mimetype migration

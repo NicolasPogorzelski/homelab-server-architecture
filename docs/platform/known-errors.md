@@ -2147,7 +2147,7 @@ half. The weekday test carried the same offset, selecting the 16:00 rule from th
 it would wake on.
 
 **How it stayed invisible:**
-Three things had to line up, and they did. The operator switches the machine on during the day, so
+Three things had to line up, and they did. The machine is switched on by hand during the day, so
 the alarm was always overtaken before it came due and never observed to be wrong. `rtcwake`
 accepts a far-future time and exits 0, so the job succeeded every night. And cron reports a failure
 to nobody - the platform's own rule that every scheduled job must be a systemd timer exists for
