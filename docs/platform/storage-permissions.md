@@ -104,6 +104,16 @@ Owned by the [`storage_permissions`](../../ansible/roles/storage_permissions) ro
 - optionally `/etc/storage-permissions.local.conf` - additional entries kept off the repository;
   the script reads it alongside the managed file and Ansible neither writes nor removes it
 - `storage-permissions.timer` - daily at 23:15, `Persistent=true`, before the host powers off at 23:30
+- every share directory of the matrix on every branch, created with its owner, group and directory
+  mode where the branch does not have it yet; existing directories are left as they are
+
+The last item closes a gap the check found on 2026-10-12. MergerFS places a new file on the branch
+with the most free space (`category.create=mfs`) and, if the share does not exist there, recreates
+its directory with `mkdir`. That call keeps only the `0777` bits of the requested mode and sets
+setgid only under a setgid parent (`man 2 mkdir`); a branch root has none. `DB-Backups` appeared on
+a fourth branch that morning without the bit, and three more shares were missing from at least one
+branch. With every share present on every branch there is nothing left to recreate, and
+subdirectories inherit setgid from their share.
 
 The branch list is not kept in the repository. The script reads it from the running MergerFS
 instance (`user.mergerfs.branches` on the pool's control file), for three reasons: a disk added to
