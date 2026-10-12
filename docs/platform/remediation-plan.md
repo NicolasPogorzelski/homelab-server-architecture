@@ -632,7 +632,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   restarts MariaDB once and fails unless `ss` shows `127.0.0.1:3306` alone; it is in the drift
   sweep, which would have seen nothing here before, because no role owned the unit. Swept the other
   eight guests and the hypervisor with `ss -Hltn` the same morning: no other wildcard listener
-  beyond the documented ones.
+  beyond the documented ones. Applied 2026-10-12: `127.0.0.1:3306` alone in `ss`, the socket
+  `masked`, and `occ status` reports Nextcloud installed and out of maintenance mode.
 - **Nothing measured the binding rule, so the MariaDB socket was found by a scan, four days late.**
   The weekly snapshot saw it: the diff of 2026-10-10 carries `-127.0.0.1:3306`, `+*:3306` and
   `+mariadb.socket enabled` for lxc210, among 107 changed lines that week, and nobody read them;
@@ -642,7 +643,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
   decision behind each, so removing one is the last step of executing that decision. Two more are
   allowed on every node, `tailscaled`'s WireGuard socket and the DHCP client, since neither can
-  bind to the overlay it serves.
+  bind to the overlay it serves. Live since 2026-10-12: ten nodes report, Prometheus holds ten
+  `node_listener_check_timestamp_seconds` series and no `node_listener_outside_binding_rule` series.
 
 ## The exercise block, before Terraform
 
@@ -690,7 +692,8 @@ teach, which is the part worth keeping:
 **Applied since, measured 2026-10-12.** `auditd` is active on the hypervisor, `journal-central`
 receives on lxc200 from lxc211 and lxc260, `fleet_snapshot` carries the `dpkg --verify`
 projection, and `sbom.yml` runs on its schedule. High availability stayed at reading, as intended.
-Of the four operational items only the sshd rollout remains, on vm100, vm102 and the hypervisor.
+Of the four operational items only the sshd rollout remains, on vm102 and the hypervisor; vm100
+took the pin on 2026-10-12.
 
 **This block is the end of maintenance mode.** When these four and the four items above have been
 applied and verified, the Terraform track begins - after the
@@ -736,8 +739,8 @@ fleet held no failed unit, no firing alert and no dead scrape target, and both d
 current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
 item 4 above; these are the rest.
 
-- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** <!-- historical-count --> Since 2026-10-10 on
-  three of ten: the containers are pinned, vm100, vm102 and the hypervisor are not. Measured: `*:22` on
+- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** <!-- historical-count --> Since 2026-10-12 on
+  two of ten: the containers and vm100 are pinned, vm102 and the hypervisor are not. Measured: `*:22` on
   lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
   host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name
   vm100 as the exception to a rule the fleet otherwise follows; it is the other way round, and the
@@ -792,7 +795,7 @@ item 4 above; these are the rest.
 - ~~**VM100's unsnapshottable disk holds 18 GB.**~~ Converted 2026-10-10: `qm disk move 100 scsi1
   appdata_aux-disk --format qcow2`, online, in about 90 minutes with no I/O error on the KE-13 disk;
   139 GiB were allocated by then, not 18. A test snapshot with `--vmstate 0` succeeded and was
-  deleted. The old raw file is `unused0` until the new disk has run a few days. Its `scsi1` was a
+  deleted. The old raw file stayed as `unused0` for two days and was deleted on 2026-10-12. Its `scsi1` was a
   300 GB raw file on directory storage, and `/mnt/vm-data` inside the guest was 7 % used. The constraint recorded in `CLAUDE.md`
   is real; the migration it blocks is an order of magnitude smaller than the disk's nominal size
   suggests.
