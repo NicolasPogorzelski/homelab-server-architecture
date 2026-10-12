@@ -799,8 +799,9 @@ filesystem damage). The risk is that an `EIO` returned into the thin pool during
 could corrupt a guest filesystem.
 
 **Status:** Diagnosed to transport layer; media and firmware causes excluded; physical root
-cause unconfirmed pending the verification steps above. Re-confirmed live on 2026-08-13 - the
-fault has not resolved itself and none of the four verification steps has been performed.
+cause unconfirmed pending the verification steps above. Re-confirmed live on 2026-08-13 and
+daily since 2026-10-05, at a rate that has risen - see the measurement of 2026-10-12 below. None of
+the four verification steps has been performed.
 
 **The verification is a runbook since 2026-09-11**, rather than four bullet points that had been
 restated in three documents without ever becoming a step:
@@ -831,6 +832,30 @@ the exclusion look broader than it is.
 
 No write failed, and no filesystem, thin-pool or device-mapper error followed. The entry's title
 says boot-time; the fault is load-driven, and the boot window is simply the most reliable load.
+
+**Every day now, and with a second host byte, measured 2026-10-12.** Failed commands at
+`9:0:0:0` per calendar month, from every boot the persistent journal holds:
+
+| Month | Boots | Boots with failures | Failed commands |
+|---|---|---|---|
+| 2026-06 | 11 | 4 | 38 |
+| 2026-07 | 24 | 14 | 272 |
+| 2026-08 | 25 | 10 | 209 |
+| 2026-09 | 28 | 10 | 211 |
+| 2026-10, to the 12th | 12 | 9 | 333 |
+
+October passed September's total in eleven days, and every boot from 2026-10-05 to 2026-10-11
+failed somewhere. The bursts are no longer tied to boot or to a heavy step. On 2026-10-07 the disk
+stopped answering for about 30 s at 11:00, 11:03, 14:00, 18:33, 18:46, 22:00 and 22:01, two of
+them during drift sweeps; from then to 2026-10-11 the failures fall in 31 distinct minutes, ten of
+them in the first minute of an hour, which points at something the fleet schedules hourly and was
+not traced further. They also arrive as two host bytes: `DID_TIME_OUT`, the command abort after the timeout,
+appears beside `DID_SOFT_ERROR` and on some boots alone, so a count keyed on the first host byte
+reads zero on a bad day - the power-path runbook counts both since 2026-10-10. What has not changed
+is the direction: every `I/O error` line on those seven boots is a `READ`, none a `WRITE`, and
+`EXT4-fs error`, device-mapper and `Buffer I/O error` lines number zero. Write commands are among
+the aborted ones and were retried successfully. Nothing in this paragraph moves the diagnosis; it
+moves the urgency, and the runbook still has not been run.
 
 **Incidental correction:** all nine disks are attached to the Proxmox host. VM102 reaches
 six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART

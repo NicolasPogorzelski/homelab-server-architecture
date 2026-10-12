@@ -62,7 +62,9 @@ notes there and keep this section short.
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
   verification - written up as `runbooks/platform/ke14-power-path-check.md` on 2026-09-11, needing
   host downtime the nightly cycle already provides and no purchase. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
-  (`cmd_age=29s`, boot + 3 min, preceding boot clean) - live, and no verification step performed.
+  (`cmd_age=29s`, boot + 3 min, preceding boot clean), and on every boot from 2026-10-05 to
+  2026-10-11, in operation: 333 failed commands in eleven days of October against 211 in all of
+  September, still reads only. No verification step performed.
   **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
   enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
 - **KE-15 - RESOLVED 2026-07-14, closed 2026-08-13.** The host's `/mnt/smb/books-rw` fstab entry
