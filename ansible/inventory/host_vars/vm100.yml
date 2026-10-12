@@ -37,6 +37,17 @@ docker_boot_retry_enabled: true
 # docker.service, replacing the packaged Restart=always and 2 s.
 tailscale_boot_gate_units:
   - docker.service
+  - ssh.service
+
+# === sshd bound to the Tailscale address only ===
+# docs/decisions/sshd-listen-address.md, step 3. vm100 was never socket-activated,
+# so ListenAddress binds as written. sshd exits 255 on a bind to an address
+# tailscaled has not assigned yet, and the packaged unit refuses to restart on 255
+# unless that list is cleared; the drop-in clears it for docker.service as well,
+# which sets none. The way back is the Proxmox console or a snapshot taken first.
+tailscale_boot_gate_clear_restart_prevent: true
+
+ssh_hardening_listen_address: "{{ ansible_host }}"
 
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
