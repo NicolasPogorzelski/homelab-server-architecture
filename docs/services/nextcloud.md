@@ -126,7 +126,7 @@ user's consumption subdirectory.
 
 | Mount ID | Nextcloud User | SMB Share | Target Path |
 |---|---|---|---|
-| 4 | Operator | Paperless-ingest-user1 | `/mnt/mergerfs/Paperless/consumption/user1` |
+| 4 | user1 | Paperless-ingest-user1 | `/mnt/mergerfs/Paperless/consumption/user1` |
 | 5 | user2 | Paperless-ingest-user2 | `/mnt/mergerfs/Paperless/consumption/user2` |
 
 - Host: vm102's full MagicDNS name, `storage.<tailnet-id>.ts.net`, over the tailnet. The short

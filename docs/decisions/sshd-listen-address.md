@@ -12,7 +12,7 @@ handler, and the reboot is what applied the pin. The role now flushes its handle
 read-back, which vm102 and the hypervisor need. Next is vm102.
 
 **Amended 2026-10-12: the open choice below was made, and the containers are done.** On
-2026-10-10 the operator chose turning socket activation off over pinning the socket: one service
+2026-10-10 turning socket activation off was chosen over pinning the socket: one service
 model on every node, the boot gate already proven on lxc250 unchanged, and
 `systemctl enable --now ssh.socket` through `pct exec` as the way back. `ssh_hardening` now stops
 and disables `ssh.socket` wherever `ssh_hardening_listen_address` is set and fails the run unless

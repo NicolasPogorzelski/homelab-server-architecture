@@ -161,7 +161,7 @@ Wildcard filters are required for Paperless v2.20 path matching.
 ### Nextcloud External Storage (LXC210)
 
 - App: `files_external`
-- Mount ID 4: Operator -> `Paperless-ingest-user1` share
+- Mount ID 4: user1 -> `Paperless-ingest-user1` share
 - Mount ID 5: user2 -> `Paperless-ingest-user2` share
 - Auth: global SMB credentials (not per-session)
 

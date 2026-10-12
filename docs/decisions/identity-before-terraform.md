@@ -23,8 +23,8 @@ application asks for its own password against its own user table. Measured 2026-
 There is no directory and no identity provider. Adding a person means seven account creations,
 removing one means remembering all seven.
 
-The operator built an LDAP directory with `lldap` in a separate assessment project the week
-before, with three applications binding against it. What that project did not build is OIDC: it
+An LDAP directory with `lldap` was built in a separate assessment project the week before, with
+three applications binding against it. What that project did not build is OIDC: it
 stopped at LDAP and described an OIDC provider only as its target architecture. Rebuilding the known
 half in a second environment and adding the missing half is the learning goal here. The operational
 goal - one place to add and remove a person - is real but small at this user count, and is not the

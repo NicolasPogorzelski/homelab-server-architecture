@@ -17,7 +17,7 @@ central log aggregation, high availability, and software bills of materials with
 verification. The argument against each was the same shape: at ten guests and one operator they
 produce output nobody reads, and this repository already records what an unread guard is worth.
 
-The operator's goal for the second list is not operational. It is to have built the thing once,
+The goal of the second list is not operational. It is to have built the thing once,
 seen what it emits, and be able to say what the same control looks like in an environment that has
 a security team, a change process and an on-call rota. That is a legitimate goal and a different
 one from hardening this platform, and the difference has to survive contact with a reader.
@@ -43,7 +43,7 @@ That is evidence of running, not of the control being necessary here or of anyon
 output. They may appear as `Practised` with the exercise noted, or not appear at all.
 
 **Alerting stays off for them unless the alert would have been built anyway.** An exercise that
-pages is an exercise that trains the operator to ignore pages, which is the failure this platform
+pages is an exercise that trains whoever receives it to ignore pages, which is the failure this platform
 has already catalogued twice - `PostgreSQLBackupStale` blind during an outage, and the offsite
 rules that fired for a machine that did not exist.
 
