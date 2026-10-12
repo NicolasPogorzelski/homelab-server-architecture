@@ -99,3 +99,36 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Deploy the host configuration backup and the restore script
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - { src: "{{ guest_backup_host_config_backup_script_src }}", dest: "{{ guest_backup_host_config_backup_script_dest }}" }
+    - { src: "{{ guest_backup_platform_restore_script_src }}", dest: "{{ guest_backup_platform_restore_script_dest }}" }
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Deploy the host configuration backup units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - host-config-backup.service
+    - host-config-backup.timer
+  notify: Reload systemd
+
+- name: Enable and start the host configuration backup timer
+  ansible.builtin.systemd_service:
+    name: host-config-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

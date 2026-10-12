@@ -1,0 +1,33 @@
+# promtool unit tests for HostConfigBackupStale in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  # A fresh archive keeps the rule quiet; one five days old fires.
+  - interval: 5m
+    input_series:
+      - series: 'host_config_backup_last_success_timestamp_seconds{job="node-proxmox-host"}'
+        values: '0x1500'
+    alert_rule_test:
+      - {eval_time: 2h, alertname: HostConfigBackupStale, exp_alerts: []}
+      - eval_time: 120h
+        alertname: HostConfigBackupStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-proxmox-host}
+            exp_annotations:
+              summary: "Host configuration backup is stale or missing"
+              description: "No host configuration archive in four days, or no metric at all. Without it a rebuild of the hypervisor has the guest archives and not the host they expect - see runbooks/platform/platform-restore.md."
+
+  # No series at all fires after the hold time.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="node-proxmox-host"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HostConfigBackupStale
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Host configuration backup is stale or missing"
+              description: "No host configuration archive in four days, or no metric at all. Without it a rebuild of the hypervisor has the guest archives and not the host they expect - see runbooks/platform/platform-restore.md."

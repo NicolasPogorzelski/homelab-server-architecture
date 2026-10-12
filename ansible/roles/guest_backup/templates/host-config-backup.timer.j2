@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily host configuration backup at {{ guest_backup_host_config_backup_oncalendar }}
+
+[Timer]
+OnCalendar={{ guest_backup_host_config_backup_oncalendar }}
+# The host is off at night; a missed run is made up at the next boot.
+Persistent=true
+Unit=host-config-backup.service
+
+[Install]
+WantedBy=timers.target

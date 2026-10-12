@@ -36,13 +36,14 @@ BACKUP_DIR="/mnt/vzdump"
 # leaves the irreplaceable ones done. lxc250 leads: it is the control node, and
 # it holds the only copy of the real inventory and the Ansible SSH key.
 #
-# VM100 is absent on purpose, not by oversight. It is 25 GB of root plus 18 GB of
-# Jellyfin metadata and transcoding cache, all of it reproducible from the compose
-# stack in minutes, and its media lives on vm102. Including it would roughly
-# triple the size of a run to protect the one guest that needs it least.
+# VM100 comes last and contributes its root disk only: its 300 GB data disk on
+# the auxiliary disk carries `backup=0`, and the size guard below refuses the
+# guest rather than pull that disk in if the flag is ever lost. The root disk
+# lives on the boot SSD with every other guest, and without it a rebuild of the
+# host would have to reinstall the GPU node by hand.
 #
 # lxc240 was missing from this array from the first version until 2026-09-01.
-# Unlike vm100 above, that was not a decision - it went unnoticed. `pct list`
+# That was not a decision - it went unnoticed. `pct list`
 # is the authority on which guests exist; this line is a hand-maintained copy
 # of it and nothing compares the two. The same shape once left lxc250 out of
 # the fstrim array and out of `hosts: all`.
@@ -50,7 +51,7 @@ BACKUP_DIR="/mnt/vzdump"
 # Recheck this line against `pct list` when the fleet changes. lxc240 is not
 # listed because the container no longer exists; its archives stay in the dump
 # directory, because vzdump prunes per guest and only within that guest's run.
-GUESTS=(250 260 210 211 200 220 230 102)
+GUESTS=(250 260 210 211 200 220 230 102 100)
 
 # Retention is expressed in time, not in a number of files. The distinction is
 # not pedantic: the PostgreSQL retention reads `-mtime +7`, which means seven
@@ -58,6 +59,11 @@ GUESTS=(250 260 210 211 200 220 230 102)
 # behind. vzdump's own pruner takes the same shape - these keep counts are
 # per-class, so keep-weekly=8 is eight weeks, not eight files.
 PRUNE="keep-daily=3,keep-weekly=8,keep-monthly=6"
+
+# A VM disk larger than this without `backup=0` stops that guest's backup. The
+# passthrough disks of vm102 are terabytes each and vm100's data disk is 300 GB;
+# one lost flag would otherwise fill the target in a single run.
+MAX_DISK_GB=128
 
 # zstd, not gzip or lzo. It reaches roughly the same ratio as gzip at several
 # times the speed, and the run happens while the host is awake and in use.
@@ -96,8 +102,29 @@ fi
 START_TS="$(date +%s)"
 FAILED=0
 
+# Prints the disks of a VM that vzdump would include and that exceed MAX_DISK_GB.
+oversized_disks() {
+  qm config "$1" 2>/dev/null \
+    | grep -E '^(scsi|sata|virtio|ide)[0-9]+: ' | grep -v 'media=cdrom' | grep -v 'backup=0' \
+    | while IFS= read -r line; do
+        size="$(sed -nE 's/.*size=([0-9]+)([GMT]).*/\1 \2/p' <<<"$line")"
+        [ -n "$size" ] || continue
+        read -r n unit <<<"$size"
+        case "$unit" in M) n=$((n / 1024)) ;; T) n=$((n * 1024)) ;; esac
+        [ "$n" -gt "$MAX_DISK_GB" ] && echo "${line%%:*}"
+      done
+}
+
 for id in "${GUESTS[@]}"; do
   echo "=== vzdump ${id} ==="
+  if [ -f "/etc/pve/qemu-server/${id}.conf" ]; then
+    big="$(oversized_disks "$id" | tr '\n' ' ')"
+    if [ -n "$big" ]; then
+      echo "ERROR: VM ${id} would include ${big}over ${MAX_DISK_GB} GB without backup=0 - skipped" >&2
+      FAILED=$((FAILED + 1))
+      continue
+    fi
+  fi
   # --mode snapshot takes an LVM-thin snapshot and backs that up, so the guest
   # keeps running. `stop` would be consistent but takes everything down once a
   # week; `suspend` freezes the guest for the whole run. Snapshot is the only

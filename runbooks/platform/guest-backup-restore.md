@@ -28,7 +28,11 @@ mountpoint that the host binds to whichever disk currently holds the backup role
 time-expressed schedule, and exposed to Prometheus through a textfile metric so a silent stop
 raises `GuestBackupStale`.
 
-VM100 is excluded deliberately. It is 25 GB of root plus 18 GB of Jellyfin metadata and transcoding
+VM100 joined on 2026-10-12 with its root disk only: its 300 GB data disk carries `backup=0`, and the
+script skips any VM that would pull in a disk over 128 GB without that flag. Until then it was
+excluded deliberately, on the reasoning below, which held while its root disk was the least
+valuable copy on the platform and stopped holding once the boot SSD was due for replacement:
+it is 25 GB of root plus 18 GB of Jellyfin metadata and transcoding
 cache, reproducible from its compose stack in minutes, and its media lives on vm102. Including it
 would roughly triple a run to protect the guest that needs it least.
 
