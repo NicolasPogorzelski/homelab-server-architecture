@@ -169,15 +169,31 @@
     state: "{{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'started' }}"
   when: ssh_hardening_listen_address | length > 0
 
+# On a node that never ran socket activation the service task above finds sshd
+# already up and leaves it alone, so the new ListenAddress reaches the daemon only
+# through the reload handler. Run it now, before the bind is read back, or the
+# assert below judges the old process.
+- name: Apply the sshd configuration before reading the bind back
+  ansible.builtin.meta: flush_handlers
+
 # Read the bind back from the kernel rather than trusting the configuration file,
 # the failure this block exists for: a drop-in that says one thing while the node
-# listens on another.
+# listens on another. A reload re-execs sshd, so the read waits briefly for the
+# new process to bind.
 - name: Read which addresses listen on port 22
   ansible.builtin.command:
     cmd: ss -Hltn 'sport = :22'
   register: ssh_hardening_listeners
   changed_when: false
   check_mode: false
+  until: >-
+    ssh_hardening_listeners.stdout_lines | length > 0 and
+    ssh_hardening_listeners.stdout_lines
+    | map('split') | map(attribute=3)
+    | reject('equalto', ssh_hardening_listen_address ~ ':22') | list | length == 0
+  retries: 5
+  delay: 2
+  failed_when: false
   when: ssh_hardening_listen_address | length > 0 and not ansible_check_mode
 
 - name: Refuse to finish while sshd still listens beyond the pinned address

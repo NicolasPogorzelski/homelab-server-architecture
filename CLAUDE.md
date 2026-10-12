@@ -814,7 +814,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   succeeded with the GPU passed through. Take one before any non-trivial change and delete it after:
   a snapshot lives in the same files on the same disks, the KE-13 disk among them, so it is a way
   back from a bad change and not a backup. vm100 is still excluded from the guest backup. The old
-  raw file stays attached as `unused0` until the qcow2 disk has run for a few days.
+  raw file was deleted with `qm disk unlink` on 2026-10-12, after two days on the qcow2 disk.
 - **Guest backups exist since 2026-08-21, and have been restored once.** `guest_backup` on the
   hypervisor, weekly (Sat 11:00, `Persistent=true`), `vzdump --mode snapshot` into `/mnt/vzdump`,
   a generic path bound onto whichever disk currently holds the role. Eight of nine guests: vm100 is
@@ -861,15 +861,15 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   a run that changes live state: `git status --short --branch` must show a clean `main`, and
   `grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ansible/` must print nothing. `validate-repo.sh` Check 15
   only catches markers that reach a commit. (Found mid-merge on 2026-07-09; resolved.)
-- **sshd binds the Tailscale address on all seven containers, the wildcard on three nodes.**
-  Measured 2026-10-10 with `ss -Hltn sport = :22` on every node: the containers listen on their
-  Tailscale address alone, vm100, vm102 and the hypervisor on `0.0.0.0:22` and `[::]:22`. Six of
+- **sshd binds the Tailscale address on all seven containers and vm100, the wildcard on two nodes.**
+  Measured 2026-10-12 with `ss -Hltn sport = :22` on every node: the containers and vm100 listen on
+  their Tailscale address alone, vm102 and the hypervisor on `0.0.0.0:22` and `[::]:22`. Six of
   the containers were socket-activated, where `ListenAddress` is inert; `ssh_hardening` turns
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
-  cleared. All six passed a `pct reboot` with the pin. lxc250 still pins by a hand-written line in
-  `sshd_config`, outside the role. vm100, vm102 and the hypervisor are next, one per session, the
-  hypervisor last or never - it has no console once Linux runs. `lan_guard` already refuses 22
+  cleared. All six passed a `pct reboot` with the pin, vm100 a `qm reboot` on 2026-10-12. lxc250
+  still pins by a hand-written line in `sshd_config`, outside the role. vm102 and the hypervisor
+  are next, one per session, the hypervisor last or never - it has no console once Linux runs. `lan_guard` already refuses 22
   from the LAN on every node except the hypervisor, which admits the two admin workstations, so
   this is the second layer. See
   `docs/decisions/sshd-listen-address.md` before touching any node.

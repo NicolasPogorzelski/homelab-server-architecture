@@ -13,11 +13,14 @@ listener_metrics_textfile_dir: /var/lib/node_exporter/textfile_collector
 # service without paging and still reports the one that comes back wrong.
 listener_metrics_interval: 15min
 
-# Exceptions every node shares. Both are clients, not services: tailscaled's
-# WireGuard socket has to accept from any peer address, and the DHCP client
-# listens on 68 for the server's reply. Neither can be bound to the overlay.
+# Exceptions every node shares, and neither can be bound to the overlay.
+# tailscaled carries the overlay itself: WireGuard on 41641 accepts from any
+# peer address, and its portmapper probes the router by UPnP and PCP from a
+# short-lived socket on a random port, so it is allowed by process rather than
+# by port. The DHCP client listens on 68 for the server's reply.
+# Entries: proto and port, or port "*" with a process name.
 listener_metrics_allowed_common:
-  - { proto: udp, port: 41641, reason: "tailscaled WireGuard transport" }
+  - { proto: udp, port: "*", process: tailscaled, reason: "tailscaled WireGuard transport and portmapper probes" }
   - { proto: udp, port: 68, reason: "DHCP client" }
 
 # Per-node exceptions, each one a documented decision. Set in host_vars or

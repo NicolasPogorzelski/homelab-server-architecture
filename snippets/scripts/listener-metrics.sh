@@ -10,7 +10,9 @@
 # fires on it.
 #
 # Usage: listener-metrics.sh <textfile-dir> <allow-file>
-# Allow file: one "proto port" pair per line, '#' starts a comment.
+# Allow file: "proto port" or "proto * process" per line, '#' starts a comment.
+# The second form allows one process on any port, for a daemon whose sockets
+# take ephemeral ports by design.
 
 set -euo pipefail
 
@@ -18,9 +20,14 @@ out_dir=${1:?usage: listener-metrics.sh <textfile-dir> <allow-file>}
 allow_file=${2:?usage: listener-metrics.sh <textfile-dir> <allow-file>}
 
 declare -A allowed=()
-while read -r proto port _; do
+while read -r proto port proc _; do
     [[ -z "${proto:-}" || "$proto" == \#* ]] && continue
-    allowed["$proto/$port"]=1
+    if [[ "$port" == "*" ]]; then
+        [[ -n "${proc:-}" && "$proc" != \#* ]] || { echo "allow file: '$proto *' needs a process" >&2; exit 1; }
+        allowed["$proto/*/$proc"]=1
+    else
+        allowed["$proto/$port"]=1
+    fi
 done < "$allow_file"
 
 conforms() {
@@ -51,6 +58,7 @@ trap 'rm -f "$tmp"' EXIT
         conforms "$addr" && continue
         [[ -n "${allowed[$proto/$port]:-}" ]] && continue
         name=$(sed -nE 's/^users:\(\("([^"]+)".*/\1/p' <<< "${process:-}")
+        [[ -n "$name" && -n "${allowed[$proto/*/$name]:-}" ]] && continue
         printf 'node_listener_outside_binding_rule{proto="%s",address="%s",port="%s",process="%s"} 1\n' \
             "$proto" "$addr" "$port" "${name:-unknown}"
     done | sort -u

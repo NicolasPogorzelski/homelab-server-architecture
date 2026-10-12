@@ -2,6 +2,15 @@
 
 ## Status
 
+**Amended 2026-10-12, later the same day: vm100 is done.** Pinned from its `host_vars` behind a
+snapshot, then rebooted: the Tailscale address alone on 22 and `NRestarts=0`. The run exposed an
+ordering fault in `ssh_hardening` that the containers could not show. On a node that was never
+socket-activated nothing restarts sshd inside the role, so the new `ListenAddress` reached the
+daemon only through the reload handler, which runs at the end of the play - after the assert that
+reads the bind back. The assert failed against the old process, the failed play skipped the
+handler, and the reboot is what applied the pin. The role now flushes its handlers before the
+read-back, which vm102 and the hypervisor need. Next is vm102.
+
 **Amended 2026-10-12: the open choice below was made, and the containers are done.** On
 2026-10-10 the operator chose turning socket activation off over pinning the socket: one service
 model on every node, the boot gate already proven on lxc250 unchanged, and
