@@ -607,6 +607,24 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   when the host is up and something is wrong. Nothing tells anybody when the host, or lxc200, is
   down - see the external heartbeat under Tier 4, built in the repository and live nowhere.
 
+## Added on 2026-10-12
+
+- **MariaDB on lxc210 listened on every address for four days.** The upgrade of 2026-10-08 moved
+  `mariadb-server` from 10.11.14 to 10.11.18 at 14:37:53, and at 14:40:04 the postinst created
+  `sockets.target.wants/mariadb.socket`: its `deb-systemd-helper was-enabled` "defaults to true", so
+  a socket unit the package had never shipped before counts as new and gets enabled. From then on
+  systemd held `[::]:3306` and handed the descriptor to `mariadbd`, which never bound anything
+  itself. `bind-address = 127.0.0.1` stayed in the file and `@@bind_address` kept returning it,
+  which is why nothing that reads configuration could see the change; `ss` names `systemd` as the
+  owner of the port. This is the mechanism that made `ListenAddress` inert on the socket-activated
+  containers (see the sshd decision above), arriving by package upgrade instead of by template.
+  Exposure stayed small: all four accounts are `@localhost`, so a remote client got the handshake
+  and a refusal, and `lan_guard` dropped the LAN side. The `mariadb_bind` role masks the socket,
+  restarts MariaDB once and fails unless `ss` shows `127.0.0.1:3306` alone; it is in the drift
+  sweep, which would have seen nothing here before, because no role owned the unit. Swept the other
+  eight guests and the hypervisor with `ss -Hltn` the same morning: no other wildcard listener
+  beyond the documented ones.
+
 ## The exercise block, before Terraform
 
 Four controls that the same assessment argued against building at this scale, being built

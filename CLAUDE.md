@@ -775,8 +775,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `tailscale_cert_ondisk` inventory group. Never add a serve-backed node to that group.
 
 - **Apache on lxc210 binds `*:80` and `*:443` (LAN-exposed), violating the platform binding rule:**
-  same defect class as vm100's sshd. MariaDB and Redis on the same node bind single addresses
-  correctly. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
+  same defect class as vm100's sshd. Redis binds loopback. MariaDB is meant to and did not from
+  2026-10-08: that day's package upgrade enabled `mariadb.socket`, systemd held `[::]:3306` and
+  `bind-address = 127.0.0.1` stopped deciding anything; the `mariadb_bind` role masks the socket
+  and reads the bind back. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
   start to Tailscale being up - the KE-9/KE-12 boot-race class) or moving Nextcloud behind
   `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
   design decision; do not bolt it onto an unrelated pass.

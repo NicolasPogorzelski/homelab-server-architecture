@@ -1,0 +1,10 @@
+---
+# === mariadb_bind ===
+#
+# The address MariaDB on lxc210 should listen on. Nextcloud connects through
+# `localhost`, which the client library resolves to the Unix socket, so nothing
+# needs TCP beyond loopback. The value matches `bind-address` in Debian's
+# /etc/mysql/mariadb.conf.d/50-server.cnf; this role does not write that file,
+# it makes sure the file is the thing that decides.
+mariadb_bind_address: 127.0.0.1
+mariadb_bind_port: 3306
