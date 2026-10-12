@@ -64,7 +64,8 @@ notes there and keep this section short.
   host downtime the nightly cycle already provides and no purchase. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
   (`cmd_age=29s`, boot + 3 min, preceding boot clean), and on every boot from 2026-10-05 to
   2026-10-11, in operation: 333 failed commands in eleven days of October against 211 in all of
-  September, still reads only. No verification step performed.
+  September, still reads only. The drive is replaced for capacity in the second half of October
+  (decided 2026-10-12), and the per-boot error count before and after the swap is the test.
   **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
   enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
 - **KE-15 - RESOLVED 2026-07-14, closed 2026-08-13.** The host's `/mnt/smb/books-rw` fstab entry
@@ -877,7 +878,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
   and on 2026-10-08 four bursts during image pulls and package upgrades, all reads.
   Media and HBA-firmware causes are excluded; leading hypothesis is a sagging 12 V rail.
-  Requires physical verification (multimeter, cable reseat, HBA temperature, PSU age).
+  The drive is replaced in the second half of October (decided 2026-10-12); the swap is the test.
   The boot SSD (`scsi 9:0:0:0`, never a fixed kernel letter) carries every VM and LXC root disk,
   so an `EIO` into the thin pool during guest start could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
 - **aux-disk is back in service with 8168 unreadable sectors (KE-13), replacement pending:**

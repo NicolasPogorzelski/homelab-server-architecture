@@ -6,8 +6,8 @@ Unlike the node docs in `docs/nodes/`, this covers host-level configuration that
 
 ## Runtime Characteristics
 
-- OS: Proxmox VE 9.2 on Debian 13 (trixie); boots kernel 6.17.13 pinned with
-  `proxmox-boot-tool kernel pin`, while 9.2 defaults to the 7.0 kernel line (reason in the
+- OS: Proxmox VE 9.2 on Debian 13 (trixie) with the 7.0 kernel line, its default; the 6.17.13 pin
+  of 2026-10-08 was released on 2026-10-12 (reason in the
   [remediation plan](remediation-plan.md#added-on-2026-10-08))
 - Tailscale hostname: server
 - Tailscale variable: `proxmox_host_tailscale_ip` (see `ansible/inventory/hosts.yml.example`)
