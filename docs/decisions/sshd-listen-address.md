@@ -2,6 +2,20 @@
 
 ## Status
 
+**Amended 2026-10-12: the open choice below was made, and the containers are done.** On
+2026-10-10 the operator chose turning socket activation off over pinning the socket: one service
+model on every node, the boot gate already proven on lxc250 unchanged, and
+`systemctl enable --now ssh.socket` through `pct exec` as the way back. `ssh_hardening` now stops
+and disables `ssh.socket` wherever `ssh_hardening_listen_address` is set and fails the run unless
+`ss` shows the Tailscale address alone on 22. All six socket-activated containers took it that day,
+one at a time and each through `pct reboot`; with lxc250, seven of seven containers now bind the
+overlay address only, measured again on 2026-10-12. Two things in the rollout order below have
+changed since it was written. vm100 can be snapshotted since 2026-10-10, so step 3 has a way back
+other than the console. And since 2026-10-01 `lan_guard` drops new inbound LAN connections on every
+node, port 22 included everywhere but the hypervisor, where the two admin workstations are
+admitted; on vm100 and vm102 the pin is therefore the second layer, not the only one. Next is
+vm100, then vm102, then the hypervisor or nothing, for the reason step 4 gives.
+
 **Amended 2026-09-17, and the amendment inverts the rollout order.** `ListenAddress` only
 binds anything on a node where sshd owns its listening socket. Measured across the fleet that
 day: `ssh.socket` is enabled on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260, and disabled

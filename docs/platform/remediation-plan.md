@@ -390,7 +390,7 @@ outside its field of view. These four are ordinary work and are ordered by expos
   `ssh.service` enabled, the Tailscale address alone on 22, Ansible reaching the node, PostgreSQL
   and Nextcloud's services back. A drift sweep after the last one reported nothing. vm100, vm102 and the hypervisor are not part of this
   step, and lxc250 keeps its hand-written line in `sshd_config` until the role adopts it. The
-  decision record still reads "neither is chosen" and needs the operator's amendment. The finding as written:
+  decision record carries the choice since its amendment of 2026-10-12. The finding as written:
 - **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
   appears only as the empty default in the role, and every node still binds `*:22`, measured. The
   decision of 2026-09-11 calls for one node per session with the containers first
@@ -421,7 +421,10 @@ carried under Tier 4, and these remain. None blocks anything else.
   board's NVRAM (`Boot0000`); the fallback `\EFI\BOOT\BOOTX64.EFI` exists, but nobody chose it.
   Find the naming source with `udevadm test-builtin net_id`, pin the name, and add both steps to
   the hard-shutdown recovery runbook.
-- **Three wording items in documents the operator drafts.** The README roadmap marks phases
+- ~~**Three wording items in documents the operator drafts.**~~ Done 2026-10-12: the README defines
+  what `Done` means for a phase and no longer calls recovery deterministic, and Calibre-Web's tier
+  is settled in `CLAUDE.md`, because per-host grants made the tag a label. The finding as written:
+  The README roadmap marks phases
   `Done` while their progress documents list open work; the README promises "deterministic
   recovery" while the C1 datasets have no off-site copy; and Calibre-Web's `tag:tier1` has been
   "being reconfirmed" since 2026-07-08.

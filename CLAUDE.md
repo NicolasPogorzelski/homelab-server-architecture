@@ -619,15 +619,14 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   **vm100 is Ubuntu 22.04** (`/etc/os-release`, verified 2026-07-10) - the only non-Debian node;
   vm102 and every LXC are Debian 12. The role's origin ids and package names are Ubuntu-specific
   and do not transfer unchanged, which is why it targets `hosts: vm100` and not a group.
-- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
-  application service tiering exception, confirmed intentional 2026-07-08. The
-  `calibre-importer` role's auto-import mechanism has no verified dependency on
-  tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
-  devices don't need Calibre-Web access, so no functional gap results. See the
-  Tier Model exception note in `docs/platform/tailscale-acl.md`.
+- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2`:** application service tiering
+  exception, confirmed intentional 2026-07-08 and closed as a question on 2026-10-12. Since the ACL
+  rebuild of 2026-09-26 every grant to a tier1 service names its host, so the tag no longer decides
+  who reaches Calibre-Web; the per-host grant does, and the untrusted TVs hold none. Retagging would
+  change a label and no path. See the Tier Model exception note in `docs/platform/tailscale-acl.md`.
 - **MergerFS pool close to full on vm102 (by design; alert tiering done 2026-07-10):** the media
   archive is meant to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
-  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups, whose `/mnt/backups` target sits on
+  consumers (Nextcloud/Paperless/database backups, whose `/mnt/backups` target sits on
   this pool) will eventually hit `ENOSPC` - capacity expansion is the lever, not deletion.
   `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
   member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
