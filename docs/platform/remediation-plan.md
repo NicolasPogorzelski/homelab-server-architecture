@@ -110,8 +110,8 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 | # | Item | Unblocks |
 |---|---|---|
 | 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with 8168 unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
-| 6 | [KE-14](known-errors.md#ke-14) physical verification - 12 V rail, cable reseat, HBA temperature, PSU age | Not delivery-blocked. Needs only host downtime, which the nightly RTC cycle already provides. Written up as [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) on 2026-09-11, because four bullet points restated in three documents had not once become a scheduled step. The runbook also records the PSU, which is the A.7.11 gap in [`physical-controls.md`](physical-controls.md) |
-| 7 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
+| 6 | [KE-14](known-errors.md#ke-14) physical verification - 12 V rail, cable reseat, HBA temperature, PSU age | Deferred behind the drive replacement of the second half of October, decided 2026-10-12: it runs if the errors follow the new drive. Written up as [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md); it also records the PSU, the A.7.11 gap in [`physical-controls.md`](physical-controls.md) |
+| 7 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | A choice for the replacement drive. Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
 
 ## Tier 3 - Unblocked by the host adoption
 
@@ -583,9 +583,10 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   the image changes: a copy of `/config`, a check that no two of the six user names differ only by
   case, and a statement from Moonfin about 12.x, which no source gave on 2026-10-08.
 
-- **The hypervisor boots 6.17.13, pinned, while 9.2 defaults to 7.0.** Pinned on 2026-10-08 so the
-  [KE-14](known-errors.md#ke-14) measurements stay comparable across the power-path check. Release
-  the pin with `proxmox-boot-tool kernel unpin` once that check has a result.
+- ~~**The hypervisor boots 6.17.13, pinned, while 9.2 defaults to 7.0.**~~ Pinned on 2026-10-08 to
+  keep the [KE-14](known-errors.md#ke-14) measurements comparable; released 2026-10-12 with
+  `proxmox-boot-tool kernel unpin`, ahead of the drive swap so that the kernel and the drive do not
+  change together.
 
 ## Added on 2026-10-10
 

@@ -803,6 +803,18 @@ cause unconfirmed pending the verification steps above. Re-confirmed live on 202
 daily since 2026-10-05, at a rate that has risen - see the measurement of 2026-10-12 below. None of
 the four verification steps has been performed.
 
+**Decided 2026-10-12: the drive is replaced, and the replacement is the test.** At 110 GiB of
+volume group it is too small for what it carries, and it leaves in the second half of October.
+The power-path check is not run first; the swap answers part of its question. The count of failed
+commands per boot is the measurement, read before and after. On the same HBA port and cable it
+separates the media from the transport; on an onboard SATA port (remediation item 7) it separates
+the HBA path from the power. Errors that follow the drive point at the path, and the
+[power-path runbook](../../runbooks/platform/ke14-power-path-check.md) applies unchanged.
+
+The kernel pin is released now rather than at the swap, so the two changes do not land together:
+the baseline for the comparison is the old drive under the 7.0 kernel, from 2026-10-13 until it
+leaves.
+
 **The verification is a runbook since 2026-09-11**, rather than four bullet points that had been
 restated in three documents without ever becoming a step:
 [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md). It needs host

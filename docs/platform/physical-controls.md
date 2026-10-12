@@ -87,9 +87,9 @@ Three of these are cheap and none is scheduled:
 1. **Record the UPS.** Model, age, battery date, and one measured runtime test under real load. It
    is the control KE-14 already suspects, and "never tested" and "working" are indistinguishable
    until the mains go.
-2. **Do the KE-14 power-path check.** The procedure is a runbook now:
-   [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md). It needs host
-   downtime, which the nightly cycle already provides, and no purchase.
+2. **Do the KE-14 power-path check** if the errors follow the boot SSD replaced in the second half
+   of October (decided 2026-10-12). The procedure is a runbook:
+   [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md).
 3. **Decide the disposal method before the disk arrives**, not after. A replacement disk creates
    time pressure that a decision made in advance does not feel.
 
