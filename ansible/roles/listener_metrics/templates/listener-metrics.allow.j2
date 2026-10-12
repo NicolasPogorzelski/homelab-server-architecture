@@ -1,5 +1,5 @@
 # {{ ansible_managed }}
-# proto port  # reason - read by listener-metrics.sh
+# proto port [process]  # reason - read by listener-metrics.sh
 {% for a in listener_metrics_allowed_common + listener_metrics_allowed %}
-{{ a.proto }} {{ a.port }}  # {{ a.reason }}
+{{ a.proto }} {{ a.port }}{{ ' ' ~ a.process if a.process is defined else '' }}  # {{ a.reason }}
 {% endfor %}

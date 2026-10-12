@@ -642,9 +642,12 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   30 minutes. The exceptions that stand today - Samba and sshd on vm102, Apache and `coolwsd` on
   lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
   decision behind each, so removing one is the last step of executing that decision. Two more are
-  allowed on every node, `tailscaled`'s WireGuard socket and the DHCP client, since neither can
+  allowed on every node, `tailscaled`'s UDP sockets and the DHCP client, since neither can
   bind to the overlay it serves. Live since 2026-10-12: ten nodes report, Prometheus holds ten
   `node_listener_check_timestamp_seconds` series and no `node_listener_outside_binding_rule` series.
+  The next round on vm100 reported `tailscaled` on `0.0.0.0` at a random UDP port: the
+  portmapper's probe socket, open while it asks the router for a UPnP or PCP mapping. The common
+  allowance names the process since, rather than the port.
 
 ## The exercise block, before Terraform
 
