@@ -2,7 +2,8 @@
 
 ## Status
 
-Decided and applied 2026-09-01. Phase 2 is dated 2026-11-30.
+Decided and applied 2026-09-01. Phase 2 was dated 2026-11-30 and executed early: the container on
+2026-09-29, everything else on 2026-10-10. The cold archive is kept until 2026-11-30, see below.
 
 ## Context
 
@@ -80,6 +81,20 @@ Left in, the weekly job runs against a CTID that no longer exists, and a `pct st
 a tier1 node back on the tailnet with nothing to re-authorise. Ninety days is long enough to
 cover a quarterly task nobody remembered and short enough that the archive does not become
 permanent by neglect.
+
+**Phase 2 as executed.** `pct destroy 240` ran on 2026-09-29, two months early, and left `240` in
+`GUESTS` - so the weekly backup failed on a CTID that no longer existed until `GuestBackupPartial`
+was read on 2026-10-07. The rest followed on 2026-10-10: the data on the share and the share itself,
+its Samba and Linux accounts on vm102, the hypervisor's fstab entry and credentials, the
+`vzdump-lxc-240-*` archives, lxc240's `host_vars`, the Compose directory and the
+`storage_permissions` entry. The tailnet node is no longer visible from the control node, which
+sees every other `tag:tier1` node (read 2026-10-12).
+
+**The cold archive keeps the original date.** It is the reopening path below, and the ninety days
+were chosen for that path rather than for the container. It stays in `/root` on the hypervisor and
+on the off-site workstation until 2026-11-30 and is deleted from both on that day. The hypervisor
+copy sits on the boot SSD that carries every guest, so it is the weaker of the two and nothing is
+lost if it goes first.
 
 ## What could not be exported, and why it did not matter here
 

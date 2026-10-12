@@ -1,0 +1,68 @@
+---
+# The collector writes into node_exporter's textfile directory. Asserted rather
+# than created: a directory this role made would be one no exporter reads, and
+# the rule would stay silent for the reason that it never received a series.
+- name: Assert the node_exporter textfile directory exists
+  ansible.builtin.stat:
+    path: "{{ listener_metrics_textfile_dir }}"
+  register: listener_metrics_dir
+
+- name: Refuse to deploy a collector no exporter reads
+  ansible.builtin.assert:
+    that:
+      - listener_metrics_dir.stat.exists
+      - listener_metrics_dir.stat.isdir
+    fail_msg: >-
+      {{ listener_metrics_textfile_dir }} does not exist on this node. Run
+      node-exporter.yml first; this role only adds a collector to it.
+    quiet: true
+
+- name: Deploy the listener-metrics script
+  ansible.builtin.copy:
+    src: "{{ listener_metrics_script_src }}"
+    dest: "{{ listener_metrics_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Refresh listener metrics
+
+- name: Deploy the allow file
+  ansible.builtin.template:
+    src: listener-metrics.allow.j2
+    dest: "{{ listener_metrics_allow_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh listener metrics
+
+- name: Deploy the service and timer units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - listener-metrics.service
+    - listener-metrics.timer
+  notify: Refresh listener metrics
+
+# Under --check on a node the role has not reached, the unit file the task above
+# would write does not exist yet, and systemd cannot be asked about it. Read once,
+# so the drift sweep reports the first deployment as changes rather than an error.
+- name: Read whether the timer unit is installed  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend listener-metrics.timer
+  register: listener_metrics_unit_file
+  changed_when: false
+  # rc 1 with empty output means "no such unit file", the answer being asked for.
+  failed_when: listener_metrics_unit_file.rc not in [0, 1]
+  check_mode: false
+
+- name: Enable and start the timer
+  ansible.builtin.systemd_service:
+    name: listener-metrics.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: listener_metrics_unit_file.stdout | length > 0 or not ansible_check_mode

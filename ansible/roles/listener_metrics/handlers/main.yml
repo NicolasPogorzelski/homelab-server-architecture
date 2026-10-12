@@ -1,0 +1,9 @@
+---
+# Skipped under --check: on a node the role has not reached yet the unit does
+# not exist, and the drift sweep would report a failure instead of a change.
+- name: Refresh listener metrics
+  ansible.builtin.systemd_service:
+    name: listener-metrics.service
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

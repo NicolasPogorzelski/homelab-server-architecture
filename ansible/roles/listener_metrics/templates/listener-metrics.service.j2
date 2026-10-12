@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Export listening sockets outside the platform binding rule
+
+[Service]
+Type=oneshot
+# Root, because `ss -p` names the owning process only for a caller that can read
+# every process's file descriptors.
+ExecStart={{ listener_metrics_script_dest }} {{ listener_metrics_textfile_dir }} {{ listener_metrics_allow_file }}
+ProtectSystem=strict
+ReadWritePaths={{ listener_metrics_textfile_dir }}
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true

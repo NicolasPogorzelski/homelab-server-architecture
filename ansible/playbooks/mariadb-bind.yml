@@ -1,0 +1,16 @@
+---
+# Keep MariaDB on lxc210 on its configured loopback bind.
+#
+# Targets lxc210 by name for the reason mariadb-backup.yml gives: it is the only
+# node with a MariaDB server.
+#
+# Playbooks run from the working tree on lxc250, not from a commit.
+# preflight.yml refuses the run if that tree does not match origin/main.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Keep MariaDB off the socket unit and on loopback
+  hosts: lxc210
+  become: true
+  roles:
+    - mariadb_bind

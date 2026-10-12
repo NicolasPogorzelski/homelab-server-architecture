@@ -875,6 +875,47 @@ groups:
           summary: "Package metrics on {{ $labels.instance }} are stale"
           description: "No apt collector run in 36 hours. Patch level is unobserved on this node while this is firing."
 
+  # The binding rule - services bind the Tailscale address or loopback, never
+  # anything else - as a measurement instead of a sentence. listener_metrics
+  # classifies every listening socket on each node and exports the ones outside
+  # the rule that the node's inventory does not allow on record. Written after
+  # MariaDB on lxc210 listened on [::]:3306 for four days, from a package upgrade
+  # that enabled its socket unit, with every configuration file still saying
+  # 127.0.0.1. 30 minutes is two missed checks: long enough for a restart during
+  # an upgrade, short enough that four days cannot happen again.
+  - name: listeners
+    rules:
+      - alert: ListenerOutsideBindingRule
+        expr: node_listener_outside_binding_rule == 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.process }} listens on {{ $labels.address }}:{{ $labels.port }}/{{ $labels.proto }} ({{ $labels.job }})"
+          description: "A socket outside loopback and the Tailscale overlay that the node's listener_metrics_allowed does not name. Either bind it correctly or record the decision that allows it."
+
+      - alert: ListenerMetricsStale
+        expr: (time() - max by (job) (node_listener_check_timestamp_seconds)) > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Listener check on {{ $labels.job }} has not run for an hour"
+          description: "listener-metrics.timer runs every 15 minutes. While this fires, a new wildcard listener on the node would not be reported."
+
+      # A node whose exporter answers but carries no listener series was never
+      # reached by the role, or reads a different textfile directory - the shape
+      # DatabaseBackupMetricsMissing exists for. lxc200's containerised exporter
+      # reads no textfile directory at all; its native twin carries the series.
+      - alert: ListenerMetricsMissing
+        expr: up{job=~"node-.*", job!="node-lxc200-monitoring"} == 1 unless on (job) node_listener_check_timestamp_seconds
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No listener metrics from {{ $labels.job }}"
+          description: "The node is scraped and exports no node_listener_check_timestamp_seconds. Run listener-metrics.yml against it."
+
   - name: heartbeat
     rules:
       - alert: Watchdog

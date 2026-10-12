@@ -1,0 +1,65 @@
+---
+# Debian's mariadb-server ships mariadb.socket with `ListenStream=3306`, and its
+# postinst enables any socket unit it has not seen before: "was-enabled defaults
+# to true, so new installations run enable". A package that predates the unit
+# gets it enabled on the first upgrade that carries it. Under socket activation
+# systemd holds `[::]:3306` and passes the descriptor to mariadbd, which then
+# never binds anything itself, so `bind-address` reads back as 127.0.0.1 from
+# `@@bind_address` while the node listens on every address. The same mechanism
+# that made `ListenAddress` inert on the socket-activated containers, one
+# package over.
+#
+# Masked rather than disabled. Disabling is enough for the postinst as written -
+# it re-enables only what `was-enabled` reports - but a mask also survives a
+# packaging change to that logic, and `deb-systemd-helper unmask` lifts only
+# masks it created itself.
+- name: Read whether systemd owns the MariaDB listening socket
+  ansible.builtin.command:  # noqa: command-instead-of-module
+    cmd: systemctl is-active mariadb.socket
+  register: mariadb_bind_socket_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Mask the MariaDB socket unit so mariadbd binds its own address
+  ansible.builtin.systemd_service:
+    name: mariadb.socket
+    enabled: false
+    masked: true
+    state: stopped
+
+# Restarted only on the run that removes the socket: a mariadbd the socket
+# launched keeps the inherited `[::]:3306` descriptor after the socket stops.
+# Later runs find the socket inactive and leave the service alone. A restart
+# interrupts Nextcloud for the seconds InnoDB needs to come up; mariadbd removes
+# the stale /run/mysqld/mysqld.sock the socket unit left and creates its own.
+- name: Restart MariaDB onto its configured bind
+  ansible.builtin.systemd_service:
+    name: mariadb.service
+    state: restarted
+  when: mariadb_bind_socket_state.stdout | trim == 'active'
+
+# Read the bind back from the kernel, not from the server variable: the variable
+# is what reported 127.0.0.1 while systemd held the wildcard.
+- name: Read which addresses listen on the MariaDB port
+  ansible.builtin.command:
+    cmd: ss -Hltn 'sport = :{{ mariadb_bind_port }}'
+  register: mariadb_bind_listeners
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Refuse to finish while MariaDB listens beyond its configured address
+  ansible.builtin.assert:
+    that:
+      - mariadb_bind_listeners.stdout_lines | length > 0
+      - mariadb_bind_listeners.stdout_lines
+        | map('split') | map(attribute=3)
+        | reject('equalto', mariadb_bind_address ~ ':' ~ mariadb_bind_port) | list | length == 0
+    fail_msg: >-
+      Port {{ mariadb_bind_port }} listeners are
+      {{ mariadb_bind_listeners.stdout_lines | map('split') | map(attribute=3) | list }},
+      expected only {{ mariadb_bind_address }}:{{ mariadb_bind_port }}.
+    success_msg: "MariaDB listens on {{ mariadb_bind_address }}:{{ mariadb_bind_port }} only."
+    quiet: true
+  when: not ansible_check_mode

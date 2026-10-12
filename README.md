@@ -76,8 +76,10 @@ access policy by Tailscale tag, the three storage layers, and monitoring coverag
 | Monitoring | Prometheus + Grafana | Observability layer |
 
 High availability is not implemented, and not intended. A single host cannot fail over, so the
-effort goes into deterministic recovery: explicit dependency modelling, documented failure
-procedures, and a runbook for each of them.
+effort goes into recovery: explicit dependency modelling, documented failure procedures, a runbook
+for each of them, and restores that are tested on a timer rather than assumed. Every copy is local
+so far; the off-site copy of the most critical datasets is the first open item of the
+[remediation plan](docs/platform/remediation-plan.md).
 
 ---
 
@@ -140,7 +142,8 @@ support. This paragraph asserted that every runbook carried such a record until 
 | 7 | Kubernetes - k3s in the homelab | Planned |
 | 8 | Cloud depth (AWS) + Python | Planned |
 
-Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
+`Done` means the phase's learning arc is complete, not that its part of the platform has no open
+work; what remains for each is in the remediation plan. Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
 
 What is currently open, ranked by what its loss would cost, is in the
 [remediation plan](docs/platform/remediation-plan.md).
@@ -171,7 +174,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
 - [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
 - [Hypervisor Panic Policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) (a machine with no way in should not survive an oops)
-- [sshd Binding](docs/decisions/sshd-listen-address.md) (nine of ten nodes break the rule, so it is a fleet decision)
+- [sshd Binding](docs/decisions/sshd-listen-address.md) (socket activation made the directive inert on six containers; three nodes remain)
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 - [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
@@ -212,7 +215,7 @@ through.
 
 - [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
   catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 49 and 44 respectively
+- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 51 and 46 respectively
 - [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
 - [Repository validator](scripts/validate-repo.sh) - 44 structural checks, run by a pre-commit
   hook and by CI on every push

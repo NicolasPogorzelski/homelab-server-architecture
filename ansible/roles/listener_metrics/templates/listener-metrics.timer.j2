@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Check listening sockets every {{ listener_metrics_interval }}
+
+[Timer]
+# No Persistent=: a missed check has nothing to catch up on, the next one reads
+# the same sockets. OnBootSec puts the first run after the boot gates have let
+# the Tailscale-bound services start.
+OnBootSec=3min
+OnUnitActiveSec={{ listener_metrics_interval }}
+Unit=listener-metrics.service
+
+[Install]
+WantedBy=timers.target

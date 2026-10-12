@@ -339,7 +339,9 @@ A review from the DevOps and DevSecOps seats, against the running fleet rather t
 documents. Everything the existing machinery watches came back clean, so what follows is what sits
 outside its field of view. These four are ordinary work and are ordered by exposure.
 
-- **Nothing on this platform measures its patch level.** Measured: the hypervisor has 228 packages
+- ~~**Nothing on this platform measures its patch level.**~~ Done 2026-09-17: `apt_metrics` exports
+  `apt_upgrades_pending` from ten targets and `AptSecurityUpdatesPending` reads it; read back on
+  2026-10-12 with no security update pending anywhere. The finding as written: Measured: the hypervisor has 228 packages
   pending, 55 of them security; vm102 has 62 pending and 23 security; lxc220 has 13 and 7. The
   remaining nodes were current. `unattended_upgrades` targets exactly one node, vm100, and there is
   no metric and no rule anywhere for pending updates - `apt-upgrade.yml` is excluded from the drift
@@ -351,7 +353,9 @@ outside its field of view. These four are ordinary work and are ordered by expos
   Only then the policy question, which is different per node class: the Debian containers can take
   the same origin-restricted `unattended_upgrades` vm100 has, while the hypervisor holds `pve-*`
   packages and a kernel upgrade there costs eleven guests.
-- **lxc250 answers LLMNR and mDNS on the LAN.** `systemd-resolved` holds four sockets on
+- ~~**lxc250 answers LLMNR and mDNS on the LAN.**~~ Done 2026-09-17, by stopping and disabling
+  `systemd-resolved` rather than by the drop-in proposed below; `ss -Hlun` on 2026-10-12 shows nothing
+  on 5353 or 5355. The finding as written: `systemd-resolved` holds four sockets on
   `0.0.0.0:5355` and `[::]:5355`, `resolvectl` reports `+LLMNR +mDNS`, and nothing in this
   repository sets either - both stand at their compiled defaults. It is the only node on the fleet
   with that listener, and it is the node that holds hypervisor root, the only `~/.vault_pass`, the
@@ -365,7 +369,9 @@ outside its field of view. These four are ordinary work and are ordered by expos
   owned by the `nsswitch` role, proven by `resolvectl status` and an empty
   `ss -tulnp | grep 5355`. Worth checking the administrator workstation for the same default; the
   sweep only sees the fleet.
-- **MariaDB has a backup and no proven way back.** PostgreSQL carries write-time verification, a
+- ~~**MariaDB has a backup and no proven way back.**~~ Done: `mariadb_restore_test` and
+  [`mariadb-restore.md`](../../runbooks/database/mariadb-restore.md) exist, and the test wrote its
+  metric for the first time on 2026-10-10, see the item of that date. The finding as written: PostgreSQL carries write-time verification, a
   monthly restore into a throwaway cluster, `PostgreSQLRestoreTestStale` at 40 days and a restore
   runbook. MariaDB, live since 2026-08-15, has the dump, `MariaDBBackupStale` and a backup runbook,
   and neither a restore test nor a restore runbook. It is the half that makes Nextcloud's files
@@ -384,7 +390,7 @@ outside its field of view. These four are ordinary work and are ordered by expos
   `ssh.service` enabled, the Tailscale address alone on 22, Ansible reaching the node, PostgreSQL
   and Nextcloud's services back. A drift sweep after the last one reported nothing. vm100, vm102 and the hypervisor are not part of this
   step, and lxc250 keeps its hand-written line in `sshd_config` until the role adopts it. The
-  decision record still reads "neither is chosen" and needs the operator's amendment. The finding as written:
+  decision record carries the choice since its amendment of 2026-10-12. The finding as written:
 - **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
   appears only as the empty default in the role, and every node still binds `*:22`, measured. The
   decision of 2026-09-11 calls for one node per session with the containers first
@@ -415,7 +421,10 @@ carried under Tier 4, and these remain. None blocks anything else.
   board's NVRAM (`Boot0000`); the fallback `\EFI\BOOT\BOOTX64.EFI` exists, but nobody chose it.
   Find the naming source with `udevadm test-builtin net_id`, pin the name, and add both steps to
   the hard-shutdown recovery runbook.
-- **Three wording items in documents the operator drafts.** The README roadmap marks phases
+- ~~**Three wording items in documents the operator drafts.**~~ Done 2026-10-12: the README defines
+  what `Done` means for a phase and no longer calls recovery deterministic, and Calibre-Web's tier
+  is settled in `CLAUDE.md`, because per-host grants made the tag a label. The finding as written:
+  The README roadmap marks phases
   `Done` while their progress documents list open work; the README promises "deterministic
   recovery" while the C1 datasets have no off-site copy; and Calibre-Web's `tag:tier1` has been
   "being reconfirmed" since 2026-07-08.
@@ -426,11 +435,11 @@ carried under Tier 4, and these remain. None blocks anything else.
 
 Found while completing the inference rollout.
 
-- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (six) still reaches
+- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (four) still reaches
   vm102's LAN address, admitted by `smb_guard` on source address alone. The target replaces step 2
   of [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md), which moved the same
   mounts onto Tailscale: a host-only bridge `vmbr1`, no `bridge-ports`, static addresses for the host,
-  vm100 and vm102. All eight host mounts, the two backup mounts included, and vm100's four move to it
+  vm100 and vm102. All six host mounts, the two backup mounts included, and vm100's four move to it
   one at a time, each with automount and a reboot test; afterwards `smb_guard` drops 445 on `ens18`
   entirely. Samba keeps its wildcard bind, because an explicit bind would cut the Tailscale IPv4 path.
   That path stays a requirement: admin devices write media to vm102 over Tailscale, checked after
@@ -583,7 +592,8 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 - ~~**Host mail half arrives, and nothing needs it.**~~ Done 2026-10-10. Nobody configured mail
   here: Proxmox installs Postfix as its local mailer and asks for an address for `root@pam` at
   installation. PVE's own notifications went straight to that address - 96 messages since
-  2026-08-21, one per guest and `vzdump` run, all accepted by the recipient's server - while mail
+  2026-08-21, all accepted by the recipient's server, nearly all of them on the days the guest
+  backup ran - while mail
   to the local `root`, which smartd and cron write, was deferred because `/etc/aliases.db` had
   never been built. Nothing on either path was unique: smartd writes to the journal and
   `smart_metrics` alerts on growth, package updates are `apt_metrics`, guest backups report
@@ -594,7 +604,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 
 - ~~**The hypervisor held a Samba server nothing used, back from security updates.**~~ Done
   2026-10-10. `samba`, `samba-common` and `samba-common-bin` sat on `apt-mark hold` at 4.22.6,
-  installed by hand on 2025-12-27 before vm102 took over file serving, while their libraries had
+  installed by hand on 2025-12-27, while their libraries had
   moved to 4.22.11 on 2026-10-08. `smbd` and `nmbd` were disabled and nothing depended on the
   server package. Hold lifted, `samba` removed, the rest upgraded: every Samba package now at
   4.22.11, `apt-mark showhold` empty. Proxmox's CIFS storage keeps `smbclient` and the libraries;
@@ -605,6 +615,34 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 - **The external heartbeat is the larger gap.** Both items above were about telling somebody
   when the host is up and something is wrong. Nothing tells anybody when the host, or lxc200, is
   down - see the external heartbeat under Tier 4, built in the repository and live nowhere.
+
+## Added on 2026-10-12
+
+- **MariaDB on lxc210 listened on every address for four days.** The upgrade of 2026-10-08 moved
+  `mariadb-server` from 10.11.14 to 10.11.18 at 14:37:53, and at 14:40:04 the postinst created
+  `sockets.target.wants/mariadb.socket`: its `deb-systemd-helper was-enabled` "defaults to true", so
+  a socket unit the package had never shipped before counts as new and gets enabled. From then on
+  systemd held `[::]:3306` and handed the descriptor to `mariadbd`, which never bound anything
+  itself. `bind-address = 127.0.0.1` stayed in the file and `@@bind_address` kept returning it,
+  which is why nothing that reads configuration could see the change; `ss` names `systemd` as the
+  owner of the port. This is the mechanism that made `ListenAddress` inert on the socket-activated
+  containers (see the sshd decision above), arriving by package upgrade instead of by template.
+  Exposure stayed small: all four accounts are `@localhost`, so a remote client got the handshake
+  and a refusal, and `lan_guard` dropped the LAN side. The `mariadb_bind` role masks the socket,
+  restarts MariaDB once and fails unless `ss` shows `127.0.0.1:3306` alone; it is in the drift
+  sweep, which would have seen nothing here before, because no role owned the unit. Swept the other
+  eight guests and the hypervisor with `ss -Hltn` the same morning: no other wildcard listener
+  beyond the documented ones.
+- **Nothing measured the binding rule, so the MariaDB socket was found by a scan, four days late.**
+  The weekly snapshot saw it: the diff of 2026-10-10 carries `-127.0.0.1:3306`, `+*:3306` and
+  `+mariadb.socket enabled` for lxc210, among 107 changed lines that week, and nobody read them;
+  `FleetSnapshotStale` only says whether the diff was written. `listener_metrics` now classifies every listening socket on all ten nodes every 15 minutes
+  and exports the ones outside loopback and the overlay; `ListenerOutsideBindingRule` fires after
+  30 minutes. The exceptions that stand today - Samba and sshd on vm102, Apache and `coolwsd` on
+  lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
+  decision behind each, so removing one is the last step of executing that decision. Two more are
+  allowed on every node, `tailscaled`'s WireGuard socket and the DHCP client, since neither can
+  bind to the overlay it serves.
 
 ## The exercise block, before Terraform
 
@@ -649,6 +687,11 @@ teach, which is the part worth keeping:
   pinned to tags where every other action here is pinned to a SHA. Named in its header rather
   than left to be found.
 
+**Applied since, measured 2026-10-12.** `auditd` is active on the hypervisor, `journal-central`
+receives on lxc200 from lxc211 and lxc260, `fleet_snapshot` carries the `dpkg --verify`
+projection, and `sbom.yml` runs on its schedule. High availability stayed at reading, as intended.
+Of the four operational items only the sshd rollout remains, on vm100, vm102 and the hypervisor.
+
 **This block is the end of maintenance mode.** When these four and the four items above have been
 applied and verified, the Terraform track begins - after the
 identity track below, which was inserted on 2026-09-24.
@@ -681,6 +724,11 @@ lxc250 are closed, with no listener on 5353 or 5355. The sshd bind is pinned on 
 Whatever of step 3 is not done on 2026-09-27 moves to the small open items, except the minimum,
 which gates Terraform like the block does.
 
+**Not started, read 2026-10-12.** None of the three days took place: there is no identity node, no
+role and no changelog entry after the scheduling one of 2026-09-24. The start condition is met -
+the block is done but for the sshd rollout - so the dates above are the only part that is out of
+date. A new weekend needs choosing; the thin pool stands at 66 % and has room for the node.
+
 ## Added by the 2026-08-20 repository and fleet audit
 
 A full sweep of both sides before the Terraform track. The repository passed all 33 checks; the
@@ -688,7 +736,7 @@ fleet held no failed unit, no firing alert and no dead scrape target, and both d
 current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
 item 4 above; these are the rest.
 
-- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** Since 2026-10-10 on
+- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** <!-- historical-count --> Since 2026-10-10 on
   three of ten: the containers are pinned, vm100, vm102 and the hypervisor are not. Measured: `*:22` on
   lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
   host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name

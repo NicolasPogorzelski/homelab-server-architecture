@@ -68,3 +68,11 @@ tailscale_boot_gate_units:
 tailscale_boot_gate_clear_restart_prevent: true
 
 ssh_hardening_listen_address: "{{ ansible_host }}"
+
+# Exceptions to the binding rule that listener_metrics reports. Each names its
+# decision; remove the line when the decision is executed. MariaDB is not here on
+# purpose: mariadb_bind keeps it on loopback, and a wildcard 3306 is a fault.
+listener_metrics_allowed:
+  - { proto: tcp, port: 80, reason: "Apache wildcard bind, deferred design decision - docs/nodes/lxc210.md" }
+  - { proto: tcp, port: 443, reason: "Apache wildcard bind, deferred design decision - docs/nodes/lxc210.md" }
+  - { proto: tcp, port: 9983, reason: "coolwsd takes no bind address from the app - docs/services/nextcloud.md" }

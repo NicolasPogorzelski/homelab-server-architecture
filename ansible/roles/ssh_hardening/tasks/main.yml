@@ -123,6 +123,19 @@
     line: PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config
 
+# Where root may not log in, a key in root's authorized_keys grants nothing until
+# the day the setting is relaxed, and then grants it silently. The guests carried
+# the control node's key there from the bootstrap play of 2026-04-24, which
+# connects as root once to create the ansible user and never needs root again.
+# Recovery on a guest does not depend on it: containers take `pct exec`, the VMs
+# their console and the break-glass account. The hypervisor keeps its keys, since
+# root is its administrative account and the inventory sets prohibit-password.
+- name: Remove root's authorized_keys where sshd refuses root logins
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    state: absent
+  when: ssh_hardening_permit_root_login == 'no'
+
 # A pinned bind needs sshd to own its listening socket. Under socket activation
 # systemd holds `*:22` from `ssh.socket` and hands sshd an accepted connection, so
 # sshd never binds anything and never reads ListenAddress - which is how lxc220

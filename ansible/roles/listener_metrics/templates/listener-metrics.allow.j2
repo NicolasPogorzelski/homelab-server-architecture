@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# proto port  # reason - read by listener-metrics.sh
+{% for a in listener_metrics_allowed_common + listener_metrics_allowed %}
+{{ a.proto }} {{ a.port }}  # {{ a.reason }}
+{% endfor %}

@@ -135,3 +135,10 @@ lan_guard_allow:
     sources:
       - "{{ vm100_lan_ip }}"
     reason: netconsole from vm100, kernel messages sent by netpoll without Tailscale
+
+# Exceptions to the binding rule that listener_metrics reports. Each names its
+# decision. sshd here is step 4 of the sshd decision, "last or never": the node
+# has no console once Linux runs.
+listener_metrics_allowed:
+  - { proto: tcp, port: 22, reason: "hypervisor sshd, step 4 of docs/decisions/sshd-listen-address.md" }
+  - { proto: udp, port: 6666, reason: "netconsole receiver; netpoll cannot use Tailscale - docs/platform/proxmox-host.md" }

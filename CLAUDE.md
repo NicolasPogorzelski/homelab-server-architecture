@@ -62,7 +62,9 @@ notes there and keep this section short.
   media; the leading (unverified) hypothesis is a sagging 12 V rail, which needs physical
   verification - written up as `runbooks/platform/ke14-power-path-check.md` on 2026-09-11, needing
   host downtime the nightly cycle already provides and no purchase. The boot SSD carries every VM and LXC root disk. Fired again 2026-08-13
-  (`cmd_age=29s`, boot + 3 min, preceding boot clean) - live, and no verification step performed.
+  (`cmd_age=29s`, boot + 3 min, preceding boot clean), and on every boot from 2026-10-05 to
+  2026-10-11, in operation: 333 failed commands in eleven days of October against 211 in all of
+  September, still reads only. No verification step performed.
   **Never identify this disk by its kernel letter:** the docs said `sdc` for a month and it
   enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or `by-id`.
 - **KE-15 - RESOLVED 2026-07-14, closed 2026-08-13.** The host's `/mnt/smb/books-rw` fstab entry
@@ -180,7 +182,7 @@ notes there and keep this section short.
 
 **The one block before Terraform, agreed 2026-09-16.** Four operational findings from that day's assessment - patch level that nothing measures, the LLMNR and mDNS responder on lxc250, MariaDB's untested restore, the sshd binding decision executed nowhere - and four controls the same assessment argued against at this scale, built anyway to be learned rather than because the platform needs them ([decision](docs/decisions/exercise-scope-before-terraform.md)). The second half carries an obligation the first does not: each of those four is labelled as an exercise wherever a reader meets it, none enters `security-controls.md` as `Enforced`, and none gets an alert that would not have been built regardless. A control that cannot be told apart from a needed one will be defended as one.
 
-**The identity track, between the block and Terraform, decided 2026-09-24.** One new node with `lldap` as the directory and Authelia as the OIDC provider, clients connected lowest-risk first, scheduled for 2026-09-25 to 2026-09-27 with a stated cut ([decision](docs/decisions/identity-before-terraform.md)). It starts once the block is done except for the sshd rollout, which keeps its one-node-per-session pace and still gates Terraform. Friday closes the block's remaining applies, Saturday builds the node, Sunday connects the clients. The status and the order live in the "identity track" section of [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). Terraform begins when the block, including the sshd rollout, is done and this track is closed.
+**The identity track, between the block and Terraform, decided 2026-09-24.** One new node with `lldap` as the directory and Authelia as the OIDC provider, clients connected lowest-risk first, with a stated cut ([decision](docs/decisions/identity-before-terraform.md)). It starts once the block is done except for the sshd rollout, which keeps its one-node-per-session pace and still gates Terraform. That condition is met; the weekend of 2026-09-25 it was scheduled for passed without a start, and a new one is not chosen yet. The status and the order live in the "identity track" section of [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). Terraform begins when the block, including the sshd rollout, is done and this track is closed.
 
 **Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 
@@ -556,7 +558,7 @@ Single-host Proxmox platform. No HA - recovery-oriented design.
 **Compute layer:** VM100 (Docker, GPU/NVIDIA) runs media services (Jellyfin, Audiobookshelf) and the fallback inference backend (`llama-server`); the primary runs on the admin desktop.
 
 **Storage layer:** VM102 (MergerFS + SnapRAID + Samba). Admin devices and the host's two backup
-mounts reach SMB over Tailscale; vm100's four media mounts and the host's six service mounts still
+mounts reach SMB over Tailscale; vm100's four media mounts and the host's four service mounts still
 use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing else - see
 `docs/decisions/smb-bind-and-lan-access.md` and the storage-network item in the remediation plan.
 
@@ -574,7 +576,7 @@ use vm102's LAN address, admitted by the `smb_guard` nftables table and nothing 
 since 2026-10-01 the `lan_guard` role drops new inbound LAN connections on every node, except SMB to
 vm102 from vm100 and the host, and break-glass SSH and netconsole to the host. Nodes are grouped into tags (`tag:tier0`, `tag:tier1`, `tag:tier2`, `tag:monitoring`, `tag:database`, `tag:ai-stack`, etc.) with explicit ACL rules. The ACL policy lives in the Tailscale admin console; `docs/platform/tailscale-acl.md` mirrors the intended model.
 
-**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces.
+**Binding rule:** Services bind to the Tailscale IP directly, or to loopback and proxied via `tailscale serve`. Never to LAN interfaces. Measured on every node by `listener_metrics`; an exception goes into the node's `listener_metrics_allowed` with the decision that permits it, or `ListenerOutsideBindingRule` fires.
 
 ## Known Technical Debt & Gotchas
 
@@ -619,15 +621,14 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   **vm100 is Ubuntu 22.04** (`/etc/os-release`, verified 2026-07-10) - the only non-Debian node;
   vm102 and every LXC are Debian 12. The role's origin ids and package names are Ubuntu-specific
   and do not transfer unchanged, which is why it targets `hosts: vm100` and not a group.
-- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2` (rationale being reconfirmed):**
-  application service tiering exception, confirmed intentional 2026-07-08. The
-  `calibre-importer` role's auto-import mechanism has no verified dependency on
-  tier1 access (SMB-only; tier1 and tier2 grant port 445 identically). Untrusted
-  devices don't need Calibre-Web access, so no functional gap results. See the
-  Tier Model exception note in `docs/platform/tailscale-acl.md`.
+- **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2`:** application service tiering
+  exception, confirmed intentional 2026-07-08 and closed as a question on 2026-10-12. Since the ACL
+  rebuild of 2026-09-26 every grant to a tier1 service names its host, so the tag no longer decides
+  who reaches Calibre-Web; the per-host grant does, and the untrusted TVs hold none. Retagging would
+  change a label and no path. See the Tier Model exception note in `docs/platform/tailscale-acl.md`.
 - **MergerFS pool close to full on vm102 (by design; alert tiering done 2026-07-10):** the media
   archive is meant to fill; read-only consumers (Jellyfin/ABS/Calibre) are unaffected, but write
-  consumers (Nextcloud/Paperless/Vaultwarden/Postgres-backups, whose `/mnt/backups` target sits on
+  consumers (Nextcloud/Paperless/database backups, whose `/mnt/backups` target sits on
   this pool) will eventually hit `ENOSPC` - capacity expansion is the lever, not deletion.
   `DiskSpaceCritical` used to fire 21 times at once for this single fact: the pool, its five
   member disks, and the twelve CIFS mounts through which other nodes view it. Percentage is the
@@ -775,8 +776,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `tailscale_cert_ondisk` inventory group. Never add a serve-backed node to that group.
 
 - **Apache on lxc210 binds `*:80` and `*:443` (LAN-exposed), violating the platform binding rule:**
-  same defect class as vm100's sshd. MariaDB and Redis on the same node bind single addresses
-  correctly. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
+  same defect class as vm100's sshd. Redis binds loopback. MariaDB is meant to and did not from
+  2026-10-08: that day's package upgrade enabled `mariadb.socket`, systemd held `[::]:3306` and
+  `bind-address = 127.0.0.1` stopped deciding anything; the `mariadb_bind` role masks the socket
+  and reads the bind back. Fixing it means either pinning `Listen` to the Tailscale IP (which couples Apache's
   start to Tailscale being up - the KE-9/KE-12 boot-race class) or moving Nextcloud behind
   `tailscale serve`, which would also retire the whole KE-16 renewal problem. Needs its own
   design decision; do not bolt it onto an unrelated pass.
@@ -865,9 +868,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
   cleared. All six passed a `pct reboot` with the pin. lxc250 still pins by a hand-written line in
-  `sshd_config`, outside the role. The three VMs and the host are next, one per session, the
+  `sshd_config`, outside the role. vm100, vm102 and the hypervisor are next, one per session, the
   hypervisor last or never - it has no console once Linux runs. `lan_guard` already refuses 22
-  from the LAN on every node, so this is the second layer. See
+  from the LAN on every node except the hypervisor, which admits the two admin workstations, so
+  this is the second layer. See
   `docs/decisions/sshd-listen-address.md` before touching any node.
 - **KE-14 - boot-time I/O errors on the boot SSD, root cause unconfirmed:** intermittent
   `DID_SOFT_ERROR` and `DID_TIME_OUT` bursts against the boot SSD (LSI SAS2008 HBA) under I/O load - the boot window,
