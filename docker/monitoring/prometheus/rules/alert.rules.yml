@@ -409,7 +409,10 @@ groups:
       # errors, on purpose -- the guest list is ordered by value and aborting at
       # the first fault would sacrifice every guest after it -- so a partial run
       # exits non-zero AND leaves this counter above zero. SystemdUnitFailed sees
-      # the run; this says how much of it was lost.
+      # the run; this says how much of it was lost. A run that ends early - a
+      # failed pre-flight check, an error, a stop at shutdown - counts every guest
+      # it did not finish, so this also fires after the reboot has cleared the
+      # unit's failed state.
       - alert: GuestBackupPartial
         expr: guest_backup_failed_guests > 0
         for: 0m
@@ -417,7 +420,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $value }} guest(s) failed to back up"
-          description: "The last vzdump run completed with {{ $value }} guest(s) exiting non-zero. Check `journalctl -u guest-backup.service` for which."
+          description: "The last vzdump run left {{ $value }} guest(s) without a new archive, by a non-zero exit or by ending early. Check `journalctl -u guest-backup.service` for which."
 
       # The case the two rules above cannot express. Both compare against a
       # metric, so both go silent -- not red -- if the collector stops writing or
@@ -687,8 +690,14 @@ groups:
       # that is not broken, on a host that would have reported it after every
       # single boot. An alert that is red by construction is one people learn to
       # dismiss, which would have cost the rule the service hangs it exists for.
+      #
+      # `snapraid-maintenance@` is excluded for a different reason: a oneshot
+      # stays `activating` for its whole run, and a scrub of 12 % took 8095 s on
+      # 2026-10-12, so the rule fired every week on a run that was working. The
+      # units carry `TimeoutStartSec=infinity` by design, and a hung sync or
+      # scrub is what SnapRAIDSyncStale and SnapRAIDScrubStale already report.
       - alert: SystemdUnitStuckActivating
-        expr: node_systemd_unit_state{state="activating", name!~".*\\.device"} == 1
+        expr: node_systemd_unit_state{state="activating", name!~".*\\.device|snapraid-maintenance@.*\\.service"} == 1
         for: 30m
         labels:
           severity: warning

@@ -72,6 +72,64 @@ COMPRESS="zstd"
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 PROM_FILE="${TEXTFILE_DIR}/guest-backup.prom"
 
+# === Metrics ===
+#
+# Written whether the run succeeded or not. A collector that only emits on
+# success cannot distinguish "failed" from "never ran", which is the same
+# blindness LvmThinMetricsStale was added to cover.
+#
+# Note what these metrics can and cannot see. They prove a run happened and how
+# it ended. They do not prove the archives are restorable - only an actual
+# restore does that, which is why runbooks/platform/guest-backup-restore.md
+# carries a recorded-date discipline, the same one pg-restore.md uses.
+
+START_TS="$(date +%s)"
+FAILED=0
+DONE=0
+METRICS_WRITTEN=0
+
+write_metrics() {  # $1 = number of guests not backed up
+  local end tmp bytes
+  end="$(date +%s)"
+  mkdir -p "$TEXTFILE_DIR"
+  tmp="$(mktemp "${PROM_FILE}.XXXXXX")"
+  bytes="$(du -sb "$BACKUP_DIR" 2>/dev/null | cut -f1 || echo 0)"
+  cat > "$tmp" <<METRICS
+# HELP guest_backup_last_run_timestamp_seconds Unix time at which the last guest backup run finished.
+# TYPE guest_backup_last_run_timestamp_seconds gauge
+guest_backup_last_run_timestamp_seconds ${end}
+# HELP guest_backup_duration_seconds Wall-clock duration of the last guest backup run.
+# TYPE guest_backup_duration_seconds gauge
+guest_backup_duration_seconds $((end - START_TS))
+# HELP guest_backup_failed_guests Number of guests the last run did not back up.
+# TYPE guest_backup_failed_guests gauge
+guest_backup_failed_guests ${1}
+# HELP guest_backup_total_bytes Size of the backup target directory after the last run.
+# TYPE guest_backup_total_bytes gauge
+guest_backup_total_bytes ${bytes:-0}
+METRICS
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PROM_FILE" || rm -f "$tmp"
+  METRICS_WRITTEN=1
+}
+
+# A run that ends early - a failed pre-flight check, an error under set -e such
+# as the size guard of 2026-10-12, or the 23:30 shutdown stopping the unit -
+# would otherwise leave the previous run's metric in place, failed guests 0
+# included, and GuestBackupPartial could not see it. Every guest the run did not
+# finish counts as failed. bash runs no EXIT trap on a fatal signal, so TERM and
+# INT are turned into an ordinary exit first.
+on_exit() {
+  local rc=$?
+  if [ "$METRICS_WRITTEN" -eq 0 ]; then
+    write_metrics "$(( ${#GUESTS[@]} - DONE ))" || true
+  fi
+  exit "$rc"
+}
+trap on_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
 # === Pre-flight checks ===
 
 # Test the mount's identity, not merely that the path exists.
@@ -98,9 +156,6 @@ if [ -z "$DEST_SRC" ] || [ "$DEST_SRC" = "$ROOT_SRC" ]; then
 fi
 
 # === Run ===
-
-START_TS="$(date +%s)"
-FAILED=0
 
 # Prints the disks of a VM that vzdump would include and that exceed MAX_DISK_GB.
 oversized_disks() {
@@ -156,47 +211,12 @@ for id in "${GUESTS[@]}"; do
   if [ "$rc" -ne 0 ]; then
     echo "WARNING: vzdump ${id} exited ${rc}" >&2
     FAILED=$((FAILED + 1))
+  else
+    DONE=$((DONE + 1))
   fi
 done
 
-END_TS="$(date +%s)"
-
-# === Metrics ===
-#
-# Written whether the run succeeded or not, and written last. A collector that
-# only emits on success cannot distinguish "failed" from "never ran", which is
-# the same blindness LvmThinMetricsStale was added to cover.
-#
-# Note what these metrics can and cannot see. They prove a run happened and how
-# it ended. They do not prove the archives are restorable - only an actual
-# restore does that, which is why runbooks/platform/guest-backup-restore.md
-# carries a recorded-date discipline, the same one pg-restore.md uses.
-mkdir -p "$TEXTFILE_DIR"
-TMPFILE="$(mktemp "${PROM_FILE}.XXXXXX")"
-# The predecessor SMART collector has no such trap and leaked eleven temp files
-# into this directory between 2025-12 and 2026-08.
-trap 'rm -f "$TMPFILE"' EXIT
-
-BYTES="$(du -sb "$BACKUP_DIR" 2>/dev/null | cut -f1 || echo 0)"
-
-cat > "$TMPFILE" <<METRICS
-# HELP guest_backup_last_run_timestamp_seconds Unix time at which the last guest backup run finished.
-# TYPE guest_backup_last_run_timestamp_seconds gauge
-guest_backup_last_run_timestamp_seconds ${END_TS}
-# HELP guest_backup_duration_seconds Wall-clock duration of the last guest backup run.
-# TYPE guest_backup_duration_seconds gauge
-guest_backup_duration_seconds $((END_TS - START_TS))
-# HELP guest_backup_failed_guests Number of guests whose vzdump exited non-zero in the last run.
-# TYPE guest_backup_failed_guests gauge
-guest_backup_failed_guests ${FAILED}
-# HELP guest_backup_total_bytes Size of the backup target directory after the last run.
-# TYPE guest_backup_total_bytes gauge
-guest_backup_total_bytes ${BYTES}
-METRICS
-
-chmod 0644 "$TMPFILE"
-mv "$TMPFILE" "$PROM_FILE"
-trap - EXIT
+write_metrics "$FAILED"
 
 # A non-zero exit puts the unit into `failed`, which SystemdUnitFailed reports.
 # The metric above covers the case this cannot: a run that never starts.
