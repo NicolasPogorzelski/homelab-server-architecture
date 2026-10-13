@@ -24,7 +24,7 @@ flowchart TB
     NCDB["lxc210: Nextcloud MariaDB"]
   end
 
-  subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, 8168 unreadable sectors"]
+  subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, unreadable sectors growing"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260"]
     VZDUMP["guest backups - weekly vzdump archives"]
     MONDATA["lxc200 mp0: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
@@ -67,9 +67,9 @@ external password manager and on paper off site, which closed item 1 of the
 Identify this disk by `9:0:0:0` or by `by-id`, never by its kernel letter - it enumerated as `sdc`
 for a month of documentation and as `sda` on 2026-08-13.
 
-**aux-disk.** Back in service under protest with 8168 unreadable sectors, up from 7680 in a single
-step on 2026-09-20, and `Reported_Uncorrect` at 21 since 2026-07-09
-([KE-13](../platform/known-errors.md#ke-13)). Those sectors still hold data that cannot be read, and
+**aux-disk.** Back in service under protest with thousands of unreadable sectors, a count that has
+grown in two steps since September while `Reported_Uncorrect` has stayed at 21 since 2026-07-09
+([KE-13](../platform/known-errors.md#ke-13) carries the measurements). Those sectors still hold data that cannot be read, and
 `smartctl -H` reports PASSED regardless, because `Current_Pending_Sector` normalises to 051 against
 a threshold of 000 and can never trip the self-assessment.
 

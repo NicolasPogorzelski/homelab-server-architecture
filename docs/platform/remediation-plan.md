@@ -109,7 +109,7 @@ the same fiction as an untested backup. Once a year, retrieve the paper copy and
 
 | # | Item | Unblocks |
 |---|---|---|
-| 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with 8168 unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
+| 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with thousands of unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
 | 6 | [KE-14](known-errors.md#ke-14) physical verification - 12 V rail, cable reseat, HBA temperature, PSU age | Deferred behind the drive replacement of the second half of October, decided 2026-10-12: it runs if the errors follow the new drive. Written up as [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md); it also records the PSU, the A.7.11 gap in [`physical-controls.md`](physical-controls.md) |
 | 7 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | A choice for the replacement drive. Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
 
@@ -124,7 +124,7 @@ looking at the ones under it. Items 8 to 10 wait on nothing but a session.
 |---|---|---|
 | 8 | ~~Proxmox host becomes an Ansible node~~ Done 2026-08-21 | Closed. The host is in the inventory, `ssh_hardening` and `node_exporter` reach it, and the four technical-debt entries that named this as their prerequisite are unblocked. The trap this row used to carry - `node_exporter_textfile_dir` needing a `host_vars` override - was already obsolete when the adoption happened and is recorded in the changelog rather than here, because a warning kept alive past its fix deters the work it was written to protect |
 | 9 | ~~Extend the SMART collector to the attributes that matter~~ Written 2026-09-09, applied 2026-09-15 | Debian's `prometheus-node-exporter-collectors` supplies `smartmon.sh`, which exports every attribute per disk as `value`, `worst`, `threshold` and `raw_value`, replacing a hand-written collector that exported two. Four rules fill the `smart` group, written on growth over 25 hours rather than on level - three disks would have made a level rule red on the day it was written, and the question KE-13 could never answer was whether the numbers were still moving. **This row read Done for six days before the role had run anywhere:** measured 2026-09-15, the package still sat in dpkg state `rc`, the retired collector still held its minute timer, and `smartmon_device_info` reached Prometheus from nowhere, so those four rules read nothing and were silent rather than red. Applied that day - 663 series over nine disks, the aux-disk's counters queryable instead of hand-read, fifteen leaked temporary files removed |
-| 10 | Fold the hand-deployed host units into roles | **Four of the seven closed 2026-09-11** by the `proxmox_host_units` role: `lxc-fstrim`, `lvm-thin-metrics`, `check-smb-mounts.sh` with its unit, and the `netconsole` receiver - whose sending half had been a role since 2026-08-17 while its listening half was a file somebody typed, with a placeholder address and an install note telling the reader to substitute it. A fifth, the `pveproxy` drop-in, is folded onto the shared `wait-for-tailscale-ip.sh` through `tailscale_boot_gate` rather than copied into a second role, and that one is applied: measured 2026-09-12, the host carries `10-wait-tailscale.conf` from the role's template and nothing else, the hand-written `wait-tailscale.conf` is gone, `pveproxy` started through the gate at 12:48 with the ExecStartPre exiting 0, and a re-check of the playbook reports `changed=0` on all eleven hosts. What is left is `node_exporter` and the `wait-for-tailscale-ip.sh` copy the exporter's own role already deploys: replacing a running exporter is its own window and is held with that reason in `ansible/drift-sweep.conf`. ~~Add `/etc/snapraid.conf` on vm102~~ Done 2026-08-15 |
+| 10 | ~~Fold the hand-deployed host units into roles~~ Done 2026-09-16 | **Four of the seven closed 2026-09-11** by the `proxmox_host_units` role: `lxc-fstrim`, `lvm-thin-metrics`, `check-smb-mounts.sh` with its unit, and the `netconsole` receiver - whose sending half had been a role since 2026-08-17 while its listening half was a file somebody typed, with a placeholder address and an install note telling the reader to substitute it. A fifth, the `pveproxy` drop-in, is folded onto the shared `wait-for-tailscale-ip.sh` through `tailscale_boot_gate` rather than copied into a second role, and that one is applied: measured 2026-09-12, the host carries `10-wait-tailscale.conf` from the role's template and nothing else, the hand-written `wait-tailscale.conf` is gone, `pveproxy` started through the gate at 12:48 with the ExecStartPre exiting 0, and a re-check of the playbook reports `changed=0` on all eleven hosts. The last two, `node_exporter` and its `wait-for-tailscale-ip.sh` copy, were applied on 2026-09-16; the drift sweep runs `node-exporter` against the host with an empty baseline, measured 2026-10-13. ~~Add `/etc/snapraid.conf` on vm102~~ Done 2026-08-15 |
 | 11 | ~~Apply the `homelab_schedule` role~~ Done 2026-09-16 | Kept on cron on purpose: the job powers the host down, and catch-up semantics would be wrong for it |
 | 12 | ~~`is_mountpoint 1` on the `appdata_aux-disk` storage~~ Done 2026-08-17 | Closed. Proxmox now refuses to treat the storage as active unless a filesystem is actually mounted at the path, so a failed mount can no longer be written into the empty directory on `pve-root`. Verified immediately after: storage still `active`, vm100's `scsi1` still resolvable, guests untouched. Did not need the hardware window it was waiting on. Follow-up noticed while applying it: `mkdir 0` is deprecated and slated for removal in PVE 9, which this host already runs - the replacement is `create-base-path 0` |
 
@@ -461,8 +461,9 @@ Found while completing the inference rollout.
   [DD#8](../decisions/design-decisions.md#dd-8) and a role owning vm100's netplan file. The
   throughput measurement of the streaming box was taken on 2026-10-07, under a fault: streams
   stalled inside the `tailscale serve` forwarder, and Jellyfin now binds the Tailscale address
-  directly ([KE-28](known-errors.md#ke-28)). Open from that: the cold-boot proof of the
-  `docker.service` gate, and a measurement of three concurrent 4K streams. The netplan file held
+  directly ([KE-28](known-errors.md#ke-28)). The cold boot of 2026-10-13 proved the
+  `docker.service` gate: the address was present after 0 s and `NRestarts=0`. Open from that: a
+  measurement of three concurrent 4K streams. The netplan file held
   across the cold boot of 2026-10-02: no global IPv6 address on `enp6s18`, all three serve forwards
   present.
 - **LAN ingress guard on every node (`lan_guard`).** Rolled out on all eleven nodes on 2026-10-01,
@@ -479,7 +480,9 @@ Found while completing the inference rollout.
   becomes the second layer rather than the only one. A restart of `nftables.service` by hand
   still flushes the table until the next boot; the unit is ordered after it for exactly that
   reason.
-- **`apt_metrics` installs Recommends, and two of them fail at every boot.** The collectors package
+- ~~**`apt_metrics` installs Recommends, and two of them fail at every boot.**~~ Closed, measured
+  2026-10-13: `ipmitool`, `openipmi` and `nvme-cli` are installed on no guest, neither unit exists on
+  any of them, and no node has a failed unit. The finding as written: The collectors package
   brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
   and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -
   the same two units `systemd_hygiene` has masked on lxc260 since July. Fixed in the repository on
@@ -640,7 +643,7 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   `+mariadb.socket enabled` for lxc210, among 107 changed lines that week, and nobody read them;
   `FleetSnapshotStale` only says whether the diff was written. `listener_metrics` now classifies every listening socket on all ten nodes every 15 minutes
   and exports the ones outside loopback and the overlay; `ListenerOutsideBindingRule` fires after
-  30 minutes. The exceptions that stand today - Samba and sshd on vm102, Apache and `coolwsd` on
+  30 minutes. The exceptions that stand today - Samba on vm102, Apache and `coolwsd` on
   lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
   decision behind each, so removing one is the last step of executing that decision. Two more are
   allowed on every node, `tailscaled`'s UDP sockets and the DHCP client, since neither can
