@@ -20,9 +20,9 @@ notes there and keep this section short.
   replacement. It carries five LXC data-roots and VM100's secondary disk, with no off-site copy.
   The standing hold on `docker-compose-update` was lifted on 2026-09-05; see the entry below for
   what carries that decision. `Reported_Uncorrect` rose 18 -> 21 by 2026-07-09 and has not moved
-  since. `Current_Pending_Sector` held at 7680 from July and stepped to 8168 on 2026-09-20,
-  found in the Prometheus history on 2026-10-08 and recorded nowhere until then; it read 8168
-  before and after that day's image pulls. `smartctl -H PASSED` is meaningless here:
+  since. `Current_Pending_Sector` held at 7680 from July and has stepped twice since, on
+  2026-09-20, found only weeks later, and during the boot of 2026-10-13, which
+  `SmartAttributeDegrading` reported within fifteen minutes. KE-13 carries the values. `smartctl -H PASSED` is meaningless here:
   `Current_Pending_Sector` normalises to 051 against threshold 000 and can never trip the
   self-assessment. Not an emergency, but no longer the static disk the 2026-09-05 lift assumed.
 - **KE-18 - Tailscale readiness races (class entry, added 2026-07-28).** Four instances, all fixed:
@@ -270,11 +270,22 @@ body carries an edit marker that draws attention to exactly the line it removes.
 
 ## Publishing Is the Operator's
 
-Pushing, opening a pull request, merging and releasing are done by hand, from a terminal outside
-the session. This is enforced by a deny list in `~/.claude/settings.json` (set 2026-08-17) and
-mirrored in the project settings; `snippets/claude/hooks-reference.json` carries the sanitized
-copy, because the live file is gitignored and therefore per-machine. Deny beats allow, so a
-project-level allow rule cannot reopen it.
+Opening, editing, merging and closing a pull request and releasing are done by hand, in the GitHub
+web interface. The session may push a feature branch - `feat/`, `fix/`, `docs/`, `chore/`,
+`refactor/`, `test/` or `ci/` - to `origin`, and nothing else: not `main`, not a refspec, not
+`--force`, `--delete` or `--tags`. A global `PreToolUse` hook, `~/.claude/hooks/publish-guard.sh`
+in the `dotfiles` repository, allows exactly that form and refuses every other push and every
+writing `gh pr`, `gh release` or `gh api` call; the deny list in `~/.claude/settings.json` keeps
+the bare `git push`. `snippets/claude/hooks-reference.json` carries the sanitized copy, because
+the live file is gitignored and therefore per-machine. The second layer is on GitHub: the
+`main-protection` ruleset requires a pull request, refuses force-pushes and deletion, and has no
+bypass actors.
+
+The line moved on 2026-10-13, from "nothing leaves the machine without a person" to "nothing
+reaches `main` without a person". A pushed branch is public the moment it lands, and stays
+fetchable by its commit for a while after the branch is deleted, so the review below still
+happens before the push. A pull request cannot be deleted at all, only closed, which is why it
+stays the person's step.
 
 **Every branch gets a full review in the conversation before it is pushed.** The repository is
 public; a pull request is the moment the work becomes readable by anyone, and reviewing it there
@@ -871,7 +882,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
   cleared. All six passed a `pct reboot` with the pin, vm100 a `qm reboot` on 2026-10-12, vm102
-  a reload the same day with its first cold boot still to come. lxc250 still pins by a hand-written
+  a reload the same day and its first cold boot on 2026-10-13. lxc250 still pins by a hand-written
   line in `sshd_config`, outside the role. The hypervisor is last or never - it has no console
   once Linux runs. `lan_guard` already refuses 22
   from the LAN on every node except the hypervisor, which admits the two admin workstations, so
@@ -884,10 +895,10 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   The drive is replaced in the second half of October (decided 2026-10-12); the swap is the test.
   The boot SSD (`scsi 9:0:0:0`, never a fixed kernel letter) carries every VM and LXC root disk,
   so an `EIO` into the thin pool during guest start could corrupt a guest filesystem. See `docs/platform/known-errors.md#ke-14`.
-- **aux-disk is back in service with 8168 unreadable sectors (KE-13), replacement pending:**
+- **aux-disk is back in service with a growing count of unreadable sectors (KE-13), replacement pending:**
   it carries the Docker data-roots of LXC200/211/220/230/260 and VM100's `scsi1` disk
   (allocated). `Reported_Uncorrect` has held at 21 since 2026-07-09; `Current_Pending_Sector`
-  held at 7680 until it stepped to 8168 on 2026-09-20. See the KE-13 note in Current Status.
+  has grown in two steps since September. See the KE-13 note in Current Status.
   Nothing on `/mnt/aux-disk` has an off-site copy.
 - **The `docker-compose-update` hold is lifted (2026-09-05).** It had stood since 2026-07-09 on the
   grounds that pulling images writes gigabytes of fresh layers onto a failing disk. Three

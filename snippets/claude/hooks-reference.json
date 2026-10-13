@@ -36,7 +36,6 @@
     ],
     "deny": [
       "Bash(git push)",
-      "Bash(git push *)",
       "Bash(gh pr create *)",
       "Bash(gh pr edit *)",
       "Bash(gh pr merge *)",

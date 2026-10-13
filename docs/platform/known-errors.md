@@ -603,15 +603,15 @@ data-roots of LXC200/211/220/230/260 again - and VM100's `scsi1` data disk - bec
 no alternative target exists: the MergerFS pool on VM102 has a low-hundreds-of-GB free, and the LVM
 thin pool on the boot SSD has no headroom.
 
-**Degradation paused for two months and then took a second step.** SMART re-reads (identify the
+**Degradation paused for two months and then stepped twice.** SMART re-reads (identify the
 disk by `by-id`, not by kernel letter - see the note in [KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 | 2026-09-15 | 2026-10-08 |
-|---|---|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** |
-| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | **21** | 21 | 21 | 21 | 21 |
+| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 | 2026-09-15 | 2026-10-08 | 2026-10-13 |
+|---|---|---|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** | **8784** |
+| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** | **8784** |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | **21** | 21 | 21 | 21 | 21 | 21 |
 
 The 2026-09-15 column is the first sample `smart_metrics` exported. The step is in the Prometheus
 history on 2026-09-20, read back at one-minute resolution on 2026-10-10: the first sample of that
@@ -622,6 +622,10 @@ over the thirty days to 2026-10-10 it was in alert during 151 hours, 125 of them
 real step.
 Re-keyed by serial number that day; replayed over the same history it fires for this step until
 2026-09-21 21:24, and for nothing else.
+The second step came with the boot of 2026-10-13, while the starting guests read about 7.5 GB
+from the disk: the first sample, 12:25, read 8344, and 12:38 read 8784. The re-keyed rule went
+pending at 12:26 and fired at 12:40. A guest backup wrote about 13 GB to the disk that afternoon
+and left all four counters where they were.
 `Reported_Uncorrect` did not move, so no read has failed since July:
 the 488 new sectors moved `Offline_Uncorrectable` with them, which points at the drive's own
 offline scan rather than a failed read by a consumer.
