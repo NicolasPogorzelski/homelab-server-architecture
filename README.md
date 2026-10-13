@@ -174,7 +174,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
 - [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
 - [Hypervisor Panic Policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) (a machine with no way in should not survive an oops)
-- [sshd Binding](docs/decisions/sshd-listen-address.md) (socket activation made the directive inert on six containers; three nodes remain)
+- [sshd Binding](docs/decisions/sshd-listen-address.md) (socket activation made the directive inert on six containers; the hypervisor stays unpinned by decision)
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 - [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)

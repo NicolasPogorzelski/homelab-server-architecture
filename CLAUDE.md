@@ -184,7 +184,7 @@ notes there and keep this section short.
 
 **The one block before Terraform, agreed 2026-09-16.** Four operational findings from that day's assessment - patch level that nothing measures, the LLMNR and mDNS responder on lxc250, MariaDB's untested restore, the sshd binding decision executed nowhere - and four controls the same assessment argued against at this scale, built anyway to be learned rather than because the platform needs them ([decision](docs/decisions/exercise-scope-before-terraform.md)). The second half carries an obligation the first does not: each of those four is labelled as an exercise wherever a reader meets it, none enters `security-controls.md` as `Enforced`, and none gets an alert that would not have been built regardless. A control that cannot be told apart from a needed one will be defended as one.
 
-**The identity track, between the block and Terraform, decided 2026-09-24.** One new node with `lldap` as the directory and Authelia as the OIDC provider, clients connected lowest-risk first, with a stated cut ([decision](docs/decisions/identity-before-terraform.md)). It starts once the block is done except for the sshd rollout, which keeps its one-node-per-session pace and still gates Terraform. That condition is met; the weekend of 2026-09-25 it was scheduled for passed without a start, and a new one is not chosen yet. The status and the order live in the "identity track" section of [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). Terraform begins when the block, including the sshd rollout, is done and this track is closed.
+**The identity track, between the block and Terraform, decided 2026-09-24.** One new node with `lldap` as the directory and Authelia as the OIDC provider, clients connected lowest-risk first, with a stated cut ([decision](docs/decisions/identity-before-terraform.md)). The block is done, the sshd rollout included since 2026-10-13, when the hypervisor was decided against a pin. The weekend of 2026-09-25 it was scheduled for passed without a start, and a new one is not chosen yet. The status and the order live in the "identity track" section of [`docs/platform/remediation-plan.md`](docs/platform/remediation-plan.md). Terraform begins when this track is closed.
 
 **Roadmap after Terraform:** Kubernetes (k3s) basics, then cloud depth and Python. Bash scripting is cross-cutting throughout. Detailed timeline, certifications and career milestones live in a private repository outside this one, not here.
 
@@ -882,9 +882,9 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `ssh.socket` off wherever `ssh_hardening_listen_address` is set and refuses the pin unless the
   node also declares `ssh.service` in `tailscale_boot_gate_units` with the restart-prevent list
   cleared. All six passed a `pct reboot` with the pin, vm100 a `qm reboot` on 2026-10-12, vm102
-  a reload the same day and its first cold boot on 2026-10-13. lxc250 still pins by a hand-written
-  line in `sshd_config`, outside the role. The hypervisor is last or never - it has no console
-  once Linux runs. `lan_guard` already refuses 22
+  a reload the same day and its first cold boot on 2026-10-13. lxc250 joined the role on 2026-10-13 and passed
+  a `pct reboot`. The hypervisor stays unpinned by decision: its LAN path is the only way in
+  without Tailscale, and it has no console once Linux runs. `lan_guard` already refuses 22
   from the LAN on every node except the hypervisor, which admits the two admin workstations, so
   this is the second layer. See
   `docs/decisions/sshd-listen-address.md` before touching any node.

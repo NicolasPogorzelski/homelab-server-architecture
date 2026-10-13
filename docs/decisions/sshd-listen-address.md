@@ -2,6 +2,17 @@
 
 ## Status
 
+**Amended 2026-10-13: lxc250 joins the role, and the hypervisor is decided - never.** lxc250 now
+pins through `ssh_hardening` like the other eight; its hand-written line is gone, and a
+`pct reboot` brought sshd up on the Tailscale address alone with `NRestarts=0`. The hypervisor
+keeps its wildcard bind, and that closes the rollout rather than leaving it open. Its LAN path
+from the two admin workstations is the only way in when Tailscale does not come up, since the
+passed-through GPU leaves the host without a console, and `lan_guard` already admits exactly
+those two senders on 22. A pin on the Tailscale address would remove that path. A pin on the
+Tailscale and LAN addresses together would keep it and cut only loopback, the Tailscale IPv6
+address and link-local - the host has no global IPv6 address, measured the same day. Revisit if
+the host gains an out-of-band console: IPMI, a KVM over IP, or a display output of its own.
+
 **Amended 2026-10-12, in the evening: vm102 is done.** Pinned from its `host_vars` and applied by
 reload, the first run of the corrected role on a node that was never socket-activated: the
 handler ran before the read-back and the assert passed on the first attempt. `ss` shows the

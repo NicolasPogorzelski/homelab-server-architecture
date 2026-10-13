@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | The sshd rollout is closed: lxc250 pins through the role and passed a `pct reboot`, and the hypervisor stays unpinned by decision, because its LAN path is the only way in without Tailscale and `lan_guard` already limits it to the two admin workstations. Terraform now waits on the identity track alone. The central journal store was measured: 913 MB of 2 GB, no rotation churn. See [sshd binding](../decisions/sshd-listen-address.md). |
 | 2026-10-13 | lxc250's sshd pin moves into `ssh_hardening`, the last container outside the role. The role now also removes any `ListenAddress` left in the main `sshd_config`, since the keyword accumulates and a hand-written line would bind beside the pinned one. See [lxc250](../nodes/lxc250.md). |
 | 2026-10-13 | `guest-backup.sh` writes its metric on every exit, not only at the end. A run that stops early - failed pre-flight check, error, stop at shutdown - counts each guest it did not finish as failed, so `GuestBackupPartial` fires even after a reboot has cleared the unit's failed state. Tested with stubbed Proxmox commands in four cases. See [guest backup](../../runbooks/platform/guest-backup-restore.md). |
 | 2026-10-13 | `SystemdUnitStuckActivating` no longer covers `snapraid-maintenance@`: a scrub runs for hours as an `activating` oneshot and fired the rule every week, while a hung run is what `SnapRAIDSyncStale` and `SnapRAIDScrubStale` report. See [monitoring](monitoring.md). |

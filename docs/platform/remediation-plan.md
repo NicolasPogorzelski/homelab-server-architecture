@@ -389,7 +389,7 @@ outside its field of view. These four are ordinary work and are ordered by expos
   containers, one at a time, each followed by `pct reboot`: afterwards `ssh.socket` disabled,
   `ssh.service` enabled, the Tailscale address alone on 22, Ansible reaching the node, PostgreSQL
   and Nextcloud's services back. A drift sweep after the last one reported nothing. vm100, vm102 and the hypervisor are not part of this
-  step, and lxc250 keeps its hand-written line in `sshd_config` until the role adopts it. The
+  step, and lxc250 kept its hand-written line in `sshd_config` until the role adopted it on 2026-10-13. The
   decision record carries the choice since its amendment of 2026-10-12. The finding as written:
 - **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
   appears only as the empty default in the role, and every node still binds `*:22`, measured. The
@@ -545,8 +545,9 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
 
  Its log reads `Journal header limits
   reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
-  2026-09-26. Part of the `journal-central` exercise; whether the vacuum timer keeps up with that
-  churn has not been measured.
+  2026-09-26. Part of the `journal-central` exercise; measured 2026-10-13, the churn is gone - no
+  such line in 24 hours - and the store holds 913 MB against its 2 GB cap, growing by about 54 MB
+  a day since 2026-09-26, with the hourly vacuum freeing nothing yet.
 
 ## Added on 2026-10-08
 
@@ -699,8 +700,8 @@ teach, which is the part worth keeping:
 **Applied since, measured 2026-10-12.** `auditd` is active on the hypervisor, `journal-central`
 receives on lxc200 from lxc211 and lxc260, `fleet_snapshot` carries the `dpkg --verify`
 projection, and `sbom.yml` runs on its schedule. High availability stayed at reading, as intended.
-Of the four operational items only the sshd rollout remains, on the hypervisor alone; vm100 and
-vm102 took the pin on 2026-10-12.
+All four operational items are done: vm100 and vm102 took the sshd pin on 2026-10-12, lxc250
+joined the role on 2026-10-13, and the hypervisor was decided against a pin the same day.
 
 **This block is the end of maintenance mode.** When these four and the four items above have been
 applied and verified, the Terraform track begins - after the
@@ -736,7 +737,7 @@ which gates Terraform like the block does.
 
 **Not started, read 2026-10-12.** None of the three days took place: there is no identity node, no
 role and no changelog entry after the scheduling one of 2026-09-24. The start condition is met -
-the block is done but for the sshd rollout - so the dates above are the only part that is out of
+the block is done, the sshd rollout included since 2026-10-13 - so the dates above are the only part that is out of
 date. A new weekend needs choosing; the thin pool stands at 66 % and has room for the node.
 
 ## Added by the 2026-08-20 repository and fleet audit
