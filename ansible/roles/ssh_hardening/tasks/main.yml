@@ -109,6 +109,17 @@
     mode: '0644'
   notify: Reload ssh_config
 
+# The drop-in owns the bind. `ListenAddress` accumulates rather than taking its
+# first value, so a line left in the main file by hand is a second bind beside
+# the pinned one, not a default the drop-in overrides.
+- name: Remove ListenAddress lines from the main sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*ListenAddress\s'
+    state: absent
+  when: ssh_hardening_listen_address | length > 0
+  notify: Reload ssh_config
+
 - name: Password authentication
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config

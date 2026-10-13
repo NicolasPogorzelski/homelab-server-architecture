@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | lxc250's sshd pin moves into `ssh_hardening`, the last container outside the role. The role now also removes any `ListenAddress` left in the main `sshd_config`, since the keyword accumulates and a hand-written line would bind beside the pinned one. See [lxc250](../nodes/lxc250.md). |
 | 2026-10-13 | `guest-backup.sh` writes its metric on every exit, not only at the end. A run that stops early - failed pre-flight check, error, stop at shutdown - counts each guest it did not finish as failed, so `GuestBackupPartial` fires even after a reboot has cleared the unit's failed state. Tested with stubbed Proxmox commands in four cases. See [guest backup](../../runbooks/platform/guest-backup-restore.md). |
 | 2026-10-13 | `SystemdUnitStuckActivating` no longer covers `snapraid-maintenance@`: a scrub runs for hours as an `activating` oneshot and fired the rule every week, while a hung run is what `SnapRAIDSyncStale` and `SnapRAIDScrubStale` report. See [monitoring](monitoring.md). |
 | 2026-10-13 | KE-13 stepped again during the boot, to 8784 pending sectors, and `SmartAttributeDegrading` fired within fifteen minutes; the count now lives in KE-13 alone. The same boot proved vm102's sshd pin and vm100's `docker.service` gate cold. The session may push feature branches, never `main`, and pull requests stay manual. See [KE-13](known-errors.md#ke-13). |
