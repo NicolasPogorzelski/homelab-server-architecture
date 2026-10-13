@@ -29,7 +29,7 @@ This document outlines key architectural decisions, alternatives considered, and
 | [5](#dd-5) | Unprivileged LXC Containers | No root-equivalence between container and host, at the cost of UID mapping work |
 | [6](#dd-6) | Read-Only Media Consumers | Producers and consumers of the archive are separated, so a consumer cannot delete |
 | [7](#dd-7) | Monitoring via Dedicated LXC | Observability that does not depend on the services it watches |
-| [8](#dd-8) | LAN Exposure for Performance-Critical Workloads | A stated bandwidth trade-off: ~50 Mbit upstream makes remote streaming unusable |
+| [8](#dd-8) | LAN Exposure for Performance-Critical Workloads | Superseded by [Media Over the Tailnet](media-over-the-tailnet.md): same-LAN peers connect directly, so the uplink was never the limit |
 | [9](#dd-9) | Planned Architectural Evolution (Network Hardening - Phase 2) | What would have to change before the LAN exposure in 8 can be withdrawn |
 | [10](#dd-10) | Docker Host Networking Eliminates Container DNS | `network_mode: host` removes Docker's DNS resolver, so container names stop resolving |
 | [11](#dd-11) | Monitoring Requires Explicit Outbound ACLs for Scrape Targets | Tailscale ACLs are deny-by-default in both directions; inbound access implies no outbound |
@@ -201,14 +201,11 @@ Monitoring stack isolated in LXC200.
 
 ## 8. LAN Exposure for Performance-Critical Workloads
 
-**Status 2026-10-01: no longer in force for the media services.** Jellyfin and Audiobookshelf
-publish on loopback behind `tailscale serve` since that day. The rationale below assumed overlay
-traffic is capped by the internet uplink; measured the same day, nodes on the same LAN connect
-directly and SMB over the tailnet reached 95 MB/s ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)).
-The replacing decision record is still to be written. Nextcloud remains under this entry.
-That measurement did not cover the path the streams then took: `tailscale serve --tcp` stalled
-Jellyfin streams, and Jellyfin binds the Tailscale address directly since 2026-10-07
-([KE-28](../platform/known-errors.md#ke-28)).
+**Status: superseded since 2026-10-01** by
+[Media Over the Tailnet](media-over-the-tailnet.md), for every service named below. The rationale
+assumed overlay traffic is capped by the internet uplink; nodes on the same LAN connect directly,
+and `lan_guard` has dropped new inbound LAN connections to Nextcloud as well since that day. Kept
+for the history of the trade-off.
 
 ### Decision
 

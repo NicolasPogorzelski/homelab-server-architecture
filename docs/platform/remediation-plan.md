@@ -457,9 +457,9 @@ Found while completing the inference rollout.
   Audiobookshelf publish on `127.0.0.1` behind `tailscale serve --tcp`, and `enp6s18` holds no global
   IPv6 address ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)). Two LAN clients seen in
   Jellyfin's activity log, `.64` (last 2026-09-27) and `.71` (last 2026-07-27), were not identified;
-  they join the tailnet when they are next needed. Still open: the decision record replacing
-  [DD#8](../decisions/design-decisions.md#dd-8); the netplan file belongs to the `netplan_no_ra`
-  role since 2026-10-13. The
+  they join the tailnet when they are next needed. The decision record replacing
+  [DD#8](../decisions/design-decisions.md#dd-8) is [Media Over the Tailnet](../decisions/media-over-the-tailnet.md),
+  and the netplan file belongs to the `netplan_no_ra` role, both since 2026-10-13. The
   throughput measurement of the streaming box was taken on 2026-10-07, under a fault: streams
   stalled inside the `tailscale serve` forwarder, and Jellyfin now binds the Tailscale address
   directly ([KE-28](known-errors.md#ke-28)). The cold boot of 2026-10-13 proved the
