@@ -1,12 +1,4 @@
 ---
-# Taken once, before the first exclusive run ever rewrites the file. `creates:`
-# makes it a no-op afterwards, so the backup keeps the pre-Ansible state instead of
-# being overwritten by whatever the last run produced.
-- name: Back up the pre-existing authorized_keys once
-  ansible.builtin.command:
-    cmd: cp -a /home/{{ breakglass_user }}/.ssh/authorized_keys /home/{{ breakglass_user }}/.ssh/authorized_keys.pre-ansible
-    creates: /home/{{ breakglass_user }}/.ssh/authorized_keys.pre-ansible
-
 # One call with every key joined by newlines, NOT a loop with exclusive: true.
 # `exclusive` applies per invocation: inside a loop, each iteration would delete the
 # keys the previous one added and only the last key would survive.
