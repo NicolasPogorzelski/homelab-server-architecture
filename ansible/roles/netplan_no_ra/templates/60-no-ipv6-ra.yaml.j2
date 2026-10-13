@@ -1,0 +1,7 @@
+network:
+  version: 2
+  ethernets:
+{% for interface in netplan_no_ra_interfaces %}
+    {{ interface }}:
+      accept-ra: false
+{% endfor %}

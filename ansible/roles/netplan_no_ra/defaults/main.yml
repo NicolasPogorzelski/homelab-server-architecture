@@ -1,0 +1,6 @@
+---
+# Interfaces on which IPv6 router advertisements are ignored. A router
+# advertisement hands the interface a global IPv6 address, and every service
+# bound to the wildcard then answers on it; on vm100 that was how media ports
+# reached the LAN. See docs/nodes/vm100.md#no-media-ports-on-the-lan.
+netplan_no_ra_interfaces: []
