@@ -1,6 +1,6 @@
 services:
   jellyfin:
-    image: jellyfin/jellyfin:10.11.11  # pinned to running version (2026-06-17)
+    image: jellyfin/jellyfin:12.2  # 12.x versions have two parts; 12.2 is a release, not a moving minor tag
     container_name: jellyfin
     pid: "host"
     restart: unless-stopped

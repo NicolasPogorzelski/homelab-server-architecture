@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | Jellyfin runs 12.2.0, up from 10.11.11, behind a snapshot of vm100 and an archive of its configuration. The five plugins built for 10.11 were taken out first, as Jellyfin advises; the two with a 12 build return from their catalogues, the other three stay out. See [Jellyfin](../services/jellyfin.md). |
 | 2026-10-13 | DD#8, the LAN exception for media and Nextcloud, is superseded by a decision record for what has run since 2026-10-01: no service on the LAN, clients at home on the tailnet. It also records that Nextcloud left the LAN through `lan_guard`, while DD#8 still listed it. See [Media Over the Tailnet](../decisions/media-over-the-tailnet.md). |
 | 2026-10-13 | vm100's netplan file, which keeps IPv6 router advertisements off its LAN interface, belongs to the new `netplan_no_ra` role. The file it renders is byte-identical to the one placed by hand, and the role fails while the interface holds a global IPv6 address. See [vm100](../nodes/vm100.md#no-media-ports-on-the-lan). |
 | 2026-10-13 | The sshd rollout is closed: lxc250 pins through the role and passed a `pct reboot`, and the hypervisor stays unpinned by decision, because its LAN path is the only way in without Tailscale and `lan_guard` already limits it to the two admin workstations. Terraform now waits on the identity track alone. The central journal store was measured: 913 MB of 2 GB, no rotation churn. See [sshd binding](../decisions/sshd-listen-address.md). |
