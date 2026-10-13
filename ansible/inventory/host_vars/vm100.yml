@@ -49,6 +49,11 @@ tailscale_boot_gate_clear_restart_prevent: true
 
 ssh_hardening_listen_address: "{{ ansible_host }}"
 
+# Router advertisements gave enp6s18 a global IPv6 address that every wildcard
+# listener answered on. See docs/nodes/vm100.md#no-media-ports-on-the-lan.
+netplan_no_ra_interfaces:
+  - enp6s18
+
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
 docker_mount_ordering_required_paths:
