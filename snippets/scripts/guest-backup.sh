@@ -105,14 +105,17 @@ FAILED=0
 # Prints the disks of a VM that vzdump would include and that exceed MAX_DISK_GB.
 oversized_disks() {
   qm config "$1" 2>/dev/null \
-    | grep -E '^(scsi|sata|virtio|ide)[0-9]+: ' | grep -v 'media=cdrom' | grep -v 'backup=0' \
+    | { grep -E '^(scsi|sata|virtio|ide)[0-9]+: ' || true; } | { grep -v -e 'media=cdrom' -e 'backup=0' || true; } \
     | while IFS= read -r line; do
         size="$(sed -nE 's/.*size=([0-9]+)([GMT]).*/\1 \2/p' <<<"$line")"
         [ -n "$size" ] || continue
         read -r n unit <<<"$size"
         case "$unit" in M) n=$((n / 1024)) ;; T) n=$((n * 1024)) ;; esac
-        [ "$n" -gt "$MAX_DISK_GB" ] && echo "${line%%:*}"
+        if [ "$n" -gt "$MAX_DISK_GB" ]; then echo "${line%%:*}"; fi
       done
+  # A VM with no disk over the limit is the normal case, not a failure; under
+  # set -e and pipefail a non-zero status here would end the whole run.
+  return 0
 }
 
 for id in "${GUESTS[@]}"; do
