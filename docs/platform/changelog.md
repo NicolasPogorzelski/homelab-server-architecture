@@ -6,6 +6,7 @@ This log is maintained outside `CLAUDE.md` so the always-loaded instruction cont
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | DD#8, the LAN exception for media and Nextcloud, is superseded by a decision record for what has run since 2026-10-01: no service on the LAN, clients at home on the tailnet. It also records that Nextcloud left the LAN through `lan_guard`, while DD#8 still listed it. See [Media Over the Tailnet](../decisions/media-over-the-tailnet.md). |
 | 2026-10-13 | vm100's netplan file, which keeps IPv6 router advertisements off its LAN interface, belongs to the new `netplan_no_ra` role. The file it renders is byte-identical to the one placed by hand, and the role fails while the interface holds a global IPv6 address. See [vm100](../nodes/vm100.md#no-media-ports-on-the-lan). |
 | 2026-10-13 | The sshd rollout is closed: lxc250 pins through the role and passed a `pct reboot`, and the hypervisor stays unpinned by decision, because its LAN path is the only way in without Tailscale and `lan_guard` already limits it to the two admin workstations. Terraform now waits on the identity track alone. The central journal store was measured: 913 MB of 2 GB, no rotation churn. See [sshd binding](../decisions/sshd-listen-address.md). |
 | 2026-10-13 | lxc250's sshd pin moves into `ssh_hardening`, the last container outside the role. The role now also removes any `ListenAddress` left in the main `sshd_config`, since the keyword accumulates and a hand-written line would bind beside the pinned one. See [lxc250](../nodes/lxc250.md). |

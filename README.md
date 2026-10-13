@@ -178,6 +178,7 @@ What is currently open, ranked by what its loss would cost, is in the
 - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
 - [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
 - [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
+- [Media Over the Tailnet](docs/decisions/media-over-the-tailnet.md) (the LAN exception withdrawn: same-LAN peers never went through the uplink)
 - [Identity Before Terraform](docs/decisions/identity-before-terraform.md) (one directory and one OIDC provider, and which clients cannot use it)
 
 ### Security, risk and change
