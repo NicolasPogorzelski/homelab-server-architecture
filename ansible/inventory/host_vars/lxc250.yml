@@ -1,7 +1,11 @@
 ---
-# sshd on this node binds the Tailscale address only (`ListenAddress` in
-# sshd_config), which is why SSH is unreachable for the first half minute after a
-# boot. Until 2026-08-20 that was handled by a hand-written drop-in doing nothing
+# sshd on this node binds the Tailscale address only, which is why SSH is
+# unreachable for the first half minute after a boot. The pin comes from
+# `ssh_hardening` like on every other pinned node; socket activation was never on
+# here, so there is no socket to hand back.
+ssh_hardening_listen_address: "{{ ansible_host }}"
+
+# The boot gate below is what makes that pin survivable. Until 2026-08-20 that was handled by a hand-written drop-in doing nothing
 # but retrying every 15 s - the fifth instance of KE-18, and the one that survived
 # the sweep because it worked well enough to look intentional.
 #
