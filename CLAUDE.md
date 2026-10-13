@@ -694,8 +694,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   to no current machine) and `devops@devops-lxc` (the control node's interactive user on the admin
   account; Ansible connects as the `ansible` user with its own `authorized_keys`, so removing it
   cost no automation path). The `breakglass` role now enforces the key set with `exclusive: true`,
-  making the inventory the single source of truth, and keeps a one-time
-  `authorized_keys.pre-ansible` backup. `ssh <admin>@<node>` from lxc250 no longer works by design;
+  making the inventory the single source of truth. `ssh <admin>@<node>` from lxc250 no longer works by design;
   `ssh ansible@<node>` and break-glass from either admin machine do.
 - **Calibre library on CIFS - SQLite workaround in place, no durable fix:** `metadata.db` cannot
   safely live on CIFS (byte-range locking). Workaround: local-copy + atomic swap during import
