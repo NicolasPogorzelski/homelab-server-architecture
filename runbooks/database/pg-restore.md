@@ -1,262 +1,162 @@
 # Runbook: PostgreSQL restore from pg_dumpall backup
 
-## Problem
+- **Use when:** a database on lxc260 is corrupted or lost, or lxc260 itself has to be rebuilt.
+- **Duration:** 30-60 minutes for one database; longer for a full cluster.
+- **Risk:** dropping the live database destroys every write since the dump; replaying the whole
+  dump over a live cluster also touches the databases that were not meant to be restored.
+- **Last exercised:** 2026-08-13, pass (full-cluster restore into a scratch cluster, all databases
+  and roles compared against live). Validation runs monthly by timer (`postgresql_restore_test`).
 
-A PostgreSQL database must be restored from backup after corruption,
-accidental deletion, or CT260 rebuild.
+The backup is a `pg_dumpall` of the whole cluster (all databases plus roles), written by
+`snippets/postgres/pg-backup.sh`. It cannot be replayed for one database alone. This runbook has two
+paths:
+
+- **Path A (one database):** restore the dump into a scratch cluster on port 5433, `pg_dump` the one
+  database out of it, and load that into the live cluster.
+- **Path B (full cluster):** replay the whole dump into an empty cluster, with every consumer stopped.
+
+Consumers: `openwebui_db` -> OpenWebUI on lxc230 (`/opt/openwebui/`); `paperless_db` -> Paperless-ngx
+on lxc211 (`/opt/paperless/`). All commands run on the Proxmox host.
 
 ## Preconditions
 
-- CT260 is running and PostgreSQL is online
-- `/mnt/backups/` is mounted and contains valid `pg_dumpall_*.sql.gz` dumps
-- All dependent services (e.g. OpenWebUI on CT230) are stopped
-- No active connections to the target database
+- lxc260 is running; `/mnt/backups` inside it is the CIFS mount of the backup share.
+- The dump to restore is known (timestamp in the file name).
+- Free space on the backup share for one database dump plus one safety dump.
 
-## Procedure
+## Steps
 
-All commands run on the Proxmox host via `pct exec`.
+### Path A: restore one database
 
-### 1. Identify the backup to restore
-```bash
-pct exec 260 -- ls -lt /mnt/backups/ | head -10
-```
+1. Select the dump and confirm it is complete.
+   ```bash
+   pct exec 260 -- findmnt -no FSTYPE /mnt/backups
+   pct exec 260 -- bash -c 'ls -1t /mnt/backups/pg_dumpall_*.sql.gz | head -5'
+   DUMP=/mnt/backups/pg_dumpall_<timestamp>.sql.gz
+   pct exec 260 -- gzip -t "$DUMP"
+   pct exec 260 -- bash -c "gzip -cd $DUMP | grep -c 'PostgreSQL database cluster dump complete'"
+   ```
+   Check: `cifs`; `gzip -t` exits 0; the marker count is exactly `1`. Otherwise pick an older dump.
 
-Select the appropriate dump file by timestamp.
+2. Create a scratch cluster and restore the whole dump into it.
+   ```bash
+   pct exec 260 -- pg_createcluster 15 restoretest --port 5433 --locale en_US.UTF-8 --start-conf manual
+   pct exec 260 -- pg_ctlcluster 15 restoretest start
+   pct exec 260 -- bash -c "gzip -cd $DUMP | runuser -u postgres -- psql -p 5433 -q -d postgres"
+   ```
+   Check: `pct exec 260 -- ss -tlnp | grep 5433` shows loopback only; the only `ERROR:` line from
+   psql is `role "postgres" already exists`. Every command against the scratch cluster carries
+   `-p 5433`.
 
-### 2. Stop dependent services
-```bash
-# OpenWebUI (CT230)
-pct exec 230 -- docker stop openwebui
-```
+3. Extract the one database from the scratch cluster.
+   ```bash
+   pct exec 260 -- bash -c "runuser -u postgres -- pg_dump -p 5433 -Fc <db> > /mnt/backups/restore_<db>.dump"
+   ```
+   Check: `pct exec 260 -- runuser -u postgres -- pg_restore -l /mnt/backups/restore_<db>.dump | head`
+   lists tables of `<db>`.
 
-### 3. Verify no active connections
-```bash
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -c \"
-SELECT pid, usename, state FROM pg_stat_activity
-WHERE datname = '<target_db>';\"" postgres
-```
+4. Stop the consumer of `<db>`.
+   ```bash
+   pct exec 230 -- docker stop openwebui      # openwebui_db
+   pct exec 211 -- docker stop paperless      # paperless_db
+   ```
+   Check: `pct exec <ctid> -- docker ps` no longer lists the container.
 
-If connections remain, terminate them:
-```bash
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -c \"
-SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-WHERE datname = '<target_db>' AND pid <> pg_backend_pid();\"" postgres
-```
+5. Take a safety dump of the current live state. This is what makes step 6 reversible.
+   ```bash
+   pct exec 260 -- bash -c "runuser -u postgres -- pg_dump -Fc <db> > /mnt/backups/pre-restore_<db>_$(date +%Y%m%d_%H%M%S).dump"
+   ```
+   Check: `pg_restore -l` on the file exits 0. Do not continue if this step failed.
 
-### 4. Drop the target database
-```bash
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && dropdb <target_db>" postgres
-```
+6. Terminate remaining sessions and drop the live database.
+   ```bash
+   pct exec 260 -- runuser -u postgres -- psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '<db>' AND pid <> pg_backend_pid();"
+   pct exec 260 -- runuser -u postgres -- dropdb <db>
+   ```
+   Check: `psql -l` no longer lists `<db>`.
 
-### 5. Restore from dump
-```bash
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && gunzip -c /mnt/backups/<dump_file>.sql.gz | psql" postgres
-```
+7. Load the extracted database.
+   ```bash
+   pct exec 260 -- runuser -u postgres -- pg_restore -C -d postgres /mnt/backups/restore_<db>.dump
+   pct exec 260 -- runuser -u postgres -- psql -d <db> -c 'ANALYZE;'
+   ```
+   Check: `psql -l` lists `<db>` with its original owner; `\du` shows the tenant role.
 
-Expected output:
-- `CREATE DATABASE`, `CREATE TABLE`, `COPY`, `ALTER TABLE`, `CREATE INDEX` statements
-- `ERROR: role "..." already exists` for pre-existing roles (harmless)
+8. Start the consumer again.
+   ```bash
+   pct exec <ctid> -- docker start <container>
+   ```
+   Check: `docker ps` shows the container `Up (healthy)` or `Up`; `pg_stat_activity` on lxc260 shows a
+   session for `<db>`.
 
-### 6. Verify restore
-```bash
-# Database exists with correct owner
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -c '\l'" postgres
+9. Remove the scratch cluster and return its blocks to the thin pool.
+   ```bash
+   pct exec 260 -- pg_dropcluster 15 restoretest --stop
+   pct fstrim 260
+   ```
+   Check: `pct exec 260 -- pg_lsclusters` lists only `main`.
 
-# Tables and row counts
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -d <target_db> -c \"
-SELECT schemaname, relname, n_live_tup
-FROM pg_stat_user_tables
-ORDER BY n_live_tup DESC
-LIMIT 20;\"" postgres
+### Path B: full cluster (lxc260 rebuilt or cluster lost)
 
-# Roles intact
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -c '\du'" postgres
-```
-
-### 7. Restart dependent services
-```bash
-pct exec 230 -- docker start openwebui
-
-# Verify health
-sleep 10
-pct exec 230 -- docker ps --format "table {{.Names}}\t{{.Status}}"
-
-# Verify DB connection
-pct exec 260 -- su -s /bin/bash -c "cd /tmp && psql -c \"
-SELECT pid, usename, state FROM pg_stat_activity
-WHERE datname = '<target_db>';\"" postgres
-```
-
----
-
-## Failure Modes
-
-| Symptom | Likely Cause | Action |
-|---|---|---|
-| `DROP DATABASE` fails: "being accessed by other users" | Active connections remain | Terminate via `pg_terminate_backend()` or stop all consumers |
-| Restore errors: `role "X" already exists` | Role survived the drop (expected) | Harmless - `pg_dumpall` includes `CREATE ROLE` for all roles |
-| Restore errors: `database "X" already exists` | Database was not dropped | Run `dropdb` first |
-| Tables exist but row counts are zero | Wrong dump file selected | Check dump timestamp, try a different backup |
-| App cannot connect after restore | pg_hba.conf or listen_addresses changed | Verify pg_hba rules and listen_addresses match pre-restore state |
-
----
-
-## Full Cluster Restore (CT260 Rebuild)
-
-If CT260 must be rebuilt from scratch:
-
-1. Create new CT260 (Debian 12, unprivileged, same spec)
-2. Install PostgreSQL 15
-3. Configure `postgresql.conf` (listen_addresses, data-checksums)
-4. Configure `pg_hba.conf` (service allowlist)
-5. Mount backup share (`/mnt/backups`)
-6. Run restore procedure (steps 5-7 above)
-7. Re-apply `ansible-playbook playbooks/pg-backup.yml` - this redeploys `pg-backup.sh`,
-   `pg-backup.service` and `pg-backup.timer`. There is no cron entry to restore.
-
-Refer to: [postgresql-platform.md](../../docs/services/postgresql-platform.md) for hardening details.
-
----
-
-## Non-destructive verification (automated since 2026-08-13)
-
-> **This procedure now runs by itself.** The `postgresql_restore_test` role deploys
-> `pg-restore-test.sh` plus a timer firing `*-*-01 09:00` with `Persistent=true`, and
-> `PostgreSQLRestoreTestStale` alerts if no run has succeeded for 40 days. The steps below are
-> what that script does, kept here so the mechanism can be read, audited and executed by hand -
-> `systemctl start pg-restore-test.service` triggers it on demand. Note the script asserts dump
-> integrity and non-empty key tables rather than comparing against the live database; see step 4
-> for why a live comparison would report a difference on every run.
-
-The procedure above is the recovery path: it drops a live database, so it can only be
-rehearsed by accepting an outage. For periodic *validation* - proving that the dumps on disk are
-restorable - restore into a throwaway cluster instead. Nothing live is touched, no service is
-stopped, and it exercises the full-cluster path (all databases plus roles), which the
-single-DB procedure does not.
-
-### 1. Verify the dump is readable and complete
-
-```bash
-DUMP=$(pct exec 260 -- bash -c 'ls -1t /mnt/backups/pg_dumpall_*.sql.gz | head -1')
-pct exec 260 -- gzip -t "$DUMP"                                       # exit 0 = not truncated
-pct exec 260 -- bash -c "gunzip -c $DUMP | grep -c 'cluster dump complete'"   # must be 1
-```
-
-`pg_dumpall` writes `-- PostgreSQL database cluster dump complete` as its final line. Its
-presence is what distinguishes a finished dump from one that died mid-write; `gzip -t` alone
-does not, because a truncated stream can still be a valid gzip member. **The backup script
-performs neither check** - it tests only that the file is non-empty.
-
-### 2. Create a throwaway cluster
-
-```bash
-pct exec 260 -- pg_createcluster 15 restoretest --port 5433 \
-    --locale en_US.UTF-8 --start-conf manual
-pct exec 260 -- pg_ctlcluster 15 restoretest start
-```
-
-`--locale` must match the live cluster (`SELECT datcollate FROM pg_database`) or the dump's
-`CREATE DATABASE ... LC_COLLATE` statements fail. `--start-conf manual` is deliberate: if cleanup
-is interrupted, the stray cluster will not come back at the next boot.
-
-Confirm it binds loopback only - a second cluster must not appear on the tailnet:
-
-```bash
-pct exec 260 -- ss -tlnp | grep 5433     # expect 127.0.0.1:5433 and [::1]:5433 only
-```
-
-### 3. Restore into it
-
-```bash
-pct exec 260 -- su -s /bin/bash -c \
-    "cd /tmp && gunzip -c $DUMP | psql -p 5433 -q -d postgres" postgres
-```
-
-Every command carries `-p 5433`. That port is the only thing separating a validation run from
-overwriting production.
-
-### 4. Compare against the live cluster
-
-Compare exact counts, not `n_live_tup` from `pg_stat_user_tables` as step 6 of the recovery
-procedure does - that column is a statistics estimate and reads 0 on a freshly restored cluster
-until `ANALYZE` runs, which looks like total data loss and is not.
-
-```sql
-SELECT relname,
-       (xpath('/row/cnt/text()',
-              query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', schemaname, relname),
-                           false, true, '')))[1]::text::bigint AS n
-FROM pg_stat_user_tables ORDER BY relname;
-```
-
-Run it against port 5432 and 5433 per database and `diff` the output. Also diff `pg_roles`.
-
-**Expect append-only tables to differ.** The live database keeps moving after the dump was
-taken, so queue and task-log tables will show *more* rows live than restored. That is the
-correct result, not a defect - confirm it by checking that the surplus rows carry timestamps
-**after** the dump, rather than assuming it.
-
-### 5. Remove it and reclaim the space
-
-```bash
-pct exec 260 -- pg_dropcluster 15 restoretest --stop
-pct exec 260 -- pg_lsclusters                       # only 'main' must remain
-pct fstrim 260                                      # on the Proxmox host
-```
-
-The restored data occupies thin-pool blocks on the boot SSD. Dropping the cluster frees the
-filesystem, but only `fstrim` returns the blocks to the pool - see
-[LVM thin pool full](../platform/lvm-thin-pool-full.md).
-
----
+1. Run step 1 of Path A.
+2. Stop both consumers (step 4 of Path A, both lines).
+   Check: neither `openwebui` nor `paperless` is running.
+3. If the old cluster still starts, take a safety `pg_dumpall` of it to the backup share.
+   Check: the file ends with the completion marker.
+4. Provide an empty cluster: rebuild lxc260 per [docs/nodes/lxc260.md](../../docs/nodes/lxc260.md) or
+   `pg_dropcluster 15 main --stop && pg_createcluster 15 main --start`. Do not run
+   `postgresql_provisioning` before the restore; it would create the tenant databases empty and the
+   dump's `CREATE DATABASE` statements would fail.
+   Check: `psql -l` lists only `postgres`, `template0`, `template1`.
+5. Replay the dump: `gzip -cd $DUMP | runuser -u postgres -- psql -q -d postgres`.
+   Check: the only `ERROR:` is `role "postgres" already exists`.
+6. Run the Ansible playbooks for lxc260 (`postgresql-provisioning.yml`, `pg-backup.yml`,
+   `pg-restore-test.yml`, `postgres-exporter.yml`) to restore `pg_hba.conf`, timers and exporter.
+   Check: the playbooks report no failed tasks; `systemctl list-timers 'pg-*'` shows both timers.
+7. Start both consumers. Check: as step 8 of Path A, for both databases.
 
 ## Verification
 
-| Date | Scope | Result |
-|---|---|---|
-| 2026-08-13 | Full-cluster restore of `pg_dumpall_20260813_085331.sql.gz` into a throwaway cluster on port 5433; both databases and all roles compared against live | Pass - see below |
-| 2026-04-04 | Single-DB restore (openwebui_db): drop -> restore -> app reconnect | Pass |
+- Exact row counts on the key tables, not `n_live_tup` (that is a statistics estimate and reads 0
+  until `ANALYZE`):
+  ```bash
+  pct exec 260 -- runuser -u postgres -- psql -d paperless_db -tAc 'SELECT count(*) FROM documents_document;'
+  pct exec 260 -- runuser -u postgres -- psql -d openwebui_db -tAc 'SELECT count(*) FROM migratehistory;'
+  ```
+- The application works for a user: log in, open a recent document or chat.
+- `systemctl start pg-backup.service` on lxc260 succeeds afterwards.
 
-**2026-08-13 detail.** Dump 44,065 lines / 139 MB uncompressed, `gzip -t` clean, completion
-marker present. Restore exited 0 with exactly one error - `role "postgres" already exists`, the
-harmless case already listed under Failure Modes. `openwebui_db` matched live exactly (43/43
-tables). `paperless_db` matched on 70 of 72 tables; the two differences were
-`django_celery_results_taskresult` (-10) and `documents_paperlesstask` (-2), both accounted for
-by rows created after the dump timestamp (verified: latest post-dump rows at 09:30 and 09:05 UTC
-against a dump at 08:53:31). All four roles restored identically. Functional read on restored
-data: 2,648 documents spanning 1906-04-01 to 2026-05-07. Live cluster untouched throughout -
-same backend PID before and after, no restart, no failed unit. Thin pool 81.76 % before and
-after (152 MiB reclaimed by `fstrim`).
+## Failure modes
+
+| Symptom | Cause | Action |
+|---|---|---|
+| `dropdb` fails: "being accessed by other users" | A consumer is still connected | Repeat step 4 and the terminate query |
+| `CREATE DATABASE` fails on the scratch cluster | `--locale` differs from the live cluster | Match `SELECT datcollate FROM pg_database` |
+| `pg_restore -C` fails: database exists | Step 6 did not complete | Drop it, rerun step 7 |
+| Restored tables empty | Truncated or wrong dump | Recheck the marker; choose another dump |
+| App cannot connect after Path B | `pg_hba.conf` not re-provisioned | Run step 6 of Path B |
 
 ## Rollback
 
-**Step 4 drops the target database. There is no undo after it**, and the state being dropped may be
-the only copy of everything written since the dump was taken.
+- Before step 6 of Path A, nothing live has changed: start the consumer and drop the scratch cluster.
+- After step 6: drop `<db>` again and load the safety dump from step 5 with
+  `pg_restore -C -d postgres /mnt/backups/pre-restore_<db>_<ts>.dump`.
+- Path B: restore the safety `pg_dumpall` from step 3 into an empty cluster the same way.
+- Keep safety dumps until the restored service has been used, not only counted. They are not covered
+  by the 7-day retention glob, so delete them by hand afterwards.
 
-The rollback therefore has to be *created before* the destructive step, not looked for afterwards:
+## Background
 
-```bash
-# Dump the CURRENT state first -- the one you are about to destroy
-pct exec 260 -- su -s /bin/bash -c \
-  "pg_dump -Fc <target_db> > /mnt/backups/pre-restore_<target_db>_$(date +%Y%m%d_%H%M%S).dump" postgres
-```
+`pg_dumpall` output is one SQL stream for every database and role. Dropping one database and piping
+the whole stream into `psql` recreates that database but also re-runs statements against the others,
+which fail or duplicate data. Extracting via a scratch cluster yields a clean per-database custom
+dump that `pg_restore -C` can load.
 
-If the restore fails, or the restored data turns out to be the wrong snapshot, drop again and load
-that file back. Keep it until the result has been verified by someone *using* the service, not
-merely by the row counts in the Verification section.
+The backup script verifies each dump before publishing it (`gzip -t` and exactly one completion
+marker), and `pg-restore-test.sh` restores the newest dump into the same scratch-cluster shape every
+month; `PostgreSQLRestoreTestStale` fires after 40 days without a pass. See
+[pg-backup.md](pg-backup.md) and [postgresql-platform.md](../../docs/services/postgresql-platform.md).
 
-**Abort criteria - do not proceed to step 4 if any of these hold:** the dump fails `gzip -t`; it
-does not contain exactly one completion marker; its timestamp is older than expected; or the
-pre-restore dump above did not complete. All four are cheaper to discover now than after the drop.
-
-**Validation, as opposed to recovery, needs no rollback at all.** Restore into a throwaway cluster on
-a separate port instead -- the non-destructive procedure in this runbook touches nothing live and is
-the right tool whenever the question is "do the dumps work" rather than "get the data back".
-
----
-
-## Related Documents
-
-- [pg-backup.md](pg-backup.md) - Backup procedure
-- [postgresql-platform.md](../../docs/services/postgresql-platform.md) - Platform service documentation
-- [pg-backup.sh](../../snippets/postgres/pg-backup.sh) - Backup script
+Verified 2026-08-13: full restore of `pg_dumpall_20260813_085331.sql.gz` into a scratch cluster;
+`openwebui_db` matched live on 43 of 43 tables, `paperless_db` on 70 of 72 (the two differences were
+rows created after the dump); all four roles identical; live cluster untouched.

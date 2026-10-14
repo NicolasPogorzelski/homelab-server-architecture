@@ -1,133 +1,95 @@
-# Runbook: OpenWebUI health check (CT230)
+# Runbook: OpenWebUI health check (lxc230)
 
-## Problem
+- **Use when:** OpenWebUI at `https://ai-openwebui.<tailnet-id>.ts.net` is unreachable, errors, or
+  loses chats; or after a host reboot that touched the aux-disk.
+- **Duration:** 5-15 minutes.
+- **Risk:** none for the checks, which only read state. Repairs are listed per failure mode.
+- **Last exercised:** never.
 
-OpenWebUI depends on three independent layers that can fail separately:
-the aux-disk mount on the Proxmox host, the Docker Compose stack on CT230,
-and the PostgreSQL database connection on CT260 over Tailnet.
-A failure in any layer may render the service unavailable while the others
-remain healthy, making a structured check sequence necessary.
+OpenWebUI depends on four layers that fail separately: the aux-disk mount on the host, the Docker
+Compose stack on lxc230, the PostgreSQL connection to lxc260 over the tailnet, and `tailscale serve`
+in front of it. Work through them in order; the first failing check is the fault. All commands run
+on the Proxmox host. Node details: [lxc230.md](../../docs/nodes/lxc230.md).
 
 ## Preconditions
 
-- Proxmox host shell or SSH session active
-- CT230 is running: `pct status 230` -> `status: running`
-- CT260 is running: `pct status 260` -> `status: running`
+- `pct status 230` and `pct status 260` both print `status: running`.
 
----
+## Steps
+
+1. Host mount.
+   ```bash
+   findmnt /mnt/aux-disk/openwebui
+   ```
+   Check: one mount entry. No output: the aux-disk is not mounted (`findmnt /mnt/aux-disk`,
+   [KE-13](../../docs/platform/known-errors.md#ke-13)).
+
+2. Bind mount inside lxc230.
+   ```bash
+   pct exec 230 -- findmnt /var/lib/openwebui
+   pct exec 230 -- ls /var/lib/openwebui
+   ```
+   Check: a mount entry, and the directory lists `data/`, `containerd/`, `docker-data/`.
+
+3. Compose stack.
+   ```bash
+   pct exec 230 -- docker compose -f /opt/openwebui/docker-compose.yml ps
+   pct exec 230 -- docker compose -f /opt/openwebui/docker-compose.yml logs --tail 30
+   ```
+   Check: every service `running`; no `exited` or `restarting` entry; no database errors in the log.
+
+4. Database reachability (lxc230 -> lxc260:5432 over the tailnet).
+   ```bash
+   pct exec 230 -- nc -zv <tailscale-ip-postgres> 5432
+   ```
+   Without `nc`, from inside the app container:
+   ```bash
+   pct exec 230 -- docker exec openwebui python3 -c "import socket; socket.create_connection(('<tailscale-ip-postgres>', 5432), 3); print('ok')"
+   ```
+   Check: `succeeded!` or `ok`.
+
+5. Tailscale serve.
+   ```bash
+   pct exec 230 -- tailscale serve status
+   ```
+   Check: the output contains
+   ```
+   https://ai-openwebui.<tailnet-id>.ts.net (tailnet only)
+   |-- / proxy http://127.0.0.1:3000
+   ```
 
 ## Verification
 
-### 1. Mounts (Proxmox host)
+The service is healthy when all five checks pass and a login at
+`https://ai-openwebui.<tailnet-id>.ts.net` shows existing chats. A missing chat history with a working
+login points at the database, not at the front end.
 
-Verify the host-side path is mounted before checking inside the container.
+The inference backends (admin desktop and vm100, port 8080) are not part of this check; their absence
+degrades answers without making the service unavailable. If chat works but no model answers, see
+Admin -> Settings -> Connections and [llm-inference.md](../../docs/services/llm-inference.md).
 
-```bash
-# mp1 - local block storage (app state, uploads, vector store, Docker engine data)
-findmnt /mnt/aux-disk/openwebui
-```
+## Failure modes
 
-Expected: a single mount entry. No output = mount missing.
-
----
-
-### 2. Mounts (inside CT230)
-
-Confirm the LXC bind-mount is visible from inside the container.
-
-```bash
-# mp1 - should list data/, containerd/, docker-data/
-pct exec 230 -- ls /var/lib/openwebui
-```
-
-Expected: directory non-empty. Empty or "No such file" = bind-mount not propagated.
-
----
-
-### 3. Container status
-
-```bash
-pct exec 230 -- docker compose -f /opt/openwebui/docker-compose.yml ps
-```
-
-Expected: all services in state `running`. Any `exited` or `restarting` entry
-is a failure.
-
-Check recent logs for errors:
-```bash
-pct exec 230 -- docker compose -f /opt/openwebui/docker-compose.yml logs --tail 30
-```
-
----
-
-### 4. PostgreSQL connectivity (CT230 -> CT260)
-
-Verify CT230 can reach CT260 on port 5432 over Tailnet:
-
-```bash
-pct exec 230 -- nc -zv <tailscale-ip-ct260> 5432
-```
-
-Expected: `Connection to <tailscale-ip-ct260> 5432 port [tcp/postgresql] succeeded!`
-
-If `nc` is not available, use `docker exec` into the running container:
-```bash
-pct exec 230 -- docker exec openwebui bash -c \
-  "python3 -c \"import socket; s=socket.create_connection(('<tailscale-ip-ct260>', 5432), 3); print('ok'); s.close()\""
-```
-
----
-
-### 5. Tailscale Serve
-
-Confirm the HTTPS frontend is active and serving the correct backend:
-
-```bash
-pct exec 230 -- tailscale serve status
-```
-
-Expected output includes:
-```
-https://ai-openwebui.<tailnet-id>.ts.net (tailnet only)
-|-- / proxy http://127.0.0.1:3000
-```
-
-If the serve entry is missing, reconfigure:
-```bash
-pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000
-```
-
----
-
-## Failure Modes
-
-| Symptom | Likely Cause | Action |
+| Symptom | Cause | Action |
 |---|---|---|
-| `findmnt` returns no output for `/mnt/aux-disk/openwebui` | aux disk not mounted on Proxmox host | Check `findmnt /mnt/aux-disk` on Proxmox host |
-| `ls /var/lib/openwebui` empty inside CT230 | Host mount came up after the LXC started | `pct stop 230 && pct start 230` |
-| Container in `exited` state | App crash or OOM | `docker compose logs --tail 50` for error; check `dmesg` for OOM |
-| Container in `restarting` loop | DB unreachable at startup or config error | Check step 4 first; then inspect logs |
-| `nc` to CT260:5432 fails | Tailscale down on CT230 or CT260, or ACL blocking | `pct exec 230 -- tailscale status`; verify tag:ai-stack -> tag:database ACL rule 5 |
-| DB connection errors in app logs | Wrong credentials or DB `openwebui_db` missing | Connect to CT260 and verify: `pct exec 260 -- psql -U postgres -c '\l'` |
-| `tailscale serve status` shows no entry | Serve config lost (container restart, Tailscale restart) | Re-run serve command from step 5 |
+| Step 1 empty | aux-disk not mounted on the host | `findmnt /mnt/aux-disk`; KE-13 |
+| Step 2 empty directory | Host mount came up after lxc230 started | `pct reboot 230` |
+| Container `exited` | App crash or OOM | `docker compose logs --tail 50`; `dmesg` on the host for OOM |
+| Container `restarting` | Database unreachable at startup or config error | Step 4 first, then the log |
+| Step 4 fails | Tailscale down on lxc230 or lxc260, or ACL | `pct exec 230 -- tailscale status`; grant `tag:ai-stack -> tag:database:5432` (Rule 6 in [tailscale-acl.md](../../docs/platform/tailscale-acl.md)) |
+| Database errors in the log | Wrong credentials in `.env` or `openwebui_db` missing | `pct exec 260 -- runuser -u postgres -- psql -l`; restore per [pg-restore.md](../database/pg-restore.md) |
+| Step 5 shows no entry | Serve config lost | `pct exec 230 -- tailscale serve --bg --https=443 http://127.0.0.1:3000` |
 
 ## Rollback
 
-Nothing to roll back: every command in this runbook reads state, and none of them writes. The repair
-actions live in the failure table above, and each names its own reversal there.
+Not applicable for the checks: every command in Steps reads state. Of the repairs, `pct reboot 230`
+and `docker compose` restarts change no data; `tailscale serve --bg` is reversed with
+`tailscale serve --https=443 off`.
 
-Written down rather than omitted, because "there is nothing to undo" and "nobody thought about it"
-look identical in a document that simply has no such section.
+## Background
 
----
-
-## Notes
-
-- All commands run from the Proxmox host via `pct exec`. No direct LXC shell required.
-- The inference backends (`llama-server` on the admin desktop and vm100, port 8080) are not
-  checked here - they are inference-only and their absence degrades functionality without making the service
-  unavailable. Check OpenWebUI Admin -> Settings -> Connections if inference is broken but
-  the service is otherwise healthy, and see [LLM Inference](../../docs/services/llm-inference.md).
-- See: [OpenWebUI service docs](../../docs/services/openwebui.md)
-- See: [LXC230 node docs](../../docs/nodes/lxc230.md)
-- See: [PostgreSQL platform service](../../docs/services/postgresql-platform.md)
+OpenWebUI binds loopback only and is published through `tailscale serve`
+([decision](../../docs/decisions/loopback-tailscale-serve.md)). Chats and settings live in
+`openwebui_db` on lxc260 ([postgresql-platform.md](../../docs/services/postgresql-platform.md));
+uploads and the vector store live on the aux-disk under `/var/lib/openwebui/data` and are lost with
+it. See [openwebui.md](../../docs/services/openwebui.md).

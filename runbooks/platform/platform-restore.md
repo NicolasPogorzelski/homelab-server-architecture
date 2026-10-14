@@ -1,105 +1,106 @@
 # Runbook: Platform restore onto a fresh Proxmox host
 
-## Problem
+- **Use when:** the boot SSD is lost or replaced and the host is reinstalled; `plan` and
+  `test-restore` also run on the live host as a backup check.
+- **Duration:** `plan` and `test-restore` a few minutes; a full rebuild several hours, mostly
+  restore time.
+- **Risk:** a second running copy of the host's Tailscale identity makes both copies unreachable;
+  `host` on a host that already has guests is refused by the script.
+- **Last exercised:** never
 
-The guest backup restores machines, and only onto a host that already looks like this one. The
-host itself was in no backup: the fstab entries for the data disks and the CIFS mounts, the
-credential files those mounts read, the IOMMU kernel arguments and vfio bindings for vm100's GPU,
-the storage definitions the guest configurations name, the hand-written units under
-`/etc/systemd/system` and the Tailscale node identity. Losing the boot SSD meant reinstalling
-Proxmox and then rebuilding the host from memory before the first guest could start. A single
-archive from 2026-08-20 existed, by hand, on that same SSD.
+`snippets/scripts/platform-restore.sh`, deployed by the `guest_backup` role to
+`/usr/local/sbin/`, rebuilds the host from two archive sets in `/mnt/vzdump`:
 
-## Solution
-
-Three pieces, all from the `guest_backup` role:
-
-| Piece | What it does |
+| Source | Content |
 |---|---|
-| `host-config-backup.sh` | Daily archive of `/etc` (with `/etc/pve`), the cluster database, CIFS credentials, root's keys, `/var/lib/tailscale`, `/usr/local`, the guest configurations and the machine's metadata, written to `/mnt/vzdump/host-config` and `/var/backups/host-config`. `HostConfigBackupStale` watches it. |
-| `guest-backup.sh` | Weekly `vzdump` of every guest, vm100 included since 2026-10-12 with its data disk excluded by `backup=0`. |
-| `platform-restore.sh` | Reads both and rebuilds: `plan`, `test-restore`, `host`, `guests`, `verify`. |
+| `host-config-backup.sh`, daily | `/etc` with `/etc/pve`, the cluster database, CIFS credentials, root's keys, `/var/lib/tailscale`, `/usr/local`, guest configurations, machine metadata; to `/mnt/vzdump/host-config` and `/var/backups/host-config`. Watched by `HostConfigBackupStale`. |
+| `guest-backup.sh`, weekly | `vzdump` of all nine guests; vm100's data disk excluded by `backup=0` ([guest-backup-restore.md](guest-backup-restore.md)). |
 
-Order of a rebuild: vm102 first, because the host's CIFS mounts and three containers need its
-shares; lxc260 next, the database; lxc250 late, because it runs Ansible once the rest is up; vm100
-last, with its data disk reattached from the auxiliary disk.
+Subcommands: `plan` (read-only), `test-restore <ctid>`, `host`, `guests`, `verify`. `guests`
+restores and starts in the order `ORDER=(102 260 200 210 211 220 230 250 100)`: vm102 first,
+because the host's CIFS mounts and lxc260, lxc210 and lxc220 need its shares; vm100 last, with its
+data disk reattached from the aux-disk.
 
-## Precondition
+## Preconditions
 
-- The disk holding `/mnt/vzdump` survived: the auxiliary disk (KE-13) today. If it did not, the
-  copy in `/var/backups/host-config` on the old boot disk has the host configuration, and no
-  guest archive exists anywhere else - see the off-site item in the remediation plan.
-- A Proxmox VE installation of the same major version on the new boot disk, hostname `server`,
-  the bridge `vmbr0` on the same network as before.
-- The old host is off. The restore brings back its Tailscale identity; two running copies of one
-  node key make both unreachable.
+- The disk holding `/mnt/vzdump` (the aux-disk, [KE-13](../../docs/platform/known-errors.md#ke-13))
+  survived. If not, `/var/backups/host-config` on the old boot disk still has the host
+  configuration, but no guest archive exists anywhere else
+  ([off-site backup](../../docs/platform/remediation-plan.md#off-site-backup)).
+- Proxmox VE of the same major version installed on the new boot disk, hostname `server`, `vmbr0`
+  on the same network as before.
+- The old host is off.
 
-## Procedure
+## Steps
 
-Prove the backups first. Both commands are safe on the running host, and the second is the only
-restore test this platform can run without a second machine.
-
-```bash
-platform-restore.sh plan                 # every guest has an archive, every disk is present
-platform-restore.sh test-restore 260     # smallest container: restore as 960, mount, destroy
-```
-
-On the new installation:
-
-```bash
-# 1. The backup disk. Its fstab line is in the archive, but the archive is on it.
-mkdir -p /mnt/aux-disk && mount /dev/disk/by-id/<aux-disk>-part1 /mnt/aux-disk
-mkdir -p /mnt/vzdump && mount --bind /mnt/aux-disk/vzdump /mnt/vzdump
-
-# 2. The tool, from the newest archive (or from the repository)
-A=$(ls /mnt/vzdump/host-config/host-config-*.tar.zst | tail -1)
-tar --zstd -xOf "$A" usr/local/sbin/platform-restore.sh > /root/platform-restore.sh
-chmod 700 /root/platform-restore.sh
-
-# 3. Read before writing
-/root/platform-restore.sh plan
-
-# 4. Host configuration, then a reboot for IOMMU and vfio
-/root/platform-restore.sh host
-reboot
-
-# 5. Guests, in order, started as they come
-/root/platform-restore.sh plan
-/root/platform-restore.sh guests
-/root/platform-restore.sh verify
-```
-
-Then, from lxc250: every playbook that targets the `proxmox` group, so the roles own the host
-again, followed by `fleet-health-check.yml` and a drift sweep.
+1. On the old host while it still runs, prove the backups. Both commands are safe on the live host.
+   ```bash
+   platform-restore.sh plan
+   platform-restore.sh test-restore 260
+   ```
+   Check: `plan complete, no gaps`; `test-restore of 260 passed` (restored as 960, mounted,
+   destroyed, never started).
+2. On the new installation, mount the backup disk by hand; its fstab line is inside the archive.
+   ```bash
+   mkdir -p /mnt/aux-disk && mount /dev/disk/by-id/<aux-disk>-part1 /mnt/aux-disk
+   mkdir -p /mnt/vzdump && mount --bind /mnt/aux-disk/vzdump /mnt/vzdump
+   ```
+   Check: `ls /mnt/vzdump/host-config/` lists `host-config-*.tar.zst`.
+3. Extract the tool from the newest archive (or take it from the repository).
+   ```bash
+   A=$(ls /mnt/vzdump/host-config/host-config-*.tar.zst | tail -1)
+   tar --zstd -xOf "$A" usr/local/sbin/platform-restore.sh > /root/platform-restore.sh
+   chmod 700 /root/platform-restore.sh
+   ```
+   Check: `/root/platform-restore.sh plan` prints the saved and current Proxmox versions.
+4. Restore the host configuration, then reboot for IOMMU and vfio.
+   ```bash
+   /root/platform-restore.sh host
+   reboot
+   ```
+   Check: `host step done`; after the reboot `findmnt /mnt/vzdump` and `ls /mnt/smb` answer once
+   vm102 runs. A `network configuration differs` line is compared by hand, not applied.
+5. Restore and start the guests.
+   ```bash
+   /root/platform-restore.sh plan
+   /root/platform-restore.sh guests
+   /root/platform-restore.sh verify
+   ```
+   Check: `plan` shows every passthrough disk `present`; `verify` lists all nine guests running.
+6. From lxc250: every playbook that targets the `proxmox` group, then `fleet-health-check.yml` and
+   a drift sweep.
+   Check: no failed hosts; the sweep reports no drift.
 
 ## Verification
 
-- `platform-restore.sh verify`: every guest listed and running.
-- `qm config 102` names all seven passthrough disks, `qm config 100` its `scsi1`.
+- `qm config 102` names all seven passthrough disks; `qm config 100` has `scsi1`.
 - On the host: `ls /mnt/smb/*` answers, `systemctl --failed` is empty, `uname -r` is the expected
   kernel.
-- The fleet: `fleet-health-check.yml` green, the drift sweep reports nothing, no alert but
-  `Watchdog`.
-- On the Tailscale console: one `server` node, not two.
+- `fleet-health-check.yml` green; no alert other than `Watchdog`.
+- Tailscale admin console: one `server` node, not two.
 
-## Failure
+## Failure modes
 
 | Symptom | Cause | Action |
 |---|---|---|
-| `plan` reports `NO ARCHIVE` for a guest | The weekly run failed for it, or it was never in `GUESTS` | Check `GuestBackupPartial`; for a new guest, add it to `guest-backup.sh` |
-| `host` refuses: guests exist | Not a fresh installation | Intended. Restore single guests with `guests`, which skips existing ones |
-| `reattach ... MISSING` | A passthrough disk or the auxiliary disk is not attached | Attach it, then `qm set <id> --<key> <value>` with the line from `meta/guest-conf/` |
-| lxc260 or lxc210 fail to start | vm102's shares not yet reachable | `ls /mnt/smb/postgres-backups`, then `pct start` |
-| The node shows up twice in Tailscale | The old host is running | Power it off; remove the stale node in the console |
+| `plan`: `<id>: NO ARCHIVE` | Weekly run failed for it, or the guest is not in `GUESTS` | Check `GuestBackupPartial`; add a new guest to `guest-backup.sh` and `ORDER` |
+| `plan`: `on the saved host but not in ORDER` | Guest added without updating the script | Add it to `ORDER` |
+| `host`: `guests exist on this host` | Not a fresh installation | Intended; restore single guests with `guests`, which skips existing IDs |
+| `MISSING <key>: ... left out` | A passthrough disk or the aux-disk is not attached | Attach it; `qm set <id> --<key> <value>` with the line from `meta/guest-conf/` |
+| lxc260, lxc210 or lxc220 do not start | vm102's shares not reachable yet | `ls /mnt/smb/postgres-backups`, then `pct start <ctid>` |
+| `server` appears twice in Tailscale | Old host running | Power it off; remove the stale node in the console |
 
 ## Rollback
 
-Nothing on the old boot disk is touched. Put it back, boot it, and the platform is as it was at its
-last shutdown; the guests on the new disk are discarded with it.
+The old boot disk is not touched. Put it back and boot; the platform is as at its last shutdown,
+and whatever the new disk's guests wrote is discarded with it.
 
-## Related
+## Background
 
-- [Guest backup and restore](guest-backup-restore.md)
-- [Boot SSD replacement](boot-ssd-replacement.md)
-- [LXC250 rebuild](lxc250-rebuild.md)
-- [KE-14](../../docs/platform/known-errors.md#ke-14), [KE-13](../../docs/platform/known-errors.md#ke-13)
+The host configuration is what a guest archive does not carry: fstab entries for the data disks
+and CIFS mounts, their credential files, IOMMU kernel arguments and vfio bindings for vm100's GPU,
+the storage definitions the guest configurations name, units under `/etc/systemd/system`, and the
+Tailscale node identity. `host` appends only the saved `/mnt/` fstab lines and missing
+`storage.cfg` stanzas, so the installer's root, EFI and swap entries stay. Related:
+[boot-ssd-replacement.md](boot-ssd-replacement.md), [lxc250-rebuild.md](lxc250-rebuild.md),
+[KE-14](../../docs/platform/known-errors.md#ke-14).

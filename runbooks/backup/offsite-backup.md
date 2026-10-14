@@ -1,129 +1,105 @@
 # Runbook: off-site backup with restic
 
-## Problem
+- **Use when:** deploying the `offsite_backup` role once the VPS exists, running an off-site backup
+  by hand, restoring from the off-site copy, or an `OffsiteBackup*` alert fires.
+- **Duration:** 15 minutes to deploy; the first run takes hours (`TimeoutStartSec=21600`).
+- **Risk:** low for the source data, which is only read. A wrong `offsite_backup_paths` entry is
+  skipped by `restic backup` with exit 0; the role and script check every path for this reason.
+- **Last exercised:** never. The VPS is not provisioned and the role is not deployed, so no
+  off-site copy exists yet ([remediation plan](../../docs/platform/remediation-plan.md#off-site-backup)).
 
-Every copy of this platform's data is in one flat. The database dumps sit on vm102's archive pool,
-the guest backups on the auxiliary disk, the user files on the same pool under SnapRAID parity.
-Parity answers the loss of a disk and nothing else: deletion, corruption and ransomware are
-legitimate writes as far as the array is concerned, and the next `snapraid sync` copies the damage
-into the parity.
+Every copy of the platform's data is on one site. SnapRAID parity covers the loss of a disk, not
+deletion, corruption or ransomware; any account able to write the local backups can delete them,
+and lxc250 holds hypervisor root. The target, decided in
+[offsite-backup-target.md](../../docs/decisions/offsite-backup-target.md): `restic` to a
+`rest-server --append-only` on a small VPS. The client credential can create and read snapshots and
+cannot remove any; retention runs on the server under a different account.
 
-The credential form is sharper than the fire-and-theft form. Any account able to write these
-backups can delete them, and lxc250 has held hypervisor root since 2026-08-21.
+Scope is the C1 set in [data-classification.md](../../docs/platform/data-classification.md):
 
-## Solution
-
-`restic` from the nodes that hold C1 data to a `rest-server` running in append-only mode on a
-small VPS at a second site. The backup credential can create and read snapshots and cannot remove
-anything, so a credential stolen from this side cannot destroy the copy it was stolen to reach.
-Retention is applied on the server, by a different account.
-
-The C1 scope is defined in [`data-classification.md`](../../docs/platform/data-classification.md)
-and is about 41 GB. Two source nodes:
-
-| Node | What it sends | Why it is separate |
+| Node | What it sends | Why separate |
 |---|---|---|
-| vm102 | Nextcloud files, Paperless documents, both dump sets | The archive pool is local here; the Proxmox host sees it over CIFS |
-| lxc250 | The vault password, the real inventory and the automation SSH key | Without these no other restore can be performed, and they exist in one copy on a failing SSD |
+| vm102 | Nextcloud files, Paperless documents, both dump sets | The archive pool is local there |
+| lxc250 | Vault password, real inventory, automation SSH key | Needed before any other restore can run |
 
-Each node uses a repository and an append-only account of its own. One repository shared by
-both would mean a compromise of vm102 could read lxc250's credentials, which is the one dataset
-whose disclosure makes everything else reachable.
+Each node has its own repository and append-only account, so a compromise of vm102 cannot read
+lxc250's credentials. Schedule, verification weekday and subset are in the role defaults.
 
 ## Preconditions
 
-The role asserts these and refuses to deploy if they are missing.
+The role asserts these and refuses to deploy without them.
 
-1. **The VPS exists and runs `rest-server --append-only`.** Provisioning is a separate procedure:
-   [`platform/offsite-vps-provision.md`](../platform/offsite-vps-provision.md).
-2. **Both repositories are initialised** - `restic init` is the one operation an append-only
-   account cannot perform, so it is done once from the server side during provisioning.
-3. **`vault_offsite_backup_repository` and `vault_offsite_backup_password` exist** in the vaulted
-   `group_vars` of the inventory on lxc250. They are references in this repository and values
-   nowhere in it.
-4. **`offsite_backup_paths` is set in `host_vars`** for each source node. The role carries no
-   fleet-wide default on purpose: a wrong path is silently skipped by `restic backup`, which then
-   exits 0 having copied less.
-5. **The repository password is escrowed on paper, off site.** A `restic` repository whose password
-   is lost is indistinguishable from one that was never taken. It goes in the same envelope as the
-   Ansible vault password, and the annual escrow check covers both.
+- The VPS runs `rest-server --append-only`: [offsite-vps-provision.md](../platform/offsite-vps-provision.md).
+- Both repositories are initialised from the server side (`restic init` is the one operation an
+  append-only account cannot perform).
+- `vault_offsite_backup_repository` and `vault_offsite_backup_password` exist in the vaulted
+  `group_vars` of the inventory on lxc250.
+- `offsite_backup_paths` is set in `host_vars` for each source node; the role has no default.
+- The repository passwords are escrowed on paper off site, with the Ansible vault password.
 
-## Commands
+## Steps
 
-Deploy or update:
+1. Deploy, dry run first (from the repository's `ansible/` directory on lxc250).
+   ```bash
+   ansible-playbook playbooks/offsite-backup.yml --check --diff
+   ansible-playbook playbooks/offsite-backup.yml
+   ```
+   Check: no failed asserts; a second run reports `changed=0`. Then move the playbook from
+   `[excluded]` to `[playbooks]` in `ansible/drift-sweep.conf`.
 
-```bash
-cd ~/git/homelab-server-architecture/ansible
-ansible-playbook playbooks/offsite-backup.yml --check --diff
-ansible-playbook playbooks/offsite-backup.yml
-```
+2. Run the first backup by hand on each source node.
+   ```bash
+   systemctl start offsite-backup.service
+   journalctl -u offsite-backup.service -f
+   ```
+   Check: the run ends without `ERROR`; `systemctl show offsite-backup.service -p Result` reads
+   `success`. Read the journal as well: `systemctl reset-failed` also resets `Result`.
 
-First run by hand, watching it, rather than waiting for 04:15:
+3. List the snapshots.
+   ```bash
+   export RESTIC_REPOSITORY="$(grep '^RESTIC_REPOSITORY=' /etc/offsite-backup.env | cut -d= -f2-)"
+   export RESTIC_PASSWORD_FILE=/etc/offsite-backup.pass
+   restic snapshots
+   ```
+   Check: a snapshot tagged with the node name and today's date.
 
-```bash
-systemctl start offsite-backup.service
-journalctl -u offsite-backup.service -f
-```
-
-List what the repository holds:
-
-```bash
-export RESTIC_REPOSITORY="$(grep '^RESTIC_REPOSITORY=' /etc/offsite-backup.env | cut -d= -f2-)"
-export RESTIC_PASSWORD_FILE=/etc/offsite-backup.pass
-restic snapshots
-```
-
-Restore a single path into a scratch directory - never over the original:
-
-```bash
-restic restore latest --target /var/tmp/restore-check --include /mnt/mergerfs/Paperless
-```
+4. Restore one path into a scratch directory, never over the original, and compare.
+   ```bash
+   restic restore latest --target /var/tmp/restore-check --include /mnt/mergerfs/Paperless
+   cmp /var/tmp/restore-check/mnt/mergerfs/Paperless/<file> /mnt/mergerfs/Paperless/<file>
+   ```
+   Check: `cmp` prints nothing and exits 0. Record the date and scope in the `Last exercised` line.
 
 ## Verification
 
-1. The unit finished: `systemctl show offsite-backup.service -p Result` reads `success`.
-   **Read the journal as well.** `systemctl reset-failed` clears that field, so a reset failure and
-   a genuine success are indistinguishable in it - measured on this platform on 2026-09-08.
-2. The metric was written and is readable:
-   `awk '/^offsite_backup_/' /var/lib/node_exporter/textfile_collector/offsite-backup.prom`
-   shows `offsite_backup_success 1` and a fresh timestamp. Mode must be `0644`; node_exporter
-   skips a file it cannot read and logs nothing.
-3. Prometheus has it: `offsite_backup_success` returns a sample per source node.
-4. A restore was actually performed, not merely offered. Restore one file into
-   `/var/tmp/restore-check`, compare it against the original with `cmp`, and record the date here
-   the way [`pg-restore.md`](../database/pg-restore.md) does.
-
-| Date | Scope restored | Result |
-|---|---|---|
-| *(not yet run)* | | |
+- `grep '^offsite_backup_' /var/lib/node_exporter/textfile_collector/offsite-backup.prom` shows
+  `offsite_backup_success 1` and a current `offsite_backup_last_run_timestamp_seconds`. The file
+  mode is `0644`; node_exporter skips a file it cannot read without logging.
+- In Prometheus, `offsite_backup_success` returns one sample per source node.
+- `OffsiteBackupFailed`, `OffsiteBackupStale` and `OffsiteBackupUnverified` are not firing.
 
 ## Failure modes
 
-- **`repository is unreachable or the password is wrong`.** The script checks this before reading
-  any data, so the run costs a second rather than an hour. Check the VPS is up, then that the
-  password file matches the repository - a rotated password on the server invalidates every client.
-- **`restic forget` or `restic prune` fails.** Correct and deliberate. The client credential is
-  append-only; retention runs on the server under a different account. Do not "fix" this by
-  granting the client delete rights - that removes the control the target was chosen for.
-- **The run succeeds and the snapshot is smaller than expected.** A source path that does not exist
-  is skipped by `restic backup` with exit 0. Both the role and the script check every path for
-  this reason; if a path was renamed, the check fails loudly instead.
-- **`OffsiteBackupStale` is silent while no backup has run.** Known and structural: Prometheus runs
-  on the same site, so a period with the host off produces no scrape, and `Persistent=true`
-  refreshes the timestamp before Prometheus returns. The rule means "not more than 50 hours of
-  uptime without an off-site copy". The answer to that class is the external heartbeat in the
-  [remediation plan](../../docs/platform/remediation-plan.md), not a longer window.
-- **The first run is very slow.** 41 GB over a domestic uplink. `TimeoutStartSec=21600` allows six
-  hours; a run cut short leaves a partial snapshot the next run has to redo from the start.
+| Symptom | Cause | Action |
+|---|---|---|
+| `repository ... is unreachable or the password is wrong` | VPS down, or password file does not match the repository | Check the VPS, then `/etc/offsite-backup.pass`; a rotated server password invalidates every client |
+| `restic forget` / `restic prune` fails | By design: the client is append-only | Run retention on the server; never grant the client delete rights |
+| Snapshot smaller than expected | A source path was renamed | The path check fails loudly; fix `offsite_backup_paths` |
+| `OffsiteBackupStale` silent while nothing ran | Prometheus runs on the same site and sees only uptime | Known limit; covered by the external heartbeat item in the remediation plan |
+| First run cut off | Domestic uplink, `TimeoutStartSec` reached | Start it again by hand (step 2) and let it finish |
 
 ## Rollback
-
-Stop and disable the timer, and leave the repository alone:
 
 ```bash
 systemctl disable --now offsite-backup.timer
 ```
 
-The repository is deliberately outside the rollback. The client cannot delete from it, and
-that is the property being bought; removing snapshots is a server-side operation done knowingly.
-Removing the role from a node stops new copies and destroys none.
+The repository is outside the rollback. The client cannot delete from it, which is the property
+the target was chosen for; removing snapshots is a server-side operation. Removing the role from a
+node stops new copies and destroys none.
+
+## Background
+
+Residual risk accepted in the decision: root on the VPS can still delete the repositories. A
+restic repository whose password is lost is unreadable, which is why the password is escrowed and
+covered by the [escrow restore drill](../platform/escrow-restore-drill.md).
