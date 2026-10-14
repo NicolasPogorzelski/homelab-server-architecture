@@ -1,949 +1,137 @@
 # Remediation Plan
 
-Open platform work, ordered by loss risk and dependency, not by interest.
-
-**This document holds ordering and nothing else.** The technical detail of every item lives in
-[`known-errors.md`](known-errors.md), [`changelog.md`](changelog.md) and the runbooks, and is not
-repeated here - a second copy would be the one that goes stale. What is *not* recorded anywhere
-else is why these items must happen in this sequence, and that is what this file exists for.
-
-No dates. Milestones are expressed as dependencies, so a slipped hardware delivery does not make
-the document wrong. Update it in the same commit as the work it describes.
-
-**Item numbers run once through the whole list, not once per tier.** Tier 1 ended at 4 and Tier 2
-began at 4 until 2026-09-12, so two rows answered to the same name and the references to "item 4"
-in this file pointed at different rows depending on which one the reader had just read. Numbers
-here are addresses that other documents cite; a duplicate one makes the citation unresolvable.
-
-For the same items read as security controls rather than as work - which standard control each one
-implements, and which are enforced rather than merely practised - see
-[`security-controls.md`](security-controls.md). It does not duplicate this ordering; it explains
-what is at stake in each item's language rather than in this repository's.
-
----
-
-## The dependency chain
-
-Four items unblock most of the rest. Everything else is ordinary backlog.
-
-```mermaid
-flowchart LR
-  accTitle: Dependency chain of the open work
-  accDescr: Three chains - secrets escrow before lxc250 adoption, host adoption which needed no hardware, and the aux-disk replacement which does.
-
-  ESCROW["escrow ~/.vault_pass,<br/>hosts.yml, the Ansible SSH key"]
-  L250["lxc250 inventory adoption<br/>+ preflight gate"]
-  INSIDE["control node sits inside<br/>the system it manages"]
-  TF["Terraform state can<br/>safely live there"]
-
-  HOSTADOPT["Proxmox host becomes an Ansible node<br/>needs a proxmox group in the inventory"]
-  SMART["SMART attributes<br/>that actually fail"]
-  SCHED["homelab_schedule<br/>role applied"]
-  UNITS["five hand-deployed host units<br/>folded into roles"]
-  HOSTSSH["host SSH hardening<br/>enforced instead of hand-set"]
-
-  AUX["aux-disk replacement"]
-  PINS["pinned images actually deployed"]
-
-  ESCROW --> L250 --> INSIDE --> TF
-  HOSTADOPT --> SMART
-  HOSTADOPT --> SCHED
-  HOSTADOPT --> UNITS
-  HOSTADOPT --> HOSTSSH
-  AUX --> PINS
-
-  classDef hw fill:#8a5a00,stroke:#5f3e00,color:#ffffff
-  classDef lever fill:#1f6f43,stroke:#14512f,color:#ffffff
-  classDef risk fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class AUX,PINS hw
-  class HOSTADOPT,L250 lever
-  class ESCROW risk
-```
-
-**One edge was removed from this diagram on 2026-08-19, and its absence is the point.** The earlier
-version drew `aux-disk replacement -> Proxmox host becomes an Ansible node`, which made the whole
-right-hand branch look hardware-blocked and parked it behind a delivery date. The 2026-08-17 audit
-measured that the coupling does not exist: the adoption needs a `proxmox` group in the inventory,
-not a new disk. Only the amber chain waits on hardware.
-
-The host-adoption chain is the important one: **four separate technical-debt entries in `CLAUDE.md`
-all name "the host must become an Ansible node" as their prerequisite**, and none of them says what
-else is waiting on it. That is the single highest-leverage move on this list.
-
----
-
-## Tier 1 - Irreversible loss, not blocked on anything
-
-Cheap in hours, catastrophic if left. Nothing here waits on hardware.
-
-| # | Item | What is lost |
-|---|---|---|
-| 1 | ~~Escrow `~/.vault_pass`, `hosts.yml`, the Ansible SSH key off-site~~ Reported done 2026-08-20: credentials are held in an external password manager operated by a third party, with the most important ones written on paper off-site. Demoting the GitHub key to a read-only deploy key is still open | Substantially closed, with one thing left to confirm and one discipline left to start. **Confirm:** the item names three artefacts and only one of them is a password. `hosts.yml` and the Ansible SSH key are *files*, and a password manager holding "all passwords" does not necessarily hold them - check explicitly rather than by inference, because the failure mode is discovering the gap on the day the control node is gone. **Start:** an escrow that has never been restored from is the same fiction as an untested backup. The drill is a runbook since 2026-09-11 - [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) - with an execution log whose only row reads "not yet executed". It exercises all three artefacts rather than the password alone, which is the half this item kept describing and no procedure covered |
-| 2 | ~~Execute `runbooks/database/pg-restore.md`, record the date, put it on a cadence~~ Done 2026-08-13. ~~Remaining: make the backup script verify its own output (`gzip -t` + completion marker) at write time~~ Done 2026-08-14 - plus write-to-`.partial`-then-rename, so an unverified dump never appears under the real name, and verification ordered before retention deletion | Closed. A dump that cannot be read now fails the run that wrote it and raises `SystemdUnitFailed`, instead of surviving up to 31 days until the monthly restore test - by which point the 7-day retention has deleted every healthy predecessor. Note the write-time checks prove the stream is complete, not that it is durable on vm102: the read-back is served from the CIFS page cache. Durability remains the restore test's job |
-| 3 | Off-site copy of the C1 datasets defined in [`data-classification.md`](data-classification.md) | All backups are local, on the same site. No protection against site loss or ransomware. Scope defined 2026-08-15 - and this line's earlier wording was wrong. It read "off-site copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which presumes local copies exist that merely need duplicating elsewhere. Two of them do not exist: the Nextcloud MariaDB has no backup at all, and Vaultwarden has no consistent export. Those must be created first - an off-site copy of nothing is nothing. Status 2026-08-15: the MariaDB half is done and live - share provisioned on vm102, `mp1` bind, first verified dump on the share, metric scraped, `MariaDBBackupStale` inactive (`mariadb_backup` role + [runbook](../../runbooks/database/mariadb-backup.md)). The Vaultwarden half closed on 2026-09-01 by withdrawing the service rather than repairing it ([decision](../decisions/vaultwarden-decommission.md)): unused since February, four open items against it, and an unattended secrets store is worse than none. What remains under this item is an off-site copy of the archive pool. Measured 2026-09-04, it has none: the May 2026 mirror covers the same scope as `vzdump`, so the databases are off site and the Nextcloud files, Paperless documents and dump sets are not. **Target decided 2026-09-01** ([decision](../decisions/offsite-backup-target.md)): a small VPS running `rest-server` in append-only mode, written to by `restic`, which is the three-purpose machine this plan originally wanted, with two of the three purposes taken up now. Object Lock on object storage would be the stronger guarantee and was rejected on usability - a control that gets exercised beats one that reads better. The append-only configuration, a dedicated unprivileged account and server-side pruning are what stand in for it, and the residual risk is stated in the decision: root on the VPS can still delete. The C1 set was measured the same day at about 41 GB. The VPS is created by hand and adopted by Terraform afterwards, so the item does not wait on the learning track. **Status 2026-09-09: everything except the machine is built.** The `offsite_backup` role, the script, the timer, four alert rules and two runbooks exist - one for the daily job, one for provisioning the target. Two source nodes with a repository and an append-only account each, so a compromise of vm102 cannot read the credentials lxc250 holds. Nothing deploys until the VPS answers, and the role is deliberately out of the weekly sweep until then. What is left is buying the machine and running [`offsite-vps-provision.md`](../../runbooks/platform/offsite-vps-provision.md) |
-| 4 | Guest backup - a restorable copy of the machines, not only of their data. Role and runbook exist since 2026-08-20, and the job has been running since. Measured 2026-09-09: last run 2026-09-06, `guest_backup_failed_guests 0`, 27.6 GB written, 205 s. Eight of nine guests since lxc240 was destroyed, vm100 excluded on purpose until 2026-10-12, when its root disk joined; the run of 2026-10-10 at 11:00 succeeded for all eight. lxc240 had failed runs twice: from 2026-09-09 on paths outside its UID map, repaired 2026-09-15 ([KE-25](known-errors.md#ke-25)), and on 2026-10-03 as a CTID that no longer existed | Every VM and LXC root disk lives in one thin pool on one six-year-old SSD behind the HBA of [KE-14](known-errors.md#ke-14). The two database dumps restore *data* and Ansible restores *configuration*; neither restores a machine, and state that lives in neither - the Paperless index, Grafana's dashboards, Nextcloud's app config - is simply gone. That [`lxc250-rebuild.md`](../../runbooks/platform/lxc250-rebuild.md) exists is the measure of the gap: a rebuild runbook written because there is no restore. Blocked on nothing except the host adoption, since `vzdump` runs on the hypervisor. See [`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md) |
-
-**Why item 1 no longer says "into Vaultwarden" (decided 2026-08-14).** Vaultwarden's persistent data
-lives on `mp0: /mnt/smb/vaultwarden`, i.e. on vm102's MergerFS pool - so against the *predicted*
-failure, the boot SSD dying, it genuinely would have been a second failure domain. But that is the
-narrow reading. Against site loss, theft, fire, or ransomware spreading over the SMB mounts it
-is worth nothing: same site, same power, same network. An escrow whose whole purpose is the
-catastrophic case must not share a building with the original.
-
-The corrected target is deliberately not a server: sealed on paper, kept outside the flat, plus
-a copy in a password manager somebody else operates. The vault password is roughly 30 bytes of
-static text that changes approximately never - a running system is the wrong medium for it, and
-every additional machine is operational surface this fleet has already shown it does not
-consistently supervise. A self-hosted VPS was considered and rejected for this purpose: it
-answers "where does the secret live" with another system that itself needs credentials, which only
-moves the root-of-trust question one hop and adds a hop that can fail. It becomes the right answer
-once it carries item 3 (off-site backup target) and Terraform state as well - three purposes, not
-one.
-
-**And the same discipline as the dumps applies:** an escrow that has never been restored from is
-the same fiction as an untested backup. Once a year, retrieve the paper copy and run
-`ansible-vault view` against a vaulted file. Record the date, exactly as
-[`pg-restore.md`](../../runbooks/database/pg-restore.md) does.
-
-## Tier 2 - Blocked on hardware
-
-| # | Item | Unblocks |
-|---|---|---|
-| 5 | aux-disk replacement ([KE-13](known-errors.md#ke-13)) - including erasure of the removed disk before it leaves the flat | Removes the last store with no off-site copy. It no longer gates `docker-compose-update`: that hold was lifted on 2026-09-05, so deploying the pinned images is now a matter of picking a session rather than waiting for hardware. The disposal half is not optional and has no owner yet: the disk carries C1 application data, and with thousands of unreadable sectors a software overwrite cannot be assumed to have reached every block, so the honest options are degaussing or physical destruction. This is the only Annex A control on the list with a deadline set by hardware delivery rather than by choice (A.7.14) |
-| 6 | [KE-14](known-errors.md#ke-14) physical verification - 12 V rail, cable reseat, HBA temperature, PSU age | Deferred behind the drive replacement of the second half of October, decided 2026-10-12: it runs if the errors follow the new drive. Written up as [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md); it also records the PSU, the A.7.11 gap in [`physical-controls.md`](physical-controls.md) |
-| 7 | Consider moving the boot SSD off the LSI SAS2008 to an onboard SATA port | A choice for the replacement drive. Hypothesis-discriminating: if the KE-14 bursts stop it was the HBA path, if they persist it is power. Either way the SSD regains TRIM, which the HBA currently blocks |
-
-## Tier 3 - Unblocked by the host adoption
-
-The adoption itself (item 8) happened on 2026-08-21; the host is in the inventory and is
-reachable as an Ansible node. The heading read "behind" for eighteen days after the thing it
-named was done, which is how a plan stops being read: an item that cannot move discourages
-looking at the ones under it. Items 8 to 10 wait on nothing but a session.
-
-| # | Item | Note |
-|---|---|---|
-| 8 | ~~Proxmox host becomes an Ansible node~~ Done 2026-08-21 | Closed. The host is in the inventory, `ssh_hardening` and `node_exporter` reach it, and the four technical-debt entries that named this as their prerequisite are unblocked. The trap this row used to carry - `node_exporter_textfile_dir` needing a `host_vars` override - was already obsolete when the adoption happened and is recorded in the changelog rather than here, because a warning kept alive past its fix deters the work it was written to protect |
-| 9 | ~~Extend the SMART collector to the attributes that matter~~ Written 2026-09-09, applied 2026-09-15 | Debian's `prometheus-node-exporter-collectors` supplies `smartmon.sh`, which exports every attribute per disk as `value`, `worst`, `threshold` and `raw_value`, replacing a hand-written collector that exported two. Four rules fill the `smart` group, written on growth over 25 hours rather than on level - three disks would have made a level rule red on the day it was written, and the question KE-13 could never answer was whether the numbers were still moving. **This row read Done for six days before the role had run anywhere:** measured 2026-09-15, the package still sat in dpkg state `rc`, the retired collector still held its minute timer, and `smartmon_device_info` reached Prometheus from nowhere, so those four rules read nothing and were silent rather than red. Applied that day - 663 series over nine disks, the aux-disk's counters queryable instead of hand-read, fifteen leaked temporary files removed |
-| 10 | ~~Fold the hand-deployed host units into roles~~ Done 2026-09-16 | **Four of the seven closed 2026-09-11** by the `proxmox_host_units` role: `lxc-fstrim`, `lvm-thin-metrics`, `check-smb-mounts.sh` with its unit, and the `netconsole` receiver - whose sending half had been a role since 2026-08-17 while its listening half was a file somebody typed, with a placeholder address and an install note telling the reader to substitute it. A fifth, the `pveproxy` drop-in, is folded onto the shared `wait-for-tailscale-ip.sh` through `tailscale_boot_gate` rather than copied into a second role, and that one is applied: measured 2026-09-12, the host carries `10-wait-tailscale.conf` from the role's template and nothing else, the hand-written `wait-tailscale.conf` is gone, `pveproxy` started through the gate at 12:48 with the ExecStartPre exiting 0, and a re-check of the playbook reports `changed=0` on all eleven hosts. The last two, `node_exporter` and its `wait-for-tailscale-ip.sh` copy, were applied on 2026-09-16; the drift sweep runs `node-exporter` against the host with an empty baseline, measured 2026-10-13. ~~Add `/etc/snapraid.conf` on vm102~~ Done 2026-08-15 |
-| 11 | ~~Apply the `homelab_schedule` role~~ Done 2026-09-16 | Kept on cron on purpose: the job powers the host down, and catch-up semantics would be wrong for it |
-| 12 | ~~`is_mountpoint 1` on the `appdata_aux-disk` storage~~ Done 2026-08-17 | Closed. Proxmox now refuses to treat the storage as active unless a filesystem is actually mounted at the path, so a failed mount can no longer be written into the empty directory on `pve-root`. Verified immediately after: storage still `active`, vm100's `scsi1` still resolvable, guests untouched. Did not need the hardware window it was waiting on. Follow-up noticed while applying it: `mkdir 0` is deprecated and slated for removal in PVE 9, which this host already runs - the replacement is `create-base-path 0` |
-
-## Tier 4 - Ordinary backlog
-
-**External heartbeat (`Watchdog` alert -> off-site receiver), added 2026-08-14.** The measurement
-behind it is in the [changelog entry for 2026-08-14](changelog.md): `PostgreSQLBackupStale` could
-not see three backup-free days, because Prometheus runs on the host that was off. That is
-structural, not a threshold to retune - **an observer sharing a failure domain with the observed
-cannot report its total failure.** The standard fix is the `Watchdog` pattern that
-`kube-prometheus` ships by default: an alert whose expression is simply `vector(1)`, firing
-permanently on purpose and routed outward. If the external receiver stops seeing it, the whole
-alerting chain is down. Cost here is one rule plus one Alertmanager route; the receiver must be a
-service somebody else operates (a free heartbeat SaaS), because a self-hosted one needs a watcher
-of its own. Note the fleet already builds absence-alerts twice - `LvmThinMetricsStale` and
-`PostgreSQLRestoreTestStale` - this extends the same idea to the alerting chain itself.
-
-**Built 2026-09-11 in the repository, live nowhere.** The `Watchdog` rule is loaded; the
-Alertmanager route that keeps it out of the Discord channel exists only in
-`alertmanager.yml.example`. Measured 2026-09-24, the live file on lxc200 still carries the single
-`discord` route from May, so the heartbeat has been posting to Discord every four hours since the
-rule went live. What remains is signing up for a receiver and writing the route and its URL into
-the live `alertmanager.yml` together, which is a decision about a third-party account rather than
-a change to this platform. One number has to be right when that happens and is easy to
-get wrong: the receiver's grace period must exceed the nightly off-window, or every morning opens
-with an alarm about a host that powered down on schedule.
-
-
-**Physical and environmental controls are undocumented (added 2026-08-15).** The whole A.7 family -
-who has physical access to the machine, whether the disks are encrypted at rest, whether there is an
-uninterruptible supply - has never been written down. It surfaces here because it stopped being
-abstract: the leading hypothesis for [KE-14](known-errors.md#ke-14) is a sagging 12 V rail, i.e. an
-open incident whose suspected cause is exactly the control nobody documented. Cheap to close on
-paper, and the paper is what makes the KE-14 verification a planned step instead of a recurring
-intention.
-
-**Written 2026-09-11:** [`physical-controls.md`](physical-controls.md), rated honestly rather than
-generously - three controls in the A.7 family are `None` and the supporting-utilities row is the
-one that is load-bearing, because KE-14 already suspects the power path and the uninterruptible
-supply has never been tested under load. Two things in it are decisions rather than omissions and
-are recorded as such: disks are not encrypted at rest, which a nightly unattended boot makes
-expensive to change on this board, and `pve-firewall` is off. The disposal step for the KE-13 disk
-is the only item on this plan whose deadline is set by a delivery date.
-
-**Fifteen drifted tasks across ten playbooks - measured 2026-09-08, closed 2026-09-09.** The weekly
-sweep (`fleet_drift`) ran all 25 configured playbooks against eleven nodes in 4.3 minutes with no
-failure and no unreachable host. Twenty-three tasks would change; eight were the three held items
-recorded in `ansible/drift-sweep.conf`, leaving fifteen that nothing accounted for.
-
-Every one was read as a diff before anything was applied, and the fifteen fell into three kinds.
-Eleven were the ASCII punctuation pass reaching nodes that had not been re-run since it: em dashes
-in script and unit comments on lxc210, lxc220, lxc260, vm100 and the hypervisor. Two were the
-`breakglass` key labels on vm100 and vm102, where the keys themselves were identical and only the
-comment beside them differed. Two carried substance: `paperless_env` still held the placeholder
-`<tailnet-id>` that had rejected every browser login since 2026-06-09, and the hypervisor's
-`guest-backup.sh` still lacked lxc240 in its `GUESTS` array.
-
-All ten playbooks were applied. Re-checked immediately afterwards, all eleven playbook-and-node
-pairs report `changed=0`, and the fleet holds no failed unit on any of the ten nodes. The lesson is
-in the proportions rather than in any single line: thirteen of fifteen were cosmetic, which is
-precisely why a sweep is needed to find the other two - nobody reads thirteen harmless diffs
-looking for the fourteenth.
-
-**Every scheduled hour in this repository meant two different times - closed 2026-09-08/09.** Nine
-guests kept `Etc/UTC` while vm102 and the Proxmox host kept `Europe/Berlin`, so a bare `OnCalendar=`
-hour fired two hours later in local terms on nine of eleven nodes while every schedule written down
-here read as a local time. The `timezone` role now sets one zone fleet-wide and reads the node back
-to confirm it took. Measured 2026-09-09, ten of ten inventoried nodes report `Europe/Berlin`.
-
-One documented dependency was inverted by the old state and is corrected in `CLAUDE.md`: the
-monthly restore test was said to rely on `lxc-fstrim` reclaiming its thin-pool blocks the same
-morning, and fstrim in fact ran twenty-six minutes earlier, so the reclaim waited a day. With one
-zone fleet-wide the two timers now mean what they say. `fleet_snapshot` and `fleet_drift` still
-name the zone inside their calendar expressions, which is redundant now and deliberately kept: it
-survives a node that is rebuilt before the role reaches it.
-
-**MagicDNS does not resolve on lxc250 (found 2026-09-08, decided 2026-09-11:
-[decision](../decisions/magicdns-and-systemd-resolved.md) - take `resolve` out of `nsswitch.conf`
-on lxc250 first, and read the other six containers before assuming they match).** Any tooling on the control node that
-addresses a node by its `.ts.net` name fails. The ACL is not the cause: the node holds `tag:admin`
-and reaches every port. `systemd-resolved` is active, `/etc/nsswitch.conf` consults `resolve`
-before `dns`, resolved knows nothing of the Tailscale resolver, and `[!UNAVAIL=return]` ends the
-lookup before `/etc/resolv.conf` - which tailscaled had written correctly, with the right nameserver
-and search domain - is ever consulted. A direct UDP query to the MagicDNS resolver answers.
-`fleet-drift.sh` works around it with `curl --resolve`, which keeps SNI and certificate verification
-intact.
-
-**The closing sentence of this entry was wrong, measured 2026-09-12.** It read "the same nsswitch
-ordering is on every Debian container here", which made a one-node fault look like a fleet decision
-and is a large part of why the fix waited. All seven containers were read: lxc250 is the only one
-carrying `resolve` in the line and the only one running `systemd-resolved`, the other six read
-`files dns` with resolved inactive, and those six resolve both a short MagicDNS name and a fully
-qualified one while lxc250 resolves neither. Built the same day as the `nsswitch` role, which owns
-the line and then reads a name back through `getent` rather than reporting the file it wrote. Not
-applied.
-
-**Small open items.** A few lines each, collected because none of them blocks anything else.
-
-- ~~The lxc250 `preflight.yml` gate~~ Done 2026-09-01, imported by every playbook that changes live
-  state. The drift *metric* the original plan bundled with it is not part of this and is not
-  scheduled yet. A metric written only when a playbook runs cannot see a control node drifting
-  because nobody runs playbooks on it, so it would read healthy in the one state it exists to
-  catch - the same shape as `PostgreSQLBackupStale` during an outage. It needs a timer independent
-  of the runs. **Widened 2026-09-04:** the same blindness applies to the whole fleet, not just to
-  the control node. `ssh_hardening` gained a task on 2026-07-08 that never reached seven of ten
-  nodes, and nothing reported it for eight weeks ([KE-23](known-errors.md#ke-23)). The item is now
-  a scheduled `--check` run across the state-changing playbooks, exporting the `changed` counts as
-  a textfile metric with a rule that fires above zero. **Measured 2026-09-08:** six playbooks
-  across eleven nodes, 115 s, `rc=0` throughout, three drifts - `ssh_hardening` and
-  `node_exporter` on the Proxmox host (both already recorded here) and the `systemd_hygiene`
-  masking lxc250 never received, which nothing knew about. Three findings the run cannot make
-  by itself. The exit code is not the signal: every run returned 0, drift or not, so the
-  `changed=` counters in the recap are the only source. A `--check` run is not uniformly
-  read-only: nine roles carry `check_mode: false`, seven of them read-only queries, while
-  `prometheus_config` writes a staged file and runs promtool and `netconsole` sends a ping.
-  And the two host drifts are held on purpose, so a rule on `changed > 0` would be red from
-  the first day. **Armed 2026-09-12** and confirmed here 2026-09-16: `drift-sweep.conf`
-  carries a `[baseline]` of three held entries with a reason above each, the sweep subtracts
-  them, and `FleetDriftUnexpected` fires on what is left over. The last run read
-  `changed_total 8` against exactly those three baselines and `unexpected_total 0`. The
-  complementary half is built as well: `fleet_snapshot` covers what no role manages, which is
-  where `--check` is blind by construction.
-  **What the sweep did not cover until 2026-09-16** is itself. `timezone`, `fleet-drift` and
-  `fleet-snapshot-schedule` import the preflight gate and were in neither the sweep list nor
-  the exclusions, and the deployed `fleet-drift.sh` had been a commit behind this repository
-  since 2026-09-15 with no way to say so. All three are swept now and Check 44 holds the
-  membership.
-- ~~Adopt the Proxmox host's `00-hardening.conf` into `ssh_hardening`~~ Done 2026-09-16. The
-  `--check --diff` confirmed what the item predicted: `PasswordAuthentication no` and
-  `PermitRootLogin prohibit-password` stand unchanged on both sides and only the comment block
-  changes owner, so the run was a transfer of ownership with no configuration in it. The missing
-  physical recovery path was answered with a dead-man switch rather than a second person: a
-  `systemd-run --on-active=300` unit holding a copy of the old file and a restart, armed before
-  the run and cancelled after a *new* connection had been opened and `sshd -t` had passed. Worth
-  reusing - it is the only recovery path a single operator has on a host whose console is inside
-  a passed-through GPU.
-- ~~`DATA_SOURCE_NAME` for `postgres_exporter` into the vault~~ Built 2026-09-09, one inventory
-  line from done. The role now owns `/etc/postgres_exporter.env` behind
-  `postgres_exporter_manage_env`, which defaults to false. The flag is not caution for its own
-  sake: a role that fails on an undefined vault variable would break the weekly sweep for the node
-  it runs against, and a sweep reporting `errored` for work nobody has finished configuring is how
-  a red signal becomes background. **Closed 2026-09-16, applied and verified.**
-  `vault_postgres_exporter_dsn` is in `group_vars/all/vault.yml` and the flag is on in
-  `host_vars/lxc260.yml`. The ciphertext was made on the control node from the value read on
-  lxc260, so neither the vault password nor the plaintext reached a workstation, and the two
-  were proven identical by comparing SHA-256 digests rather than by looking at either. What the
-  run changed is ownership, not content: `postgres_exporter:600` became `root:600`, because
-  systemd reads an `EnvironmentFile` as root before dropping to `User=` and the service account
-  never needed read access to its own credential. Measured after the run: the file reads
-  `root:root 600`, the DSN still hashes to `e3c0405e...`, so nothing about the credential changed,
-  and the exporter answers with 540 `pg_` series at `NRestarts=0`.
-- ~~Pin journald `Storage=persistent` and an explicit `SystemMaxUse=` on vm100 and vm102~~ Role
-  written 2026-09-09, applied on all ten nodes 2026-09-15 - the six days in between are the
-  entry worth keeping, because the role's own read-back could not tell the difference. It
-  asserted that `journalctl --header` names a file under `/var/log/journal`, which holds under
-  `auto` as well, so ten nodes without the drop-in reported success. It now reads the merged
-  configuration through `systemd-analyze cat-config`, where the last assignment of a key wins,
-  which also catches a drop-in sorting after `10-`. The hypervisor takes `2G` rather than the
-  fleet's `512M`, for the reason recorded beside the value in `group_vars/proxmox.yml`. The item
-  named vm100 and vm102 because those were the nodes somebody had looked at; measured, `Storage=` and
-  `SystemMaxUse=` were unset on every inventoried node, so the recorded defect was a fleet-wide
-  default. Journal volume ranges from 386 MB on lxc250 to 1.3 GB on the hypervisor, against a
-  systemd default cap of 10 % of the filesystem - which on lxc250's 7.8 GB root is roughly 780 MB
-  with 2.0 GB free.
-- ~~Fold the `pveproxy` drop-in onto the shared `wait-for-tailscale-ip.sh`~~ Done 2026-09-11. The
-  host is in `tailscale_boot_gate` and the superseded `wait-tailscale.conf` is named in
-  `tailscale_boot_gate_obsolete_dropins`, because the role's `10-` prefix sorts first and a
-  hand-written file left beside it wins every directive the two share.
-- `SystemdUnitFailed` coverage for lxc200, the last node without it; its exporter is a container
-  that cannot see the host's systemd. lxc250 was the second until 2026-08-20. **Decided
-  2026-09-11** ([decision](../decisions/lxc200-systemd-visibility.md)): a native `node_exporter`
-  beside the container on a second port, not a privileged container and not a bind-mounted systemd
-  socket - that is a large authority grant on the node that holds the alerting stack, to close a
-  monitoring gap. Two exporters on one node with one job each, which is untidy on purpose and
-  recorded so a later reader knows which of the two was load-bearing. Not implemented: it adds a
-  scrape target to the rendered Prometheus config, so it wants the same session as that change.
-  **Built 2026-09-12, not applied.** The exclusion is gone from `node-exporter.yml`, the port is in
-  `host_vars/lxc200.yml`, and the job is in the template under a name of its own - the loop would
-  have rendered it as a duplicate of the container's job, which Prometheus answers by refusing the
-  entire file. Attempted 2026-09-15 and stopped at the first run: the unit installed and then exited
-  `217/USER`, because no role has ever created the `node_exporter` account and lxc200 was the one
-  node this playbook never reached. The nine that have it were made by hand before the role
-  existed. The role now creates the group and the account, with no uid pinned - the nine sit on
-  996 and 999 depending on what was free at the time. **Closed 2026-09-15** by both runs in
-  that order, the second adding a scrape target the first had to be answering: the native exporter
-  binds the node's Tailscale address on 9101, both jobs report `up`, and 895
-  `node_systemd_unit_state` series arrive from lxc200. The only instance left without them is the
-  container exporter on `127.0.0.1:9100`, which is the one that cannot see the host's systemd and
-  is why there are two. No node on this fleet is outside `SystemdUnitFailed` any more.
-- ~~`fleet-snapshot.yml` runs `become: true` against every node once a week~~ Done 2026-09-09. The
-  grant now sits on the two tasks that need it, root's crontab and the Docker socket, and the play
-  runs unprivileged otherwise. Verified rather than assumed: the three countable projections -
-  listening sockets, mount table, enabled and masked unit files - return byte-identical counts on
-  all ten nodes with and without `become`, so nothing narrowed. That check is the point. A
-  privilege reduction that quietly reads less is worse than the grant it removed, because the
-  snapshot would keep reporting and cover less.
-- ~~Clear the orphaned `smart.prom.*` temporary files from the host's textfile directory~~ Done
-  2026-09-09. The leak is closed at its source rather than swept: the script whose `mktemp` had no
-  cleanup trap is retired with item 9, and the `smart_metrics` role removes any `*.prom.*` left in
-  the directory older than an hour. Fourteen files dating back to 2025-12 were cleared. The
-  companion observation stands and belongs to item 10 - `lvm-thin-metrics.sh` leaked one the same
-  way, and it is still hand-deployed.
-
-**Closed on 2026-09-01.** The disabled `tailscaled-userspace.service` file on lxc220 is deleted,
-with two further orphans on that node ([KE-22](known-errors.md#ke-22)).
-[KE-5](known-errors.md#ke-5), the Vaultwarden migration off CIFS, is closed by decommissioning the
-service ([decision](../decisions/vaultwarden-decommission.md)).
-
-## Added by the 2026-09-16 assessment
-
-A review from the DevOps and DevSecOps seats, against the running fleet rather than against the
-documents. Everything the existing machinery watches came back clean, so what follows is what sits
-outside its field of view. These four are ordinary work and are ordered by exposure.
-
-- ~~**Nothing on this platform measures its patch level.**~~ Done 2026-09-17: `apt_metrics` exports
-  `apt_upgrades_pending` from ten targets and `AptSecurityUpdatesPending` reads it; read back on
-  2026-10-12 with no security update pending anywhere. The finding as written: Measured: the hypervisor has 228 packages
-  pending, 55 of them security; vm102 has 62 pending and 23 security; lxc220 has 13 and 7. The
-  remaining nodes were current. `unattended_upgrades` targets exactly one node, vm100, and there is
-  no metric and no rule anywhere for pending updates - `apt-upgrade.yml` is excluded from the drift
-  sweep for a good reason, since `apt` refreshes its cache even under `--check`, so patch level is
-  the one large property of this fleet that nothing observes. Measurement comes first, the way it
-  did for the SMART counters: `prometheus-node-exporter-apt.timer` is already installed on the
-  hypervisor and sits `masked`, collateral from the collector cleanup of 2026-09-15. Unmask it, own
-  it in `smart_metrics` or a sibling role, alert on security updates pending beyond a threshold.
-  Only then the policy question, which is different per node class: the Debian containers can take
-  the same origin-restricted `unattended_upgrades` vm100 has, while the hypervisor holds `pve-*`
-  packages and a kernel upgrade there costs eleven guests.
-- ~~**lxc250 answers LLMNR and mDNS on the LAN.**~~ Done 2026-09-17, by stopping and disabling
-  `systemd-resolved` rather than by the drop-in proposed below; `ss -Hlun` on 2026-10-12 shows nothing
-  on 5353 or 5355. The finding as written: `systemd-resolved` holds four sockets on
-  `0.0.0.0:5355` and `[::]:5355`, `resolvectl` reports `+LLMNR +mDNS`, and nothing in this
-  repository sets either - both stand at their compiled defaults. It is the only node on the fleet
-  with that listener, and it is the node that holds hypervisor root, the only `~/.vault_pass`, the
-  Ansible SSH key and the only real `hosts.yml`. LLMNR has no authentication: a host on the same
-  segment can answer a lookup that DNS failed and take the connection. The platform binding rule
-  forbids exactly this, and the Tailscale ACLs cannot help, because none of it is tailnet traffic.
-  It arrived with the `nsswitch` change of 2026-09-12, which enabled `systemd-resolved` so MagicDNS
-  names would resolve: the role owns the `hosts` line and nobody owns the protocol switches - the
-  same shape as the `node_exporter` that bound `*:9100` because its unit carried no listen address.
-  Remedy is a drop-in under `/etc/systemd/resolved.conf.d/` with `LLMNR=no` and `MulticastDNS=no`,
-  owned by the `nsswitch` role, proven by `resolvectl status` and an empty
-  `ss -tulnp | grep 5355`. Worth checking the administrator workstation for the same default; the
-  sweep only sees the fleet.
-- ~~**MariaDB has a backup and no proven way back.**~~ Done: `mariadb_restore_test` and
-  [`mariadb-restore.md`](../../runbooks/database/mariadb-restore.md) exist, and the test wrote its
-  metric for the first time on 2026-10-10, see the item of that date. The finding as written: PostgreSQL carries write-time verification, a
-  monthly restore into a throwaway cluster, `PostgreSQLRestoreTestStale` at 40 days and a restore
-  runbook. MariaDB, live since 2026-08-15, has the dump, `MariaDBBackupStale` and a backup runbook,
-  and neither a restore test nor a restore runbook. It is the half that makes Nextcloud's files
-  mean anything, and a dump nobody has restored is an assumption. The pattern exists: mirror
-  `postgresql_restore_test` into a throwaway instance, assert non-empty key tables, export the
-  metric, add the staleness rule.
-- **The sshd binding decision: socket activation off, decided 2026-10-10.** The pin applied to
-  lxc220 on 2026-09-17 bound nothing, because the node was socket-activated, and it was withdrawn.
-  Of the two ways the [decision](../decisions/sshd-listen-address.md) left open, turning
-  `ssh.socket` off won over pinning the socket: one service model across the fleet, the boot
-  gate already proven on lxc250, and `systemctl enable --now ssh.socket` through `pct exec` as the
-  way back. `ssh_hardening` now hands the port from the socket to `ssh.service` wherever
-  `ssh_hardening_listen_address` is set and reads the bind back from `ss`, failing the run if
-  anything but the Tailscale address listens on 22. Applied 2026-10-10 to all six socket-activated
-  containers, one at a time, each followed by `pct reboot`: afterwards `ssh.socket` disabled,
-  `ssh.service` enabled, the Tailscale address alone on 22, Ansible reaching the node, PostgreSQL
-  and Nextcloud's services back. A drift sweep after the last one reported nothing. vm100, vm102 and the hypervisor are not part of this
-  step, and lxc250 kept its hand-written line in `sshd_config` until the role adopted it on 2026-10-13. The
-  decision record carries the choice since its amendment of 2026-10-12. The finding as written:
-- **The sshd binding decision had not been executed on any node.** `ssh_hardening_listen_address`
-  appears only as the empty default in the role, and every node still binds `*:22`, measured. The
-  decision of 2026-09-11 calls for one node per session with the containers first
-  ([decision](../decisions/sshd-listen-address.md)). A decision that is never executed reads, six
-  months later, as a solved problem. The dead-man switch used for the hypervisor's sshd on
-  2026-09-16 is the recovery pattern for it, and it is now proven.
-
-## Added by the 2026-09-30 fix-list reconciliation
-
-A list of 21 repository findings from July, kept outside this repository, was read against `main`
-and the running fleet. Eleven are closed or no longer apply, the `Watchdog` route is already
-carried under Tier 4, and these remain. None blocks anything else.
-
-- ~~**The inference probe is merged and not applied.**~~ Done 2026-10-01: `prometheus-config.yml`
-  applied after a clean `--check --diff`, and `probe_success{service="llama-server"}` reads 1.
-- ~~**Alert delivery has never been tested end to end.**~~ Tested 2026-10-10: `amtool alert add AlertDeliveryTest` on lxc200 moved `alertmanager_notifications_total{integration="discord"}` from 9 to 10 with every failure reason at 0; arrival in the channel itself is checked there, by eye. Repeat it after any change to the receiver. Every alert leaves through one Discord
-  webhook, and a revoked webhook fails without Alertmanager reporting it. Inject one alert with
-  `amtool alert add`, watch it arrive, and record the date, so the last successful test is a fact
-  rather than a guess.
-- ~~**`serial: 1` has no failure limit.**~~ Done 2026-10-10: measured with a throwaway play that failed its first of three hosts - the other two never started, `serial: 1` already stops. The eight playbooks now say so with `max_fail_percentage: 0`, which keeps it if a batch grows, and [ansible.md](ansible.md#rolling-playbooks-and-a-stopped-run) describes the split state a stopped run leaves. Eight playbooks roll one host at a time and none sets
-  `max_fail_percentage`; only `preflight.yml` sets `any_errors_fatal`. What a failed third host does
-  to hosts four to eight has not been run. A throwaway play with `command: /bin/false` on one host
-  answers it, after which the limit is set on purpose. A run that stops midway also leaves the
-  earlier hosts changed, and no runbook describes that split state.
-- ~~**A board swap would take the hypervisor's network and boot entry with it.**~~ Written 2026-10-10, untested: the name comes from `/usr/local/lib/systemd/network/50-pmx-nic0.link`, written by the Proxmox installer and matching the MAC; the boot fallback `\EFI\BOOT\BOOTX64.EFI` exists. The recovery, through GRUB because `vfio-pci` leaves no console, is in the [hard-shutdown runbook](../../runbooks/platform/hard-shutdown-recovery.md). The bridge port is
-  `nic0`, and measured 2026-09-30 `/etc/systemd/network/` holds no `.link` file that assigns the
-  name, so it comes from somewhere this repository does not control. The boot entry lives in the
-  board's NVRAM (`Boot0000`); the fallback `\EFI\BOOT\BOOTX64.EFI` exists, but nobody chose it.
-  Find the naming source with `udevadm test-builtin net_id`, pin the name, and add both steps to
-  the hard-shutdown recovery runbook.
-- ~~**Three wording items in the hand-drafted documents.**~~ Done 2026-10-12: the README defines
-  what `Done` means for a phase and no longer calls recovery deterministic, and Calibre-Web's tier
-  is settled in `CLAUDE.md`, because per-host grants made the tag a label. The finding as written:
-  The README roadmap marks phases
-  `Done` while their progress documents list open work; the README promises "deterministic
-  recovery" while the C1 datasets have no off-site copy; and Calibre-Web's `tag:tier1` has been
-  "being reconfirmed" since 2026-07-08.
-- ~~**`.vault_pass` is not in `.gitignore`.**~~ Done 2026-10-10. The file lives in the control node's home directory,
-  outside the working tree, so nothing can commit it today. One line keeps it that way.
-
-## Added on 2026-10-01
-
-Found while completing the inference rollout.
-
-- **The storage network.** SMB from vm100 (four mounts) and the Proxmox host (four) still reaches
-  vm102's LAN address, admitted by `smb_guard` on source address alone. The target replaces step 2
-  of [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md), which moved the same
-  mounts onto Tailscale: a host-only bridge `vmbr1`, no `bridge-ports`, static addresses for the host,
-  vm100 and vm102. All six host mounts, the two backup mounts included, and vm100's four move to it
-  one at a time, each with automount and a reboot test; afterwards `smb_guard` drops 445 on `ens18`
-  entirely. Samba keeps its wildcard bind, because an explicit bind would cut the Tailscale IPv4 path.
-  That path stays a requirement: admin devices write media to vm102 over Tailscale, checked after
-  every step by mounting a share from the admin desktop and writing and deleting a file. Measured
-  2026-10-01 over that path: 94.9 MB/s up and 104.9 MB/s down with `smbclient`, a direct connection
-  over the LAN at 1 ms. Sampled every second during a repeat run (92.5 MB/s up, 104.7 MB/s down),
-  neither of vm102's two vCPUs saturated: both near 65 % busy, `tailscaled` at 84 to 93 % of one core
-  and `smbd` near 28 % during the upload, steal 0. On 1 GbE the link and the tunnel set the ceiling,
-  so more vCPUs would not raise it; at 2.5 GbE `tailscaled` would need about three cores, and the
-  CPU type (`x86-64-v2-AES` passes no AVX2 to the guest) becomes worth changing. The ACL tests
-  already describe the target (`tag:tier2 -> tag:storage:445` denied, `tag:admin` accepted), so the
-  policy does not change. It needs a decision record, drafted blank-file-first, before any live change.
-- ~~**Media clients move to the tailnet, and vm100 stops listening on the LAN.**~~ Done 2026-10-01.
-  The streaming box moved to `tag:media-player` and streams over the tailnet; Jellyfin and
-  Audiobookshelf publish on `127.0.0.1` behind `tailscale serve --tcp`, and `enp6s18` holds no global
-  IPv6 address ([vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)). Two LAN clients seen in
-  Jellyfin's activity log, `.64` (last 2026-09-27) and `.71` (last 2026-07-27), were not identified;
-  they join the tailnet when they are next needed. The decision record replacing
-  [DD#8](../decisions/design-decisions.md#dd-8) is [Media Over the Tailnet](../decisions/media-over-the-tailnet.md),
-  and the netplan file belongs to the `netplan_no_ra` role, both since 2026-10-13. The
-  throughput measurement of the streaming box was taken on 2026-10-07, under a fault: streams
-  stalled inside the `tailscale serve` forwarder, and Jellyfin now binds the Tailscale address
-  directly ([KE-28](known-errors.md#ke-28)). The cold boot of 2026-10-13 proved the
-  `docker.service` gate: the address was present after 0 s and `NRestarts=0`. Open from that: a
-  measurement of three concurrent 4K streams. The netplan file held
-  across the cold boot of 2026-10-02: no global IPv6 address on `enp6s18`, all three serve forwards
-  present.
-- **LAN ingress guard on every node (`lan_guard`).** Rolled out on all eleven nodes on 2026-10-01,
-  one step at a time: lxc220, the other six containers, vm102, vm100, the hypervisor. Measured from
-  the admin notebook afterwards, fifteen service ports on every LAN address: closed everywhere
-  except SSH to the hypervisor, which admits the two admin workstations and refused lxc250 as a
-  control. New SMB connections from the hypervisor and vm100 to vm102 pass the exception, the
-  Bazzite still reaches `storage:445` over the tailnet, vm100's netconsole reaches the host, and
-  all 53 Prometheus targets stayed up. Proven across the cold boot of 2026-10-02 08:36: the table
-  loaded on all eleven nodes, the same scan found the same single open port, the hypervisor's SMB
-  mounts reconnected through the exception, and netconsole frames arrived. Still open: the
-  sentence in [`sshd-listen-address.md`](../decisions/sshd-listen-address.md) that nothing enforces the
-  untrusted LAN at the host boundary needs an amendment, and pinning sshd itself
-  becomes the second layer rather than the only one. A restart of `nftables.service` by hand
-  still flushes the table until the next boot; the unit is ordered after it for exactly that
-  reason.
-- ~~**`apt_metrics` installs Recommends, and two of them fail at every boot.**~~ Closed, measured
-  2026-10-13: `ipmitool`, `openipmi` and `nvme-cli` are installed on no guest, neither unit exists on
-  any of them, and no node has a failed unit. The finding as written: The collectors package
-  brought `ipmitool`, `openipmi` and `nvme-cli` on 2026-09-25. Since 2026-09-26, `nvmf-autoconnect`
-  and `openipmi` fail on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc250, and `openipmi` on vm102 -
-  the same two units `systemd_hygiene` has masked on lxc260 since July. Fixed in the repository on
-  2026-10-07: both roles install without Recommends, and `systemd_hygiene_group_absent_packages` in
-  `group_vars/guests.yml` removes them and their two libraries from every guest, retiring lxc260's
-  masks. Writing it found the role's removal guard blind (it matched `Remv`, apt prints `Purg`).
-  Open until `apt-metrics.yml` and `systemd-hygiene.yml` are applied and the thirteen
-  `SystemdUnitFailed` alerts clear.
-- ~~**OpenWebUI 0.9.6 to 0.11.x.**~~ Done 2026-10-08: 0.11.4, applied after a dump of
-  `openwebui_db`, which is the rollback path because the migrations support no downgrade. The
-  first start took about seven minutes past the migrations before the port answered.
-- **`gpu` on vm100 has passwordless sudo.** Closed 2026-10-07, together with the same rule for
-  `storage` on vm102 - see the break-glass item under "Added on 2026-10-07".
-
-## Added on 2026-10-07
-
-Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
-
-- ~~**lxc240 was destroyed ahead of its phase 2.**~~ Phase 2 done 2026-10-10, also ahead of the
-  2026-11-30 date in the [decommission record](../decisions/vaultwarden-decommission.md).
-  `vzdestroy:240` had run on 2026-09-29 without a record, and the weekly guest
-  backup then failed on the missing CTID until `240` left `GUESTS` on 2026-10-07. Removed on
-  2026-10-10: the 728 KB of data on the share and the `[Vaultwarden]` share with its Samba and
-  Linux accounts on vm102, the hypervisor's `/mnt/smb/vaultwarden` fstab entry, mount point and
-  credentials file - which the record did not list - the three `vzdump-lxc-240-*` archives with
-  their logs, lxc240's `host_vars` file, the Vaultwarden compose stack under `docker/`, the
-  `storage_permissions` entry and the share in the sanitized `smb.conf` snippet. `smb.conf` and
-  `fstab` were copied to `/root` first. The generic SQLite side-file excludes in
-  `snapraid_maintenance` stay; they never named Vaultwarden. Open: the node in the Tailscale
-  console, the cold archive from phase 1 (`/root` on the hypervisor and an off-site workstation),
-  and the amendment to the record.
-- **Embedded subtitles on 4K remuxes are extracted on demand, over CIFS.** A client that asks for
-  one track makes Jellyfin read the whole file, measured at about five minutes for a 30 GB episode,
-  and the client gives up. All profiles are held at subtitle mode "None" since 2026-10-07, which
-  costs the automatic translation of foreign-language scenes in clients that request subtitles
-  from the server; Moonfin in direct play reads them from the file and is unaffected (measured
-  2026-10-08, [jellyfin.md](../services/jellyfin.md#subtitle-extraction)). The durable fix is to extract the
-  text tracks once into sidecar `.srt` files beside the media, which Jellyfin serves without
-  touching the container; it writes into the archive on vm102 and is its own unit of work.
-
-- **The break-glass accounts on vm100 and vm102 were root by key alone.** `/etc/sudoers.d/ansible-apt`
-  granted `gpu` and `storage` `NOPASSWD: ALL`, left over from the first Ansible runs in April,
-  before the `ansible` user existed. On 2026-10-07 a diagnostic session on the admin workstation used it to
-  run `sudo -n grep -rh` across `/srv` on vm100, read the media archive over CIFS at 187 MB/s for
-  half an hour, and stalled every Jellyfin stream; it had kept running after the workstation shut
-  down, reparented to PID 1. Removed on both VMs the same day, after checking both accounts hold a
-  password and sit in `sudo`; the `breakglass` role now removes the file and fails on any remaining
-  `NOPASSWD` rule for the account. Swept: no other node carries such a rule for a human account.
-  Still open, in order of weight:
-  - `gpu` is in the `docker` and `lxd` groups, each of which is root without sudo - built 2026-10-10: `breakglass` removes the account from `docker`, `lxd`, `libvirt` and `disk` where it is a member, applied the same day (`id -nG gpu` no longer lists either); `sudo docker` with a password remains. A check run shows the removal as skipped rather than changed, so the drift sweep does not see this one. Removing
-    `NOPASSWD` stops an accident, not a session that looks for root. `storage` on vm102 has
-    neither. Decide whether the break-glass account needs `docker` at all.
-  - Automated sessions on the admin workstation authenticate with the break-glass key. A separate,
-    restricted key and account for automated sessions, the way Ansible has `ansible`, would keep the
-    break-glass path for people.
-  - Diagnostics on vm100 and vm102 must not read the archive: no recursive search under `/srv`,
-    `/mnt/smb` or `/mnt/mergerfs`, and no decoding of media files while somebody is watching. The
-    same evening an `ffmpeg -t 600` run for diagnosis read four minutes of one file and did the same
-    in miniature.
-
- Its log reads `Journal header limits
-  reached or header out-of-date, rotating` at intervals of one to fifteen seconds, measured for
-  2026-09-26. Part of the `journal-central` exercise; measured 2026-10-13, the churn is gone - no
-  such line in 24 hours - and the store holds 913 MB against its 2 GB cap, growing by about 54 MB
-  a day since 2026-09-26, with the hourly vacuum freeing nothing yet.
-
-## Added on 2026-10-08
-
-- **Moonfin passthrough is disabled on the streaming box until upstream fixes #1775.** With audio
-  bitstreamed, a refresh-rate switch hung five of seven starts; with PCM, six of six played. The
-  interim costs object audio and moves dynamic range control into the client's decoder. Revert
-  steps and the measurement are in
-  [jellyfin.md](../services/jellyfin.md#moonfin-direct-play). Nothing in the fleet changed; the
-  setting lives on the box.
-
-- ~~**The CUDA watchdog restarts Jellyfin under running streams.**~~ Decided, built and applied
-  2026-10-10; first run 13:16 with `jellyfin_cuda_ok 1`. The rule: restart only when no stream needs to be
-  protected. With CUDA gone the watchdog now restarts when nothing plays or a video transcode is
-  among the sessions, and holds while only direct streams play; it polls every minute instead of
-  every thirty, and `JellyfinCudaLost` makes a held or failed restart visible
-  ([jellyfin.md](../services/jellyfin.md#cuda-watchdog)). Not yet observed: a held restart with a
-  real transcode, which is when the `IsVideoDirect` reading meets real data.
-
-- **Nextcloud cannot reach the two Paperless ingest shares - diagnosed 2026-10-10.** On lxc210 the
-  mount host `storage` resolves to vm102's LAN address, where `smb_guard` admits port 445 from
-  vm100 and the hypervisor only; over the tailnet the ACL rebuilt on 2026-09-26 left the flow out
-  and its test asserted a deny, so lxc210 does not even see vm102 as a peer. Measured from lxc210:
-  445 closed on both paths. The fix keeps the feature and the LAN closed: ACL Rule 15
-  (`nextcloud` -> `tag:storage:445`, written in [tailscale-acl.md](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares)),
-  then both mounts switched to vm102's full MagicDNS name. The console change comes first; the
-  mount change follows it.
-- **Nextcloud 35 needs PHP 8.3, so it needs Debian 13 on lxc210.** 34.0.4 is the last major that
-  runs on Debian 12's PHP 8.2 (`lib/versioncheck.php` of each tag), and `occ setupchecks` already
-  flags 8.2 as deprecated. 34 is supported until 2027-06. Same check lists a mimetype migration
-  (`occ maintenance:repair --include-expensive`), which walks every file on the CIFS data
-  directory and belongs in its own window.
-
-- **Jellyfin 12 is prepared, not applied.** 10.11.11 receives no further releases. 12.x migrates the
-  database with no way back except a restore, requires a full library scan afterwards, removes
-  the global subtitle settings in favour of per-library ones, and ignores `X-Emby-Token` - the
-  last is handled, `jellyfin_user_prefs` sends the `Authorization` header since 2026-10-08. Before
-  the image changes: a copy of `/config`, a check that no two of the six user names differ only by
-  case, and a statement from Moonfin about 12.x, which no source gave on 2026-10-08.
-
-- ~~**The hypervisor boots 6.17.13, pinned, while 9.2 defaults to 7.0.**~~ Pinned on 2026-10-08 to
-  keep the [KE-14](known-errors.md#ke-14) measurements comparable; released 2026-10-12 with
-  `proxmox-boot-tool kernel unpin`, ahead of the drive swap so that the kernel and the drive do not
-  change together.
-
-## Added on 2026-10-10
-
-- ~~**Host mail half arrives, and nothing needs it.**~~ Done 2026-10-10. Nobody configured mail
-  here: Proxmox installs Postfix as its local mailer and asks for an address for `root@pam` at
-  installation. PVE's own notifications went straight to that address - 96 messages since
-  2026-08-21, all accepted by the recipient's server, nearly all of them on the days the guest
-  backup ran - while mail
-  to the local `root`, which smartd and cron write, was deferred because `/etc/aliases.db` had
-  never been built. Nothing on either path was unique: smartd writes to the journal and
-  `smart_metrics` alerts on growth, package updates are `apt_metrics`, guest backups report
-  through `GuestBackupPartial` and `GuestBackupStale`. So there is one alert channel now:
-  `newaliases`, the 19 queued messages deleted, and PVE's built-in `mail-to-root` endpoint
-  disabled. Verified with a test message to `root`: delivered locally to `proxmox-mail-forward`,
-  which logged `skipping disabled target 'mail-to-root'`, no `postfix/smtp` line, queue empty.
-
-- ~~**The hypervisor held a Samba server nothing used, back from security updates.**~~ Done
-  2026-10-10. `samba`, `samba-common` and `samba-common-bin` sat on `apt-mark hold` at 4.22.6,
-  installed by hand on 2025-12-27, while their libraries had
-  moved to 4.22.11 on 2026-10-08. `smbd` and `nmbd` were disabled and nothing depended on the
-  server package. Hold lifted, `samba` removed, the rest upgraded: every Samba package now at
-  4.22.11, `apt-mark showhold` empty. Proxmox's CIFS storage keeps `smbclient` and the libraries;
-  `pvesm status` reported all storages active and all eight `/mnt/smb` mounts resolved as `cifs`
-  afterwards. The old `smb.conf`, which still defined two shares of its own, is kept as
-  `/root/smb.conf.pre-removal-2026-10-10`.
-
-- **The external heartbeat is the larger gap.** Both items above were about telling somebody
-  when the host is up and something is wrong. Nothing tells anybody when the host, or lxc200, is
-  down - see the external heartbeat under Tier 4, built in the repository and live nowhere.
-
-## Added on 2026-10-12
-
-- **MariaDB on lxc210 listened on every address for four days.** The upgrade of 2026-10-08 moved
-  `mariadb-server` from 10.11.14 to 10.11.18 at 14:37:53, and at 14:40:04 the postinst created
-  `sockets.target.wants/mariadb.socket`: its `deb-systemd-helper was-enabled` "defaults to true", so
-  a socket unit the package had never shipped before counts as new and gets enabled. From then on
-  systemd held `[::]:3306` and handed the descriptor to `mariadbd`, which never bound anything
-  itself. `bind-address = 127.0.0.1` stayed in the file and `@@bind_address` kept returning it,
-  which is why nothing that reads configuration could see the change; `ss` names `systemd` as the
-  owner of the port. This is the mechanism that made `ListenAddress` inert on the socket-activated
-  containers (see the sshd decision above), arriving by package upgrade instead of by template.
-  Exposure stayed small: all four accounts are `@localhost`, so a remote client got the handshake
-  and a refusal, and `lan_guard` dropped the LAN side. The `mariadb_bind` role masks the socket,
-  restarts MariaDB once and fails unless `ss` shows `127.0.0.1:3306` alone; it is in the drift
-  sweep, which would have seen nothing here before, because no role owned the unit. Swept the other
-  eight guests and the hypervisor with `ss -Hltn` the same morning: no other wildcard listener
-  beyond the documented ones. Applied 2026-10-12: `127.0.0.1:3306` alone in `ss`, the socket
-  `masked`, and `occ status` reports Nextcloud installed and out of maintenance mode.
-- **Nothing measured the binding rule, so the MariaDB socket was found by a scan, four days late.**
-  The weekly snapshot saw it: the diff of 2026-10-10 carries `-127.0.0.1:3306`, `+*:3306` and
-  `+mariadb.socket enabled` for lxc210, among 107 changed lines that week, and nobody read them;
-  `FleetSnapshotStale` only says whether the diff was written. `listener_metrics` now classifies every listening socket on all ten nodes every 15 minutes
-  and exports the ones outside loopback and the overlay; `ListenerOutsideBindingRule` fires after
-  30 minutes. The exceptions that stand today - Samba on vm102, Apache and `coolwsd` on
-  lxc210, sshd and the netconsole receiver on the hypervisor - are listed per node with the
-  decision behind each, so removing one is the last step of executing that decision. Two more are
-  allowed on every node, `tailscaled`'s UDP sockets and the DHCP client, since neither can
-  bind to the overlay it serves. Live since 2026-10-12: ten nodes report, Prometheus holds ten
-  `node_listener_check_timestamp_seconds` series and no `node_listener_outside_binding_rule` series.
-  The next round on vm100 reported `tailscaled` on `0.0.0.0` at a random UDP port: the
-  portmapper's probe socket, open while it asks the router for a UPnP or PCP mapping. The common
-  allowance names the process since, rather than the port.
-
-## The exercise block, before Terraform
-
-Four controls that the same assessment argued against building at this scale, being built
-anyway and for a reason that is not operational: to have run the thing once and to be able to say
-what it looks like where it belongs. The reasoning, the labelling rules and the exit condition are
-in [the decision](../decisions/exercise-scope-before-terraform.md), which also carries the
-homelab-versus-workplace comparison this block exists to produce.
-
-Read the labelling as part of the work rather than as documentation afterwards. None of these
-enters `security-controls.md` as `Enforced`, none of them gets an alert that would not have been
-built regardless, and each is revisited once the Terraform track has started.
-
-- `auditd` on a node or two, plus `dpkg --verify` as a projection in `fleet_snapshot`. The second
-  half is the one with standalone value and is cheap: package integrity, into a weekly diff that
-  already exists.
-- Central log aggregation for the journals of ten nodes that power down nightly.
-- High availability far enough to see quorum, fencing and what a single node arms against itself.
-  Not left running: an HA stack on one node with no quorum partner fences the node it protects
-  ([decision](../decisions/hypervisor-panic-and-watchdog.md)).
-- An SBOM for the compose stacks, with signature verification where the images allow it.
-
-**Built 2026-09-17, applied to nothing.** All four exist in the repository and none has run
-against the fleet, because playbooks execute from the control node's tree and `preflight.yml`
-refuses a tree that is not a clean `main` in sync with `origin`. What each one turned out to
-teach, which is the part worth keeping:
-
-- `auditd` cannot run in an unprivileged LXC at all. The kernel audit subsystem is global and not
-  namespaced, so the role asserts the node is not a container rather than documenting it. In a
-  workplace this is why container auditing happens from the node through the runtime.
-- Its disk actions are `SYSLOG`, not the `HALT` that hardening guides copy from upstream. A
-  logging daemon able to power off a hypervisor carrying eleven guests outweighs what it watches.
-- The `dpkg --verify` half is not an integrity control and says so: dpkg keeps its checksums on
-  the filesystem they describe. It finds mistakes reliably and an adversary not at all.
-- Log aggregation lands on the same boot SSD the senders live on, so it outlives the guest and
-  not the disk. A receiver in a second failure domain is the real control and this platform has
-  one machine.
-- High availability stopped at reading, which the decision required. `pvecm status` exits 2 with
-  no corosync config while `ha-manager status` answers `quorum OK`, and everything but a resource
-  is already running - see [`ha-mechanics.md`](ha-mechanics.md).
-- The SBOM workflow carries a supply-chain weakness in a supply-chain workflow: two actions
-  pinned to tags where every other action here is pinned to a SHA. Named in its header rather
-  than left to be found.
-
-**Applied since, measured 2026-10-12.** `auditd` is active on the hypervisor, `journal-central`
-receives on lxc200 from lxc211 and lxc260, `fleet_snapshot` carries the `dpkg --verify`
-projection, and `sbom.yml` runs on its schedule. High availability stayed at reading, as intended.
-All four operational items are done: vm100 and vm102 took the sshd pin on 2026-10-12, lxc250
-joined the role on 2026-10-13, and the hypervisor was decided against a pin the same day.
-
-**This block is the end of maintenance mode.** When these four and the four items above have been
-applied and verified, the Terraform track begins - after the
-identity track below, which was inserted on 2026-09-24.
-
-## The identity track, between the block and Terraform
-
-The reasoning, the component choice and the cut are in
-[the decision](../decisions/identity-before-terraform.md). This section holds the order and the
-state it starts from.
-
-**Where the block stood on 2026-09-24, measured that evening.** Repository and loaded alert rules
-agree, and PRs #123 to #125 are merged. What remains is applying what was merged: the drift report
-of 18:33 on lxc250 lists 50 changed tasks, all unexpected, in three playbooks - `apt-metrics` on
-nine nodes, `auditd` on the hypervisor, `journal-central` on lxc200, lxc211 and lxc260 - and
-`FleetDriftUnexpected` fires on exactly that. `apt_upgrades_pending` reaches Prometheus from lxc260
-only, and neither `auditd` nor `systemd-journal-upload` is active on any node. LLMNR and mDNS on
-lxc250 are closed, with no listener on 5353 or 5355. The sshd bind is pinned on lxc250 alone.
-
-1. **2026-09-25, the block.** Apply the three playbooks, run the drift sweep by hand, and expect
-   `FleetDriftUnexpected` to clear. Decide how the socket-activated nodes get their bind pinned
-   ([open decision](../decisions/sshd-listen-address.md)) and execute it on one of them. The other
-   nodes follow one per session after the weekend.
-2. **2026-09-26, the node.** Container, `onboarding.yml`, roles for `lldap` and Authelia, both
-   databases through `postgresql_provisioning` on lxc260, Tailscale tag and ACL rule, node and
-   service documents, scrape targets. The thin pool has about 13 GB free for it.
-3. **2026-09-27, the clients.** Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum;
-   Audiobookshelf and Calibre-Web follow if the day allows. Nextcloud and Proxmox VE are deferred
-   on purpose, for the reasons in the decision.
-
-Whatever of step 3 is not done on 2026-09-27 moves to the small open items, except the minimum,
-which gates Terraform like the block does.
-
-**Not started, read 2026-10-12.** None of the three days took place: there is no identity node, no
-role and no changelog entry after the scheduling one of 2026-09-24. The start condition is met -
-the block is done, the sshd rollout included since 2026-10-13 - so the dates above are the only part that is out of
-date. A new weekend needs choosing; the thin pool stands at 66 % and has room for the node.
-
-## Added by the 2026-08-20 repository and fleet audit
-
-A full sweep of both sides before the Terraform track. The repository passed all 33 checks; the
-fleet held no failed unit, no firing alert and no dead scrape target, and both database dumps were
-current. What follows is what that clean surface did not cover. The guest-backup finding is Tier 1
-item 4 above; these are the rest.
-
-- **The binding rule is violated by sshd on ten of eleven nodes, not on one.** <!-- historical-count --> Since 2026-10-12 on
-  one of ten: the containers, vm100 and vm102 are pinned, the hypervisor is not. Measured: `*:22` on
-  lxc200, lxc210, lxc211, lxc220, lxc230, lxc240, lxc260, on vm100, on vm102 and on the Proxmox
-  host. Only lxc250 pins `ListenAddress` to its Tailscale address. `CLAUDE.md` and `vm100.md` name
-  vm100 as the exception to a rule the fleet otherwise follows; it is the other way round, and the
-  design decision those documents defer is therefore a fleet decision rather than a node one. The
-  acute risk stays closed - password authentication is off everywhere - so this is a correctness and
-  honesty problem, not an urgent one.
-- ~~**The host runs `rpcbind` on `0.0.0.0:111` and `[::]:111`.**~~ Measured closed 2026-10-10: both units inactive, nothing listens on 111. Same finding as the one recorded for
-  lxc210 on 2026-08-17, on the hypervisor, unmentioned. Neither node has a use for it. The lxc210
-  half is closed on 2026-09-11 by removing `nfs-common` and `rpcbind`, which also retired the
-  [KE-3](known-errors.md#ke-3) mask. The hypervisor half is deliberately left: Proxmox's own
-  packages relate to `nfs-common` and a removal there could take a `pve-*` package with it, so it
-  needs the simulated removal read by a person rather than the same host var copied across.
-  **Read 2026-09-12, and the fear was justified.** `apt-get -s remove --purge rpcbind nfs-common`
-  on the host lists `proxmox-ve`, `pve-manager`, `pve-container`, `qemu-server`, `pve-ha-manager`,
-  `libpve-storage-perl` and `libpve-guest-common-perl` among the packages it would take - the
-  cleanup that was right on a container would remove the hypervisor's management stack. The port is
-  closed by masking `rpcbind.socket` and `rpcbind.service` instead, declared in
-  `group_vars/proxmox.yml`: no NFS storage is configured, `rpc-statd` is static and inactive, and
-  `sockets.target` only wants the socket, so a mask is skipped rather than failed. Built, not
-  applied.
-- ~~**Alertmanager on lxc200 binds `*:9094`.**~~ Closed 2026-09-11 with
-  `--cluster.listen-address=`, an empty value that disables the gossip listener outright. The port
-  was open because Alertmanager clusters by default and the container runs with host networking; a
-  cluster of one had nobody to gossip with, so it carried no traffic and no benefit. The
-  `docker compose up -d` that this line named as outstanding happened on 2026-09-15, and the
-  measurement in between is the interesting part: the live compose file on lxc200 differed from
-  the repository in exactly one block, the one carrying this change. `*:9094` was still open
-  four days after the row was struck through.
-- **`pve-firewall` is disabled.** Defensible on a host whose exposure is governed by Tailscale ACLs
-  and by the nftables guard on vm102, but it is a security posture nothing states, and an undocumented
-  deliberate choice is indistinguishable from an oversight at review time.
-- **The boot SSD is a consumer drive with 58,540 power-on hours.** `Wear_Leveling_Count` normalises
-  to 047 at 633 program-erase cycles, and `Used_Rsvd_Blk_Cnt_Tot` carries `WHEN_FAILED=In_the_past`
-  with a worst value of 001 against a threshold of 010 - it has been below its threshold at some
-  point, though the raw value reads 0 and the current value 100, which is consistent with a known
-  firmware artefact on this drive family. [KE-14](known-errors.md#ke-14) excludes media and HBA
-  firmware as causes and never mentions the drive's age. It carries every guest root disk.
-- ~~**The package that closes item 9 was already installed and then removed.**~~ Acted on
-  2026-09-09, and half of it was wrong. `prometheus-node-exporter-collectors` did sit in dpkg state
-  `rc`, it does ship `smartmon.sh`, and the work was indeed a reinstall plus a drop-in rather than a
-  script to write. But no `prometheus-node-exporter-*.timer` units survived the removal: measured,
-  the unit files leave with the package and only its configuration stays. A finding written from a
-  plausible inference rather than from a command reads as fact three weeks later.
-- **The SMART collector exports drive serial numbers as a Prometheus label.** Nine of them, in the
-  time series database and in every panel built on it. Still true of the packaged collector that
-  replaced it on 2026-09-09, and now deliberate rather than incidental: `smartmon_device_info`
-  carries the serial, and it is what turns an alert naming `/dev/sdi` into an instruction about
-  which disk to unplug. Kernel letters are not stable here - the boot SSD was documented as `sdc`
-  for a month and enumerated as `sda` ([KE-14](known-errors.md#ke-14)) - so the label that survives
-  a reboot is the one worth alerting with. The series stay inside the tailnet and reach this
-  repository nowhere.
-- ~~**VM100's unsnapshottable disk holds 18 GB.**~~ Converted 2026-10-10: `qm disk move 100 scsi1
-  appdata_aux-disk --format qcow2`, online, in about 90 minutes with no I/O error on the KE-13 disk;
-  139 GiB were allocated by then, not 18. A test snapshot with `--vmstate 0` succeeded and was
-  deleted. The old raw file stayed as `unused0` for two days and was deleted on 2026-10-12. Its `scsi1` was a
-  300 GB raw file on directory storage, and `/mnt/vm-data` inside the guest was 7 % used. The constraint recorded in `CLAUDE.md`
-  is real; the migration it blocks is an order of magnitude smaller than the disk's nominal size
-  suggests.
-- ~~**A second copy of the real inventory sits on lxc250.**~~ Done 2026-10-10: the stale working tree and a world-readable `hosts.yml` backup in `~/inventory-backups` deleted; the zip and the stray clone were already gone. The pre-sanitization git bundle stays on purpose, private, as its README says. `backup-hsa-20260709-premerge-abort/`,
-  8.4 MB, from the mid-merge abort of 2026-07-09, containing `ansible/inventory/hosts.yml`. Beside
-  it, `backup-hsa-pre-sanitization-20260710/`, `homelab-docs.zip` and a stray clone whose directory
-  name is the repository's with a trailing dash. The gitignored inventory is treated as a single
-  copy everywhere in these documents; it is not.
-- ~~**The `pveproxy` drop-in carries a non-English comment and an inline Tailscale address.**~~ Measured closed 2026-10-10: the only drop-in is `tailscale_boot_gate`'s, plain ASCII, no address. It
-  predates the shared `wait-for-tailscale-ip.sh` and was never folded into it, so the host holds two
-  spellings of one readiness gate - one of which hard-codes an address that `tailscale ip -4` would
-  supply.
-- **Item 10 undercounts.** There are eight hand-deployed host artefacts, not five: the five listed,
-  plus `check-smb-mounts.sh` with `smb-mounts-check.service`, the `node-exporter-smarttext.sh` timer
-  pair, and the `pveproxy` drop-in above.
-- ~~**The Proxmox host document has no `## Failure Impact` section.**~~ Closed: [proxmox-host.md](proxmox-host.md#failure-impact) carries it. Check 6 requires one of every
-  document under `docs/nodes/`, and the host lives in `docs/platform/`, so the single point of
-  failure for the entire platform is the one node whose failure is not written down. Added in the
-  same pass as this entry.
-- **An off-site copy exists and is documented nowhere.** A rescue of the auxiliary disk's contents
-  was taken to an administrator workstation on 2026-06-25 and is still there, on encrypted storage,
-  in a different building from the server. It is a point-in-time copy roughly eight weeks old, not a
-  running backup, and its error logs contain only `socket ignored` lines from container runtime
-  sockets, so the copy itself is complete. A second mirror on removable media is reported to exist
-  from May, likewise unrecorded. Neither changes the plan, but "no off-site copy of anything" was
-  not accurate.
-- **The rest was confirmation rather than discovery**, and is listed only so the measurements have a
-  date. Struck through where a later measurement closed it. SnapRAID scrub coverage has degraded
-  from 123 to 126 days on the oldest block with 74 % of the array unscrubbed and
-  `SnapRAIDScrubStale` green; no compose stack on the fleet runs a pinned image; ~~eleven orphaned
-  `smart.prom.*` temp files remain~~ cleared 2026-09-09, fourteen by then; ~~lxc220 still holds the
-  disabled `tailscaled-userspace.service` file~~ deleted 2026-09-01; ~~lxc250's `node_exporter` ran
-  argument-free on `*:9100` and is scraped by nobody, its sshd drop-in still retries rather than
-  waits, and its root filesystem is at 73 % with no alert~~ all three closed 2026-08-20 by the
-  inventory adoption, the `tailscale_boot_gate` role and the scrape that `DiskSpaceCritical` reads;
-  `journald` `Storage=` is unset on vm100 and vm102; the deprecated `mkdir 0` remains in
-  `storage.cfg` on a host already running PVE 9; and the KE-13 auxiliary disk reads 21 and 7680
-  unchanged since 2026-07-09 - sixty-two days in service, re-read 2026-09-09, with no new
-  uncorrectable error.
-
-## Added by the 2026-08-17 repository audit
-
-Every documented claim was checked against the running fleet. Most findings were documentation
-drift and are corrected in place; these are the ones that are work rather than wording.
-
-- ~~**A `mergerfs` directory storage in `storage.cfg` points at `/mergerfs`, which is not a
-  mountpoint.**~~ Removed 2026-08-17. It was registered for `images,rootdir` with `shared 1`, and
-  `pvesm status` reported it with the same free space as `local` - it would have allocated straight
-  into `pve-root` on the KE-14 boot SSD. Item 12's failure class with one aggravation: the aux-disk
-  storage at least has a disk that could fail to mount, this one had none. Verified unused before
-  removal - three empty directories totalling 16 KB, no guest config referencing it, no backup job,
-  no replication entry. The definition is gone; `/mergerfs` itself was left in place, because
-  removing a config line is reversible and removing a directory is less so.
-- ~~**Nothing on the fleet runs a pinned image.**~~ Closed: every compose stack pins its images (validate-repo Check 30), raised and applied on 2026-10-08. Every compose stack runs `:latest` or `:main` while
-  the repository pins exact versions, and lxc200's live compose file still carries the
-  `# TODO: pin to specific version tag` the repository copy has already resolved. The repository
-  file is therefore not the deployed file. Two consequences: there is no rollback point, and the
-  weekly Trivy scan measures images that are not running - its own comment claims the compose files
-  "cannot drift from reality", which is the assumption this measured. Coupled to item 5: applying
-  the pinned files means running `docker-compose-update`, which the aux-disk hold forbade until
-  2026-09-05. What it needs now is a session somebody is watching, not a delivery date.
-- ~~**`SnapRAIDScrubStale` cannot see scrub coverage.**~~ Closed 2026-09-11 by four rules reading
-  `snapraid status` from a timer independent of the sync, plus `snapraid touch` in the nightly run.
-  **What the fix exposed is now the open item:** the coverage is not poor because the job is
-  broken, it is poor because a monthly scrub at snapraid's default 8 % takes about a year for a
-  full pass. So the thresholds are set above today's measurement rather than where anyone would
-  want them, and the real question is the cadence. **Answered 2026-09-12, and the number was
-  already on the node.** The scrub timer last fired at 20:00:03 on 2026-09-01 and
-  `snapraid_scrub_last_success_timestamp` reads 21:10:36 the same evening: 8% of this array takes
-  70 minutes, so a full pass is 12.5 runs and the monthly schedule verified everything once every
-  12.5 months. The schedule is now weekly at 12%, which covers the 66% that no scrub has ever
-  reached in about five and a half weeks - before `SnapRAIDScrubCoverageAging` trips at 200 days,
-  which the oldest block reaches around 2026-11-01 at one day per day. Both operations now export
-  their own duration, so the next change to this schedule starts from a measurement rather than
-  from this paragraph. Not applied yet. The original finding read: it measures when a scrub last ran, not how
-  much of the array that scrub reached. Measured 2026-08-17: the last run was twelve days ago and
-  the rule is green, while `snapraid status` reports the oldest block scrubbed 123 days ago and
-  74 % of the array unscrubbed. Same class as `smart_health_passed` and `PostgreSQLBackupStale` -
-  the guard measures that the job ran, not that it achieved anything. Both numbers are already in
-  the `snapraid status` output, so exporting them from `snapraid-maintenance.sh` as two more
-  textfile metrics is small. Run `snapraid touch` in the same pass: 63322 files carry a zero
-  sub-second timestamp, which weakens change detection.
-- **The archive pool has months, not years.** 198 GiB free against a 100 GiB alert threshold, with
-  every member disk between 29 and 37 GiB. The alert still fires before writes fail, so this is
-  runway rather than a defect - but it belongs on a plan with the hardware order rather than in
-  prose as "small and shrinking".
-- ~~**`node-exporter-smarttext.sh` has no copy in the repository.**~~ Closed 2026-09-15: the script was retired in favour of `smart_metrics`. The other two hand-deployed host
-  scripts do. It also carries non-English comments, so item 9 begins with bringing the script under
-  version control and translating it, not with adding attributes. Its `mktemp` has no cleanup trap,
-  which is where the orphaned temp files come from.
-- ~~**lxc250 is at 73 % of its 8 GB root and nothing watches it.**~~ Closed 2026-08-20 by the
-  inventory adoption: the node is scraped, so `DiskSpaceCritical` covers it like every other. The
-  fill is unchanged - 74 % measured 2026-09-09 - which is the part worth keeping. The finding was
-  never about the number; it was that the number was unobserved on the one node whose loss item 1
-  calls unrecoverable.
-- ~~**Collabora Online (`coolwsd`) runs on lxc210, undocumented, on `*:9983`.**~~ Measured
-  2026-09-09 and closed 2026-09-11. There is no `coolwsd` package and no unit: a Nextcloud app
-  extracts an AppImage into `/tmp` and runs it, so no role can own it without owning the app, and
-  it offers no listen-address setting. The `*:9983` bind is therefore closed one layer down, by the
-  `nft_guard` role - loopback accepted, the port dropped everywhere else, which is what Nextcloud's
-  `proxy.php` already uses. Still open and separate: `onlyoffice` is enabled with an empty document
-  server URL, a second office backend that cannot work.
-- ~~**`nfs-common` on lxc210 is the cause the `systemd_hygiene` mask treats as a symptom.**~~ Closed
-  2026-09-11. The role gained `systemd_hygiene_absent_packages`, which simulates the removal with
-  `apt-get -s` and refuses if apt would take anything beyond the named packages, and
-  `systemd_hygiene_retired_units`, which unmasks and deletes the leftover symlink. Two audit
-  findings eight months apart turned out to be one package.
-
-**What this changes about the dependency chain at the top.** The host adoption was described as
-unblocking four technical-debt entries. It unblocks six: the audit found the Proxmox host running
-`PermitRootLogin yes` with `PasswordAuthentication yes`, and lxc250 accepting password
-authentication - both because `ssh_hardening` only ever reached the nine inventoried nodes. Those
-two are security findings rather than rebuild risks, and neither of them waits on hardware. The
-adoption itself does not either: it needs a `proxmox` group in the inventory, not a new disk.
-
----
+The register of open platform work, ranked by loss risk and dependency. Each row names the risk of
+leaving the item and the next step. Items whose next step needs more than one sentence have a short
+section below the table. Closed items are removed; the pull request that closed them is the record.
+The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](security-controls.md).
+
+## Open items
+
+| Rank | Item | Risk if left | Next step |
+|---|---|---|---|
+| 1 | [Off-site backup](#off-site-backup) | Every copy of the C1 data is on one site; fire, theft or ransomware reaching the SMB mounts destroys originals and backups together | Provision the VPS with [`offsite-vps-provision.md`](../../runbooks/platform/offsite-vps-provision.md), then deploy the `offsite_backup` role |
+| 2 | [Boot SSD replacement](#boot-ssd-replacement) ([KE-14](known-errors.md#ke-14)) | The disk carrying Proxmox and every guest root disk logs I/O errors in operation | Replace it in the second half of October 2026 with [`boot-ssd-replacement.md`](../../runbooks/platform/boot-ssd-replacement.md) |
+| 3 | [Escrow restore drill](#escrow-restore-drill) | The escrow of the vault password, the real inventory and the Ansible SSH key has never been restored from; a gap would be found on the day lxc250 is lost | Run [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) once and record the result |
+| 4 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
+| 5 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 produces silence, not an alert | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
+| 6 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Record the UPS and measure its runtime; run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if errors persist after rank 2 |
+| 7 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
+| 8 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
+| 9 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
+| 10 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
+| 11 | [Identity track](#identity-track) | Every service keeps its own accounts; Terraform waits on this track | Choose a start date, then build the identity node per [the decision](../decisions/identity-before-terraform.md) |
+| 12 | Nextcloud 35 needs Debian 13 on lxc210 | Nextcloud 34 is the last major that runs on Debian 12's PHP 8.2 and is supported until 2027-06 | Upgrade lxc210 to Debian 13, then run `occ maintenance:repair --include-expensive` in its own window |
+| 13 | Jellyfin 12 | Jellyfin 10.11 receives no further releases; 12.x migrates the database with no way back except a restore | Copy `/config`, check that no two user names differ only by case, confirm client support, then change the image in `docker/jellyfin/docker-compose.yml` |
+| 14 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
+| 15 | Archive pool capacity | `ArchivePoolLowSpace` fires before writes fail, but the pool has no expansion plan | Re-measure free space and add a data disk to the next hardware order if the trend requires it |
+| 16 | SSH host key checking in Ansible | `ansible/ansible.cfg` sets `host_key_checking = False`, so a replaced or spoofed host key on a node goes unnoticed | Record each node's host key in the control node's `known_hosts` from the inventory, then remove the setting |
+
+## Item notes
+
+### Off-site backup
+
+Target decided in [`offsite-backup-target.md`](../decisions/offsite-backup-target.md): a small VPS
+running `rest-server` in append-only mode, written to by `restic`. Scope is the C1 set in
+[`data-classification.md`](data-classification.md).
+
+The `offsite_backup` role, its playbook, the alert rules and two runbooks exist. Each source node
+gets its own repository and append-only account, so a compromise of vm102 cannot read the
+credentials lxc250 holds. The playbook stays excluded from the drift sweep (`ansible/drift-sweep.conf`)
+until the target exists.
+
+1. Provision the VPS with [`offsite-vps-provision.md`](../../runbooks/platform/offsite-vps-provision.md).
+2. Apply `offsite-backup.yml` and move it from `[excluded]` to `[playbooks]` in the sweep.
+3. Restore once from the VPS per [`offsite-backup.md`](../../runbooks/backup/offsite-backup.md).
+
+Residual risk, accepted in the decision: root on the VPS can still delete the repositories.
+
+### Boot SSD replacement
+
+The replacement is a rebuild, not a clone: Proxmox installed fresh on the new disk and the platform
+restored with [`platform-restore.md`](../../runbooks/platform/platform-restore.md). It is the first
+full restore test, and the old SSD stays untouched as the rollback.
+
+Decide the port before the swap. The same HBA port and cable separates the media from the
+transport; an onboard SATA port separates the HBA path from the power and gives the SSD the TRIM
+the HBA blocks. The per-boot count of failed commands before and after is the KE-14 test.
+
+### Escrow restore drill
+
+The escrow exists since 2026-08-20: a password manager operated by a third party, plus a paper copy
+off site. Two of the three artefacts are files (`hosts.yml` and the Ansible SSH key), so the drill
+confirms that the escrow holds them, not only the vault password. After the first run, repeat it
+yearly and record each run in the runbook's execution log.
+
+### aux-disk replacement and disposal
+
+The aux-disk carries `/mnt/vzdump` (the guest backups), the Docker data roots and vm100's data disk.
+[`aux-disk-failure-rescue.md`](../../runbooks/storage/aux-disk-failure-rescue.md) covers moving the
+data off it.
+
+Disposal is part of the item. The disk holds C1 application data, and with thousands of unreadable
+sectors a software overwrite cannot be assumed to reach every block. The options are degaussing or
+physical destruction, decided before the disk is removed (A.7.14 in
+[`security-controls.md`](security-controls.md)).
+
+### External heartbeat
+
+The `Watchdog` rule fires permanently and is loaded. The route that sends it to an external
+receiver instead of Discord exists only in
+[`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example); the
+live file on lxc200 still has the single Discord route (measured 2026-09-24).
+
+1. Sign up for a heartbeat service operated by a third party; a self-hosted receiver would need a
+   watcher of its own.
+2. Set its grace period above the nightly off-window (`homelab_schedule` defaults), or every
+   morning opens with an alarm.
+3. Deploy the route and the receiver URL in the live `alertmanager.yml` together.
+
+### Power path and UPS
+
+[`physical-controls.md`](physical-controls.md) names supporting utilities as the weakest physical
+control. Record the UPS model, age and battery date, and measure one runtime under real load. The
+KE-14 power-path check runs only if the errors follow the new boot SSD (rank 2); it needs host
+downtime and no purchase.
+
+### Storage network
+
+SMB from vm100 and the hypervisor reaches vm102's LAN address, admitted by `smb_guard` and by the
+`lan_guard` exception in `ansible/inventory/host_vars/vm102.yml`. The target replaces step 2 of
+[`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md):
+
+- a host-only bridge `vmbr1` without `bridge-ports`, static addresses for the host, vm100 and vm102;
+- the host mounts and vm100's mounts move to it one at a time, each with automount and a reboot
+  test;
+- afterwards `smb_guard` drops 445 on vm102's LAN interface and the `lan_guard` exception for 445
+  is removed.
+
+Samba keeps its wildcard bind, because an explicit bind cuts the Tailscale path the admin
+workstations use; check that path after every step. The ACL does not change. In the same window,
+adopt the hand-deployed `smb-guard` table (`snippets/storage/smb-guard.nft`) into the `nft_guard`
+role.
+
+Verified 2026-10-01: SMB over Tailscale from the admin desktop at 94.9 MB/s up and 104.9 MB/s down
+with `smbclient`; neither of vm102's two vCPUs saturated. On 1 GbE the link and the tunnel set the
+ceiling.
+
+### Identity track
+
+Status Proposed in [`identity-before-terraform.md`](../decisions/identity-before-terraform.md); its
+start condition, the exercise block applied, is met. Order:
+
+1. The node: container, `onboarding.yml`, roles for `lldap` and Authelia, both databases through
+   `postgresql_provisioning` on lxc260, Tailscale tag and ACL rule, node and service documents,
+   scrape targets.
+2. The clients: Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum that gates
+   Terraform; Audiobookshelf and Calibre-Web follow. Nextcloud and Proxmox VE are deferred for the
+   reasons in the decision.
 
 ## Deferred on purpose
 
-- **Apache on lxc210 binding `*:80`/`*:443`.** Still deferred, and still a project rather than a
-  fix: the plausible answer is moving Nextcloud behind `tailscale serve`, which would also retire
-  [KE-16](known-errors.md#ke-16) entirely. **The sshd half is no longer deferred** - decided
-  2026-09-11 in [`sshd-listen-address.md`](../decisions/sshd-listen-address.md), with the mechanism
-  built and defaulted off. `ssh_hardening_listen_address` pins the bind and the role refuses to
-  write it unless the node also carries the boot gate that makes a failed bind survivable. The
-  rollout is deliberately one node per session, LXCs first because `pct exec` recovers them, and
-  the hypervisor last or never - it is the one node where the recovery cost exceeds the exposure.
-  The original entry read:
-  both are real binding-rule violations, and both need their own design decision. The sshd half was
-  recorded here as a vm100 defect until the 2026-08-17 sweep measured it: lxc250 is the only node
-  that pins `ListenAddress`, and every other node - both VMs, the hypervisor and all seven
-  inventoried LXCs - binds `*:22` dual-stack on hosts carrying a routable IPv6. The KE-6 lesson
-  about sweeping the fleet had been applied to services somebody installed deliberately and not to
-  the ones the distribution brings - the lxc210 fix is plausibly
-  "move Nextcloud behind `tailscale serve`", which would also retire [KE-16](known-errors.md#ke-16)
-  entirely. That is a project, not a fix to bolt onto an unrelated pass.
-- **Alertmanager routing and per-tier dashboards.** The alerts exist; only delivery is crude.
-- **Molecule.** Out of scope for the current learning arc, per the roadmap.
+- **Alertmanager routing and per-tier dashboards.** The alerts exist; delivery is a single channel.
+- **Molecule and a test estate.** Out of scope until the Terraform track; `--check --diff` and the
+  drift sweep stand in (A.8.29 and A.8.31 in [`security-controls.md`](security-controls.md)).
 - **KE-3, KE-11, KE-17.** Non-blocking, or no confirmed root cause to act on.
-- **[KE-10](known-errors.md#ke-10) (Jellyfin CUDA loss).** Deferred, but active: 16 watchdog
-  restarts between 2026-08-14 and 2026-10-08. The workaround absorbs each occurrence silently,
-  which is why it looks dormant, and each one ends the streams that are running at the time.
+- **[KE-10](known-errors.md#ke-10), Jellyfin CUDA loss.** No root cause. The watchdog restarts
+  Jellyfin only while no direct stream plays; `JellyfinCudaLost` reports a held or failed restart.
+- **High availability.** Stays at reading on a single node; see [`ha-mechanics.md`](ha-mechanics.md).

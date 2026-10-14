@@ -31,9 +31,8 @@ first thing worth noticing:
 quorum OK
 ```
 
-That line says nothing about a cluster. It says one node agrees with itself.
-Read without the `pvecm` output above it, it is exactly the kind of green that
-this repository keeps finding underneath a fault.
+That line says nothing about a cluster. It says one node agrees with itself, and
+it reads as healthy only without the `pvecm` output above it.
 
 **The CRM**, one cluster resource manager, decides what should run where.
 **The LRM**, one local resource manager per node, does it. Both run here and are
@@ -76,9 +75,9 @@ that single parameter is the difference between a safety device and a hazard.
 there are no HA resources to manage, so it never enters `active` work, never
 registers a client with `watchdog-mux`, and nothing ever stops the feeding.
 
-That is the whole of why this platform is safe with the stack running. Not
-because the pieces are absent - all but one are present and started - but because
-no resource exists to put the last piece in motion.
+That is why this platform is safe with the stack running: all pieces but
+corosync are present and started, and no resource exists to put the last one in
+motion.
 
 ## The chain, if a resource did exist
 
@@ -100,7 +99,7 @@ itself and comes back to exactly the same situation.
 
 - **There is nobody to fail over to.** Fencing frees a workload for another node
   to claim. With one node the workload goes down either way, and the reset adds
-  the boot time of eleven guests to an outage that did not need it.
+  the boot time of nine guests to an outage that did not need it.
 - **A transient becomes an outage.** Anything that stalls the LRM - a pmxcfs
   hiccup, storage that stops answering, the kernel oops this platform already has
   on file as [KE-21](known-errors.md#ke-21) - stops the feeding, and the machine
@@ -112,9 +111,8 @@ itself and comes back to exactly the same situation.
   available.** Turning on half a clustering feature to obtain a reboot timer
   inverts the design rather than extending it.
 
-This is the same conclusion the panic-and-watchdog decision reached on
-2026-09-11; what is new here is that the mechanism is written down rather than
-referred to.
+The [panic-and-watchdog decision](../decisions/hypervisor-panic-and-watchdog.md)
+reaches the same conclusion; this document describes the mechanism behind it.
 
 ## What it looks like where it belongs
 
@@ -132,9 +130,8 @@ referred to.
 Split brain. It needs two halves that can each believe they are the survivor, and
 that requires a second node and a network that can partition between them. Every
 interesting HA failure - fence races, a node resurrected with stale state, a
-quorum device that votes for the wrong side - lives on the far side of that line.
-Reading about them is not the same as having seen one, and this platform cannot
-produce one.
+quorum device that votes for the wrong side - lives on the far side of that line,
+and this platform cannot produce one.
 
 ## Where to look again
 

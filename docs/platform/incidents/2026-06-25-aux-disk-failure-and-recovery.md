@@ -1,125 +1,97 @@
 # Incident & Recovery: aux-disk Failure and Remote-Access Stabilization (2026-06-25)
 
-A single working session that resolved three coupled problems on the single-host
-Proxmox platform. Continues the prior lockout-recovery handover (host had booted
-into emergency mode after an aux-disk mount failure; remote access was restored via
-an fstab `nofail` change before this session).
+Three coupled problems on the single Proxmox host, resolved on 2026-06-25. Before that day the
+host had booted into emergency mode after an aux-disk mount failure, and remote access had been
+restored with `nofail` on the aux-disk fstab entry.
 
 ## Summary
 
 | # | Problem | Outcome |
 |---|---|---|
-| 1 | Remote access fragile after the lockout; Proxmox web UI unreachable | pveproxy boot-race fixed (systemd drop-in); reachability model verified; LAN-SSH fallback confirmed |
-| 2 | Five service LXCs would not start | Root cause = aux-disk physical disk failure; disk to be decommissioned |
-| 3 | Irreplaceable data on the dying disk | All rescued read-only and verified before any repair attempt; no data loss |
+| 1 | Remote access fragile after the lockout; Proxmox web UI unreachable | pveproxy boot race fixed ([KE-12](../known-errors.md#ke-12)); LAN SSH fallback verified |
+| 2 | Five service LXCs would not start | Root cause: aux-disk medium errors ([KE-13](../known-errors.md#ke-13)) |
+| 3 | Irreplaceable data on the failing disk | Rescued read-only and verified before any repair; no data loss |
 
-The three are linked: the same aux disk that caused the original emergency-mode
-lockout also held the data-root / bind-mount sources of the five stopped LXCs.
+The same disk caused the emergency-mode lockout and held the bind-mount sources of the five stopped
+containers.
 
-## 1 - Remote-Access Stabilization
+## 1 - Remote access
 
-### 1.1 Lockout root cause corrected to a single cause
+### 1.1 Lockout cause
 
-The handover protocol attributed the lockout to two independent faults (an aux-disk
-fsck failure and an unplugged network cable). Verified correction: the cable
-was never unplugged. The single root cause is the aux-disk mount failure tripping
-`local-fs.target`, dropping the host into emergency mode, where no network
-target is reached - so neither `tailscaled` nor a reachable `sshd` ever comes up.
-In emergency mode the NIC link LED is on (kernel + driver loaded) but no interface
-is configured, which is what made the cable look suspect. The durable mitigation
-(fstab `nofail` on the aux-disk entry) was already in place from the handover; it is
-what allows the host to boot past the failed mount now.
+The earlier recovery notes named two faults, an aux-disk fsck failure and an unplugged network
+cable. The cable was never unplugged. The single cause was the aux-disk mount failure tripping
+`local-fs.target`, which drops the host into emergency mode: no network target is reached, so
+neither `tailscaled` nor a reachable `sshd` starts. In emergency mode the NIC link LED is on
+(driver loaded) but no interface is configured, which made the cable look suspect. `nofail` on the
+aux-disk entry lets the boot continue past the failed mount.
 
-### 1.2 pveproxy Tailscale-IP boot race (web UI down)
+### 1.2 pveproxy Tailscale-IP boot race
 
-After the reboot, SSH worked but the Proxmox web UI on `:8006` was unreachable.
-Root cause verified: `pveproxy` is configured to bind only the host Tailscale IP
-(`/etc/default/pveproxy` -> `LISTEN_IP=<tailscale-ip-proxmox-host>`, an intentional
-"web UI over the tailnet only" hardening). On boot, pveproxy starts before
-`tailscaled` has assigned that IP, fails five times with
-`unable to create socket - Cannot assign requested address` (`EADDRNOTAVAIL`), and
-systemd gives up (`start request repeated too quickly`). The service then stays
-dead until a manual restart.
+After the reboot SSH worked and the web UI on `:8006` did not. `pveproxy` binds only the host
+Tailscale IP (`/etc/default/pveproxy`, `LISTEN_IP=<tailscale-ip-proxmox-host>`). It started before
+`tailscaled` assigned that IP, failed five times with `unable to create socket - Cannot assign
+requested address`, and systemd stopped retrying (`start request repeated too quickly`). Same class
+as [KE-9](../known-errors.md#ke-9); recorded as [KE-12](../known-errors.md#ke-12).
+Decision: [pveproxy boot ordering](../../decisions/pveproxy-tailscale-boot-ordering.md).
+Recovery: [runbook](../../../runbooks/platform/pveproxy-tailscale-boot-race.md).
 
-This is the same fault class as [KE-9](../known-errors.md#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race)
-(PostgreSQL) and is recorded as
-[KE-12](../known-errors.md#ke-12-pveproxy-fails-to-start-after-boot-tailscale-ip-bind-race).
-Fix and the rejected alternatives:
-[ADR pveproxy-tailscale-boot-ordering](../../decisions/pveproxy-tailscale-boot-ordering.md).
-Recovery procedure:
-[runbook pveproxy-tailscale-boot-race](../../../runbooks/platform/pveproxy-tailscale-boot-race.md).
+### 1.3 Reachability on that day
 
-### 1.3 Reachability model and the LAN-SSH fallback
+A service is reachable only if its binding, the network path and the firewall all allow it:
 
-Clarified and verified the rule that reachability = binding x network x firewall
-- all three must hold, and "not firewall-blocked" does not imply "reachable":
-
-| Service | Binds to | LAN reachable? | Tailscale reachable? |
+| Service | Binds to | LAN reachable | Tailscale reachable |
 |---|---|---|---|
-| `sshd` | `0.0.0.0:22` (all interfaces) | Yes - verified `ssh root@<lan-ip-proxmox-host>` over a wired LAN path | Yes |
-| Web UI (`pveproxy`) | host Tailscale IP only (`:8006`) | No - by binding, not by firewall | Yes |
+| `sshd` | `0.0.0.0:22` | Yes - `ssh root@<lan-ip-proxmox>` over wired LAN | Yes |
+| Web UI (`pveproxy`) | host Tailscale IP, `:8006` | No - by binding | Yes |
 
-The Proxmox firewall is `disabled` (no `cluster.fw`/`host.fw`); nothing is filtered.
-A LAN-SSH "break-glass" was verified end to end from the admin workstation
-(`SSH_CONNECTION` confirmed the LAN path, not a Tailscale tunnel). Emergency mode
-remains the one state that removes all network paths at once - the firewall
-notausgang only matters once the network is up.
+The Proxmox firewall was disabled (no `cluster.fw`/`host.fw`). LAN SSH as break-glass was verified
+from the admin workstation (`SSH_CONNECTION` showed the LAN path). Emergency mode removes every
+network path at once, so a firewall exception only helps once the network is up. Since 2026-10-01
+`lan_guard` restricts LAN inbound on every node; break-glass SSH to the hypervisor remains.
 
-## 2 - aux-disk Physical Disk Failure
+## 2 - aux-disk physical failure
 
-### 2.1 Symptom -> diagnosis
+### 2.1 Diagnosis
 
-Five LXCs were stopped (LXC200 monitoring, LXC211 paperless, LXC220 calibre-web,
-LXC230 openwebui, LXC260 postgres); the three running ones (LXC210, LXC240,
-LXC250) had no aux-disk dependency. Each stopped container has a bind-mount whose
-source is on `/mnt/aux-disk` (the Docker data-root strategy from the "Adding a New
-Service" checklist). With aux-disk unmounted, those source paths were missing and
-Proxmox refused to start the containers.
+Five LXCs were stopped: lxc200 (monitoring), lxc211 (Paperless), lxc220 (Calibre-Web), lxc230
+(OpenWebUI), lxc260 (PostgreSQL). Each has a bind mount whose source is on `/mnt/aux-disk` (Docker
+data-root). With the disk unmounted those paths were missing and Proxmox refused to start the
+containers. The containers without an aux-disk dependency kept running.
 
-aux-disk did not mount because of unrecoverable hardware medium errors, not a
-filesystem-only or cabling fault. Verified from the kernel log:
+The disk did not mount because of hardware medium errors, not a filesystem or cabling fault:
 
 ```
 critical medium error, dev sdb, sector ...   (Unrecovered read error)
 ```
 
-SMART confirmed end-of-life on a consumer-grade drive (~6.5 years power-on):
-
-| Attribute | Value |
+| SMART attribute | Value |
 |---|---|
 | Current_Pending_Sector | 7688 |
 | Offline_Uncorrectable | 7688 |
 | Reported_Uncorrect | 18 |
 | Power_On_Hours | ~56800 |
 
-A read-only mount (`-o ro,noload`, no journal replay) succeeded and exposed the
-full directory tree intact - the bad sectors had not hit the live metadata. This
-gave a rescue window. Recorded as
-[KE-13](../known-errors.md#ke-13-aux-disk-physical-disk-failure-medium-errors).
+A read-only mount (`-o ro,noload`, no journal replay) succeeded and exposed the full directory
+tree: the bad sectors had not hit live metadata.
 
-### 2.2 Rescue method (data-preservation first)
+### 2.2 Rescue method
 
-Principle: rescue before repair. No `fsck` or read-write mount was attempted on
-the failing disk until everything was copied off - a read-write `fsck` writes to a
-disk with 7688 pending sectors and can finish it off, and could "repair" metadata
-into data loss. Method:
+No `fsck` and no read-write mount until everything was copied off; a read-write `fsck` writes to a
+disk with thousands of pending sectors and can turn metadata repair into data loss.
 
-- Source mounted strictly read-only (`-o ro,noload`); VM100's jellyfin-data image
-  loop-mounted read-only for the data inside it.
+- Source mounted read-only (`-o ro,noload`). vm100's jellyfin-data disk, a raw image file on the
+  aux-disk, was loop-mounted read-only to reach the data inside it.
 - Per-directory `tar` streamed over SSH to the admin workstation (`<lan-ip-admin-workstation>`,
-  gigabit wired), landing as archives on its LUKS-encrypted disk. `tar` was chosen
-  over file-level `rsync` so ownership/permissions are preserved inside the
-  archive (no root needed on the receiver, exact UIDs on restore).
-- Ordered most-valuable-first so an interruption could not lose the irreplaceable
-  data: databases/configs -> media -> regenerable caches.
-- Read errors surfaced explicitly (`--ignore-failed-read`, stderr captured); the
-  only messages were `socket ignored` (runtime sockets, not data), i.e. zero
-  real medium errors during the rescue.
+  wired gigabit) onto its encrypted disk. `tar` keeps ownership and permissions inside the archive,
+  so the receiver needs no root and restores keep exact UIDs.
+- Most valuable first: databases and configs, then media, then regenerable caches.
+- `--ignore-failed-read` with stderr captured; the only messages were `socket ignored`, so no
+  medium error occurred during the rescue.
 
-Full procedure:
-[runbook aux-disk-failure-rescue](../../../runbooks/storage/aux-disk-failure-rescue.md).
+Procedure: [aux-disk failure rescue](../../../runbooks/storage/aux-disk-failure-rescue.md).
 
-### 2.3 Rescue inventory (verified, 0 data loss)
+### 2.3 Rescue inventory
 
 | Archive | Size | Content |
 |---|---|---|
@@ -128,93 +100,61 @@ Full procedure:
 | `monitoring.tar` | 6.3 G | Prometheus/Grafana data |
 | `calibreweb.tar` | 2.1 G | containerd layers (regenerable) |
 | `nextcloud.tar` | 61 M | - |
-| `jf-jellyfin.tar` | 13 G | Jellyfin library DB + artwork/metadata |
-| `audiobookshelf.tar` | 1.6 G | Audiobookshelf DB + covers |
-| `calibre-library-metadata.tar` | 528 M | Calibre `metadata.db` + covers/`.opf` (media-free) |
-| `calibre-web-config.tar` | 260 K | calibre-web `app.db` |
+| `jf-jellyfin.tar` | 13 G | Jellyfin library DB, artwork, metadata |
+| `audiobookshelf.tar` | 1.6 G | Audiobookshelf DB and covers |
+| `calibre-library-metadata.tar` | 528 M | Calibre `metadata.db`, covers, `.opf` (no media) |
+| `calibre-web-config.tar` | 260 K | Calibre-Web `app.db` |
 | `Archiv.tar` | 45 G | Audiobook archive (media) |
 
-All 12 archives passed `tar -t` integrity checks. The ~88 GB difference between the
-disk's 182 GB "allocated" and ~95 GB live data was dead space in VM100's sparse
-a few hundred GB jellyfin-data image (high-water-mark, never reclaimed by discard) - shed
-automatically by copying file-level rather than imaging the raw disk.
+Every archive in the table passed `tar -t`. The disk showed 182 GB allocated against about 95 GB of
+live data; the difference was dead space inside vm100's sparse jellyfin-data image (blocks written
+once and never released by discard). Copying file by file instead of imaging the disk left it
+behind.
 
-## 3 - Media Library Metadata Map
+## 3 - Media library metadata
 
-The user's concern was the library metadata (the catalog behind the visible
-web-UI entries), not the media files (those live on the VM102 MergerFS pool).
-Authoritative source: the per-service `.env` files resolved from the IaC repo on
-LXC250. Result:
+Where each library's catalog lives (media files are on the vm102 pool), from the per-service `.env`
+files on lxc250:
 
-| Library | Metadata location | Storage health | Status |
+| Library | Metadata location | Storage | Status |
 |---|---|---|---|
-| Jellyfin | `/mnt/vm-data/jellyfin` on VM100 (= a `.raw` image on aux-disk) | **failing** | Rescued (`jf-jellyfin.tar`) |
-| Audiobookshelf | `/opt/docker/audiobookshelf` on the VM100 root disk | healthy (local-lvm) | Backed up (`audiobookshelf.tar`) |
-| Calibre | calibre-web `app.db` on LXC220 rootfs; catalog `metadata.db` on the MergerFS pool | healthy | Backed up; catalog already on the pool |
+| Jellyfin | `/mnt/vm-data/jellyfin` on vm100 (image on the aux-disk) | failing | Rescued (`jf-jellyfin.tar`) |
+| Audiobookshelf | `/opt/docker/audiobookshelf` on vm100's root disk | local-lvm | Copied (`audiobookshelf.tar`) |
+| Calibre | Calibre-Web `app.db` on lxc220 rootfs; `metadata.db` on the pool | healthy | Copied; catalog already on the pool |
 
-Only Jellyfin's library was on the dying disk; it is rescued. Audiobookshelf and
-Calibre metadata were never on aux-disk. No re-scrape is required.
+Only Jellyfin's library was on the failing disk. No re-scrape was needed.
 
-## System State After This Session
+At the end of the day the five containers and vm100 stayed down pending a storage decision; the
+aux-disk was mounted read-only for the rescue only.
 
-- **Remote access:** SSH over Tailscale and LAN both verified; web UI restored and
-  made reboot-safe (pveproxy drop-in).
-- **Containers:** LXC210/240/250 running. LXC200/211/220/230/260 and VM100 remain
-  **down** pending data relocation off aux-disk - not yet restored.
-- **aux-disk:** physically failed, mounted read-only for rescue only; to be
-  decommissioned. All data copied to the admin workstation (`~/aux-disk-rescue/`).
-- **Firewall:** disabled (unchanged).
+## Configuration changes
 
-## Open Items
+One persistent change: the host drop-in `/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf`
+(`After=`/`Wants=tailscaled.service`, `ExecStartPre` poll for the Tailscale IP, up to 30 s). The
+read-only mounts and vm100 disk mappings used for inspection were transient and removed.
 
-1. **Permanent home + service restart.** Move the rescued databases/configs onto
-   healthy storage (local-lvm SSD is the right fit for live DBs; the MergerFS pool
-   is for media and is ~full), re-point the LXC bind mounts, restart LXC200/211/220/230/260
-   and VM100. The off-disk copy on the admin workstation is staging, not a home.
-2. **aux-disk replacement decision.** Replace with a healthy disk vs. decommission
-   only - open. Drives whether the Docker data-root strategy is restored on a new
-   aux-disk or moved.
-3. **Docker data-root strategy invalidated.** The
-   [docker-data-root-migration runbook](../../../runbooks/platform/docker-data-root-migration.md)
-   and the "Adding a New Service" step 6 in
-   [CLAUDE.md](../../../CLAUDE.md) both target `/mnt/aux-disk`, which no longer exists.
-   Both need revision once the replacement decision is made.
-4. **pveproxy fix vs. the canonical pattern.** The applied fix is an inline
-   `ExecStartPre` poll loop; the repo already has the `postgresql-boot-order`
-   pattern (`wait-for-tailscale-ip.sh` + Ansible role). Aligning pveproxy to that
-   shared script/role is the durable follow-up. See the
-   [ADR](../../decisions/pveproxy-tailscale-boot-ordering.md).
-5. **No off-site backup** of the rescued set - it is a single local copy on one
-   admin workstation (consistent with the existing off-site-backup tech-debt item).
+## Follow-up items
 
-## Configuration Changes Made
+1. Permanent home for the data and service restart - done 2026-07-09: no other target had room,
+   so the disk went back into service with the five data-roots and vm100's disk on it
+   ([KE-13](../known-errors.md#ke-13)).
+2. aux-disk replacement - open:
+   [remediation plan](../remediation-plan.md#aux-disk-replacement-and-disposal).
+3. Docker data-root strategy on `/mnt/aux-disk` - unchanged while the disk is in service; the
+   [data-root migration runbook](../../../runbooks/platform/docker-data-root-migration.md) is
+   revisited with the replacement.
+4. pveproxy gate on the shared script - done 2026-09-12: the `tailscale_boot_gate` role owns it and
+   removed the hand-written drop-in ([KE-12](../known-errors.md#ke-12)).
+5. Off-site copy - open. The `offsite_backup` role exists and is not deployed; first item of the
+   [remediation plan](../remediation-plan.md#off-site-backup).
+6. Disk health monitoring - done: `smart_metrics` exports per-attribute SMART data and
+   `SmartAttributeDegrading` alerts per disk serial ([KE-13](../known-errors.md#ke-13)).
 
-| Where | Change |
-|---|---|
-| `/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf` (Proxmox host) | New drop-in: `After=/Wants=tailscaled.service` + `ExecStartPre` poll until the Tailscale IP is present (<=30 s). Reboot-safety not yet tested on a fresh boot. |
+## Findings
 
-No other persistent changes. The aux-disk read-only mounts and the VM100 disk
-mappings used for inspection were created transiently and cleaned up.
+- Emergency mode removes every network path at once; `nofail` on non-critical mounts keeps the
+  boot out of it.
+- Every service bound to the Tailscale IP needs a wait-for-IP gate
+  ([KE-18](../known-errors.md#ke-18)).
 
-## Lessons Learned
-
-- Emergency mode removes every network path at once - LAN and Tailscale both. The
-  only structural defence is keeping the boot out of emergency mode (`nofail` on
-  non-critical mounts), not any single access path.
-- "Bind to the Tailscale IP only" hardening (KE-9, this incident) repeatedly
-  collides with boot ordering: any service pinned to the Tailscale IP needs a
-  wait-for-IP gate, or it loses the race and dies.
-- A consumer drive at ~6.5 years with thousands of pending sectors is a
-  decommission, not a repair. Rescue read-only first; never `fsck` a failing disk
-  before the data is off it.
-
-## Related Documents
-
-- [KE-12 - pveproxy Tailscale-IP bind race](../known-errors.md#ke-12-pveproxy-fails-to-start-after-boot-tailscale-ip-bind-race)
-- [KE-13 - aux-disk physical disk failure](../known-errors.md#ke-13-aux-disk-physical-disk-failure-medium-errors)
-- [ADR - pveproxy Tailscale boot ordering](../../decisions/pveproxy-tailscale-boot-ordering.md)
-- [Runbook - pveproxy boot-race recovery](../../../runbooks/platform/pveproxy-tailscale-boot-race.md)
-- [Runbook - aux-disk failure rescue](../../../runbooks/storage/aux-disk-failure-rescue.md)
-- [Proxmox Host](../proxmox-host.md)
-- [VM100 node](../../nodes/vm100.md)
-- [Platform Changelog](../changelog.md)
+Related: [Proxmox host](../proxmox-host.md), [vm100](../../nodes/vm100.md).
