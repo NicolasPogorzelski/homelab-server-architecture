@@ -3,11 +3,9 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
-# A socket cannot be restarted while its service holds it: systemd refuses to
-# start a socket whose service is still active. So the service stops first, the
-# socket restarts onto its new address, and the service starts on the new fd.
-# Handlers run in the order listed here. A restart proves nothing under --check,
-# and on a node without the package the units do not exist yet.
+# systemd refuses to start a socket whose service is active, so: stop the
+# service, restart the socket on its new address, start the service (handlers run
+# in listed order). Skipped under --check, where the units may not exist yet.
 - name: Stop journal-remote
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.service

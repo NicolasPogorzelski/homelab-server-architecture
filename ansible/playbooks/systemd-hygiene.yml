@@ -1,18 +1,8 @@
 ---
-# `guests`, not `all` - see ssh-hardening.yml for the convention and why it is a
-# group definition rather than a habit of checking.
-#
-# The Proxmox host was deliberately absent until 2026-09-12, on the grounds that
-# the role is a no-op where nothing is listed and that the node had no
-# permanently failed unit. It has a play of its own now, with the units named and
-# the reason recorded in `group_vars/proxmox.yml` - which is what this role asks
-# of every other node. Note it is a separate play rather than a widened `hosts:`
-# line: a fleet-wide entry added to `group_vars/all` must not start masking units
-# on the hypervisor by accident, and `systemd_hygiene_group_units` is set on
-# `lxcs`, not above it.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Guests and hypervisor are separate plays (see ssh-hardening.yml). The
+# hypervisor's units are listed in group_vars/proxmox.yml, and
+# `systemd_hygiene_group_units` is set on `lxcs` rather than `all`, so a
+# fleet-wide entry cannot mask units on the hypervisor by accident.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 
@@ -22,8 +12,6 @@
   roles:
     - systemd_hygiene
 
-# The hypervisor, named separately. See ssh-hardening.yml for why sweeps stop at
-# `guests`.
 - name: Mask systemd units that must not run on the Proxmox host
   hosts: proxmox
   become: false # the inventory connects as root; there is no ansible user here

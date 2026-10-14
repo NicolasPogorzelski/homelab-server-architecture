@@ -7,15 +7,13 @@
 # first rule of the chain accepts everything that does not arrive on the LAN
 # interface, so tailscale0, loopback and Docker's bridges pass unfiltered.
 #
-# Binding each service to its Tailscale address or to loopback stays the
-# platform's rule and the better fix where a service allows it. This role is the
-# layer underneath: it closes the wildcard binds that are still open (sshd on most
-# nodes, Apache on lxc210) and any bind a future change gets wrong, and it does so
-# without making a single service wait for Tailscale at boot.
+# Binding services to Tailscale or loopback remains the primary rule. This role
+# is the layer underneath: it covers remaining wildcard binds (e.g. Apache on
+# lxc210, sshd on the hypervisor) and future mistakes, without making any
+# service wait for Tailscale at boot.
 #
-# Never loaded through nftables.service. Its stock /etc/nftables.conf opens with
-# `flush ruleset`, which would take this table and Tailscale's chains with it; the
-# unit orders itself after nftables.service on the containers that enable it.
+# Never loaded through nftables.service: its stock config starts with `flush
+# ruleset`. The unit orders itself after nftables.service instead.
 
 lan_guard_enabled: true
 

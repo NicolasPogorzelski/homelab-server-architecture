@@ -5,22 +5,15 @@ mariadb_backup_script_src: "{{ playbook_dir }}/../../snippets/mariadb/mariadb-ba
 mariadb_backup_script_dest: /usr/local/sbin/mariadb-backup.sh
 
 # Bind of the host's CIFS mount of the backup share. The role refuses to deploy
-# if this is not a CIFS mount -- see tasks/main.yml for why that is an assert and
-# not a "create the directory" task.
+# unless this is a CIFS mount (tasks/main.yml).
 mariadb_backup_dir: /mnt/backups
 
 mariadb_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
 
-# A systemd timer, not a cron job. The Proxmox host is powered down overnight
-# (homelab_schedule) and woken by RTC in the morning, so nothing runs at 03:30
-# and a cron slot would simply be missed and lost -- exactly how the PostgreSQL
-# dumps silently stopped for two months. Persistent=true fires the overdue run at
-# the next boot instead.
+# The host is powered down at this hour (homelab_schedule); the timer's
+# Persistent=true fires the overdue run at the next boot.
 mariadb_backup_oncalendar: "*-*-* 03:30:00"
 
-# Because both database timers catch up at boot, the half-hour offset in the
-# calendar above buys nothing on the run that actually matters: after an
-# overnight power-down, pg-backup and this one both fire within seconds of each
-# other and stream to the same CIFS server. The randomised delay separates them
-# without coupling the two units to each other.
+# After a power-down this and pg-backup both catch up at boot against the same
+# CIFS server; the random delay separates them without coupling the units.
 mariadb_backup_randomized_delay_sec: 300

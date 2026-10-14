@@ -1,18 +1,11 @@
 ---
-# Debian's mariadb-server ships mariadb.socket with `ListenStream=3306`, and its
-# postinst enables any socket unit it has not seen before: "was-enabled defaults
-# to true, so new installations run enable". A package that predates the unit
-# gets it enabled on the first upgrade that carries it. Under socket activation
-# systemd holds `[::]:3306` and passes the descriptor to mariadbd, which then
-# never binds anything itself, so `bind-address` reads back as 127.0.0.1 from
-# `@@bind_address` while the node listens on every address. The same mechanism
-# that made `ListenAddress` inert on the socket-activated containers, one
-# package over.
+# Debian's mariadb-server ships mariadb.socket (`ListenStream=3306`) and its
+# postinst enables it on install or upgrade. Under socket activation systemd
+# holds `[::]:3306` and mariadbd never binds, so `@@bind_address` reads
+# 127.0.0.1 while the node listens on every address (same mechanism as KE-24).
 #
-# Masked rather than disabled. Disabling is enough for the postinst as written -
-# it re-enables only what `was-enabled` reports - but a mask also survives a
-# packaging change to that logic, and `deb-systemd-helper unmask` lifts only
-# masks it created itself.
+# Masked rather than disabled, so a change in the packaging logic cannot
+# re-enable it.
 - name: Read whether systemd owns the MariaDB listening socket
   ansible.builtin.command:  # noqa: command-instead-of-module
     cmd: systemctl is-active mariadb.socket
@@ -28,11 +21,8 @@
     masked: true
     state: stopped
 
-# Restarted only on the run that removes the socket: a mariadbd the socket
-# launched keeps the inherited `[::]:3306` descriptor after the socket stops.
-# Later runs find the socket inactive and leave the service alone. A restart
-# interrupts Nextcloud for the seconds InnoDB needs to come up; mariadbd removes
-# the stale /run/mysqld/mysqld.sock the socket unit left and creates its own.
+# Restarted only on the run that removes the socket: a socket-launched mariadbd
+# keeps the inherited wildcard descriptor. Interrupts Nextcloud for seconds.
 - name: Restart MariaDB onto its configured bind
   ansible.builtin.systemd_service:
     name: mariadb.service

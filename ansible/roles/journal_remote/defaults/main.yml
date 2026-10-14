@@ -1,43 +1,29 @@
 ---
 # === journal_remote (EXERCISE) ===
 #
-# The receiving half of central log aggregation. Exists to be understood rather
-# than because this platform needs it - the assessment of 2026-09-16 argued
-# against it at ten nodes that power down nightly, and that argument stands. The
-# labelling rules and the exit are in
-# docs/decisions/exercise-scope-before-terraform.md. No alert reads anything this
-# produces and nothing here is Enforced in security-controls.md.
+# The receiving half of central log aggregation. A learning exercise, not a
+# control this platform needs; scope and exit are in
+# docs/decisions/exercise-scope-before-terraform.md. No alert reads its output
+# and nothing here is Enforced in security-controls.md.
 #
-# systemd's own remoting rather than Loki or an ELK stack, and the choice is the
-# lesson. journald already holds structured records with verified boot ids and
-# monotonic ordering; shipping them as journals keeps that, where a line-based
-# collector would throw it away and a parser would try to guess it back.
+# systemd's own remoting rather than Loki or ELK: shipping journals keeps
+# structured fields, boot ids and ordering that a line-based collector drops.
 #
-# What it does not fix is the thing aggregation is for. lxc200's storage is on the
-# same boot SSD as every other guest, so logs shipped here do not outlive the
-# disk that produced them - they outlive the *guest*, which is a smaller claim.
-# Real aggregation puts the receiver in another failure domain, and this platform
-# has exactly one.
+# lxc200 sits on the same boot SSD as every other guest, so shipped logs outlive
+# a guest, not the disk. Real aggregation needs a second failure domain.
 journal_remote_package: systemd-journal-remote
 
-# Bound to the node's Tailscale address, never the wildcard. journald's own
-# packaging ships a socket unit listening on [::]:19532, which would put an
-# unauthenticated log sink on the untrusted LAN - the binding rule exists for
-# precisely this, and the LLMNR responder found on lxc250 on 2026-09-16 is what
-# happens when a daemon's default is left to decide.
+# Bound to the node's Tailscale address, never the wildcard: the packaged socket
+# listens on [::]:19532, an unauthenticated log sink on the LAN.
 journal_remote_listen_address: "{{ ansible_host }}"
 journal_remote_port: 19532
 
-# Where the received journals land, and how much of them is kept. Ten nodes at a
-# few hundred megabytes each would fill this container's root filesystem, which
-# is thin-pool space on the boot SSD. Enforced by the hourly vacuum timer, not by
-# the receiver - see the task that deploys it.
+# Received journals and their cap. Uncapped, they would fill this container's
+# root filesystem in the thin pool. Enforced by the hourly vacuum timer (tasks).
 journal_remote_dir: /var/log/journal/remote
 journal_remote_max_use: 2G
 
-# Plain HTTP over the tailnet, not HTTPS. The transport is already encrypted and
-# authenticated by WireGuard, and adding TLS here would mean a second certificate
-# lifecycle on a node that has one - KE-16 is the entry about what that costs.
-# In a workplace with no overlay this line is the opposite way round, and that is
-# the difference worth noticing.
+# Plain HTTP: WireGuard already encrypts and authenticates the tailnet, and TLS
+# would add a second certificate lifecycle (see KE-16). Without an overlay
+# network this would have to be true.
 journal_remote_use_tls: false

@@ -1,8 +1,8 @@
 # {{ ansible_managed }}
 [Unit]
 Description=Refresh the Tailscale TLS certificate and reload the services that serve it
-# tailscaled must be up to answer `tailscale cert`; without this the unit fails
-# during the boot window, the same race class as KE-9 and KE-12.
+# tailscaled must be up to answer `tailscale cert` (boot-race class of KE-9 and
+# KE-12).
 After=tailscaled.service
 Wants=tailscaled.service
 

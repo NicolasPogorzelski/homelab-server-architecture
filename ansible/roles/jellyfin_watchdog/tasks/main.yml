@@ -25,9 +25,7 @@
     group: root
     mode: "0600"
 
-# no_log and no diff: the file is the API key. `--diff` prints a changed file's
-# content, which is how a dry run once put the Paperless database password on
-# a terminal.
+# no_log and no diff: the file is the API key, and `--diff` would print it.
 - name: Give the watchdog its API key as a curl header file
   ansible.builtin.copy:
     dest: "{{ jellyfin_watchdog_config_dir }}/auth-header"
@@ -56,8 +54,8 @@
     mode: "0644"
   notify: Reload systemd
 
-# See paperless_inbox_scan for why this is not `ansible.builtin.cron`, and why the
-# filter is `sed -E /d` rather than `grep -v`.
+# Not `ansible.builtin.cron`: it only removes entries it created. The legacy
+# line is filtered out with sed and the crontab piped back.
 - name: Read the root crontab
   ansible.builtin.command:
     cmd: crontab -l -u root
@@ -75,9 +73,7 @@
   when: jellyfin_watchdog_root_crontab.stdout is search(jellyfin_watchdog_legacy_cron_pattern)
   changed_when: true
 
-# Skipped in check mode: the unit file above was not really written, so systemd
-# cannot see it yet and `enable` would fail with "Could not find the requested
-# service". Without this guard the role cannot be dry-run at all.
+# Skipped in check mode: the unit file was not written, so `enable` would fail.
 - name: Enable and start the watchdog timer
   ansible.builtin.systemd_service:
     name: jellyfin-cuda-watchdog.timer

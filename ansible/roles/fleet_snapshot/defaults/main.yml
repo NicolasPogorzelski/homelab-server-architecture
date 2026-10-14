@@ -1,28 +1,20 @@
 ---
-# Saturday morning, ahead of lxc-fstrim.timer at 10:30 and guest-backup at 11:00.
-# The snapshot is meant to describe the week that was, so it runs before the
-# jobs that rewrite state, and it stays clear of the backup's disk load.
-# Saturday because the host starts by itself at 09:50 on Saturdays in every plan
-# of homelab_schedule and not at all on Sundays; 10:10 leaves the guests twenty
-# minutes to come up.
+# Saturday morning, after the host's scheduled wake (homelab_schedule) and before
+# lxc-fstrim.timer and guest_backup, so the snapshot describes the week before
+# jobs rewrite state and stays clear of the backup's disk load.
 #
-# The zone is part of the expression and is not decoration. lxc250 runs Etc/UTC
-# while the hypervisor those two jobs live on runs Europe/Berlin, so a bare
-# "09:00" here fired at 11:00 local - the minute vzdump started. Measured
-# 2026-09-08, that is exactly what the first deployment did. Naming the zone
-# also survives the daylight-saving change, which a fixed UTC hour would not.
+# The zone is explicit: lxc250 runs Etc/UTC, the hypervisor Europe/Berlin. A bare
+# time would drift by the UTC offset and across daylight-saving changes.
 fleet_snapshot_on_calendar: "Sat *-*-* 10:10:00 Europe/Berlin"
 fleet_snapshot_randomized_delay: "300"
 
-# The control node runs the playbook against the whole inventory, so the unit
-# needs the repository, the interpreter and the vault password that only exist
-# on this node.
+# The unit runs the playbook from the control node's checkout, interpreter and
+# vault password.
 fleet_snapshot_user: devops
 fleet_snapshot_repo: /home/devops/git/homelab-server-architecture
 fleet_snapshot_playbook: playbooks/fleet-snapshot.yml
 fleet_snapshot_path: /home/devops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Absolute, because systemd resolves a bare ExecStart name against a fixed list of four
-# directories and deliberately ignores the unit's own Environment=PATH. The first deployment
-# used the bare name and the service died with status 203/EXEC before it reached a task.
+# Absolute: systemd resolves a bare ExecStart name against fixed directories and
+# ignores Environment=PATH (a bare name fails with 203/EXEC).
 fleet_snapshot_playbook_bin: /home/devops/.local/bin/ansible-playbook

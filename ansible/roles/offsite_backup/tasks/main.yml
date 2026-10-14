@@ -1,7 +1,6 @@
 ---
-# A node with no paths configured would deploy a timer that fails every night
-# against an empty argument, which is worse than not being deployed: it produces
-# a red unit that says nothing about what is missing.
+# Without paths the timer would fail every night with a unit error that does not
+# say what is missing.
 - name: Assert this node declares what it sends off site
   ansible.builtin.assert:
     that:
@@ -35,10 +34,8 @@
   loop: "{{ offsite_backup_paths }}"
   register: offsite_backup_sources
 
-# `restic backup` skips a path it cannot find and still exits 0. That is the
-# shape where a backup keeps succeeding while covering less every month, so the
-# check belongs here as well as in the script: the script catches a path that
-# disappears later, this catches one that was wrong from the start.
+# `restic backup` skips a missing path and still exits 0. The script catches a
+# path that disappears later; this catches one that is wrong from the start.
 - name: Refuse to deploy against a source path that does not exist
   ansible.builtin.assert:
     that:

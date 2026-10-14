@@ -69,11 +69,8 @@ if [ -z "${ARMED}" ]; then
     exit 1
 fi
 
-# rtcwake reads the RTC and then the system clock, and subtracts the difference
-# from the requested time. When the second ticks between the two reads, the alarm
-# lands one second early: measured 07:29:59 for a requested 07:30:00. What this
-# check exists to catch is the wrong day or no alarm, so a minute of slack costs
-# nothing and an exact comparison fails at random.
+# rtcwake can land one second early when the clock ticks between its two reads.
+# The check targets a wrong day or no alarm, so a minute of slack is allowed.
 OFFSET=$(( ARMED - WAKE_TIME ))
 if [ "${OFFSET#-}" -gt 60 ]; then
     echo "ERROR: alarm reads ${ARMED} ($(date -d "@${ARMED}")), expected ${WAKE_TIME} ($(date -d "@${WAKE_TIME}"))" >&2

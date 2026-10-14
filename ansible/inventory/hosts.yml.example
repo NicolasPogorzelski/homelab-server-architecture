@@ -54,11 +54,7 @@ all:
         lxc260:  # PostgreSQL platform
           ansible_host: <tailscale-ip-postgres>
 
-    # The `security` group was removed together with lxc240 on 2026-09-01. It
-    # had that one member and no playbook ever targeted it.
-    # See docs/decisions/vaultwarden-decommission.md.
-
-    docker:  # Nodes running Docker Compose stacks (Item #9 update workflow)
+    docker:  # Nodes running Docker Compose stacks (docker-compose-update.yml)
       hosts:
         lxc200:  # monitoring stack
           ansible_host: <tailscale-ip-monitoring>
@@ -88,12 +84,8 @@ all:
         lxc230:
           ansible_host: <tailscale-ip-ai-openwebui>
           prometheus_label: openwebui
-        # The control node, in the inventory since 2026-08-20. It was absent for
-        # months, which meant `hosts: all` excluded it silently: no node_exporter
-        # scrape, no NodeDown, no disk alert on its 8 GB root, and no patching.
-        # It also holds the only copy of the vault password, the real inventory
-        # and the Ansible SSH key, which made it the worst node on the fleet to
-        # leave unmanaged.
+        # The control node. It holds the only copy of the vault password, the
+        # real inventory and the Ansible SSH key.
         lxc250:
           ansible_host: <tailscale-ip-devops>
           prometheus_label: devops
@@ -101,18 +93,10 @@ all:
           ansible_host: <tailscale-ip-postgres>
           prometheus_label: postgres
 
-    # Every node that is NOT the hypervisor. Sweeping playbooks target this
-    # group, never `all`.
-    #
-    # That has gone wrong in both directions. `all` excluded lxc250 for months
-    # because it belonged to no group, and nothing reported the absence. Since
-    # the hypervisor joined the inventory on 2026-08-21 the same mechanism runs
-    # the other way: a play written with `hosts: all` now also reaches the
-    # machine that runs all ten guests. Naming the group in the playbook removes
-    # the need to remember.
-    #
-    # Read-only playbooks may still use `all` - fleet-health-check.yml does, and
-    # should, because the host belongs in a health report.
+    # Every node except the hypervisor. `all` also reaches the machine that runs
+    # all nine guests, so a playbook uses `all` only where the hypervisor is
+    # meant to be covered; otherwise it targets `guests` and, if needed, the
+    # `proxmox` group in a separate play.
     guests:
       children:
         lxcs:
@@ -122,7 +106,7 @@ all:
       hosts:
         proxmox-host:
           ansible_host: <tailscale-ip-proxmox-host>
-          ansible_user: root  # No ansible user bootstrapped on hypervisor; use root directly
+          ansible_user: root  # no ansible user on the hypervisor; root connects directly
 
     vms:
       hosts:

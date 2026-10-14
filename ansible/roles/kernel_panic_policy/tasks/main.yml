@@ -8,12 +8,8 @@
     mode: "0644"
   notify: Reload sysctl
 
-# The file on disk is not the setting. A drop-in that is never read leaves the
-# running kernel at its old value, and the failure it guards against is exactly the
-# kind nobody rehearses - so the role reads the kernel back rather than trusting
-# what it just wrote. This is the journald role's check applied to a second
-# mechanism, and the reason is the same: KE-16 renewed a certificate on disk while
-# the daemon kept serving the old one from memory.
+# Reads the running kernel back rather than trusting the file: a drop-in that is
+# not loaded or is overridden leaves the old value in force.
 - name: Flush handlers so the readback sees the new values
   ansible.builtin.meta: flush_handlers
 

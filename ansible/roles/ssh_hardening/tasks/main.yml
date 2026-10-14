@@ -11,39 +11,11 @@
       a typo here takes SSH down on the node it was meant to harden.
     quiet: true
 
-# sshd must not be reloaded where systemd owns the listening socket.
-#
-# Debian ships ssh.socket with `Accept=no` and `ListenStream=22`, so systemd
-# holds the socket and hands the descriptor to ssh.service on the first
-# connection - both then show as owners of :22 in `ss -lntp`. That is a supported
-# arrangement and the normal steady state on the Proxmox Debian 12 containers,
-# where the template enables it. vm100, vm102, lxc250 and the hypervisor have it
-# disabled and run the daemon on its own.
-#
-# What breaks is SIGHUP. sshd does not re-read its configuration on reload, it
-# re-execs, and the new process binds :22 itself instead of reusing the inherited
-# descriptor. systemd still holds the socket, the bind fails with EADDRINUSE and
-# the unit exits 255. Measured on six containers 2026-09-04 (KE-24). The socket
-# starts the service again on the next connection, so the fault repairs itself,
-# which is most of the reason it went unnoticed.
-#
-# The reload is therefore chosen per node rather than forbidden: restart where
-# the socket is active, reload where it is not. Both validate the configuration
-# first - ExecStartPre and ExecReload each run `sshd -t` - and a restart under
-# socket activation refuses no connection, because the socket keeps listening.
-#
-# Established sessions survive either verb, which is not a given: ssh.service
-# carries `KillMode=process`, so a stop signals the main process alone and the
-# forked per-session children keep running. Under the systemd default of
-# `control-group` a restart would take down the connection Ansible is working
-# over, mid-play.
-#
-# The handler falls back to `restarted` rather than `reloaded` where the
-# detection did not run. This platform has no high-availability requirement -
-# the host powers down every night by design - so a listener gap of a second or
-# two after a configuration change costs nothing, while a dead sshd on six nodes
-# costs a hypervisor session to repair. The safe default is the verb that works
-# on both kinds of node, not the gentler one.
+# sshd must not be reloaded where systemd owns the listening socket (KE-24): a
+# reload re-execs sshd, the new process binds :22 itself, fails with EADDRINUSE
+# against ssh.socket and exits 255. So the verb is chosen per node: restart where
+# ssh.socket is active, reload where it is not. Both run `sshd -t` first, and
+# established sessions survive either, because ssh.service has `KillMode=process`.
 #
 # noqa: command-instead-of-module - service_facts sees .service units only, and
 # systemd_service has no query-only mode. A node without the unit returns a
@@ -61,17 +33,10 @@
     ssh_hardening_reload_verb: >-
       {{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'reloaded' }}
 
-# Pinning ListenAddress couples sshd's start to tailscaled having assigned the
-# address, which is the KE-18 class, and sshd is its worst-behaved member: it exits
-# 255 on a failed bind and Debian's ssh.service names 255 in
-# RestartPreventExitStatus, so the packaged unit will not restart it on exactly
-# that failure. A node that gets the bind without the gate comes back from a reboot
-# with no SSH and is reachable only by `pct exec` or a console - and on the
-# hypervisor, by neither.
-#
-# So the role refuses the half-configuration rather than trusting whoever edits the
-# inventory to remember the other half. The two settings are safe together and dangerous alone,
-# and this repository has recorded five instances of the failure they prevent.
+# A pinned ListenAddress couples sshd's start to tailscaled having assigned the
+# address (KE-18). sshd exits 255 on a failed bind, and Debian's ssh.service lists
+# 255 in RestartPreventExitStatus, so without the boot gate a reboot leaves the
+# node without SSH. The role refuses the pin without the gate.
 - name: Refuse a pinned bind without the boot gate that makes it survivable
   ansible.builtin.assert:
     that:
@@ -87,19 +52,12 @@
     quiet: true
   when: ssh_hardening_listen_address | length > 0
 
-# A template rather than inline `content:` since 2026-09-11, so the optional
-# ListenAddress can be a conditional block without leaving a stray blank line in
-# the rendered file on the nodes that do not set it. The rendered output for
-# an unset variable is byte-identical to what the copy task produced, which is why
-# this change reports no drift.
+# A template, so the optional ListenAddress is a conditional block without a stray
+# blank line on nodes that do not set it.
 #
-# Deliberately no `validate:`. `sshd -t -f <drop-in>` would test this fragment as a
-# whole configuration, with every other directive falling back to a compiled-in
-# default - a test of something the daemon never reads in that form. The real
-# validation is already in the right place: ssh.service runs `sshd -t` against the
-# complete configuration in both ExecStartPre and ExecReload, so a bad drop-in
-# fails the reload rather than being accepted by a check that proved less than it
-# appeared to.
+# No `validate:`: `sshd -t -f <drop-in>` would test the fragment as a whole
+# configuration. ssh.service runs `sshd -t` against the complete configuration in
+# ExecStartPre and ExecReload, so a bad drop-in fails the reload instead.
 - name: Deploy sshd_config.d drop-in that wins over distro-provided defaults
   ansible.builtin.template:
     src: 00-hardening.conf.j2
@@ -134,33 +92,21 @@
     line: PermitRootLogin {{ ssh_hardening_permit_root_login }}
   notify: Reload ssh_config
 
-# Where root may not log in, a key in root's authorized_keys grants nothing until
-# the day the setting is relaxed, and then grants it silently. The guests carried
-# the control node's key there from the bootstrap play of 2026-04-24, which
-# connects as root once to create the ansible user and never needs root again.
-# Recovery on a guest does not depend on it: containers take `pct exec`, the VMs
-# their console and the break-glass account. The hypervisor keeps its keys, since
-# root is its administrative account and the inventory sets prohibit-password.
+# Where root may not log in, a key in root's authorized_keys would grant access
+# silently the day the setting is relaxed. Guest recovery does not need it
+# (`pct exec`, VM console, break-glass account). The hypervisor keeps its keys:
+# root is its administrative account (prohibit-password).
 - name: Remove root's authorized_keys where sshd refuses root logins
   ansible.builtin.file:
     path: /root/.ssh/authorized_keys
     state: absent
   when: ssh_hardening_permit_root_login == 'no'
 
-# A pinned bind needs sshd to own its listening socket. Under socket activation
-# systemd holds `*:22` from `ssh.socket` and hands sshd an accepted connection, so
-# sshd never binds anything and never reads ListenAddress - which is how lxc220
-# carried a pinned drop-in for three weeks while still listening on every address.
-# Where the bind is pinned, the socket therefore goes and the service owns the port,
-# the arrangement lxc250, vm100, vm102 and the hypervisor already run.
-#
-# Order matters. The socket has to stop before the service starts: a specific
-# address cannot be bound on :22 while systemd holds the wildcard. Between the two
-# steps nothing listens, which refuses new connections for a moment and drops no
-# established one - ssh.service carries `KillMode=process`, and Ansible's own
-# session runs over a multiplexed connection that is already open. If the service
-# then fails to start, the node has no sshd; recovery is `pct exec` from the
-# hypervisor, which is why this runs one node at a time.
+# A pinned bind needs sshd to own its socket: under socket activation systemd holds
+# `*:22` and sshd never reads ListenAddress. The socket stops before the service
+# starts, because the address cannot be bound while systemd holds the wildcard.
+# Established sessions survive (`KillMode=process`); if the service then fails,
+# recovery is `pct exec` from the hypervisor.
 - name: Hand the listening socket from systemd back to sshd
   ansible.builtin.systemd_service:
     name: ssh.socket
@@ -168,11 +114,9 @@
     state: stopped
   when: ssh_hardening_listen_address | length > 0
 
-# Restarted, not started, on the run that removes the socket: an ssh.service the
-# socket already launched is running on the inherited `*:22` descriptor, and
-# stopping the socket does not take that descriptor away from it. Later runs find
-# the socket inactive and only make sure the service is up, so they report no
-# change.
+# Restarted on the run that removes the socket: a running ssh.service keeps the
+# inherited `*:22` descriptor. Later runs find the socket inactive and only ensure
+# the service is up.
 - name: Run sshd as a standing service that binds its own address
   ansible.builtin.systemd_service:
     name: ssh.service
@@ -180,17 +124,13 @@
     state: "{{ 'restarted' if ssh_hardening_socket_state.stdout | trim == 'active' else 'started' }}"
   when: ssh_hardening_listen_address | length > 0
 
-# On a node that never ran socket activation the service task above finds sshd
-# already up and leaves it alone, so the new ListenAddress reaches the daemon only
-# through the reload handler. Run it now, before the bind is read back, or the
-# assert below judges the old process.
+# Without socket activation the task above leaves a running sshd alone, so the new
+# ListenAddress arrives only through the handler. Run it before the read-back.
 - name: Apply the sshd configuration before reading the bind back
   ansible.builtin.meta: flush_handlers
 
-# Read the bind back from the kernel rather than trusting the configuration file,
-# the failure this block exists for: a drop-in that says one thing while the node
-# listens on another. A reload re-execs sshd, so the read waits briefly for the
-# new process to bind.
+# Read the bind back from the kernel rather than trusting the configuration file.
+# A reload re-execs sshd, so the read retries briefly while the new process binds.
 - name: Read which addresses listen on port 22
   ansible.builtin.command:
     cmd: ss -Hltn 'sport = :22'

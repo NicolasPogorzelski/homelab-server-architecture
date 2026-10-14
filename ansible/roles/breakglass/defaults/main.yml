@@ -1,23 +1,17 @@
 ---
-# Break-glass SSH public keys to install for the host's native admin user.
-# Empty by default so the role is a no-op unless a group/host var supplies keys.
+# Break-glass SSH public keys for the host's native admin user. Empty by default:
+# the key task is skipped unless group/host vars supply keys. The sudoers and
+# group checks below run regardless.
 breakglass_pubkeys: []
 
 # Sudoers files that granted the break-glass account root without a password.
-# /etc/sudoers.d/ansible-apt dates from the first Ansible runs, when playbooks
-# still connected as the native user; the `ansible` user and its own sudoers file
-# replaced that two days later and the old file stayed. With it, the break-glass
-# key alone was root, and a session on the admin workstation could run anything
-# as root unasked - which is how a recursive grep came to read the whole media
-# archive over CIFS on 2026-10-07. The account keeps root through the `sudo`
-# group, behind its password.
+# ansible-apt is left over from before Ansible connected as its own `ansible`
+# user. The account keeps root through the `sudo` group, behind its password.
 breakglass_retired_sudoers_files:
   - /etc/sudoers.d/ansible-apt
 
-# Groups whose members are root without sudo: the Docker socket and LXD each hand
-# out a root shell to anyone who can talk to them, so a password on sudo protects
-# nothing while the account sits in either. libvirt and disk are listed for the
-# same reason; a node that has none of them is unaffected.
+# Groups whose members are root without sudo (Docker socket, LXD, libvirt, raw
+# disk access). A sudo password protects nothing while the account is in one.
 breakglass_root_equivalent_groups:
   - docker
   - lxd

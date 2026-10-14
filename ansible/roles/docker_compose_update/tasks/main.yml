@@ -1,20 +1,12 @@
 ---
-# The compose file this role deploys is not self-contained. Six of the seven
-# under docker/ interpolate `${VAR}`, and Compose resolves those from the `.env`
-# sitting beside the file on the target node - a file this role does not deploy,
-# does not template and, until 2026-09-05, did not look at.
+# Compose files interpolate `${VAR}` from the `.env` beside them on the node,
+# which this role does not deploy. Compose substitutes an empty string for an
+# unset variable, so `"${CW_BIND_ADDRESS}:${CW_PORT}:8083"` would publish on
+# every interface and a volume would lose its source.
 #
-# An unset variable is not an error to Compose. It substitutes an empty string
-# and carries on, so `"${CW_BIND_ADDRESS}:${CW_PORT}:8083"` becomes ":8083:8083",
-# which publishes on every interface, and `${CW_CONFIG}:/config:rw` becomes
-# ":/config:rw", which mounts nothing where the database lives. Measured on
-# lxc220 that day: the node had no `.env` at all, because its compose file still
-# carried the literals the repository had already replaced with variables. The
-# run would have taken a service bound to loopback and put it on the LAN.
-#
-# The gate therefore reads the variables out of the file about to be written and
-# refuses the node if anything on it cannot resolve them. It runs before the copy
-# on purpose: after the copy the working file is already gone.
+# The gate reads the variables from the file about to be written and refuses the
+# node if its `.env` cannot resolve them. It runs before the copy, while the
+# working file is still in place.
 - name: Read the .env beside each compose file on the node
   ansible.builtin.slurp:
     src: "{{ item.dest }}/.env"
@@ -24,10 +16,8 @@
   loop_control:
     label: "{{ item.dest }}"
 
-# `${VAR}` is required; `${VAR:-fallback}` is not, and the closing brace right
-# after the name is what separates them - a name followed by `:-` never matches.
-# Variable names are matched as the shell defines them, so a stray `${1}` or a
-# literal `$HOME` in a comment does not become a false precondition.
+# Matches `${VAR}` only: `${VAR:-fallback}` has a default, and `${1}` or a bare
+# `$HOME` are not shell-style variable names in braces.
 - name: Refuse a node that cannot resolve the variables in the file it is about to receive
   ansible.builtin.assert:
     that:

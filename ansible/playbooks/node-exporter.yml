@@ -1,17 +1,7 @@
 ---
-# Every guest, lxc200 included since 2026-09-12. Deploying a native exporter
-# alongside the containerised one is no longer the argument against doing it; it
-# is the point. The compose stack's exporter keeps 9100 and keeps reporting this
-# node's resources, and it cannot see the host's systemd, so
-# `SystemdUnitFailed` was blind on the one node that runs the alerting stack.
-# The role gives it a second unit on 9101 with the systemd collector.
-#
-# Two exporters on one node with one job each, deliberately. When the container
-# is eventually retired, docs/decisions/lxc200-systemd-visibility.md is what
-# records which of the two was load-bearing.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Every guest. lxc200 runs this native exporter on 9101 with the systemd
+# collector next to the containerised one on 9100, which cannot see the host's
+# systemd (docs/decisions/lxc200-systemd-visibility.md).
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 
@@ -25,20 +15,8 @@
   roles:
     - node_exporter
 
-# The hypervisor named separately rather than swept in by `all`. See
-# ssh-hardening.yml for why sweeps stop at `guests`.
-#
-# This play adopts a unit that already exists: the host has run a hand-written
-# node_exporter since 2026-04, and since 2026-07-14 it binds the Tailscale
-# address and carries `--collector.systemd`. The role's defaults match it,
-# textfile-collector path included - verified 2026-08-20 - so adoption replaces
-# a typed unit with a generated one of the same content, and the first run should
-# report a change for the file and no change in behaviour.
-#
-# The obsolete warning that used to sit here is worth naming so it is not
-# reintroduced: `node_exporter_textfile_dir` needing a `host_vars` override
-# stopped being true on 2026-07-10, when the default became fleet-wide. A stale
-# trap outlives its fix and deters the work it was written to protect.
+# The hypervisor is named separately, never swept in by `all` (see
+# ssh-hardening.yml).
 - name: Deploy node_exporter to the Proxmox host
   hosts: proxmox
   become: false # the inventory connects as root; there is no ansible user here

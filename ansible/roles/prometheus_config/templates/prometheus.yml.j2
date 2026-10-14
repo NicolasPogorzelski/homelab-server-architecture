@@ -15,21 +15,17 @@ scrape_configs:
       - targets: ["127.0.0.1:9090"]
 
   # Node Exporter - LXC200 monitoring (loopback, Docker container).
-  # Resources only. A container cannot read the host's systemd, so this target
-  # carries no `node_systemd_unit_state` and never could.
+  # Resources only: a container cannot read the node's systemd, so this target
+  # carries no `node_systemd_unit_state`.
   - job_name: "node-lxc200-monitoring"
     static_configs:
       - targets: ["127.0.0.1:9100"]
 
   # Node Exporter - LXC200 native unit beside that container, systemd collector.
-  # The second half of a deliberate duplication: one job for resources, one for
-  # unit state, on the node that runs the alerting stack and was the last one
-  # `SystemdUnitFailed` could not see.
-  #
-  # The port has no default here on purpose. It is a fact about the node and
-  # lives in its host_vars; a default would let this file and the unit disagree
-  # silently, and a target pointed at a port nothing listens on reports `up == 0`
-  # as though the node were down.
+  # Deliberate duplication: one job for resources, one for unit state, so
+  # `SystemdUnitFailed` also covers the node that runs the alerting stack.
+  # See docs/decisions/lxc200-systemd-visibility.md. No port default here: the
+  # port lives in lxc200's host_vars, so this target and the unit cannot disagree.
   - job_name: "node-lxc200-monitoring-systemd"
     static_configs:
       - targets: ["{{ hostvars['lxc200']['ansible_host'] }}:{{ hostvars['lxc200']['node_exporter_port'] }}"]
@@ -39,16 +35,14 @@ scrape_configs:
     static_configs:
       - targets: ["{{ hostvars['lxc260']['ansible_host'] }}:9187"]
 
-  # Node Exporter - Proxmox hypervisor host (not in Ansible inventory - bare-metal host)
+  # Node Exporter - Proxmox hypervisor host (group `proxmox`, not in the loops below)
   - job_name: "node-proxmox-host"
     static_configs:
       - targets: ["{{ proxmox_host_tailscale_ip }}:9100"]
 
-  # Node Exporter from inventory. lxc200 is written out above rather than swept
-  # in here: it has two exporters, and this loop names a job after the node's
-  # `prometheus_label`, so it would render the second one as a duplicate of
-  # `node-lxc200-monitoring`. Prometheus refuses a config with two jobs of the
-  # same name outright - the whole file fails to load, not just the duplicate.
+  # Node Exporter from inventory. lxc200 is written out above: the loop would
+  # render a duplicate `node-lxc200-monitoring` job, and Prometheus refuses to load
+  # a config with two jobs of the same name.
   {% for host in groups['lxcs'] %}
   {% if host != 'lxc200' %}
   - job_name: "node-{{ host }}-{{ hostvars[host]['prometheus_label'] }}"

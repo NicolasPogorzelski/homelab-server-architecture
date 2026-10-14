@@ -2,9 +2,8 @@
 # Native admin user that receives the break-glass key on this host.
 breakglass_user: gpu
 
-# Ubuntu 22.04 ships prometheus-node-exporter-collectors from 2021, which has
-# apt.sh and not the apt_info.py of Debian's current package. Both write
-# apt_upgrades_pending with the same labels and the same HELP line.
+# Ubuntu 22.04's collectors package has apt.sh instead of Debian's apt_info.py;
+# both write apt_upgrades_pending with the same labels.
 apt_metrics_collector: /usr/share/prometheus-node-exporter-collectors/apt.sh
 
 # Docker Compose stacks on this node. dest = project_src on the node;
@@ -24,10 +23,8 @@ docker_mount_ordering_units:
   - srv-media-podcasts.automount
 
 # A bind onto an automount triggers the CIFS mount once, inside runc. If vm102
-# refuses that attempt, the container start fails, and Docker's restart policy
-# never retries a start that did not succeed. Seen on 2026-09-29 (vm102
-# unreachable, Jellyfin and Audiobookshelf down) and 2026-10-03 (EAGAIN in session
-# setup, Jellyfin down). See docs/nodes/vm100.md.
+# refuses it, the container start fails and Docker's restart policy does not
+# retry a start that never succeeded. See docs/nodes/vm100.md.
 docker_boot_retry_enabled: true
 
 # Jellyfin publishes on this node's Tailscale address (KE-28), so dockerd must not
@@ -40,11 +37,11 @@ tailscale_boot_gate_units:
   - ssh.service
 
 # === sshd bound to the Tailscale address only ===
-# docs/decisions/sshd-listen-address.md, step 3. vm100 was never socket-activated,
-# so ListenAddress binds as written. sshd exits 255 on a bind to an address
-# tailscaled has not assigned yet, and the packaged unit refuses to restart on 255
-# unless that list is cleared; the drop-in clears it for docker.service as well,
-# which sets none. The way back is the Proxmox console or a snapshot taken first.
+# docs/decisions/sshd-listen-address.md. Not socket-activated, so ListenAddress
+# binds as written. sshd exits 255 on a bind to an unassigned address and the
+# packaged unit does not restart on 255 unless that list is cleared; the drop-in
+# clears it for docker.service as well, which sets none. The way back is the
+# Proxmox console or a snapshot taken first.
 tailscale_boot_gate_clear_restart_prevent: true
 
 ssh_hardening_listen_address: "{{ ansible_host }}"
@@ -72,12 +69,9 @@ systemd_hygiene_masked_units:
       nothing consumes the path: Jellyfin and Audiobookshelf read their libraries
       over autofs/CIFS from vm102. Already recorded as legacy in docs/nodes/vm100.md.
 
-  # The four units below carried the two pool-wide media shares, replaced on
-  # 2026-08-16 by four scoped shares on new paths under /srv/media. They were
-  # only `systemctl disable`d that day, deliberately: disabling drops the boot
-  # symlink without unmounting, and unmounting a live CIFS mount on this node is
-  # what froze the guest in KE-20. The nightly power-off retired them, so all
-  # four have been inactive since - verified 2026-08-17 before removal.
+  # The four units below carried the two pool-wide media shares, replaced by
+  # the scoped shares under /srv/media. They were disabled rather than stopped,
+  # because unmounting a live CIFS mount on this node froze the guest (KE-20).
   - name: media-jellyfin.automount
     action: remove
     reason: >-

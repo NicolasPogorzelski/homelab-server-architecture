@@ -5,9 +5,8 @@
   register: smart_metrics_smartctl
 
 # The packaged timer carries ConditionFileIsExecutable=/usr/sbin/smartctl, so a
-# missing smartctl produces a skipped unit rather than a failed one - a collector
-# that is silently absent, which is the class of fault this role exists to end.
-# Fail here instead, where somebody is watching.
+# missing smartctl produces a skipped unit rather than a failed one, and no alert.
+# Fail here instead.
 - name: Fail if smartctl is missing
   ansible.builtin.fail:
     msg: >-
@@ -15,9 +14,8 @@
       condition and export nothing, without failing.
   when: not smart_metrics_smartctl.stat.exists
 
-# Without Recommends, for the reason apt_metrics gives. smartctl is the one
-# recommended package this role needs, and the task above asserts it rather
-# than relying on apt to have pulled it in.
+# Without Recommends (see apt_metrics). smartctl, the one recommended package
+# needed, is asserted above instead.
 - name: Install the collector package and sponge
   ansible.builtin.apt:
     name:
@@ -61,15 +59,9 @@
     state: stopped
   loop: "{{ smart_metrics_masked_timers }}"
 
-# Masking a timer that systemd currently holds loaded leaves it `failed`, and the
-# stop above does not clear that. Measured 2026-09-15: installing the package
-# started all four timers, the mask six seconds later made each one report
-# `Unit to trigger vanished` and `Failed with result 'resources'`, and two were
-# still sitting in that state afterwards - enough for SystemdUnitFailed to fire
-# on the hypervisor for units this role had just retired on purpose.
-#
-# reset-failed has no module form and exits 0 for a unit that is not failed, so
-# no guard is needed.
+# Masking a loaded timer can leave it `failed` ("Unit to trigger vanished"), which
+# the stop does not clear and SystemdUnitFailed would report. reset-failed has no
+# module form and exits 0 for a unit that is not failed.
 - name: Clear the failed state masking left behind  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl reset-failed {{ smart_metrics_masked_timers | join(' ') }}
@@ -85,9 +77,8 @@
     state: started
     daemon_reload: true
 
-# Run it once now rather than waiting up to fifteen minutes for the timer. The
-# legacy collector is removed in the next tasks, so this is what keeps the host
-# from having no SMART metric at all in between.
+# Run it once now rather than waiting for the timer, so the host keeps a SMART
+# metric when the legacy collector is removed below.
 - name: Produce a first reading immediately
   ansible.builtin.systemd_service:
     name: "{{ smart_metrics_unit }}"
@@ -130,9 +121,8 @@
     path: "{{ smart_metrics_textfile_dir }}/{{ smart_metrics_legacy_output }}"
     state: absent
 
-# The retired script leaked one temporary file per failed run and nothing ever
-# cleared them. node_exporter ignores anything not ending in .prom, so they cost
-# nothing but inodes - the reason they survived unnoticed since 2025-12.
+# The retired script leaked one temporary file per failed run. node_exporter
+# ignores anything not ending in .prom, so they cost only inodes.
 - name: Find leaked collector temporary files
   ansible.builtin.find:
     paths: "{{ smart_metrics_textfile_dir }}"

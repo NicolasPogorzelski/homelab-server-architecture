@@ -1,18 +1,10 @@
 ---
-# One call with every key joined by newlines, NOT a loop with exclusive: true.
-# `exclusive` applies per invocation: inside a loop, each iteration would delete the
-# keys the previous one added and only the last key would survive.
+# One call with all keys joined by newlines, not a loop: `exclusive` applies per
+# invocation, so in a loop only the last key would survive.
 #
-# exclusive: true makes the inventory the single source of truth. Until now the file
-# accumulated whatever had ever been added by hand - a legacy `root@server` RSA key
-# belonging to no current machine, and `devops@devops-lxc`, the control node's
-# interactive user, sitting on the *admin* account. Ansible authenticates as the
-# `ansible` user with its own authorized_keys, so dropping the latter costs no
-# automation path; it only ends `ssh <admin>@<node>` from lxc250, which was never
-# the intended route.
-#
-# Break-glass then means exactly what the inventory says: the two admin laptops,
-# and nothing that accreted along the way.
+# exclusive: true makes the inventory the single source of truth; any key added
+# by hand is removed. Ansible itself connects as the `ansible` user, whose
+# authorized_keys this role does not touch.
 - name: Enforce the break-glass SSH public keys for the native admin user
   ansible.posix.authorized_key:
     user: "{{ breakglass_user }}"
@@ -20,19 +12,14 @@
     exclusive: true
     key: "{{ breakglass_pubkeys | join(breakglass_key_separator) }}"
   vars:
-    # The separator must be a real newline. `join("\n")` written inline does not
-    # produce one: Jinja does not unescape \n in that string literal, and a
-    # --check --diff showed the two keys landing on a single line joined by a
-    # literal backslash-n - one malformed entry, both laptop keys dead, with the
-    # old keys already removed by exclusive: true. A double-quoted YAML scalar is
-    # the one place the escape is reliably expanded, so the newline is built here
-    # and handed to Jinja as a value.
+    # A real newline, built by the double-quoted YAML scalar. An inline
+    # `join("\n")` is not unescaped by Jinja and would join all keys into one
+    # malformed line, which exclusive: true then enforces.
     breakglass_key_separator: "\n"
   when: breakglass_pubkeys | length > 0
 
-# Removing the passwordless rule leaves the `sudo` group as the account's only
-# way to root, and that path asks for the account's password. An account whose
-# password is locked or unset would lose root entirely, so the run stops there.
+# Without the NOPASSWD rule, root goes through `sudo` and the account password.
+# A locked or unset password would lose root entirely, so the run stops there.
 - name: Read the break-glass account's password status  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: passwd -S {{ breakglass_user }}
@@ -56,9 +43,9 @@
     state: absent
   loop: "{{ breakglass_retired_sudoers_files }}"
 
-# The file list above names the one rule that was found. This reads what sudo
-# itself resolves, so a NOPASSWD rule added later under any other name fails the
-# run, and the weekly drift sweep with it.
+# Reads what sudo itself resolves, so a NOPASSWD rule under any other file name
+# fails the run. Skipped in check mode, so the weekly drift sweep does not run
+# this check; it runs on real (non-check) runs only.
 - name: Read the break-glass account's effective sudo rules  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: sudo -l -U {{ breakglass_user }}
@@ -77,10 +64,8 @@
     quiet: true
   when: not ansible_check_mode
 
-# The NOPASSWD checks above make root cost a password. Membership in a group that
-# grants root by other means would make that cost optional, so the account leaves
-# such groups. `ansible.builtin.user` can only set the full group list, which
-# would also remove groups this role has no opinion about, hence gpasswd per group.
+# Root-equivalent groups would bypass the sudo password. gpasswd per group,
+# because ansible.builtin.user can only set the full group list.
 - name: Read the break-glass account's groups  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: id -nG {{ breakglass_user }}

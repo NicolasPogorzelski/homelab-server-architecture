@@ -6,13 +6,9 @@ compose_projects:
   - { dest: /srv/calibreweb, src: calibre-web }
 
 # === sshd bound to the Tailscale address only ===
-# docs/decisions/sshd-listen-address.md. This node was socket-activated, and under
-# `ssh.socket` sshd never binds anything, so ListenAddress alone was inert here;
-# ssh_hardening now disables the socket wherever the bind is pinned and lets
-# ssh.service own the port. The gate is what makes the pin survive a boot: sshd
-# exits 255 on a bind to an address tailscaled has not assigned yet, and Debian's
-# unit refuses to restart on 255 unless that list is cleared. ssh_hardening
-# asserts both gate lines before it writes the bind.
+# See docs/decisions/sshd-listen-address.md. The boot gate holds sshd until
+# tailscaled has assigned the address; sshd exits 255 otherwise, which Debian's
+# unit does not restart unless RestartPreventExitStatus is cleared.
 tailscale_boot_gate_units:
   - ssh.service
 

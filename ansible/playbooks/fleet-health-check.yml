@@ -1,17 +1,19 @@
 ---
+# Read-only fleet overview. No preflight gate, so it stays runnable from any
+# tree during an incident.
 - name: Gather fleet facts
   hosts: all
   gather_facts: true
   tasks:
-    - name: Node_uptime
+    - name: Show node uptime
       ansible.builtin.debug:
         var: ansible_uptime_seconds
 
-    - name: Node_RAM
+    - name: Show node memory
       ansible.builtin.debug:
         var: ansible_memory_mb
 
-    - name: Node_mounts
+    - name: Show node mounts
       ansible.builtin.debug:
         var: ansible_mounts
 
@@ -47,17 +49,9 @@
   hosts: localhost
   connection: local
   gather_facts: true
-  # No become, and the report lives under the invoking user's home rather than
-  # in /var/log. This play ran as root against a local connection until
-  # 2026-09-16, which means it never ran at all: the control node's interactive
-  # account has no passwordless sudo, so the play failed with "sudo: a password
-  # is required" every time and /var/log/fleet-health was never created. The
-  # rest of the playbook reaches the fleet as the ansible user and was
-  # unaffected, so a run ended with ten green nodes and one red play.
-  #
-  # Root was never needed for it: every value in the report is a fact the
-  # preceding plays already hold in memory, and the file is for the person who
-  # started the run.
+  # No become: every value comes from facts the plays above already hold, and the
+  # control node's interactive account has no passwordless sudo. The report
+  # therefore lives under that account's home, not /var/log.
   become: false
   vars:
     fleet_health_report_dir: "{{ ansible_env.HOME }}/fleet-health"

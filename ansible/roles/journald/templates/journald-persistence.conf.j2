@@ -1,8 +1,7 @@
 # {{ ansible_managed }}
 [Journal]
-# Explicit rather than `auto`. Under `auto` this node is persistent because
-# /var/log/journal exists, and would become RAM-only without a word if that
-# directory ever went away.
+# Explicit rather than `auto`, which turns RAM-only without notice if
+# /var/log/journal is missing.
 Storage={{ journald_storage }}
 SystemMaxUse={{ journald_system_max_use }}
 SystemKeepFree={{ journald_system_keep_free }}

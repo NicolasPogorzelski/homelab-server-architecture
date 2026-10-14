@@ -1,17 +1,11 @@
 # {{ ansible_managed }}
 #
-# The packaged unit writes into /var/lib/prometheus/node-exporter, which is
-# Debian's node_exporter path. This fleet runs a hand-installed binary reading
-# {{ apt_metrics_textfile_dir }}, so the collector is pointed there instead.
-# ExecStart is cleared first: systemd appends to it otherwise, and the unit would
-# run the collector twice, into two directories.
+# Points the packaged collector at {{ apt_metrics_textfile_dir }}, the directory
+# the fleet's node_exporter reads. ExecStart is cleared first; systemd would
+# otherwise append and run the collector twice.
 #
-# `set -o pipefail` is the load-bearing part, not decoration. Without it the
-# pipeline's exit status is sponge's, so a producer that fails to run at all
-# still leaves the unit reporting success - measured 2026-09-17 on lxc260, where
-# a wrong script name produced "Finished successfully" and a zero-byte metric
-# file. A collector that runs, succeeds and writes nothing is the exact shape
-# this platform has on file three times over.
+# `set -o pipefail` makes a failing collector fail the unit; without it the exit
+# status is sponge's and a failed run leaves an empty file behind a success.
 [Service]
 ExecStart=
 ExecStart=/bin/bash -c 'set -o pipefail; {{ apt_metrics_collector }} | sponge {{ apt_metrics_textfile_dir }}/apt.prom'

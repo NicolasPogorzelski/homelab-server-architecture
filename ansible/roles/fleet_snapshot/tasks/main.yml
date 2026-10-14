@@ -1,11 +1,8 @@
 ---
-# The role installs the schedule; the playbook it starts is the deliverable and
-# lives under ansible/playbooks/. Nothing is copied to /usr/local/sbin, because
-# the thing being scheduled is a playbook in the working tree rather than a
-# script - which is also the one caveat worth knowing: a control node parked on
-# a feature branch would take its weekly snapshot with a different command set
-# and quietly move the baseline. preflight.yml cannot help here, since a
-# read-only playbook must stay runnable during an incident.
+# Schedules a playbook from the working tree; nothing is copied. Caveat: a
+# checkout parked on a feature branch runs that branch's command set and moves
+# the baseline. No preflight gate, so the read-only playbook stays runnable
+# during an incident.
 
 - name: Refuse to schedule the snapshot without its playbook
   ansible.builtin.stat:

@@ -2,10 +2,9 @@
 #
 # EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
 #
-# The package listens on port 19532 on every address. The empty ListenStream=
-# drops that, and the second line binds the Tailscale address only. FreeBind lets
-# systemd bind it at boot before tailscaled has assigned it, so the socket does
-# not depend on Tailscale being up first.
+# The empty ListenStream= drops the packaged wildcard listener; the next line
+# binds the Tailscale address only. FreeBind lets the socket bind before
+# tailscaled has assigned the address.
 [Socket]
 ListenStream=
 ListenStream={{ journal_remote_listen_address }}:{{ journal_remote_port }}

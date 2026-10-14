@@ -1,14 +1,8 @@
 ---
-# The Serve URL is read from the node rather than declared. Paperless needs it
-# twice - as PAPERLESS_URL and in PAPERLESS_CSRF_TRUSTED_ORIGINS, Django's
-# allowlist of origins permitted to submit a form. Both used to be literals in
-# defaults/main.yml holding the `<tailnet-id>` placeholder, which shipped verbatim
-# and made every browser login fail with 403 while the API kept working, because
-# a token request carries no Origin header for Django to check.
-#
-# Tailscale is the only authority for this name, so it is asked directly. That is
-# also why there is no fallback value: a fallback here is a second place for the
-# name to be wrong, and the wrong value is the one that looks plausible.
+# The Serve URL is read from tailscaled, the only authority for the name. Paperless
+# needs it as PAPERLESS_URL and in PAPERLESS_CSRF_TRUSTED_ORIGINS; a wrong origin
+# fails every browser login with 403 while the API keeps working. No fallback value:
+# it would be a second, plausible-looking place for the name to be wrong.
 - name: Read the node's Tailscale status
   ansible.builtin.command:
     cmd: tailscale status --json
@@ -16,10 +10,8 @@
   changed_when: false
   check_mode: false
 
-# Self.DNSName is fully qualified and ends in a dot ("paperless.<tailnet>.ts.net."),
-# which is correct in DNS and invalid in an origin - Django compares the origin
-# string byte for byte, so the trailing dot would fail the check as surely as the
-# placeholder did.
+# Self.DNSName ends in a dot ("paperless.<tailnet-id>.ts.net."), which is valid DNS
+# but fails Django's byte-for-byte origin comparison.
 - name: Derive the Tailscale Serve URL
   ansible.builtin.set_fact:
     paperless_serve_url: 'https://{{ (paperless_tailscale_status.stdout | from_json).Self.DNSName | regex_replace("\.$", "") }}'
@@ -34,8 +26,7 @@
     success_msg: 'Serve URL derived from tailscaled: {{ paperless_serve_url }}'
 
 # diff: false because the file holds the database password and the secret key,
-# and --diff prints unchanged lines as context: a run that changed only the
-# polling setting would still have shown both in the terminal.
+# and --diff prints unchanged lines as context.
 - name: Deploy paperless .env
   ansible.builtin.template:
     src: paperless.env.j2

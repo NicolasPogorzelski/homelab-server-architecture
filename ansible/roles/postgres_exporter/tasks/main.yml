@@ -1,7 +1,6 @@
 ---
-# Fails loudly rather than deploying a unit that cannot start. The binary and the
-# environment file were installed by hand in April and are out of this role's
-# scope; if either is missing, this is not the node the role thinks it is.
+# Fail rather than deploy a unit that cannot start. The binary is installed by
+# hand, outside this role; the environment file must already exist.
 - name: Assert the exporter binary and environment file are present
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -31,9 +30,8 @@
   when: postgres_exporter_manage_env
   no_log: true
 
-# 0600 and root-owned: the exporter reads it through systemd's EnvironmentFile,
-# which is read by PID 1 before the unit drops to its own account, so the
-# unprivileged exporter user never needs to see the password on disk.
+# 0600 and root-owned: PID 1 reads EnvironmentFile before dropping to the
+# exporter's account, which never needs to read the file itself.
 - name: Deploy the postgres_exporter environment file
   ansible.builtin.copy:
     content: "DATA_SOURCE_NAME={{ postgres_exporter_data_source_name }}\n"

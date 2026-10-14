@@ -1,29 +1,22 @@
 ---
 # The role acts on two lists: units that can never succeed on *this* node
 # (systemd_hygiene_masked_units, per host) and units whose condition belongs to
-# the platform (systemd_hygiene_group_units, per group). They are combined once
-# here so the five tasks below have a single thing to loop over - and so adding
-# a third source later touches one line, not five.
+# a group (systemd_hygiene_group_units). Combined once here, so the tasks below
+# loop over a single list.
 - name: Combine the per-host and per-group lists
   ansible.builtin.set_fact:
     systemd_hygiene_units: "{{ systemd_hygiene_group_units + systemd_hygiene_masked_units }}"
     systemd_hygiene_packages: "{{ systemd_hygiene_group_absent_packages + systemd_hygiene_absent_packages }}"
 
-# Two kinds of unit need two different treatments, and using the wrong one fails
-# loudly rather than silently:
+# Two kinds of unit, two treatments:
 #
-#   action: mask   (default) - the unit ships with a package under
-#                  /usr/lib/systemd/system. `systemctl mask` symlinks
-#                  /etc/systemd/system/<unit> to /dev/null, shadowing it.
-#   action: remove - the unit is a local file that already lives in
-#                  /etc/systemd/system. Masking it fails ("File ... already
-#                  exists") because the symlink target would be the file itself.
-#                  Such a unit is deleted, not shadowed.
-# `state: stopped` alongside the mask, because masking does not stop anything.
-# Measured 2026-09-15 on the hypervisor: rpcbind.socket and rpcbind.service came
-# back `masked`, the changelog recorded the port as closed, and rpcbind was still
-# listening on 0.0.0.0:111 under the pid it had held since boot. A mask decides
-# what starts next time; it says nothing about what is running now.
+#   action: mask   (default) - a package unit under /usr/lib/systemd/system;
+#                  `systemctl mask` shadows it with a /dev/null symlink.
+#   action: remove - a local file in /etc/systemd/system. Masking fails ("File
+#                  ... already exists"), so the file is deleted.
+#
+# `state: stopped` alongside the mask, because a mask only decides what starts next
+# time; a running unit keeps running and listening.
 - name: Mask package-provided units that can never succeed on this node
   ansible.builtin.systemd_service:
     name: "{{ item.name }}"
@@ -34,9 +27,8 @@
     label: "{{ item.name }} - {{ item.reason }}"
   when: (item.action | default('mask')) == 'mask'
 
-# systemd_service cannot stop a unit whose file no longer exists - on the second
-# run it errors out. `file: state=absent` is idempotent by nature, but the stop
-# and disable are not, so they have to be gated on the unit still being there.
+# systemd_service errors on a unit whose file is gone, so stop and disable are
+# gated on the file still existing.
 - name: Detect which unit files are still present
   ansible.builtin.stat:
     path: /etc/systemd/system/{{ item.name }}
@@ -72,15 +64,9 @@
 # `failed` result already recorded for it. Without this, node_systemd_unit_state
 # keeps reporting state="failed" for a unit that can no longer be attempted.
 #
-# Waiver rationale for command-instead-of-module: no module answers this. The rule
-# points at ansible.builtin.systemd_service, which has no query-only mode and
-# errors out on a unit whose file the `remove` task above has just deleted.
-# ansible.builtin.service_facts enumerates .service units only, and half of
-# systemd_hygiene_masked_units are .mount units. Upstream already exempts
-# `systemctl reset-failed` (the task below) in the rule's own allow-list of
-# subcommands with no module equivalent; `is-failed` belongs there too and its
-# absence is an upstream gap, not a signal. Waived here, not in skip_list, so
-# the rule stays armed everywhere else.
+# command-instead-of-module waived here only: systemd_service has no query-only
+# mode and errors on a deleted unit, and service_facts sees .service units only,
+# while the lists include .mount units.
 - name: Check which handled units still carry a failed state # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl is-failed {{ item.name }}
@@ -103,14 +89,9 @@
 
 # === Packages that are the cause rather than the symptom ===
 
-# apt-get -s prints the plan without executing it. The assert below reads that plan
-# rather than trusting that a package with no user has no dependents. Whether a
-# removal is confined to what was asked for is not visible from the package name,
-# and it differs per node: a container and a hypervisor running the same package
-# have different things depending on it.
-# noqa: command-instead-of-module - the apt module has no dry-run that reports the
-# plan. `check_mode` reports whether the module would change something, not which
-# packages apt would take with it, and that list is the entire point of the task.
+# apt-get -s prints the removal plan without executing it; what else a removal
+# takes differs per node. noqa: command-instead-of-module - the apt module's
+# check mode does not report which packages apt would take with it.
 - name: Simulate the package removal  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: apt-get -s -o Debug::NoLocking=1 remove --purge {{ systemd_hygiene_packages | map(attribute='name') | join(' ') }}
@@ -119,11 +100,9 @@
   check_mode: false
   when: systemd_hygiene_packages | length > 0
 
-# `remove --purge` reports each package as `Purg`, not `Remv`, so a filter on
-# `Remv` alone read an empty list on every run this role has made and the guard
-# below could never refuse anything. The name is cut out with two plain
-# replacements rather than a backreference, whose escaping inside a folded
-# YAML scalar and a Jinja string reached re.sub as a literal backslash-digit.
+# `remove --purge` reports packages as `Purg`, not `Remv`, so both are matched.
+# Two plain replacements instead of a backreference, whose escaping through YAML
+# and Jinja reaches re.sub as a literal backslash-digit.
 - name: Refuse a removal that would take anything else with it
   ansible.builtin.assert:
     that:
@@ -152,7 +131,7 @@
   when: systemd_hygiene_packages | length > 0
 
 # Unmask before deleting the symlink: systemd knows the unit as masked until told
-# otherwise, and a bare `rm` would leave that state in its head until a reload.
+# otherwise, and a bare `rm` would leave that state until a reload.
 - name: Unmask units whose package is gone
   ansible.builtin.systemd_service:
     name: "{{ item.name }}"

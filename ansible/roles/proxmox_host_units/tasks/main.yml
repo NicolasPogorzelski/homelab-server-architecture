@@ -1,7 +1,6 @@
 ---
-# socat is the receiver's entire implementation. Asserting it rather than assuming
-# it: a unit whose ExecStart does not exist fails at every boot with 203/EXEC, which
-# is how fleet-snapshot.service died on its first start on 2026-09-08.
+# socat is the receiver's entire implementation. Installed rather than assumed: a
+# unit whose ExecStart binary is missing fails at every boot with 203/EXEC.
 - name: Install socat for the netconsole receiver
   ansible.builtin.apt:
     name: socat
@@ -37,10 +36,8 @@
     mode: "0644"
   notify: Restart the netconsole receiver
 
-# Skipped in check mode for the reason the snapraid role records: under --check the
-# unit files above were not really written, so systemd cannot see them and `enable`
-# fails with "Could not find the requested service". Without this guard the role
-# cannot be dry-run at all, and a role that cannot be dry-run cannot be reviewed.
+# Skipped in check mode: the unit files were not really written, so `enable` would
+# fail with "Could not find the requested service".
 - name: Enable and start the timers
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -62,12 +59,9 @@
 - name: Flush handlers before verifying
   ansible.builtin.meta: flush_handlers
 
-# Adoption is only real if the unit is running the adopted file. The two guards
-# below read the result rather than the intention: the metric the collector is
-# supposed to produce, and the address the receiver is supposed to hold. A role
-# that reported success here while the host kept its old copy would be the
-# hand-written node_exporter finding again - `systemctl is-active` said `active`
-# and that read as coverage.
+# Read the result rather than the intention: the metric the collector produces and
+# the bind address in the receiver's unit. `systemctl is-active` alone would report
+# `active` for an outdated unit.
 - name: Read back the thin-pool metric the collector writes
   ansible.builtin.stat:
     path: /var/lib/node_exporter/textfile_collector/lvm-thin.prom
@@ -85,6 +79,8 @@
     success_msg: "Thin-pool metrics are being written."
   when: not ansible_check_mode
 
+# Reads ExecStart as systemd has loaded it after the daemon-reload, not the
+# process's argv; the restart handler has already applied it to the process.
 - name: Read the receiver's running command line back # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl show netconsole-receiver.service --property=ExecStart --value

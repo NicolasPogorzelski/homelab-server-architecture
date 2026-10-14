@@ -1,12 +1,10 @@
 {{ ansible_managed | comment }}
 #
-# Wants= rather than Requires= for the automount units: if one fails to install its
-# trigger, Docker should still start. A media library that is empty is a smaller
-# failure than a node with no containers at all, and the empty library is visible in
-# the service while a dead Docker daemon takes the node's monitoring with it.
+# Wants= for the automount units: if a trigger fails, Docker still starts; an
+# empty library is a smaller failure than a node without containers.
 #
-# RequiresMountsFor= for local paths is the hard form on purpose: Docker's data root
-# lives there, and without it the daemon would fill the root disk instead.
+# RequiresMountsFor= for local paths: without Docker's data root the daemon would
+# fill the root disk instead.
 
 [Unit]
 {% if docker_mount_ordering_units | length > 0 %}

@@ -2,11 +2,9 @@
 #
 # EXERCISE - see docs/decisions/exercise-scope-before-terraform.md.
 #
-# The packaged unit runs with PrivateNetwork=yes and requires its socket unit,
-# so it cannot bind an address itself: it takes the listening socket systemd
-# hands it as fd 3. The address is pinned in the socket's drop-in. ExecStart is
-# cleared first because systemd appends otherwise, and --listen-http replaces
-# the package's --listen-https because the tailnet already encrypts.
+# The unit runs with PrivateNetwork=yes and takes its listening socket from
+# systemd as fd 3; the address is pinned in the socket drop-in. ExecStart is
+# cleared first (systemd appends otherwise). HTTP, as the tailnet encrypts.
 [Service]
 ExecStart=
 ExecStart=/lib/systemd/systemd-journal-remote --listen-http=-3 --output={{ journal_remote_dir }}/

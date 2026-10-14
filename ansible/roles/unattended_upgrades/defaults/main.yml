@@ -7,13 +7,9 @@
 #
 # The stock /etc/apt/apt.conf.d/50unattended-upgrades allows
 # "${distro_id}:${distro_codename}" - the *regular* archive, not just security -
-# and ships an empty Package-Blacklist. On a GPU node that means a kernel can be
-# installed autonomously, and the NVIDIA DKMS module is only rebuilt for it on the
-# next boot; if that fails, Jellyfin loses CUDA and nobody knows why.
-#
-# Disabling unattended-upgrades entirely would trade a security window for a
-# stability risk. The narrower answer is to keep security updates and exclude the
-# packages whose upgrade must be a deliberate, observed act.
+# and ships an empty Package-Blacklist, so a kernel can be installed unattended and
+# the NVIDIA DKMS module rebuilt only at the next boot; if that fails, Jellyfin
+# loses CUDA. Security updates stay automatic; the coupled packages are excluded.
 
 # Only security pockets. The plain "${distro_id}:${distro_codename}" entry from the
 # stock config is deliberately absent.

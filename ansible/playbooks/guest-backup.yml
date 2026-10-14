@@ -1,16 +1,6 @@
 ---
-# Targets the `proxmox` group, because vzdump is a host-level tool: it reaches
-# the guests through the hypervisor's storage layer, not through anything running
-# inside them. There is deliberately no per-guest counterpart.
-#
-# This playbook therefore cannot run until the Proxmox host is in the real
-# inventory. Until the `proxmox` group exists there, Ansible prints
-# "skipping: no hosts matched" and exits 0 - success, having done nothing. That
-# silence is the reason the host adoption is sequenced before this role rather
-# than after it.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Targets the `proxmox` group: vzdump is a host-level tool that reaches the
+# guests through the hypervisor's storage layer, so there is no per-guest play.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

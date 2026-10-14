@@ -1,10 +1,6 @@
 ---
-# The share has to exist before anything else is deployed, and the role asserts
-# it rather than creating it: the mount is a Proxmox host bind mount configured
-# in /etc/pve/lxc/210.conf, which is outside every Ansible node. A task here
-# could only create an empty directory that looks like the mount and silently
-# is not -- the KE-7 failure class, one layer up from the check the script does
-# at runtime.
+# Asserted, not created: the share is a host bind mount (/etc/pve/lxc/210.conf),
+# and a task here could only create an empty look-alike directory (KE-7 class).
 - name: Assert the backup share is mounted into this container
   ansible.builtin.assert:
     that:
@@ -29,9 +25,8 @@
     group: root
     mode: "0755"
 
-# Owned by root, unlike the PostgreSQL equivalent which is owned by postgres.
-# The difference follows from the unit: pg-backup runs as the postgres user for
-# peer authentication, this one runs as root for unix_socket authentication.
+# Owned by root, because the backup unit runs as root (pg-backup on lxc260 runs
+# as postgres instead).
 - name: Create textfile collector directory
   ansible.builtin.file:
     path: "{{ mariadb_backup_textfile_dir }}"

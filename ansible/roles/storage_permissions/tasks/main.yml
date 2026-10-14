@@ -6,18 +6,10 @@
   changed_when: false
   failed_when: storage_permissions_pool.rc != 0
 
-# Checked here rather than left to the first run: without the branch list the
-# script exits 2 out of a timer at 23:30 where nobody is reading. Failing during
-# the deploy puts it in front of a person.
-#
-# Queried with getfattr rather than stat. /mnt/mergerfs/.mergerfs is a pseudo
-# file: MergerFS answers xattr calls on that path, but it has no directory entry,
-# so stat reports ENOENT while getfattr returns the branch list. The first
-# version of this task used stat and failed on a healthy pool.
-# check_mode: false because ansible.builtin.command is skipped under --check by
-# default, which left the variable unset and made the assertion below fail on a
-# healthy pool - a dry run that cannot complete is a dry run nobody performs.
-# The command only reads an extended attribute.
+# Checked at deploy time, where a person sees it, rather than in the timer run.
+# getfattr, not stat: /mnt/mergerfs/.mergerfs is a pseudo file that answers xattr
+# calls but has no directory entry. check_mode: false so --check can run the
+# assertion below; the command only reads an extended attribute.
 - name: Read the MergerFS branch list
   ansible.builtin.command:
     cmd: getfattr --only-values -n user.mergerfs.branches /mnt/mergerfs/.mergerfs
@@ -33,19 +25,13 @@
       - storage_permissions_ctl.stdout | length > 0
     fail_msg: >-
       Cannot read user.mergerfs.branches from /mnt/mergerfs/.mergerfs. The check
-      reads the branch list there, because the repository must not carry the real
-      disk labels (validate-repo.sh Check 18). Without it the branches would have
-      to be hand-maintained, which is how the aux branch was missed in the first
-      place.
+      reads the branch list there because the repository does not carry the real
+      disk labels; without it the branch list would have to be maintained by hand.
 
-# MergerFS creates a share directory on a branch only when a write first lands
-# there (category.create=mfs), by cloning the path with mkdir(2). mkdir keeps the
-# 0777 bits of the requested mode and sets setgid only under a setgid parent, and
-# a branch root has none, so every cloned share directory arrives without it
-# (man 2 mkdir). Creating each share on each branch in advance means there is
-# nothing to clone, and every subdirectory then inherits setgid from its share.
-# Existing directories are left alone: the matrix modes are maxima, and a stricter
-# directory is not drift. Entries from the node's .local.conf are not covered.
+# MergerFS clones a share directory onto a branch with mkdir(2) on first write,
+# and mkdir drops setgid under a branch root without it. Creating every share on
+# every branch in advance lets subdirectories inherit setgid. Existing directories
+# are left alone; entries from the node's .local.conf are not covered.
 - name: Record the branch paths
   ansible.builtin.set_fact:
     storage_permissions_branches: >-
@@ -104,9 +90,8 @@
     mode: "0644"
   notify: Reload systemd
 
-# Same guard as snapraid_maintenance: in check mode the unit files were never
-# written, so systemd cannot see them and `enable` fails outright. Without this
-# the role cannot be dry-run at all, and dry-running it is the whole habit.
+# Skipped in check mode: the unit files were not really written, so `enable` would
+# fail with "Could not find the requested service".
 - name: Enable and start the check timer
   ansible.builtin.systemd_service:
     name: storage-permissions.timer
@@ -115,9 +100,8 @@
     daemon_reload: true
   when: not ansible_check_mode
 
-# Deliberately --metrics and not --check: a converged run must not report failed
-# just because the matrix found drift. The drift itself is reported by Prometheus
-# from the metric this writes. Ansible's job here is to prove the check runs.
+# --metrics, not --check: drift is reported by Prometheus from the metric, not as
+# a failed Ansible run. This only proves the check runs.
 - name: Run the check once so the metric exists immediately
   ansible.builtin.command:
     cmd: "{{ storage_permissions_script_dest }} --metrics"

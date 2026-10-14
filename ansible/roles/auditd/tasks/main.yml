@@ -1,10 +1,6 @@
 ---
-# The first thing this role asserts is where it may run, and the reason is the
-# lesson rather than a guard rail. The kernel audit subsystem is global and not
-# namespaced: one queue per kernel, owned by whoever holds CAP_AUDIT_CONTROL in
-# the initial user namespace. An unprivileged LXC has neither, so auditd inside
-# one either fails to start or reports the host's events under the container's
-# name.
+# The kernel audit subsystem needs CAP_AUDIT_CONTROL in the initial user
+# namespace, which an unprivileged LXC does not have.
 - name: Refuse to run inside a container
   ansible.builtin.assert:
     that: ansible_virtualization_role != 'guest' or ansible_virtualization_type not in ['lxc', 'container', 'docker']
@@ -29,11 +25,8 @@
     owner: root
     group: root
     mode: "0640"
-  # No validate. auditd has no option that only checks a configuration: -f keeps
-  # the daemon in the foreground, -c takes a directory rather than a file, and
-  # validate runs without a shell, so a `&&` in it is just another argument. The
-  # check that this file was accepted is the daemon starting and the kernel
-  # holding the rules, both asserted below.
+  # No validate: auditd has no check-only option. Acceptance is proven below by
+  # the daemon running and the kernel holding the rules.
   notify: Reload audit rules
 
 - name: Deploy the rule set
@@ -45,10 +38,8 @@
     mode: "0640"
   notify: Reload audit rules
 
-# Under --check the package above was not installed, so on a node seeing this
-# role for the first time the unit does not exist and systemd_service fails the
-# play. The role is in the weekly drift sweep, which runs in check mode, and that
-# failure is what raised FleetDriftIncomplete from 2026-09-20.
+# Under --check (the weekly drift sweep) the package may not be installed, and
+# systemd_service would fail on the missing unit.
 - name: Ask systemd whether auditd exists yet  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl list-unit-files --no-legend --plain auditd.service
@@ -67,9 +58,8 @@
 - name: Flush handlers so the rules are loaded before they are read back
   ansible.builtin.meta: flush_handlers
 
-# Read the kernel's loaded rules, not the file on disk. A rule the kernel
-# rejected leaves the file intact and the daemon running, which is the shape this
-# repository keeps finding: a guard that was written and never armed.
+# Reads the kernel's loaded rules, not the file: a rejected rule leaves the file
+# intact and the daemon running.
 - name: Read the loaded rules back out of the kernel  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: auditctl -l

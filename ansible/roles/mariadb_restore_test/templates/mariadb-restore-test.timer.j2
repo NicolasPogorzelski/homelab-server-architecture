@@ -5,15 +5,12 @@ Description=Monthly MariaDB restore validation at {{ mariadb_restore_test_oncale
 [Timer]
 OnCalendar={{ mariadb_restore_test_oncalendar }}
 
-# The host powers down overnight and is not guaranteed to be running on any given
-# calendar day, so a monthly slot is missed outright more often than not.
-# Persistent=true records the last run and fires an overdue one at the next boot
-# rather than skipping the month.
+# The host is not up every day; Persistent=true fires a missed monthly run at the
+# next boot instead of skipping the month.
 Persistent=true
 
-# The catch-up lands in the boot window, where every other Persistent=true job on
-# this node fires too. Jitter keeps the restore off the same CIFS share as the
-# dump at the same instant.
+# Catch-up runs share the boot window; jitter keeps the restore and the dump off
+# the CIFS share at the same instant.
 RandomizedDelaySec=300
 
 Unit=mariadb-restore-test.service

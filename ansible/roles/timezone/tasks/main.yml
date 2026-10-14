@@ -1,13 +1,10 @@
 ---
-# Written with builtin modules rather than community.general.timezone, which
-# would have to be added to requirements.yml and installed in CI for what Debian
-# expresses as a symlink and a one-line file. Fewer moving parts for the same
-# result, and no collection to keep pinned.
+# Builtin modules rather than community.general.timezone: on Debian the zone is a
+# symlink and a one-line file, and no extra collection has to be pinned.
 #
-# No notify on either task. A handler here would fire on all eleven nodes, ten of
-# which run no database, and a role reaching for a service it did not install is
-# how a timezone change becomes an outage. The pin at the bottom notifies
-# instead, and it exists only where MariaDB does.
+# No notify on these tasks: a handler would restart a service on every node,
+# including nodes that do not run it. Only the MariaDB pin below notifies, and it
+# runs only where timezone_pin_mariadb is set.
 - name: Point /etc/localtime at the chosen zone
   ansible.builtin.file:
     src: "/usr/share/zoneinfo/{{ timezone_name }}"
@@ -15,10 +12,8 @@
     state: link
     force: true
 
-# The hypervisor carries the symlink and no /etc/timezone at all - Proxmox reads
-# only /etc/localtime - so this task creates the file there rather than
-# correcting it. That is the one change the role makes on a node already set
-# to the right zone, and it makes all eleven describe themselves the same way.
+# Proxmox reads only /etc/localtime and ships no /etc/timezone; this creates it
+# there, so every node describes its zone the same way.
 - name: Record the zone name where Debian expects it
   ansible.builtin.copy:
     content: "{{ timezone_name }}\n"
@@ -34,10 +29,8 @@
   changed_when: false
   check_mode: false
 
-# The read-back is the point of the role rather than a flourish. A container
-# whose /etc/localtime is bound read-only from the host accepts neither task and
-# reports success for both, and the schedule written here would then mean
-# something else on that node than every document claims.
+# A container whose /etc/localtime is bound read-only from the host would report
+# success for both tasks without taking the change; the read-back catches that.
 - name: Refuse to pass on a node that did not take the change
   ansible.builtin.assert:
     that:

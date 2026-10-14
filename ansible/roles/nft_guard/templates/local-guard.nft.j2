@@ -5,9 +5,8 @@
 # nft_guard role; see its defaults for why a filter rather than a bind address, and
 # why this is never loaded through nftables.service.
 
-# Idempotent prelude: declaring the table before deleting it makes `nft -f`
-# re-appliable, and lets the delete succeed on the very first run too, since
-# deleting a table that does not exist is an error.
+# Idempotent prelude: declaring the table first lets the delete succeed on the
+# first run too (deleting a missing table is an error), so `nft -f` is re-appliable.
 table inet {{ nft_guard_table }}
 delete table inet {{ nft_guard_table }}
 
@@ -15,10 +14,8 @@ table inet {{ nft_guard_table }} {
   chain input {
     type filter hook input priority filter; policy accept;
 
-    # Loopback first and unconditionally. Every consumer of the ports below is on
-    # this node - Nextcloud reaches Collabora through proxy.php on its own web
-    # server - so accepting lo is what keeps the service working while the same
-    # port is closed to everything else.
+    # Loopback first: every consumer of the ports below is on this node (Nextcloud
+    # reaches Collabora through proxy.php on its own web server).
     iifname "lo" accept
 
 {% for entry in nft_guard_local_only_ports %}
