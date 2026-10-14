@@ -1,50 +1,21 @@
 name: Image vulnerability scan
 
-# Why this workflow exists.
+# Weekly CVE report for every image pinned in docker/. Pinned images age between
+# updates; this measures how exposed they are, while Dependabot version updates
+# for them stay off (see .github/dependabot.yml).
 #
-# Every image in `docker/` is pinned to an exact version, and `docker-compose-update` is under a
-# standing hold until the aux-disk is replaced (`docs/platform/known-errors.md#ke-13`). Pinned plus
-# frozen means known-aging images are running on purpose - a documented, accepted risk.
+# Reports, does not gate: it is not a pull-request check, because an upstream CVE
+# is not a defect in the change under review.
 #
-# ISO/IEC 27001 treats an accepted risk as something that must stay *monitored*, not something that
-# stops being tracked. This scan is that monitoring: it answers "how exposed are we right now",
-# which is a different question from Dependabot's "is a newer tag available". Dependabot version
-# updates for these images are deliberately switched off (see `.github/dependabot.yml`), because
-# pull requests proposing upgrades nobody may apply are noise, and noise is what makes a signal
-# stop being read.
-#
-# It deliberately does **not** run on pull requests and is **not** a required status check. A CVE
-# in an upstream image is not a defect in the change being reviewed, and a permanently red gate
-# that cannot be fixed by the person facing it is the fastest way to teach people to ignore gates.
-#
-# Two severity tiers, and the reason is a measurement rather than a preference.
-#
-# The first version of this workflow uploaded every HIGH and CRITICAL finding to the Security tab.
-# Its first run produced **6928 open alerts** - 139 critical, 2162 high by GitHub's own rating, with
-# `gotenberg` alone contributing 3538. Every one of them fixable, since `ignore-unfixed` is on. That
-# is not a signal, it is a wall, and a wall is read exactly once. The workflow that warns against
-# building an unreadable gate had built an unreadable report.
-#
-# So the two outputs answer two different questions:
-#
-#   * The **run summary** carries per-image CRITICAL and HIGH counts. That is the trend metric - a
-#     number to compare week over week, the same shape as alerting on absolute free bytes rather
-#     than a percentage.
-#   * The **Security tab** receives CRITICAL only, so a new entry there is visible instead of being
-#     buried, and so the list stays small enough to triage.
-#
-# The cost is a second scan pass per image. On public repositories the runner minutes are free and
-# the vulnerability database is cached between the two steps, so this buys readability with the one
-# resource that is not scarce here.
-#
-# One trap worth recording: Trivy's severity label and GitHub's are not the same measure. Everything
-# uploaded is a Trivy HIGH or CRITICAL, but GitHub re-derives its own level from the numeric CVSS
-# score in the SARIF, which is why most of those 6928 appeared as "medium" or "low". Reading the
-# GitHub column alone understates them.
+# Two outputs: the run summary carries per-image CRITICAL and HIGH counts as the
+# weekly trend; the Security tab receives CRITICAL only, so it stays small enough
+# to triage (uploading HIGH as well produced thousands of alerts). GitHub re-rates
+# uploaded findings from the CVSS score in the SARIF, so its severity column can
+# read lower than Trivy's.
 
 on:
   schedule:
-    # Friday 06:00 UTC - results are waiting when the weekly fleet audit starts.
+    # Friday 06:00 UTC, before the weekly fleet audit.
     - cron: "0 6 * * 5"
   workflow_dispatch:
   push:
@@ -70,10 +41,8 @@ jobs:
 
       - name: Build the image list from the compose files
         id: list
-        # The compose files are the single source of truth for what runs on the fleet, so the list
-        # cannot drift from reality the way a second hand-maintained list would. `\K` drops
-        # everything matched before it, leaving only the image reference; `\S+` stops at the
-        # trailing `# pinned to ...` comment.
+        # The compose files own the image versions, so the list cannot drift. `\K` drops the
+        # `image:` prefix; `\S+` stops before a trailing comment.
         run: |
           images="$(grep -rhoP '^\s*image:\s*\K\S+' docker/ | sort -u | jq -R . | jq -sc .)"
           echo "images=${images}" >> "$GITHUB_OUTPUT"
@@ -84,18 +53,15 @@ jobs:
     needs: collect
     runs-on: ubuntu-24.04
     strategy:
-      # One vulnerable image must not hide the results for the other twelve.
+      # One vulnerable image must not hide the results for the others.
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.collect.outputs.images) }}
     steps:
       - name: Derive a stable SARIF category
         id: slug
-        # The image reference is passed through the environment rather than interpolated directly
-        # into the shell command. `${{ }}` interpolation is textual substitution performed before
-        # the shell sees the line, so a value containing shell metacharacters would be executed
-        # rather than quoted. These values come from our own repository, but the safe pattern costs
-        # nothing and is the one that survives a file becoming untrusted later.
+        # Passed through the environment: `${{ }}` is substituted before the shell parses the
+        # line, so metacharacters in the value would be executed rather than quoted.
         env:
           IMAGE: ${{ matrix.image }}
         run: |
@@ -109,12 +75,9 @@ jobs:
           format: json
           output: trivy.json
           severity: CRITICAL,HIGH
-          # Report only vulnerabilities that have a fix available upstream. During the hold, the
-          # number that matters is "how much is fixable and not being fixed" - that is the price
-          # of the hold, expressed in findings. Unfixable CVEs would inflate the count without
-          # changing any available decision.
+          # Only findings with an upstream fix: those are the ones an update can act on.
           ignore-unfixed: true
-          # Never fail the run. This workflow reports; it does not gate. See the note at the top.
+          # Never fail the run; this workflow reports, it does not gate.
           exit-code: "0"
 
       - name: Write the counts to the run summary
@@ -140,6 +103,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: trivy.sarif
-          # A distinct category per image keeps the findings separate; without it each upload would
-          # overwrite the previous one and only the last image scanned would remain visible.
+          # One category per image; otherwise each upload overwrites the previous one.
           category: trivy-${{ steps.slug.outputs.value }}

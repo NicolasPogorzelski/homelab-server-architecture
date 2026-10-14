@@ -1,45 +1,14 @@
 name: SBOM and signature verification
 
-# EXERCISE. This workflow is one of four controls built to be understood rather
-# than because this platform needs them - see
-# docs/decisions/exercise-scope-before-terraform.md for why, how they are
-# labelled, and when each is revisited. It reports and never gates, the same way
-# image-scan.yml does and for the same reason: a permanently red check nobody can
-# fix teaches people to ignore checks.
-#
-# What it answers that image-scan.yml does not. That workflow asks "how exposed
-# are we today", which is a question about vulnerabilities. This one asks two
-# questions about provenance: what is actually inside each image, recorded in a
-# form that can be diffed and kept, and whether the image can be shown to come
-# from whoever claims to have built it.
-#
-# The second question is the one worth running once. Most of this fleet's images
-# are community builds from Docker Hub, and community builds are largely
-# unsigned. The expected result is therefore a mostly empty column, and that is
-# the finding rather than a disappointment: in a workplace the answer decides
-# whether an image may run at all, and here it decides nothing, because there is
-# no admission controller to refuse one.
-#
-# An SBOM is only worth generating if it is kept. A bill of materials produced and
-# discarded answers no question later, which is when the question arrives - the
-# day a CVE lands in a library and somebody has to say within the hour whether
-# anything here contains it. These are uploaded as run artifacts with a retention
-# window; a workplace would push them to a registry or an artifact store that
-# outlives the pipeline.
-#
-# ONE HONEST GAP, recorded rather than hidden. Every other action in this
-# repository is pinned to a commit SHA, because a major-version tag is a mutable
-# reference the upstream owner can repoint. The two actions below are pinned to
-# tags, because the author could not resolve their SHAs at the time of writing.
-# That is a supply-chain workflow carrying a supply-chain weakness, which is a
-# poor joke to leave unremarked - it is the first thing to fix if this exercise is
-# kept rather than removed.
+# Exercise control (docs/decisions/exercise-scope-before-terraform.md). Monthly,
+# for every image pinned in docker/: an SPDX SBOM kept as a run artifact for 90
+# days, and whether cosign can verify any signature for the image. Reports, never
+# gates.
 
 on:
   workflow_dispatch:
   schedule:
-    # Monthly, the day after the first pg restore test, so a person looking at
-    # results has both in the same sitting.
+    # Monthly on the 2nd, the day after the PostgreSQL restore test.
     - cron: "0 7 2 * *"
 
 permissions:
@@ -57,9 +26,7 @@ jobs:
 
       - name: Build the image list from the compose files
         id: list
-        # Same derivation as image-scan.yml, deliberately. The compose files are
-        # the single source of truth for what runs on the fleet, and a second
-        # hand-maintained list would drift from the first.
+        # Same derivation as image-scan.yml: the compose files own the image list.
         run: |
           images="$(grep -rhoP '^\s*image:\s*\K\S+' docker/ | sort -u | jq -R . | jq -sc .)"
           echo "images=${images}" >> "$GITHUB_OUTPUT"
@@ -76,9 +43,7 @@ jobs:
     steps:
       - name: Derive a stable artifact name
         id: slug
-        # Through the environment rather than interpolated into the shell, for
-        # the reason image-scan.yml records: `${{ }}` is textual substitution
-        # performed before the shell sees the line.
+        # Through the environment, not `${{ }}` in the script (see image-scan.yml).
         env:
           IMAGE: ${{ matrix.image }}
         run: |
@@ -86,7 +51,7 @@ jobs:
           echo "value=${slug}" >> "$GITHUB_OUTPUT"
 
       - name: Generate the SBOM
-        uses: anchore/sbom-action@v0  # tag-pinned; see the gap noted in the header
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: ${{ matrix.image }}
           format: spdx-json
@@ -109,17 +74,14 @@ jobs:
           retention-days: 90
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3  # tag-pinned; see the gap noted in the header
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
       - name: Can this image's provenance be shown at all?
         env:
           IMAGE: ${{ matrix.image }}
-        # Never fails the job. An unsigned community image is the expected answer
-        # for most of this fleet, and recording that honestly is the point of the
-        # step. `--certificate-identity-regexp .*` accepts any signer: the
-        # question here is whether a verifiable signature exists, not whether it
-        # belongs to an identity this repository trusts, which is the question a
-        # workplace policy would ask next.
+        # Never fails the job; most images here are unsigned community builds.
+        # The regexps accept any signer: this asks whether a verifiable
+        # signature exists, not whether the signer is trusted.
         run: |
           if cosign verify \
                --certificate-identity-regexp '.*' \

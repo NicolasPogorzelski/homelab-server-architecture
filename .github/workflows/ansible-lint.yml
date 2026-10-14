@@ -5,23 +5,24 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   Ansible_lint:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repo code
-        # See the note in validate-repo.yml: pinned to a SHA because a major-version tag is mutable.
+        # Pinned to a commit SHA because tags can be repointed.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install ansible-lint and collections
         run: |
           pip install 'ansible-lint==26.6.0'
           ansible-galaxy collection install -r ansible/requirements.yml
       - name: Provide a vault password file for syntax-check
-        # ansible.cfg sets vault_password_file = ~/.vault_pass. ansible-lint runs
-        # `ansible-playbook --syntax-check` per role, which parses (but never
-        # decrypts) the committed !vault vars in group_vars/all/vault.yml. Without
-        # the file present, every syntax-check aborts with an internal-error.
-        # A dummy value suffices because syntax-check does not decrypt.
+        # ansible.cfg points vault_password_file at ~/.vault_pass, and syntax-check
+        # aborts if the file is missing. It parses but never decrypts the vault vars,
+        # so a dummy value suffices.
         run: echo 'ci-syntax-check-only' > ~/.vault_pass
       - name: Run ansible-lint
         run: cd ansible && ansible-lint .
