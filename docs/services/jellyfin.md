@@ -1,185 +1,97 @@
-# Jellyfin (VM100)
+# Jellyfin
 
-Jellyfin is deployed via Docker Compose on VM100 with NVIDIA GPU hardware transcoding.
+Media server on vm100 with NVIDIA hardware transcoding. Node details: [vm100](../nodes/vm100.md).
 
 ## Deployment
 
-- Image: `jellyfin/jellyfin:10.11.11`
-- Compose path (runtime): `/opt/docker/jellyfin/docker-compose.yml`
-- GPU acceleration: enabled (`gpus: all`, NVIDIA runtime)
-- Runs as non-root user (`user: 1000:1000`)
+- Compose stack in `/opt/docker/jellyfin`, source `docker/jellyfin/docker-compose.yml`; the image
+  version is pinned there, synced by `docker_compose_update`
+- GPU reserved through the NVIDIA runtime; runs as `${PUID}:${PGID}`, not root
+- Config, cache and metadata on `/mnt/vm-data/jellyfin`, the `jellyfin-data` disk
 
 ## Storage Integration
 
-Media is read-only mounted from VM102 via systemd automount (SMB/autofs):
+Libraries are mounted read-only from vm102 through systemd automounts over SMB:
 
-- `${JF_MEDIA_FILME}` -> `/media/Filme:ro`
-- `${JF_MEDIA_SERIEN}` -> `/media/Serien:ro`
+- `${JF_MEDIA_FILME}` -> `/media/Filme:ro` (share `media-jf-filme`)
+- `${JF_MEDIA_SERIEN}` -> `/media/Serien:ro` (share `media-jf-serien`)
 
-Config, cache, and metadata use local persistent volumes on VM100.
+## Access Model
 
-## Access Model (Zero Trust)
-
-- No public ingress / no router port forwarding.
-- Jellyfin publishes on vm100's Tailscale address only (`<tailscale-ip-vm100>:8096`, set as
-  `JELLYFIN_BIND_ADDR` in the node's `.env`). Nothing on the LAN reaches it; clients use
-  `http://gpu-vm.<tailnet-id>.ts.net:8096` or the Tailscale IP (WireGuard-encrypted, no TLS
-  hostname).
-- From 2026-10-01 to 2026-10-07 it sat on loopback behind `tailscale serve --tcp 8096`. That
-  forwarder stalled streams to the streaming box, and Jellyfin moved to the direct bind
+- Jellyfin publishes on vm100's Tailscale address only, `<tailscale-ip-vm100>:8096`
+  (`JELLYFIN_BIND_ADDR` in the node's `.env`; `docker_compose_update` refuses an `.env` without it).
+  The `tailscale serve` forwarder stalled streams and is not used
   ([KE-28](../platform/known-errors.md#ke-28)).
-- At boot, `docker.service` waits for the Tailscale address through `tailscale_boot_gate`, with
+- At boot `docker.service` waits for that address through `tailscale_boot_gate`, with
   `docker_boot_retry` behind it ([KE-18](../platform/known-errors.md#ke-18)).
-- Network policy enforced via Tailscale ACL (node tags + ACL JSON).
-- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
+- Clients use `http://gpu-vm.<tailnet-id>.ts.net:8096`; the transport is WireGuard, with no TLS
+  hostname. No LAN or public path ([media over the tailnet](../decisions/media-over-the-tailnet.md)).
 
-| Source | Port | Access |
-|---|---|---|
-| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:untrusted` | 8096 | Allowed |
-| One external user through machine sharing | 8096 | Allowed |
-| `tag:monitoring` | 8096 | Allowed (blackbox probe) |
-| `tag:reader`, `tag:tier0`, every other tag | 8096 | Denied |
+| Source | Port 8096 |
+|---|---|
+| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:untrusted`, `tag:media-player` | allowed |
+| one external user through machine sharing | allowed |
+| `tag:monitoring` | allowed (blackbox probe) |
+| `tag:reader`, `tag:tier0`, every other tag | denied |
+
+Rules: [tailscale-acl.md](../platform/tailscale-acl.md).
 
 ## Subtitle Extraction
 
 When a client asks for an embedded subtitle as a separate stream, Jellyfin runs ffmpeg over the
-whole file and extracts every subtitle track at once, into `/config/data/subtitles/`. On a 4K remux
-that means reading tens of gigabytes over CIFS before the first frame: measured 2026-10-07, a 46 GB
-film ran at about 110 MB/s for five minutes, and the client gave up long before. The server option
-`EnableSubtitleExtraction` in `encoding.xml` is already `false` and does not stop it.
+whole file and extracts every subtitle track into `/config/data/subtitles/`. On a 4K remux that
+reads tens of gigabytes over CIFS before the first frame.
+Verified 2026-10-07: a 46 GB file read at about 110 MB/s for five minutes; the client gave up first.
 
-- The lever is the subtitle mode. "Default" plays any track the file flags as default, and many
-  4K episodes carry a German forced track flagged that way; "Only forced" selects the same track.
-  Every profile is held at "None" by the `jellyfin_user_prefs` role.
-- Moonfin in direct play reads embedded text tracks from the container itself and never asks the
-  server for them. Measured 2026-10-08 over eight starts that showed an embedded text track
-  (`subtitle track N picked by positional`, `0 external files`): Jellyfin started no ffmpeg and
-  wrote nothing to `/config/data/subtitles/`. Moonfin's own subtitle setting can stay on.
-- An extraction keeps running after the client closes, and it saturates the read path for every
-  other stream until it ends.
-- Extracted tracks are cached, so a second start of the same file is immediate.
-- Anything else that reads the archive has the same effect. Diagnose from `/opt/docker/jellyfin/.env`,
-  `docker inspect` and `ffprobe`, never with a recursive search under `/srv` or by decoding a file
-  while it is being watched.
+- `EnableSubtitleExtraction=false` in `encoding.xml` does not stop it. The lever is the user's
+  subtitle mode: "Default" and "Only forced" both pick forced tracks flagged as default. The
+  `jellyfin_user_prefs` role holds every profile at "None".
+- Clients in direct play that read embedded text tracks themselves start no extraction.
+  Verified 2026-10-08 over eight starts: no ffmpeg, nothing written to `/config/data/subtitles/`.
+- An extraction keeps running after the client closes and saturates the read path for every other
+  stream. Extracted tracks are cached.
+- Anything else that reads the archive has the same effect. Diagnose from the `.env`,
+  `docker inspect` and `ffprobe`, never with a recursive search under `/srv`.
 
 ## CUDA Watchdog
 
-Jellyfin intermittently loses CUDA access at runtime (see [KE-10](../platform/known-errors.md#ke-10)).
-A watchdog script checks GPU availability every minute and restarts the container once access is
-lost - but not under a stream that does not need the GPU. A restart ends every running stream,
-direct play included; on 2026-10-08 one found CUDA lost at 11:29:08 and stopped a direct-play
-stream to the box. So with CUDA gone the script asks Jellyfin's `/Sessions` who is playing:
+Jellyfin intermittently loses CUDA access ([KE-10](../platform/known-errors.md#ke-10)). A restart
+ends every stream, direct play included, so with CUDA gone the watchdog asks Jellyfin's `/Sessions`
+who is playing:
 
 | Sessions playing | Action |
 |---|---|
 | none | restart |
-| at least one transcodes video (`TranscodingInfo.IsVideoDirect` false) | restart; that stream already depends on the lost GPU |
-| only direct play or direct stream | hold, look again next minute |
+| at least one video transcode (`TranscodingInfo.IsVideoDirect` false) | restart |
+| only direct play or direct stream | hold, check again next minute |
 | API does not answer | restart |
 
-The API key is the one `jellyfin_user_prefs` uses, deployed to a root-only header file that `curl`
-reads with `-H @file`, so it never appears on a command line. The field names are Jellyfin's
-session model; a held restart with a real video transcode running has not been observed yet.
-
-State goes to the textfile collector: `jellyfin_cuda_ok`, `jellyfin_watchdog_restart_held` and
-`jellyfin_watchdog_last_restart_timestamp_seconds`. `JellyfinCudaLost` fires after ten minutes of
-`jellyfin_cuda_ok == 0`, which is either a restart held for direct streams or one that did not
-bring CUDA back.
-
-### Deploy on VM100
-
-Managed by the `jellyfin_watchdog` Ansible role - script, service unit and timer:
+- Role `jellyfin_watchdog`: `snippets/scripts/jellyfin-cuda-watchdog.sh`, its service and a
+  monotonic timer (`OnBootSec=5min`, `OnUnitActiveSec=1min`, `AccuracySec=5s`, no `Persistent=`).
+- The API key sits in a root-only header file read by `curl -H @file`, never on a command line.
+- Metrics: `jellyfin_cuda_ok`, `jellyfin_watchdog_restart_held`,
+  `jellyfin_watchdog_last_restart_timestamp_seconds`. `JellyfinCudaLost` fires after ten minutes of
+  `jellyfin_cuda_ok == 0`. A failed run raises `SystemdUnitFailed`.
 
 ```bash
-ansible-playbook playbooks/jellyfin-watchdog.yml --check --diff   # preview
-ansible-playbook playbooks/jellyfin-watchdog.yml                  # apply
-```
-
-### Schedule
-
-`jellyfin-cuda-watchdog.timer` - a monotonic timer, not a calendar one:
-
-```
-OnBootSec=5min
-OnUnitActiveSec=1min
-AccuracySec=5s
-```
-
-The first poll waits 5 minutes after boot so Docker and the NVIDIA runtime have
-settled; restarting a half-started container is worse than checking it late. One minute keeps a
-held restart within a minute of the last direct stream ending, and `AccuracySec` stops systemd
-from coalescing the timer to its one-minute default accuracy.
-`Persistent=` is deliberately absent - it applies only to `OnCalendar=` timers, and
-a poll missed while the host was powered off has nothing to catch up on.
-
-The role removed the previous `*/30 * * * *` root crontab entry. Do not re-add it.
-
-### Verify
-
-```bash
+ansible-playbook playbooks/jellyfin-watchdog.yml --check --diff
 systemctl list-timers jellyfin-cuda-watchdog.timer
 journalctl -t jellyfin-cuda-watchdog -n 20
 ```
 
-Because the watchdog is a systemd unit, a failing run now raises the fleet-wide
-`SystemdUnitFailed` alert. As a cron job it failed silently.
-
-### Script reference
-
-[snippets/scripts/jellyfin-cuda-watchdog.sh](../../snippets/scripts/jellyfin-cuda-watchdog.sh)
-
----
-
 ## Moonfin Direct Play
 
-Moonfin's built-in player on the Android TV box hangs on most starts in which the display switches
-refresh rate while the audio is bitstreamed to the AV receiver. The fault is in the client and is
-reported upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775).
-Measured 2026-10-08 with `adb logcat` on the box and Moonfin's own diagnostic reports, which the
-app uploads to Jellyfin's log directory:
-
-| Box UI mode | Audio in Moonfin | Starts | Playing after 30 s |
-|---|---|---|---|
-| 3840x2160 @ 59.94 Hz, so every start switches | passthrough (AC3, E-AC3) | 7 | 2 |
-| 3840x2160 @ 23.976 Hz, no switch | passthrough | 4 | 4 |
-| 3840x2160 @ 59.94 Hz, so every start switches | passthrough disabled, PCM | 6 | 6 |
-
-- Every start with a switch runs the same sequence. Moonfin requests the 23.976 Hz mode once the
-  video decoder is up and opens the audio track about 30 ms later; the HDMI link renegotiates 0.9
-  to 1.5 s after that and kills the passthrough track (`AudioTrack write failed: -6`). Moonfin
-  rebuilds it. In the hanging starts the rebuilt track reported timestamp jumps of 208 ms, the
-  player dropped frames and stayed in `buffering` with more than 11 s buffered until its own
-  watchdog failed playback after 31 s.
-- Ruled out across three titles: server, storage and network (direct play, no ffmpeg, vm102 load
-  below 0.2), the file (AC3 and E-AC3, Dolby Vision P7 and P8, HDR10), subtitles (hangs with the
-  track on and off) and Moonfin's scaling option (Scale on TV picks the same mode). The
-  2026-10-07 version of this section blamed the forced subtitle tracks; it rested on a handful of
-  starts of a fault whose outcome varies from one start to the next.
-- Moonfin 2.6.0 has no setting that orders the switch before the audio. Its "Video start delay"
-  slider is stored and synced but read by no playback code, and the box's own "Match frame rate"
-  entry is a one-off action, not a mode.
-- **Interim:** audio passthrough in Moonfin is set to Disabled. Moonfin decodes with its bundled
-  FFmpeg and sends multichannel PCM, and the PCM path survives the renegotiation. Refresh rate
-  switching, Dolby Vision and subtitles stay on. Cost: object audio (Atmos, DTS:X) is reduced to
-  its channel bed, and dynamic range control moves from the receiver to the decoder.
-- **Revert when:** a Moonfin release closes #1775. Set passthrough back to Auto and start a
-  23.976 fps title with AC3 audio from a 59.94 Hz UI at least three times; one clean start proves
-  nothing for a fault that let two of seven through.
-- An external player is not the fix: the built-in player is what carries playback sync and
-  trickplay previews. While an external player runs, Moonfin also reports the time since the
-  hand-off as the playback position, so the server holds a wrong resume point until it returns.
+Playback hangs on the streaming box are a client fault, not a platform one, and are tracked
+upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775).
 
 ## Failure Impact
 
-If VM100 becomes unavailable:
-
-- No media streaming.
-- No data loss - media is read-only from VM102 storage.
-- Recovery: restart VM100, verify SMB automounts, confirm Docker containers are running.
+- vm100 down: no media streaming; libraries on vm102 are unaffected.
+- `jellyfin-data` is not in the guest backup; config and watch state are lost with the aux-disk
+  ([KE-13](../platform/known-errors.md#ke-13)).
+- Recovery: restart vm100, check the automounts, `docker compose ps` in the stack directory.
 
 ## Related Documents
 
-- [VM100 Node](../nodes/vm100.md)
-- [Storage Design](../platform/storage-design.md)
-- [Tailscale ACL](../platform/tailscale-acl.md)
+- [vm100](../nodes/vm100.md)
+- [Storage design](../platform/storage-design.md)

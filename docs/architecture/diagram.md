@@ -1,42 +1,20 @@
 # Infrastructure Architecture - Logical View
 
-Three views, each answering one question: who may talk to whom, where the bytes live, and what is
-watched. Two further views live in their own documents because they answer questions about failure
-rather than about structure - [failure domains](failure-domains.md) and
-[backup and recovery](backup-flow.md).
+Three views: who may reach whom, where the bytes live, and what is watched. Failure and backup have
+their own views: [failure domains](failure-domains.md) and [backup and recovery](backup-flow.md).
 
-## Reading the arrows
+## Reading the Arrows
 
-**An arrow follows what is delivered.** A request to the service it reaches, bytes to the node that
-consumes them, metrics to the collector, configuration to the node it configures. Where the network
-connection is opened in the opposite direction, the view says so on the spot - View 3 is the case
-that matters, because Prometheus pulls.
+An arrow follows what is delivered: a request to the service it reaches, bytes to their consumer,
+metrics to the collector. Where the connection opens the other way, the view says so (View 3,
+because Prometheus pulls). A dotted arrow delivers nothing: parity protection, or an exercise path.
+A component drawn inside a box runs inside it. Node names match the inventory.
 
-A dotted arrow marks a relationship that delivers nothing: parity protection, or a path that is
-deliberately absent.
+## View 1 - Access Policy
 
-**Containment means "runs inside".** Where a component runs within another, it is drawn inside its
-box rather than attached by an arrow, so that no arrow has to mean "is part of" as well.
-
-Node identifiers match the inventory (`vm100`, `lxc210`), so a node in a diagram can be grepped for
-in `ansible/inventory/` and in `docs/nodes/`.
-
----
-
-## View 1 - Access policy
-
-Not a node list - the policy itself. Every arrow is an ACL rule from
-[`tailscale-acl.md`](../platform/tailscale-acl.md) with the ports it grants. Here the delivery
-direction and the connection direction are the same: the arrow is the request.
-
-Since the rebuild of 2026-09-26 most grants name a host rather than a tag, because `tag:tier1` holds
-three services and reaching one of them should not mean reaching the other two. The diagram draws
-them the same way: a service box stands for one host, a tag box for every node carrying the tag.
-
-An ACL is a relation between sources and destinations, so it is drawn as one: sources on the left,
-destinations on the right, ports on the edge. It is split in two because the policy answers two
-different questions - what a person or device may reach, and what a service may reach on its own
-behalf.
+Every arrow is a grant from [`tailscale-acl.md`](../platform/tailscale-acl.md) with its ports; here
+the arrow is the request. Most grants name a host rather than a tag, because `tag:tier1` holds three
+services. A service box stands for one host, a tag box for every node carrying the tag.
 
 ### 1a - Access by people and devices
 
@@ -71,29 +49,23 @@ flowchart LR
   UNTRUST_S --> JF
   PLAYER_S --> JF
   EXTERNAL_S --> NC & JF & ABS
-
-  classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
-  classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff
-  classDef untrust fill:#7a1f1f,stroke:#571414,color:#ffffff
-  class ADMIN_S,MOBILE_S,CLIENT_S,READER_S,PLAYER_S,EXTERNAL_S src
-  class INFRA,PVE,NC,PL,CW,OW,JF,ABS dst
-  class UNTRUST_S untrust
 ```
 
-The dotted arrow is a real grant with a narrower source: the rule names the client notebook's
-address, not the tag. Two tags are missing on purpose. `tag:isolated` has no rule at all, and no rule
-anywhere has a person's device as its destination, apart from the inference backend on the admin desktop in 1b.
+The dotted arrow is a grant with a narrower source: the client notebook's address, not the tag.
+`tag:isolated` has no rule. No rule has a person's device as destination, except the inference
+backend on the admin desktop in 1b.
 
 ### 1b - Service to service, and monitoring
 
 ```mermaid
 flowchart LR
   accTitle: Tailscale ACL - service-to-service, control and monitoring rules
-  accDescr: The monitoring node, the control node, the hypervisor, Paperless and the AI stack on the left, with the ports they may reach.
+  accDescr: The monitoring node, the control node, the hypervisor, Nextcloud, Paperless, the database and the AI stack on the left, with the ports they may reach.
 
   MON_S["tag:monitoring<br/>lxc200"]
   CTL_S["tag:control<br/>lxc250"]
   T0_S["tag:tier0<br/>Proxmox host"]
+  NC_S["nextcloud<br/>lxc210"]
   PL_S["paperless<br/>lxc211"]
   DB_S["tag:database<br/>lxc260"]
   AI_S["tag:ai-stack<br/>lxc230"]
@@ -103,7 +75,7 @@ flowchart LR
   ST_D["tag:storage<br/>vm102"]
   DB_D["tag:database<br/>lxc260"]
   MON_D["tag:monitoring<br/>lxc200"]
-  OLL["vm100 8080<br/>admin desktop 8080"]
+  LLM["vm100 8080<br/>admin desktop 8080"]
 
   MON_S -->|"9100"| SERVERS
   MON_S -->|"9187"| DB_D
@@ -111,149 +83,96 @@ flowchart LR
   CTL_S ==>|"22"| SERVERS
   CTL_S -->|"9443"| MON_D
   T0_S -->|"445"| ST_D
+  NC_S -->|"445"| ST_D
   PL_S -->|"5432"| DB_D
   PL_S -.->|"19532"| MON_D
   DB_S -.->|"19532"| MON_D
   AI_S -->|"5432"| DB_D
-  AI_S -->|"8080"| OLL
-
-  classDef src fill:#0b3d6b,stroke:#062a4b,color:#ffffff
-  classDef dst fill:#1f6f43,stroke:#14512f,color:#ffffff
-  class MON_S,CTL_S,T0_S,PL_S,DB_S,AI_S src
-  class SERVERS,PROBES,ST_D,DB_D,MON_D,OLL dst
+  AI_S -->|"8080"| LLM
 ```
 
-The dotted arrows are the journal upload, an exercise rather than a path the platform depends on.
-Two tags never appear as a source: `tag:storage` and `tag:tier2`. vm102 and vm100 answer and never
-initiate over the tailnet - vm100 mounts its media over the LAN - and since Tailscale ACLs are
-deny-by-default that is enforced rather than merely observed. `tag:database` initiates exactly one
-thing, the journal upload.
+The dotted arrows are the journal upload, an [exercise](../decisions/exercise-scope-before-terraform.md).
+`tag:storage` and `tag:tier2` never appear as a source: vm102 and vm100 initiate nothing over the
+tailnet (vm100 mounts its media over the LAN), and ACLs are deny-by-default. Port 9100 shows that a
+machine is alive; the probes show that the service on it answers
+([KE-8](../platform/known-errors.md#ke-8)).
 
-The two monitoring grants are drawn separately on purpose. Port 9100 is node_exporter; the probes
-were added after [KE-8](../platform/known-errors.md#ke-8) showed that a node can answer while the
-service on it is dead. One measures that the machine is alive, the other that the thing people use
-is.
+## View 2 - Where the Bytes Live
 
----
+Three storage layers. Only the archive pool has parity; the other two carry the root disks, the
+Docker state and the PostgreSQL data on single disks, both with open faults.
 
-## View 2 - Where the bytes live
-
-Three storage layers, not one. The media archive is the one usually drawn, and it is the only one of
-the three with parity protection. The other two carry more critical data on less protected hardware,
-and both are named in open incidents.
-
-Note the asymmetry in how the archive is reached: vm100 mounts CIFS itself, while the LXCs never do.
-The Proxmox host mounts the shares and bind-mounts them into the containers, which is why a failed
-host mount surfaces inside a container as an empty directory
+vm100 mounts CIFS itself; the containers never do. The host mounts the shares and bind-mounts them
+into the containers, so a failed host mount appears inside a container as an empty directory
 ([KE-15](../platform/known-errors.md#ke-15)).
 
 ```mermaid
 flowchart TB
   accTitle: The three storage layers of the platform
-  accDescr: Boot SSD thin pool with all guest root disks, aux-disk with Docker data roots, and the vm102 archive pool with parity, showing which consumer uses which.
+  accDescr: Boot SSD thin pool with all guest root disks, aux-disk with Docker data roots, PostgreSQL data and vm100's data disk, and the vm102 archive pool with parity, showing which consumer uses which.
 
-  subgraph boot["boot SSD - scsi 9:0:0:0, behind the LSI SAS2008 HBA"]
+  subgraph boot["boot SSD - behind the LSI SAS2008 HBA"]
     THIN[("pve-data thin pool")]
     PVEROOT[("pve-root, /boot/efi")]
   end
 
-  subgraph aux["aux-disk - /mnt/aux-disk, AHCI, storage appdata_aux-disk"]
-    DOCKERROOTS[("Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260")]
-    JELLYRAW[("vm100 scsi1 - jellyfin-data raw image")]
+  subgraph aux["aux-disk - /mnt/aux-disk"]
+    DOCKERROOTS[("Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230")]
+    PGDATA[("PostgreSQL data directory<br/>lxc260")]
+    JELLY[("vm100 scsi1 - jellyfin-data, qcow2")]
+    VZDUMP[("/mnt/vzdump - guest backups")]
   end
 
-  subgraph pool["vm102 archive pool - disks passed through from the host by-id"]
+  subgraph pool["vm102 archive pool - disks passed through by-id"]
     DISKS[("disk01 - disk05 + aux-pool")]
-    PARITY[("parity1 - outside the union")]
+    PARITY[("parity disk - outside the union")]
     MERGER["/mnt/mergerfs union"]
     SAMBA["Samba - segmented shares"]
   end
 
-  THIN -->|"every VM and LXC root disk"| GUESTS["9 guests<br/>including lxc210's MariaDB and lxc250's vault password"]
+  THIN -->|"every guest root disk"| GUESTS["9 guests<br/>including lxc210's MariaDB<br/>and lxc250's Ansible secrets"]
   DISKS --> MERGER
   DISKS -.->|"parity covers the data disks"| PARITY
   MERGER --> SAMBA
   SAMBA -->|"CIFS, mounted by vm100 itself"| VM100["vm100"]
-  SAMBA -->|"CIFS, mounted by the host"| HOSTCIFS["Proxmox CIFS mounts<br/>bind-mounted into the containers"]
-  HOSTCIFS -->|"application data"| CIFSLXC["lxc210, lxc211, lxc220,<br/>lxc230, lxc260"]
-  DOCKERROOTS -->|"Docker engine state"| DOCKERLXC["lxc200, lxc211, lxc220,<br/>lxc230, lxc260"]
-  JELLYRAW --> VM100
+  SAMBA -->|"CIFS, mounted by the host"| HOSTCIFS["Proxmox CIFS mounts<br/>bind-mounted into containers"]
+  HOSTCIFS -->|"application data, dumps"| CIFSLXC["lxc210, lxc211,<br/>lxc220, lxc260"]
+  DOCKERROOTS -->|"Docker engine state"| DOCKERLXC["lxc200, lxc211,<br/>lxc220, lxc230"]
+  PGDATA --> PG["lxc260"]
+  JELLY --> VM100
 
   classDef sick fill:#7a1f1f,stroke:#571414,color:#ffffff
   classDef ok fill:#6a4a9c,stroke:#4c3570,color:#ffffff
   classDef consumer fill:#1f6f43,stroke:#14512f,color:#ffffff
-  class THIN,PVEROOT,DOCKERROOTS,JELLYRAW sick
+  class THIN,PVEROOT,DOCKERROOTS,PGDATA,JELLY,VZDUMP sick
   class DISKS,PARITY,MERGER,SAMBA ok
-  class GUESTS,VM100,CIFSLXC,DOCKERLXC,HOSTCIFS consumer
+  class GUESTS,VM100,CIFSLXC,DOCKERLXC,HOSTCIFS,PG consumer
 ```
 
-The two container groups at the bottom are deliberately not the same set. Five containers receive
-application data over the host's CIFS mounts; five keep their Docker engine state on aux-disk. Four
-appear in both, lxc200 only in the second, lxc210 only in the first - which is why a
-question like "what does this container lose if that disk dies" has to be asked per node rather than
-per container class.
+The two container groups differ: lxc210 and lxc260 receive CIFS data but run no Docker; lxc200 and
+lxc230 run Docker but have no CIFS mount. Loss per disk is therefore asked per node.
 
-Red marks hardware with an open fault rather than a design flaw: the boot SSD throws intermittent
-transport-layer I/O errors ([KE-14](../platform/known-errors.md#ke-14), root cause unconfirmed), and
-aux-disk holds a growing number of unreadable sectors and is awaiting replacement
-([KE-13](../platform/known-errors.md#ke-13)). What each of them takes down if it goes is the subject
-of [failure domains](failure-domains.md).
+Red marks hardware with an open fault: the boot SSD logs transport-layer I/O errors
+([KE-14](../platform/known-errors.md#ke-14)), and the aux-disk has a growing count of unreadable
+sectors ([KE-13](../platform/known-errors.md#ke-13)). See [failure domains](failure-domains.md).
 
----
+## View 3 - Monitoring Coverage
 
-## View 3 - Monitoring coverage
+Prometheus on lxc200 scrapes the jobs rendered from
+`ansible/roles/prometheus_config/templates/prometheus.yml.j2`. Metrics flow to lxc200; the connection
+opens the other way, as the monitoring grants in View 1.
 
-Prometheus on lxc200 with 15 scrape jobs over 20 targets, measured 2026-10-08; one of them is
-Prometheus scraping itself and is not drawn. The arrows follow the metrics, which is the delivery direction. The
-connection is opened the other way, because Prometheus pulls - View 1 shows that direction, as the
-monitoring tag reaching outward on ports 9100, 9187 and the probe ports.
+| Exporter | Where | Adds |
+|---|---|---|
+| node_exporter, systemd unit on the Tailscale address | every node | `node_systemd_unit_state`, apt and listener metrics |
+| textfile collectors | host, vm102, vm100 | SMART, LVM thin pool, guest and host-config backup; SnapRAID, storage permissions; CUDA watchdog |
+| node_exporter, Docker container on loopback | lxc200 | resources only, no systemd units |
+| postgres_exporter | lxc260 | `pg_stat_*`, `pg_up` |
+| blackbox_exporter | lxc200 | three HTTP probes on vm100, four HTTPS probes behind `tailscale serve` |
 
-Coverage is drawn by exporter class rather than as one uniform arrow, because it is not uniform.
+`SystemdUnitFailed` covers all ten nodes. On lxc200 the container exporter cannot see the node's
+systemd, so a second, native exporter on 9101 reports it
+([decision](../decisions/lxc200-systemd-visibility.md)).
 
-```mermaid
-flowchart LR
-  accTitle: Monitoring coverage by exporter class
-  accDescr: node_exporter, postgres_exporter and blackbox probes delivering metrics to Prometheus on lxc200, with the one partial exporter marked.
-
-  subgraph targets["node_exporter - systemd binary with --collector.systemd"]
-    HOST["Proxmox host<br/>+ textfile: smartmon, lvm-thin, guest-backup, apt"]
-    VM102["vm102<br/>+ textfile: snapraid_sync, snapraid_scrub"]
-    VM100["vm100"]
-    NODES["lxc210, lxc211, lxc220,<br/>lxc230, lxc250, lxc260"]
-    LXC200NATIVE["lxc200<br/>second, native exporter on 9101"]
-  end
-
-  LXC200SELF["lxc200 node_exporter<br/>Docker container on loopback<br/>cannot see the host's systemd units"]
-  PGEXP["postgres_exporter on lxc260<br/>pg_stat via loopback"]
-  BLACKBOX["blackbox_exporter probes<br/>3 HTTP + 4 Serve-HTTPS endpoints"]
-
-  PROM["Prometheus + Alertmanager on lxc200"]
-
-  targets -->|"metrics"| PROM
-  LXC200SELF -->|"metrics, no systemd units"| PROM
-  PGEXP -->|"metrics"| PROM
-  BLACKBOX -->|"probe results"| PROM
-
-  classDef ok fill:#1f6f43,stroke:#14512f,color:#ffffff
-  classDef partial fill:#8a5a00,stroke:#5f3e00,color:#ffffff
-  class HOST,VM102,VM100,NODES,LXC200NATIVE,PGEXP,BLACKBOX ok
-  class LXC200SELF partial
-  class PROM ok
-```
-
-No node is outside `SystemdUnitFailed` any more. lxc200 was the last: its first exporter runs as a
-Docker container on loopback and cannot see the node's systemd units, which is why it is drawn as
-partial. Since 2026-09-15 a native exporter on the node's Tailscale address, port 9101, reports
-them ([decision](../decisions/lxc200-systemd-visibility.md)). lxc250 closed on 2026-08-20, when it
-joined the inventory and the role replaced a hand-written exporter that bound `*:9100` and was read
-by nobody.
-
-Note also what the blackbox probes add. `NodeDown` says a node answers; a probe says the service on
-it answers. The first run of these probes found Paperless and OpenWebUI returning 502 behind a
-healthy node ([KE-8](../platform/known-errors.md#ke-8)).
-
----
-
-Network policy is enforced through the Tailscale ACL, not through what these diagrams draw. The
-policy document is [`tailscale-acl.md`](../platform/tailscale-acl.md); where the two disagree, the
-ACL JSON in the admin console is the source of truth and this page is wrong.
+The policy is enforced by the Tailscale ACL, not by these diagrams. Where they disagree with the
+admin console, the console is the source of truth.

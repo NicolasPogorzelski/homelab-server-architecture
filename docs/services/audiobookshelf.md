@@ -1,51 +1,47 @@
-# Audiobookshelf (VM100)
+# Audiobookshelf
 
-Audiobookshelf is deployed via Docker Compose on VM100.
+Audiobook and podcast server on vm100. Node details: [vm100](../nodes/vm100.md).
 
 ## Deployment
 
-- Image: `ghcr.io/advplyr/audiobookshelf:2.37.1`
-- Compose path (runtime): `/opt/docker/audiobookshelf/docker-compose.yml`
-- Runs on port 13378/TCP
+- Compose stack in `/opt/docker/audiobookshelf`, source `docker/audiobookshelf/docker-compose.yml`
+  (image version there), synced by `docker_compose_update`
+- Config and metadata under `${ABS_DATA_ROOT}` on vm100's root disk, which the guest backup covers
 
 ## Storage Integration
 
-Media is read-only mounted from VM102 via systemd automount (SMB/autofs):
+Libraries are mounted read-only from vm102 through systemd automounts over SMB:
 
-- `${ABS_AUDIOBOOKS_ROOT}` -> `/audiobooks:ro`
-- `${ABS_PODCASTS_ROOT}` -> `/podcasts:ro`
+- `${ABS_AUDIOBOOKS_ROOT}` -> `/audiobooks:ro` (share `media-abs-audiobooks`)
+- `${ABS_PODCASTS_ROOT}` -> `/podcasts:ro` (share `media-abs-podcasts`)
 
-Config and metadata use local persistent volumes on VM100.
+## Access Model
 
-## Access Model (Zero Trust)
-
-- No public ingress / no router port forwarding.
-- Audiobookshelf is published on `127.0.0.1:13378` only and reaches the tailnet through
-  `tailscale serve --bg --tcp 13378 tcp://127.0.0.1:13378` on vm100. Since 2026-10-01 it is not
-  reachable from the LAN; clients use `http://gpu-vm.<tailnet-id>.ts.net:13378` or the node's
-  Tailscale IP (WireGuard-encrypted, no TLS hostname).
+- Published on `127.0.0.1:13378` only. The tailnet reaches it through
+  `tailscale serve --bg --tcp 13378 tcp://127.0.0.1:13378` on vm100
+  ([decision](../decisions/loopback-tailscale-serve.md)).
+- Clients use `http://gpu-vm.<tailnet-id>.ts.net:13378` or vm100's Tailscale address; the transport
+  is WireGuard, with no TLS hostname. No LAN or public path
+  ([media over the tailnet](../decisions/media-over-the-tailnet.md)).
 - Clients appear to Audiobookshelf as `127.0.0.1`, because `tailscale serve` forwards the TCP stream.
-- Network policy enforced via Tailscale ACL (node tags + ACL JSON).
-- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-- See: [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
 
-| Source | Port | Access |
-|---|---|---|
-| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:reader` | 13378 | Allowed |
-| One external user through machine sharing | 13378 | Allowed |
-| `tag:monitoring` | 13378 | Allowed (blackbox probe) |
-| `tag:untrusted`, `tag:tier0`, every other tag | 13378 | Denied |
+| Source | Port 13378 |
+|---|---|
+| `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:reader` | allowed |
+| one external user through machine sharing | allowed |
+| `tag:monitoring` | allowed (blackbox probe) |
+| `tag:untrusted`, `tag:media-player`, every other tag | denied |
+
+Rules: [tailscale-acl.md](../platform/tailscale-acl.md).
 
 ## Failure Impact
 
-If VM100 becomes unavailable:
-
-- No audiobook or podcast streaming.
-- No data loss - media is read-only from VM102 storage.
-- Recovery: restart VM100, verify SMB automounts, confirm Docker containers are running.
+- vm100 down: no audiobook or podcast streaming; the libraries on vm102 are unaffected.
+- vm102 unreachable at boot: the container start fails and `docker_boot_retry` retries it
+  ([KE-27](../platform/known-errors.md#ke-27)).
+- Recovery: restart vm100, check the automounts, `docker compose ps` in the stack directory.
 
 ## Related Documents
 
-- [VM100 Node](../nodes/vm100.md)
-- [Storage Design](../platform/storage-design.md)
-- [Tailscale ACL](../platform/tailscale-acl.md)
+- [vm100](../nodes/vm100.md)
+- [Storage design](../platform/storage-design.md)

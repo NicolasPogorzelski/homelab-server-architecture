@@ -1,176 +1,78 @@
-# Nextcloud (LXC210)
+# Nextcloud
 
-Nextcloud is deployed as a classic web application stack inside an unprivileged Debian LXC container.
+File sync, sharing and Talk on lxc210, as a native Debian stack. User data is on vm102. Node
+details: [lxc210](../nodes/lxc210.md).
 
 ## Components
 
-- Webserver: Apache 2.4 (HTTP/80 + HTTPS/443)
-- PHP: PHP 8.2 (Debian packages)
-- Database: MariaDB/MySQL (local to the container; `dbhost=localhost`)
+- Apache 2.4 with PHP 8.2 (Debian packages); application in `/var/www/nextcloud`, owned by
+  `www-data` ([KE-25](../platform/known-errors.md#ke-25))
+- MariaDB in the container (`dbhost=localhost`, database `nextcloud`), not on the PostgreSQL
+  platform: Nextcloud predates lxc260 and upstream recommends MariaDB. No migration is planned.
+- Redis on `127.0.0.1:6379` for file locking, APCu as local cache
+- Collabora Online for document editing (below)
+- Nextcloud 34, the last major that runs on PHP 8.2
 
-Note: MariaDB runs locally rather than on the centralized PostgreSQL platform (lxc260).
-Nextcloud's official documentation recommends MariaDB, and Nextcloud was deployed before
-lxc260 existed. Migration is not planned.
-- Cache/Locking: APCu (local cache) + Redis (transaction/file locking)
-- Document editing: Collabora Online (`coolwsd`), bundled by the `richdocumentscode` app, plus the
-  `onlyoffice` connector app - see below
+## Storage
 
-### Collabora Online, recorded 2026-08-17, measured 2026-09-09
+- User data: `/mnt/nextcloud`, the vm102 `[Nextcloud]` share mounted by the host and bind-mounted
+  into the container, owned by `www-data` through the mount's UID mapping
+- MariaDB data on the container's root disk; nightly verified dumps go to the `[DB-Backups]` share
+- No database on CIFS; Redis handles locking.
 
-This component ran unrecorded for an unknown length of time. It appears in no service document, no
-data classification row and no access-model section, and it never passed the "Adding a New Service"
-checklist - it arrived as a Nextcloud app rather than as a deployment, which is exactly the gap that
-lets a component skip the process. It was found by a port sweep, not by reading anything.
+## Collabora Online
 
-The open question the first version left - whether document editing is used - is answered: it is.
-The 2026-09-09 measurement then changed most of the rest of the picture.
+The `richdocumentscode` app extracts a Collabora (CODE) AppImage into `/tmp` and runs it as
+`www-data`. There is no package and no unit, so no role can own it without owning the app.
 
-**It is not a service on this node.** There is no `coolwsd` package and no `coolwsd` unit;
-`systemctl is-active coolwsd` reads `inactive` while a process listens. What runs is an AppImage
-that the `richdocumentscode` app extracts into `/tmp` and starts as `www-data`. Consequences that
-follow from that and from nothing else: it survives no reboot except by being extracted again, its
-document jails live on the container rootfs on the [KE-14](../platform/known-errors.md#ke-14) boot
-SSD, and no Ansible role can own it without owning the Nextcloud app that ships it.
+- It listens on `*:9983` and accepts no listen address. Nextcloud reaches it through `proxy.php` on
+  its own web server, over loopback. `nft_guard` drops 9983 on every interface except loopback, and
+  `listener_metrics` lists it as a recorded exception.
+- Its process sandbox (capabilities and seccomp) is switched off by the AppImage, because it does
+  not work in an unprivileged LXC; uploaded documents are confined by the container boundary.
+- vm102's `snapraid.conf` excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`.
+- The `onlyoffice` app is disabled; editing runs through `richdocuments` alone.
 
-**The wildcard bind is real and reachable by nobody.** `coolwsd` listens on `*:9983`, but Nextcloud
-addresses it through `proxy.php` on its own web server - `wopi_url` is
-`https://nextcloud.<tailnet-id>.ts.net/apps/richdocumentscode/proxy.php?req=`. So the port is
-exposed on the LAN and nothing is supposed to reach it there. That makes this a smaller problem
-than Apache's identical deviation and a more awkward one: the app passes `--port=9983` with no
-listen address and offers no setting for one, so the fix is a packet filter rather than a
-configuration line. Grouped with the Apache bind decision rather than solved separately.
+## Access Model
 
-**The sandbox is off.** The process runs with `--o:security.capabilities=false` and
-`--o:security.seccomp=false`. Those two switches are what confine the LibreOffice processes that
-parse documents, and documents are the untrusted input here - Paperless feeds this instance from a
-consumption directory. The AppImage sets them because capability-based jailing does not work inside
-an unprivileged LXC, so this is a consequence of where Nextcloud runs rather than a misconfiguration
-anybody made. It is recorded because the risk is real and currently unmitigated: a malicious
-document is confined by the container boundary and by nothing inside it.
-
-**A second office backend is enabled and cannot work.** `onlyoffice` 9.13.0 is enabled with an
-empty `DocumentServerUrl`, so it has no server to talk to, and it has been enabled in that state
-for as long as anybody has looked. Still open: `occ app:disable onlyoffice`, which the editing path
-does not depend on - that runs through `richdocuments` and `richdocumentscode`. Reversible with
-`occ app:enable onlyoffice`, which is why it is a one-line task rather than a decision.
-
-vm102's `snapraid.conf` already excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`, so the
-component was operationally known on the storage side while being absent from the documentation.
-
-## Runtime Configuration (Sanitized)
-
-- Nextcloud version: 34.0.4, the last major that runs on Debian 12's PHP 8.2; 35 needs PHP 8.3
-- Data directory: `/mnt/nextcloud` (mounted storage)
-- DB type: `mysql`, database: `nextcloud`
-- Redis: `127.0.0.1:6379` (local Redis instance)
-- Trusted domains / overwrite URL: configured for LAN + Tailscale (values anonymized in repo)
-
-## Data / Storage Integration
-
-- Nextcloud application code: `/var/www/nextcloud`, owned by `www-data` throughout. Until
-  2026-10-08 most of it belonged to host UID 1000, which the updater cannot write; see
-  [KE-25](../platform/known-errors.md#ke-25)
-- Persistent user data: CIFS-mounted storage at `/mnt/nextcloud`
-- Ownership model: mapped to `www-data` inside the unprivileged container (UID/GID mapping via mount options)
-
-Important:
-- The database (MariaDB) runs locally inside the container and is not stored on CIFS.
-- Redis is used for file locking to avoid concurrency issues.
-- CIFS is used only for persistent user file storage.
-
-This separation keeps:
-- service runtime (container filesystem)
-- persistent user data (storage mount)
-cleanly decoupled.
-
-## Failure Impact
-
-If the CIFS mount becomes unavailable:
-- Nextcloud may start but fail to access user data.
-- Application errors will occur due to missing data directory.
-- Monitoring should detect mount or storage degradation.
-
-## Access Model (Zero Trust)
-
-### Exposure
-- No public reverse proxy.
-- No router port forwarding.
-- Service is not publicly reachable.
-
-### Network Enforcement
-
-- Remote access is provided via the Tailscale overlay network.
-- LAN access is permitted within the private network to optimize large file uploads and reduce unnecessary traffic routing through the overlay.
-- No public exposure or router port-forwarding is configured.
-- Network policy is enforced through Tailscale ACL (node tags + ACL JSON).
-- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
-
-### Transport Security
-
-- HTTPS is provided via Tailscale (MagicDNS + automatic certificates).
-- TLS certificates are stored under `/var/lib/tailscale/certs/` and used by Apache vhosts.
-- No publicly trusted certificates are exposed to the internet.
-
-## Apache VirtualHosts (Conceptual)
-
-- `*:80` internal HTTP vhost (e.g. for local access / redirect patterns)
-- `*:443` HTTPS vhost using Tailscale-provided certificates
+- Reached over the tailnet only, at `https://nextcloud.<tailnet-id>.ts.net`. Apache terminates TLS
+  with the certificate from `tailscale cert`, renewed by the `tailscale_cert` role
+  ([KE-16](../platform/known-errors.md#ke-16)).
+- No LAN access: `lan_guard` drops new inbound LAN connections, including to Apache's wildcard bind
+  ([media over the tailnet](../decisions/media-over-the-tailnet.md)).
+- No public reverse proxy, no port forwarding.
+- Grants: admin workstations, admin phone, client devices, one external user through machine
+  sharing, the monitoring probe ([tailscale-acl.md](../platform/tailscale-acl.md)).
+- Apache binds `*:80` and `*:443` instead of the Tailscale address; tracked in the
+  [remediation plan](../platform/remediation-plan.md#open-items).
 
 ## External Storage (Paperless Integration)
 
-The `files_external` app provides Nextcloud users with direct upload paths
-into Paperless-ngx consumption directories.
+The `files_external` app gives two users an upload path into Paperless-ngx:
 
-Each mount points to a dedicated SMB share on VM102, scoped to a single
-user's consumption subdirectory.
-
-| Mount ID | Nextcloud User | SMB Share | Target Path |
+| Mount ID | Nextcloud user | SMB share | Target on vm102 |
 |---|---|---|---|
-| 4 | user1 | Paperless-ingest-user1 | `/mnt/mergerfs/Paperless/consumption/user1` |
-| 5 | user2 | Paperless-ingest-user2 | `/mnt/mergerfs/Paperless/consumption/user2` |
+| 4 | user1 | `Paperless-ingest-user1` | `/mnt/mergerfs/Paperless/consumption/user1` |
+| 5 | user2 | `Paperless-ingest-user2` | `/mnt/mergerfs/Paperless/consumption/user2` |
 
-- Host: vm102's full MagicDNS name, `storage.<tailnet-id>.ts.net`, over the tailnet. The short
-  name `storage` also resolves on the LAN, where `smb_guard` on vm102 refuses lxc210; the tailnet
-  path needs [ACL Rule 15](../platform/tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares).
-  Both mounts failed from at least 2026-09-29 until that rule existed.
-- SMB user: `paperless-ingest` (global credentials, not per-session)
-- Auth method: global credentials stored in Nextcloud config (not session-based)
-- Files uploaded here are consumed and deleted by Paperless within ~30 seconds
+- Host: `storage.<tailnet-id>.ts.net`, the full MagicDNS name, over the tailnet. The short name
+  `storage` also resolves on the LAN, where `smb_guard` refuses lxc210. The path needs the
+  `nextcloud` grant to `tag:storage:445` in [tailscale-acl.md](../platform/tailscale-acl.md).
+- SMB user `paperless-ingest`, global credentials stored in Nextcloud.
+- Paperless consumes and deletes uploaded files within about 30 s.
+- `paperless-inbox-scan.timer` (role `paperless_inbox_scan`) runs `occ files:scan` on each user's
+  "Paperless Inbox" hourly, so the file cache drops consumed files.
 
-### Cache Synchronization Timer
+Repair procedures: [ingestion runbook](../../runbooks/integration/nextcloud-paperless.md).
 
-Paperless deletes consumed files from the SMB share. Nextcloud's file cache does not
-detect these deletions automatically (External Storage mounts are not monitored in real time).
+## Failure Impact
 
-A scheduled `files:scan` on LXC210 keeps the cache consistent:
-
-- Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
-- Schedule: `paperless-inbox-scan.timer` - `OnCalendar=hourly`, `Persistent=true`
-- Log: `journalctl -u paperless-inbox-scan.service`
-- Scope: scans `<user>/files/Paperless Inbox` per Nextcloud user; silently skips users without the folder
-
-Managed by the `paperless_inbox_scan` Ansible role
-(`ansible-playbook playbooks/paperless-inbox-scan.yml`), which also removed the
-previous hourly root crontab entry.
-
-`Persistent=true` matters here: the Proxmox host powers down overnight, so a plain
-cron entry loses every slot it sleeps through and never retries. The timer runs the
-overdue scan at the next boot instead. A failing run now raises the fleet-wide
-`SystemdUnitFailed` alert - as a cron job it failed silently.
-
-See: [Paperless-ngx Service Documentation](./paperless.md) - Nextcloud Integration section
-
-## Notes / Known Issues
-
-- `run-rpc_pipefs.mount` used to sit in `failed` state permanently. It is non-blocking
-  for Nextcloud (nothing here uses NFS/RPC), but a permanently failed unit is noise that
-  hides real failures once `SystemdUnitFailed` alerts on unit state. It is now masked via
-  the `systemd_hygiene` role (`host_vars/lxc210.yml`) rather than tolerated.
+- lxc210 down: no sync, no Talk, no upload path into Paperless. Data on vm102 is unaffected.
+- CIFS mount missing: Nextcloud starts but cannot read user data.
+- MariaDB lost: restore from the dump ([MariaDB restore](../../runbooks/database/mariadb-restore.md)).
 
 ## Related Documents
 
-- [LXC210 Node](../nodes/lxc210.md)
-- [Paperless-ngx Service](./paperless.md)
-- [Storage Design](../platform/storage-design.md)
-- [Tailscale ACL](../platform/tailscale-acl.md)
-- [Loopback + Tailscale Serve ADR](../decisions/loopback-tailscale-serve.md)
+- [lxc210](../nodes/lxc210.md)
+- [Paperless-ngx](./paperless.md)
+- [Storage design](../platform/storage-design.md)

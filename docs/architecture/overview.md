@@ -1,67 +1,62 @@
 # Architecture Overview
 
-The infrastructure is modular and responsibility-driven. It is designed around clear separation of
-concerns (compute vs. storage vs. services) and reboot-safe operation.
-
-This page describes the shape of the platform. It does not repeat the document index - the
-[README](../../README.md) carries that, and a second copy is the one that goes stale.
+One Proxmox host runs nine guests, separated by responsibility: compute, storage, and one service
+per container. The host and all nine guests are Ansible-managed from lxc250. The document index is
+in the [README](../../README.md#documentation).
 
 ## Components
 
 ### Hypervisor (Proxmox VE)
 
-- Hosts VMs and unprivileged LXCs
-- Startup order modeled to ensure dependencies are met during reboot
-- Single host, no cluster, no failover: recovery here is procedural, and the procedures are written
+- Runs the VMs and unprivileged LXCs, Ansible group `proxmox`
+- Single host, no cluster, no failover; recovery is procedural
+  ([platform restore](../../runbooks/platform/platform-restore.md))
+- Powers down nightly and wakes on schedule (`homelab_schedule`); every scheduled job is a systemd
+  timer with `Persistent=true`
 
 ### VMs
 
-- VM100 - Compute / GPU (Ubuntu, Docker, NVIDIA passthrough, media services)
-- VM102 - Storage (Debian, MergerFS + SnapRAID + Samba)
+- vm100 - GPU compute (Ubuntu, Docker, NVIDIA passthrough): Jellyfin, Audiobookshelf, `llama-server`
+- vm102 - storage (Debian): SnapRAID, MergerFS, Samba
 
-### Service LXCs
+### LXCs
 
-- LXC200 - Monitoring (Prometheus + Grafana + Node Exporter)
-- LXC210 - Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
-- LXC211 - Paperless-ngx (document management, Docker in LXC)
-- LXC220 - Calibre-Web (Docker in LXC)
-- LXC230 - OpenWebUI (AI stack entrypoint, Docker in LXC)
-- LXC250 - DevOps (central management workstation; Git, Ansible, IaC)
-- LXC260 - PostgreSQL (centralized platform database)
+- lxc200 - monitoring: Prometheus, Grafana, Alertmanager
+- lxc210 - Nextcloud: Apache, PHP, MariaDB, Redis
+- lxc211 - Paperless-ngx (Docker)
+- lxc220 - Calibre-Web (Docker)
+- lxc230 - OpenWebUI (Docker)
+- lxc250 - Ansible control node
+- lxc260 - PostgreSQL platform database
+
+Each node has its own document under [`docs/nodes/`](../nodes/).
 
 ## Design Principles
 
-- Separation of concerns (compute, storage, services)
-- Minimal coupling between components
-- Zero-Trust access model (access enforced via Tailscale overlay + ACL policy-as-code)
-- Least privilege access (RO/RW separation where applicable)
-- Reboot-safe operation (mount and startup dependency modeling)
+- Separation of compute, storage and services
+- Zero-trust access: the Tailscale overlay and its ACL are the only remote path
+- Least privilege: read-only media consumers, one SMB identity per service
+- Reboot safety: units that need a Tailscale address wait for it, network mounts are automounts
 
-Two of these carry a qualification that belongs next to them rather than in a document a reader
-might not reach.
+Two qualifications:
 
-**No public exposure** is true at the network boundary and not at the socket. Several services bind
-wildcard addresses, so what keeps them unreachable is a filter rather than the bind: the router's
-missing forwarding rules against the internet, and since 2026-10-01 the `lan_guard` table on every
-node against the LAN. The measured list is in [the exposure model](exposure-diagram.md).
-
-**Reboot-safe** is the design intent and was not the behaviour. Ordering a unit after `tailscaled`
-does not wait for an address, which produced the same fault four times
-([KE-18](../platform/known-errors.md#ke-18)); a plain fstab entry for a share served by a guest the
-host has not started yet is attempted once and never retried
-([KE-15](../platform/known-errors.md#ke-15)). Both classes are fixed where they were found, and
-every known KE-18 instance has been proven by a cold boot.
+- "No public exposure" holds at the network boundary, not at every socket. A few services bind
+  wildcard addresses; the router's missing forwarding rules keep the internet out and, since
+  2026-10-01, `lan_guard` on every node keeps the LAN out. The measured list is in the
+  [exposure model](exposure-diagram.md).
+- Reboot safety is enforced where the faults were found: units ordered after `tailscaled` without
+  waiting for an address ([KE-18](../platform/known-errors.md#ke-18)) and fstab mounts of shares
+  served by a guest not yet started ([KE-15](../platform/known-errors.md#ke-15)).
 
 ## Networking Layer
 
-- Zero-trust inspired access model
-- Identity-based overlay networking (Tailscale)
-- Explicit ACL segmentation between tiers
-- No public service exposure, with the qualification above
+- Identity-based overlay (Tailscale), one tag per server
+- Grants name a port, and a host where a tag holds several services
+- The policy lives in the Tailscale admin console, which is the source of truth;
+  [tailscale-acl.md](../platform/tailscale-acl.md) mirrors it and is applied by hand
+- No service is published to the LAN or the internet
 
-## The four views
-
-Start here rather than at a node document if you want to understand the platform as a whole.
+## The Four Views
 
 | View | Answers |
 |---|---|
@@ -70,8 +65,7 @@ Start here rather than at a node document if you want to understand the platform
 | [Backup and recovery](backup-flow.md) | What is copied, and what is not |
 | [Exposure model](exposure-diagram.md) | What is reachable from where |
 
-## Where to go next
+## Where to Go Next
 
-- Nodes, services, platform documents, runbooks and decision records: the [README index](../../README.md#documentation)
-- Why the trade-offs went the way they did: [Design Decisions](../decisions/design-decisions.md)
-- What is currently open, ranked by what its loss would cost: [Remediation Plan](../platform/remediation-plan.md)
+- Why the trade-offs went the way they did: [design decisions](../decisions/design-decisions.md)
+- Open work, ranked by loss risk: [remediation plan](../platform/remediation-plan.md)
