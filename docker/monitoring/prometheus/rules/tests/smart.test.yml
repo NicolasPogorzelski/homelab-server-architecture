@@ -1,7 +1,5 @@
 # promtool unit tests for the `smart` group in ../alert.rules.yml.
-# Run from this directory:
-#   podman run --rm -v "$PWD/..:/r:ro,Z" -w /r/tests --entrypoint promtool \
-#     docker.io/prom/prometheus:v3.15.0 test rules smart.test.yml
+# Run from this directory the way README.md one level up describes.
 # The 1m interval matters: input samples spaced wider than the five-minute
 # lookback make every series vanish between samples, and an alert with `for:`
 # then never leaves `pending`.

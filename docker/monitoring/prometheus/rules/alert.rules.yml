@@ -10,16 +10,9 @@ groups:
           summary: "Node {{ $labels.instance }} is down"
           description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
 
-      # Percentage is the right measure for a root filesystem and the wrong one for
-      # an archive. Before 2026-07-10 this rule fired 21 times at once, all of them
-      # the same fact: the MergerFS pool, its five member disks, and the twelve CIFS
-      # mounts through which other nodes see that pool, each nearly full. 15% of a
-      # multi-terabyte archive is a large absolute amount - a threshold a pool
-      # designed to fill will never meet again. An alert that is always red is
-      # not read.
-      #
-      # Excluded here, and covered by ArchivePoolLowSpace below instead:
-      #   - cifs: a remote view of storage some other node owns; that node alerts.
+      # Percentage suits a root filesystem, not an archive designed to fill. Excluded here
+      # and covered by ArchivePoolLowSpace instead:
+      #   - cifs: a remote view of storage another node owns; that node alerts.
       #   - the MergerFS pool and its member disks on vm102.
       - alert: DiskSpaceCritical
         expr: |
@@ -44,12 +37,8 @@ groups:
           summary: "High memory usage on {{ $labels.instance }}"
           description: "Memory usage on {{ $labels.instance }} is above 90% ({{ $value | printf \"%.1f\" }}% used)."
 
-      # 15 minutes, not 0. After a night powered down the first evaluation can
-      # come before the timer's Persistent=true catch-up has written a fresh
-      # timestamp: measured 2026-09-24, MariaDBBackupStale fired at 16:12 and
-      # resolved in the same notification, the dump having finished about three
-      # minutes after boot. A dump that has not landed a quarter of an hour into
-      # uptime is a real one.
+      # for: 15m because after the nightly power-down the first evaluation can precede the
+      # timer's Persistent=true catch-up; the dump lands a few minutes after boot.
       - alert: PostgreSQLBackupStale
         expr: (time() - pg_backup_last_success_timestamp) > 90000
         for: 15m
@@ -59,12 +48,9 @@ groups:
           summary: "PostgreSQL backup is stale"
           description: "Last successful pg_dumpall on CT260 was more than 25 hours ago."
 
-      # Same 25-hour threshold and the same blind spot as the PostgreSQL rule
-      # above: it means "not more than 25 hours of uptime without a backup", not
-      # "a backup every day", because Prometheus runs on the host that powers
-      # down overnight. Deliberately not corrected here -- on a host that sleeps
-      # by design, an alert for "the host was off" is noise, and the honest fix is
-      # the external heartbeat on the backlog.
+      # Same 25-hour threshold and the same limit as the PostgreSQL rule: Prometheus runs on
+      # the host that powers down overnight, so this means "not 25 hours of uptime without a
+      # backup". Covering host-off periods is the job of the external heartbeat (Watchdog).
       - alert: MariaDBBackupStale
         expr: (time() - mariadb_backup_last_success_timestamp) > 90000
         for: 15m
@@ -74,15 +60,10 @@ groups:
           summary: "MariaDB backup is stale"
           description: "Last successful mariadb-dump on CT210 was more than 25 hours ago. Nextcloud's file data is on the archive pool; without this database those files are unusable."
 
-      # What the two rules above cannot say, for the reason GuestBackupMetricsMissing
-      # gives: an absent series compares as nothing, so they go silent rather than
-      # red. That happened. From 2026-09-18 Prometheus scraped Debian's packaged
-      # exporter on lxc260, which reads a different textfile directory, and
-      # pg_backup_last_success_timestamp was absent for six days while the dumps
-      # kept landing. The restore tests share the gap and the same job labels, and
-      # absent() keeps only the matcher labels, so each absence is tagged with its
-      # metric name: otherwise two missing series on one job are one result under
-      # `or`, and the second hides behind the first.
+      # An absent series compares as nothing, so the staleness rules above go silent rather
+      # than red when the textfile collector is not read (wrong exporter on port 9100, for
+      # example). absent() keeps only matcher labels, so each absence is tagged with its
+      # metric name; otherwise two missing series on one job collapse into one result.
       - alert: DatabaseBackupMetricsMissing
         expr: |
           label_replace(absent(pg_backup_last_success_timestamp{job="node-lxc260-postgres"}),
@@ -100,9 +81,8 @@ groups:
           summary: "{{ $labels.metric }} is not being reported ({{ $labels.job }})"
           description: "{{ $labels.metric }} is absent on {{ $labels.job }}, so the staleness rule that reads it cannot fire. Either the textfile collector is not being read - check which exporter holds port 9100 on that node - or the job has never completed successfully and written it."
 
-      # 40 days, against a monthly schedule: one missed run is slack, two is a
-      # fault. An absent series produces no result here, so a test that has never
-      # succeeded is reported by DatabaseBackupMetricsMissing instead.
+      # 40 days against a monthly schedule: one missed run is slack, two is a fault. A test
+      # that has never succeeded has no series; DatabaseBackupMetricsMissing reports that.
       - alert: PostgreSQLRestoreTestStale
         expr: (time() - pg_restore_test_last_success_timestamp) > 3456000
         for: 0m
@@ -112,11 +92,8 @@ groups:
           summary: "PostgreSQL restore validation is overdue"
           description: "The last successful restore test on CT260 was more than 40 days ago. Dumps are still being written, but nothing has proven they can be read back."
 
-      # The same 40 days against the same monthly shape, for the database that
-      # had a dump, a staleness rule and a runbook and no proof any of it could
-      # be read back. Nextcloud's files live on the archive pool and its index
-      # lives here; a dump that restores into empty tables loses the second
-      # without touching the first, and imports without an error while doing it.
+      # Same 40 days. Nextcloud's files are on the archive pool and its index is in this
+      # database; a dump that restores into empty tables imports without an error.
       - alert: MariaDBRestoreTestStale
         expr: (time() - mariadb_restore_test_last_success_timestamp) > 3456000
         for: 0m
@@ -148,9 +125,8 @@ groups:
 
   - name: snapraid
     rules:
-      # for: 30m because the host is off for more than 26 hours before some
-      # scheduled starts (homelab_schedule), and the catch-up sync that follows
-      # needs a few minutes. Without it every such start sends one false alert.
+      # for: 30m because the host can be off for more than 26 hours before a scheduled start
+      # (homelab_schedule) and the catch-up sync needs a few minutes.
       - alert: SnapRAIDSyncStale
         expr: (time() - snapraid_sync_last_success_timestamp) > 93600
         for: 30m
@@ -160,17 +136,9 @@ groups:
           summary: "SnapRAID sync is stale"
           description: "Last successful snapraid sync on VM102 was more than 26 hours ago."
 
-      # 32 days until 2026-09-12, which was one missed run plus margin while the
-      # scrub was monthly. The scrub is weekly now, and leaving the threshold
-      # where it was would have let three consecutive runs fail in silence. Ten
-      # days is the same shape of rule as before: one missed Monday, plus room
-      # for Persistent=true to catch up an overdue run at the next boot.
-      #
-      # What this rule is actually likely to catch, now that the runs are timed:
-      # a scrub the nightly shutdown kills. The timer fires at 20:00, a 12% run
-      # costs about 105 minutes, and the host powers down at 23:30 - so an
-      # overrun is not close today, and if the array grows until it is, the
-      # script never reaches its success metric and this is what says so.
+      # Ten days against a weekly scrub: one missed Monday plus room for Persistent=true to
+      # catch up at the next boot. Also catches a scrub killed by the nightly shutdown, which
+      # never reaches its success metric.
       - alert: SnapRAIDScrubStale
         expr: (time() - snapraid_scrub_last_success_timestamp) > 864000
         for: 0m
@@ -180,28 +148,9 @@ groups:
           summary: "SnapRAID scrub is stale"
           description: "Last successful snapraid scrub on VM102 was more than 10 days ago. The scrub is weekly, so this is one missed run plus catch-up margin - check whether the run was killed before it finished."
 
-      # The four rules below were added on 2026-09-11 because the one above cannot
-      # see what a scrub achieved. Measured 2026-08-17: it was green while the
-      # oldest block in the array had gone 123 days unverified and 74% of the array
-      # had never been scrubbed at all. The job had run; it had reached almost
-      # nothing. Same shape as smart_health_passed reading PASSED for a disk with
-      # 7680 unreadable sectors, and as PostgreSQLBackupStale during an outage.
-      #
-      # The thresholds sit above the measured baseline rather than at the value
-      # anyone would want, and that is a decision rather than an oversight. A rule
-      # set where the numbers ought to be would be red from its first evaluation,
-      # and this repository has already recorded what that costs: a permanently
-      # red rule is one people learn to scroll past.
-      #
-      # The schedule they were written against has since changed, and the
-      # thresholds deliberately have not. Until 2026-09-12 the scrub was monthly
-      # at snapraid's default -p 8, which is a full pass every 12.5 months by
-      # arithmetic rather than by fault; it is now weekly at 12%, which should
-      # reach the never-scrubbed two thirds of the array in about five and a half
-      # weeks and turn the oldest-block curve before the 200-day line. Leaving
-      # these numbers alone is what makes the next few weeks a measurement: if
-      # the new cadence works, the values fall away from the thresholds on their
-      # own, and if it does not, these fire.
+      # The rule above says a scrub ran, not what it covered. These four measure coverage.
+      # Thresholds sit above the measured baseline so the rules are not red on deployment;
+      # the weekly 12% scrub is expected to pull the values below them.
       - alert: SnapRAIDScrubCoverageAging
         expr: snapraid_scrub_oldest_block_age_days > 200
         for: 1h
@@ -220,13 +169,9 @@ groups:
           summary: "{{ $value | humanizePercentage }} of the SnapRAID array is unscrubbed"
           description: "The fraction of the array no scrub has ever verified is above 0.85. Parity exists for these blocks; nothing has confirmed it can be used."
 
-      # Distinct from the two above on purpose: they mean the coverage was read and
-      # is poor, this means it was not read. The metric is written by a timer that
-      # runs independently of the sync, so an absent reading is not explained by a
-      # failed sync.
-      #
-      # for: 30m for the reason given at SnapRAIDSyncStale: the host can be off
-      # for more than 48 hours before a scheduled start.
+      # The two rules above mean coverage was read and is poor; this one means it was not
+      # read. The status timer runs independently of the sync. for: 30m as for
+      # SnapRAIDSyncStale: the host can be off for more than 48 hours before a start.
       - alert: SnapRAIDStatusStale
         expr: (time() - snapraid_status_last_run_timestamp) > 172800
         for: 30m
@@ -247,17 +192,11 @@ groups:
 
   - name: storage
     rules:
-      # The MergerFS archive is meant to fill, so a percentage threshold says
-      # nothing. What matters is whether the next write fits. Read-only consumers
-      # (Jellyfin, Audiobookshelf, Calibre) are unaffected either way; the write
-      # consumers - Nextcloud, Paperless, Vaultwarden, and the nightly pg_dumpall,
-      # whose target /mnt/backups lives on this pool - will hit ENOSPC. Capacity
-      # expansion is the lever, not deletion, so this is a warning with a long
-      # window, not a page.
-      #
-      # 100 GiB ~= two days of headroom at the observed growth rate. Measured on
-      # vm102, which owns the pool; the CIFS mounts on consumer nodes are views of
-      # this same filesystem and are excluded from DiskSpaceCritical for that reason.
+      # The archive is meant to fill, so what matters is whether the next write fits. Write
+      # consumers (Nextcloud, Paperless, pg_dumpall to /mnt/backups) hit ENOSPC; read
+      # consumers are unaffected. The remedy is capacity, hence a warning with a long window.
+      # 100 GiB is about two days of headroom at the observed growth rate. Measured on vm102,
+      # which owns the pool; CIFS views of it are excluded from DiskSpaceCritical.
       - alert: ArchivePoolLowSpace
         expr: node_filesystem_avail_bytes{fstype="fuse.mergerfs"} < 100 * 1024 * 1024 * 1024
         for: 1h
@@ -265,20 +204,12 @@ groups:
           severity: warning
         annotations:
           summary: "MergerFS archive pool below 100 GiB free on {{ $labels.instance }}"
-          description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, Vaultwarden, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
+          description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
 
-      # The share model on vm102 grants each consumer access through a group. That
-      # only holds while the group is the path actually being used, and from the
-      # pool's creation on 2025-12-26 until 2026-08-16 it was not: every object
-      # also carried read permission for "other", so access worked regardless of
-      # what the groups said. The sweep that found it counted the wrong groups
-      # and zero objects a service could not read.
-      #
-      # The metric behind this rule exists so that the intended mechanism is the
-      # only mechanism, and so that a return to the old state is visible.
-      #
-      # for: 1h because a repair run produces transient drift while it works, and
-      # because a weakened boundary is not an outage.
+      # Access on vm102 is granted through groups only. This metric counts objects that
+      # deviate from the matrix, for example read permission for "other", which would let
+      # access work regardless of the groups (docs/platform/storage-permissions.md).
+      # for: 1h because a repair run produces transient drift while it works.
       - alert: StoragePermissionDrift
         expr: sum(storage_permission_violations) > 0
         for: 1h
@@ -288,10 +219,8 @@ groups:
           summary: "Storage permission matrix violated on {{ $labels.instance }}"
           description: "{{ $value }} objects on the MergerFS branches deviate from the target matrix in /etc/storage-permissions.conf. Run `storage-permissions.sh --check` on vm102 for the breakdown, `--apply` to repair. See docs/platform/storage-permissions.md."
 
-      # Without this, a check that stops running looks exactly like a check that
-      # keeps passing - the metric simply holds its last value forever. Every
-      # textfile collector on this platform needs its own staleness rule for that
-      # reason; LvmThinMetricsStale is the same guard one layer down.
+      # A collector that stops running leaves its last value in place, which looks like a
+      # passing check. Every textfile collector here has a staleness rule for that reason.
       - alert: StoragePermissionCheckStale
         expr: (time() - storage_permission_check_timestamp_seconds) > 172800
         for: 0m
@@ -303,21 +232,11 @@ groups:
 
   - name: lvm
     rules:
-      # A thin pool is a block-layer object with no filesystem and no mount point, so
-      # node_filesystem_* cannot see it and no DiskSpaceCritical-style rule can be written
-      # against it. The metrics below come from lvm-thin-metrics.sh, a node_exporter textfile
-      # collector on the Proxmox host (added 2026-08-10). Before that the pool was unobservable:
-      # it was found at 92.55% by a manual audit, thirteen days after being recorded at 86.15%.
-      #
-      # Why this matters more than a full filesystem: overflowing a thin pool corrupts whatever
-      # was mid-write, which on this host means packages during apt. That is KE-7, and it has
-      # already happened here once.
-      #
-      # Thresholds are set against a measured ~0.49 pp/day: 85% leaves roughly a month before
-      # the pool is full, 90% roughly three weeks. Both are long windows on purpose, because
-      # the remedy is slow. Check lvm_vg_free_bytes before reaching for `lvextend` - on this
-      # host it is 0, the VG is fully allocated, and extending the pool first requires shrinking
-      # root/swap or adding a PV. See runbooks/platform/lvm-thin-pool-full.md.
+      # A thin pool has no filesystem, so node_filesystem_* cannot see it. The metrics come
+      # from lvm-thin-metrics.sh, a textfile collector on the Proxmox host. Overflowing a
+      # thin pool corrupts in-flight writes (KE-7). 85% and 90% leave weeks at the measured
+      # growth rate, because the remedy is slow: the VG has no free extents, so lvextend
+      # first needs root/swap shrunk or a new PV. See runbooks/platform/lvm-thin-pool-full.md.
       - alert: LvmThinPoolWarning
         expr: lvm_thin_pool_data_percent > 85
         for: 1h
@@ -336,9 +255,8 @@ groups:
           summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} at {{ $value | printf \"%.2f\" }}% allocated"
           description: "Overflow corrupts in-flight writes across every guest on this pool (KE-7). Do not start an apt upgrade. Reclaim via lxc-fstrim.service, then check lvm_vg_free_bytes to see whether lvextend is even available."
 
-      # Metadata exhaustion is the worse failure: the pool flips read-only and recovery is far
-      # more involved than for a full data area. It sits at ~3.4% here, so any approach to 80%
-      # is anomalous rather than gradual, and 15m is enough of a window.
+      # Metadata exhaustion flips the pool read-only and is harder to recover than a full
+      # data area. Usage sits at a few percent, so any approach to 80% is anomalous.
       - alert: LvmThinPoolMetadataCritical
         expr: lvm_thin_pool_metadata_percent > 80
         for: 15m
@@ -348,16 +266,11 @@ groups:
           summary: "Thin pool {{ $labels.vg }}/{{ $labels.lv }} metadata at {{ $value | printf \"%.2f\" }}%"
           description: "Metadata exhaustion makes the pool read-only. This is not the same failure as a full data area and is harder to undo."
 
-      # The collector exits non-zero on failure, so a broken run reaches SystemdUnitFailed. That
-      # does not cover the timer being stopped or masked, in which case the last .prom file stays
-      # in place and every rule above keeps evaluating a frozen value that looks healthy. Alert on
-      # the file's age instead - the same "absence of a failure is not success" trap that hid the
-      # container fstrim units for months.
+      # A failed run reaches SystemdUnitFailed; a stopped or masked timer does not, and the
+      # last .prom file keeps every rule above evaluating a frozen value. Alert on its age.
       - alert: LvmThinMetricsStale
-        # node_exporter labels this with the *full path*, not the basename, so an exact match on
-        # "lvm-thin.prom" silently matches nothing and the alert never fires. Anchored regex
-        # instead, which also survives the textfile directory moving when the host is adopted
-        # into Ansible.
+        # node_exporter labels the file with its full path, so match an anchored regex, not
+        # the basename.
         expr: time() - node_textfile_mtime_seconds{file=~".*/lvm-thin\\.prom$"} > 900
         for: 5m
         labels:
@@ -368,18 +281,9 @@ groups:
 
   - name: systemd
     rules:
-      # A unit stuck in `failed` fits none of the other alert categories: the node
-      # is up (NodeDown quiet), the disk is fine, and blackbox only knows whether a
-      # port answers. calibre-import.service failed every 2 minutes for a month
-      # while every dashboard stayed green (KE-15).
-      #
-      # `for: 15m` absorbs boot-window transients - units that fail once because a
-      # network mount is not up yet and succeed on the next trigger. Anything still
-      # failed a quarter of an hour after the fact is a real fault.
-      #
-      # This rule deliberately carries no exception list. Units that can never
-      # succeed on a node are masked or removed at the source by the
-      # `systemd_hygiene` Ansible role, so that every alert here means something.
+      # A unit stuck in `failed` is invisible to NodeDown and blackbox (KE-15). for: 15m
+      # absorbs boot-window failures that succeed on the next trigger. No exception list:
+      # units that cannot succeed on a node are masked or removed by `systemd_hygiene`.
       - alert: SystemdUnitFailed
         expr: node_systemd_unit_state{state="failed"} == 1
         for: 15m
@@ -391,11 +295,8 @@ groups:
 
   - name: backup
     rules:
-      # Weekly job, so the threshold is one missed run plus margin rather than a
-      # tight fit. The host sleeps two thirds of the day and the timer carries
-      # Persistent=true, which means a slot missed while the machine was off is
-      # made up at the next boot -- an alert at eight days would fire on a normal
-      # late catch-up and teach everyone to ignore it.
+      # Weekly job: one missed run plus margin. Persistent=true makes up a slot missed while
+      # the host was off, so a tighter threshold would fire on a normal catch-up.
       - alert: GuestBackupStale
         expr: (time() - guest_backup_last_run_timestamp_seconds) > 864000
         for: 0m
@@ -405,14 +306,9 @@ groups:
           summary: "Guest backup is stale"
           description: "The last vzdump run of all VMs and LXCs finished more than 10 days ago. Every guest root disk lives in one thin pool on the boot SSD, so this is the only copy of the machines themselves."
 
-      # Separate from the unit failing. The script keeps going after a guest
-      # errors, on purpose -- the guest list is ordered by value and aborting at
-      # the first fault would sacrifice every guest after it -- so a partial run
-      # exits non-zero AND leaves this counter above zero. SystemdUnitFailed sees
-      # the run; this says how much of it was lost. A run that ends early - a
-      # failed pre-flight check, an error, a stop at shutdown - counts every guest
-      # it did not finish, so this also fires after the reboot has cleared the
-      # unit's failed state.
+      # The script continues past a failed guest, so a partial run exits non-zero and leaves
+      # this counter above zero. A run that ends early counts every unfinished guest, so this
+      # still fires after a reboot has cleared the unit's failed state.
       - alert: GuestBackupPartial
         expr: guest_backup_failed_guests > 0
         for: 0m
@@ -422,11 +318,8 @@ groups:
           summary: "{{ $value }} guest(s) failed to back up"
           description: "The last vzdump run left {{ $value }} guest(s) without a new archive, by a non-zero exit or by ending early. Check `journalctl -u guest-backup.service` for which."
 
-      # The case the two rules above cannot express. Both compare against a
-      # metric, so both go silent -- not red -- if the collector stops writing or
-      # the job was never installed on a rebuilt host. absent() is the only form
-      # that fires on nothing being there, the same reason LvmThinMetricsStale
-      # exists next to the thresholds it guards.
+      # Both rules above compare against a metric and go silent if it is absent. absent()
+      # fires when the job was never deployed or its collector stopped writing.
       - alert: GuestBackupMetricsMissing
         expr: absent(guest_backup_last_run_timestamp_seconds)
         for: 30m
@@ -436,9 +329,8 @@ groups:
           summary: "No guest backup metrics are being reported"
           description: "guest_backup_last_run_timestamp_seconds is absent. Either the job was never deployed on this host, or its textfile collector stopped writing - both read as green on every other backup rule."
 
-      # The host configuration archive is daily and three seconds of work, so
-      # four days covers a long weekend with the host off and nothing more. One
-      # rule for both shapes of silence: a stale timestamp, and none at all.
+      # Daily job of a few seconds; four days covers a long weekend with the host off. One
+      # rule for both a stale timestamp and a missing one.
       - alert: HostConfigBackupStale
         expr: (time() - host_config_backup_last_success_timestamp_seconds) > 345600 or absent(host_config_backup_last_success_timestamp_seconds)
         for: 30m
@@ -448,20 +340,14 @@ groups:
           summary: "Host configuration backup is stale or missing"
           description: "No host configuration archive in four days, or no metric at all. Without it a rebuild of the hypervisor has the guest archives and not the host they expect - see runbooks/platform/platform-restore.md."
 
-    # Known limitation, recorded rather than worked around. Prometheus runs on
-    # lxc200, on the host these backups protect, so none of these rules can see
-    # an outage of that host: no scrape happens, and Persistent=true refreshes
-    # the timestamp before Prometheus is back. They mean "not more than 10 days
-    # of uptime without a backup", not "a backup every 10 days". Identical class
-    # to PostgreSQLBackupStale, and to the host node_exporter whose own failure
-    # stopped the host from reporting it. The general fix is the external
-    # heartbeat in remediation-plan.md Tier 4, not a different threshold here.
+    # Prometheus runs on the host these backups protect, so these rules cannot see the host
+    # being off: they mean "not 10 days of uptime without a backup". The external
+    # heartbeat (Watchdog) covers host-off periods.
 
   - name: offsite
     rules:
-      # The run reports its own outcome rather than leaving the alert to infer it
-      # from a timestamp. A restic run that fails halfway still updates nothing
-      # else, so without this the only symptom would be staleness a day later.
+      # The run reports its own outcome, so a failure shows within minutes rather than as
+      # staleness a day later.
       - alert: OffsiteBackupFailed
         expr: offsite_backup_success == 0
         for: 15m
@@ -471,16 +357,8 @@ groups:
           summary: "Off-site backup on {{ $labels.instance }} did not complete"
           description: "The last off-site run exited non-zero. Read `journalctl -u offsite-backup.service` on the node; the runbook is runbooks/backup/offsite-backup.md."
 
-      # 50 hours, not 25: the job runs daily but the host sleeps overnight and a
-      # first upload over a domestic uplink can outlast a single waking day.
-      #
-      # This rule shares the blindness PostgreSQLBackupStale already documents.
-      # Prometheus runs on the same site as the thing it watches, so a period
-      # with the host off produces no scrape, and Persistent=true refreshes the
-      # timestamp before Prometheus is back. It means "not more than 50 hours of
-      # uptime without an off-site copy", which is a weaker sentence than it
-      # looks and is deliberately not fixed here - the answer to that class is
-      # the external heartbeat in the remediation plan, not a longer window.
+      # 50 hours, not 25: the job runs daily, the host sleeps overnight, and a first upload
+      # can outlast one waking day. Like the other staleness rules it counts uptime only.
       - alert: OffsiteBackupStale
         expr: time() - offsite_backup_last_run_timestamp_seconds > 180000
         for: 1h
@@ -490,11 +368,7 @@ groups:
           summary: "No off-site backup from {{ $labels.instance }} in over two days"
           description: "offsite_backup_last_run_timestamp_seconds is {{ $value | humanizeDuration }} old."
 
-      # Reading the repository's structure proves it is consistent; reading data
-      # back proves the bytes are there. The weekly sample is what separates this
-      # from the guards this platform keeps finding fault with - smart_health_passed,
-      # SnapRAIDScrubStale - which report that a job ran rather than that it
-      # achieved anything.
+      # Reading data back proves the bytes exist; a structural check alone does not.
       - alert: OffsiteBackupUnverified
         expr: time() - offsite_backup_last_verify_timestamp_seconds > 1296000
         for: 1h
@@ -504,35 +378,15 @@ groups:
           summary: "Off-site data from {{ $labels.instance }} has not been read back in 15 days"
           description: "The weekly --read-data-subset check has not run. The repository may be structurally sound and unreadable in substance."
 
-      # Absent is not zero. A node that never deploys the role, or whose textfile
-      # write fails, exports nothing at all - which every rule above reads as
-      # silence rather than as a fault.
-      # OffsiteBackupMetricsMissing was here and is withdrawn until the target
-      # exists, 2026-09-12. Its expression was `absent(offsite_backup_success)`,
-      # which is true and will stay true until the VPS is bought: no node runs the
-      # role, so nothing writes the metric. It fired within an hour of these rules
-      # first being deployed.
-      #
-      # A rule that is red by construction is the thing this repository keeps
-      # arguing against - the percentage threshold on a pool designed to fill, the
-      # level thresholds the SMART rules avoid, the sweep entry that teaches a
-      # reader to skip the whole report. `ansible/drift-sweep.conf` already
-      # excludes the offsite playbook for exactly this reason and says to add it
-      # back the day the machine answers. This belongs in the same sentence.
-      #
-      # The other three rules in this group need no such treatment: each reads a
-      # series that does not exist yet, so each is inert rather than red.
-      #
-      # Restore it in the same change as the first successful run. What covers the
-      # gap meanwhile is not a rule but the remediation plan, where "no off-site
-      # copy" is Tier 1 item 3 and the most-read open item in the repository.
+      # No absent() rule for this group yet: no node runs offsite_backup until the target
+      # VPS exists, so absent(offsite_backup_success) would be red by construction. Add it in
+      # the same change as the first successful run. The three rules above read series that
+      # do not exist yet, so they are inert rather than red. Open item: remediation plan.
 
   - name: snapshot
     rules:
-      # The weekly snapshot of the fleet's unmanaged surface. Fourteen days is one
-      # missed Sunday plus margin: the host sleeps nightly and the timer carries
-      # Persistent=true, so a Sunday spent powered down is made up at the next
-      # boot and a tighter threshold would fire on an ordinary catch-up.
+      # Fourteen days is one missed Sunday plus margin; Persistent=true makes up a Sunday
+      # spent powered down at the next boot.
       - alert: FleetSnapshotStale
         expr: (time() - fleet_snapshot_last_run_timestamp_seconds) > 1209600
         for: 0m
@@ -542,11 +396,8 @@ groups:
           summary: "Fleet snapshot is stale"
           description: "No fleet snapshot has completed for more than 14 days. Nothing is comparing the fleet's listening sockets, local unit files, crontabs and mounts against last week's."
 
-      # A snapshot taken while three nodes were unreachable records those three as
-      # empty and writes that as the new baseline; next week their real state
-      # returns and reads as fresh drift. Worse, the run in between looks clean.
-      # This is the guard-cannot-measure case stated as a metric rather than left
-      # to whoever opens the diff.
+      # A snapshot taken while nodes were unreachable records them as empty and writes that
+      # as the new baseline, so missing hosts are reported as a metric.
       - alert: FleetSnapshotIncomplete
         expr: fleet_snapshot_hosts_recorded < fleet_snapshot_hosts_expected
         for: 0m
@@ -556,21 +407,15 @@ groups:
           summary: "Fleet snapshot covered {{ $value }} of the expected hosts"
           description: "At least one inventory host did not answer during the last snapshot. Its file reads [unreachable], which is deliberately not the same as an empty one."
 
-    # There is deliberately no rule on fleet_snapshot_changed_lines. Drift here is
-    # the expected weekly output, not a fault, and an alert that nobody can clear
-    # by acting on it becomes the permanent red that Check 23's rationale in
-    # CLAUDE.md argues against. The metric is exported so the count is visible in
-    # a dashboard and in the review; the judgement about whether a change matters
-    # stays with the person reading the diff.
+    # No rule on fleet_snapshot_changed_lines: drift is the expected weekly output and
+    # cannot be cleared by acting on it. The metric is exported for dashboards; whether a
+    # change matters is judged when reading the diff.
 
   - name: drift
     rules:
-      # The weekly sweep runs every playbook in ansible/drift-sweep.conf with
-      # --check and counts the tasks that would change. `unexpected` is that
-      # count minus the baseline in the same file, so drift held on purpose - the
-      # hypervisor's hand-written sshd drop-in, its node_exporter, the unapplied
-      # homelab_schedule - does not keep this permanently red. Anything above the
-      # baseline is a node running something the repository does not describe.
+      # The weekly sweep runs every playbook in ansible/drift-sweep.conf with --check.
+      # `unexpected` is the changed-task count minus the baseline in that file, so drift held
+      # on purpose does not keep this red.
       - alert: FleetDriftUnexpected
         expr: fleet_drift_unexpected_total > 0
         for: 0m
@@ -580,9 +425,7 @@ groups:
           summary: "{{ $value }} task(s) drifted beyond the recorded baseline"
           description: "The weekly check-mode sweep found changes no baseline entry accounts for. Read /var/lib/fleet-drift/report.txt on lxc250 for the playbook and host."
 
-      # Fourteen days is one missed Saturday plus margin, matching the snapshot rule
-      # beside it: the host sleeps nightly and Persistent=true makes an overdue
-      # sweep run at the next boot rather than at the scheduled minute.
+      # Fourteen days is one missed Saturday plus margin, as for the snapshot rule.
       - alert: FleetDriftStale
         expr: (time() - fleet_drift_last_run_timestamp_seconds) > 1209600
         for: 0m
@@ -592,9 +435,8 @@ groups:
           summary: "Drift sweep is stale"
           description: "No check-mode sweep has completed for more than 14 days. Nothing is comparing the repository against what the fleet runs."
 
-      # A sweep that could not run half its playbooks reports little drift and
-      # looks reassuring. The count of what could not be measured therefore gets
-      # its own rule rather than a line in a report nobody opens.
+      # A sweep that could not run some playbooks under-reports drift, so what could not be
+      # measured gets its own rule.
       - alert: FleetDriftIncomplete
         expr: (fleet_drift_playbooks_errored > 0) or (fleet_drift_hosts_unreachable > 0)
         for: 0m
@@ -604,11 +446,8 @@ groups:
           summary: "Drift sweep could not measure everything"
           description: "At least one playbook produced no usable recap, or a host was unreachable. The drift figures from this run are a lower bound, not a result."
 
-      # The layer a check run cannot reach. prometheus_config promotes the rules
-      # file and reloads; if that reload failed, the file on disk matches the
-      # repository while the rules in memory are the previous set - the shape of
-      # KE-16, where a renewed certificate sat on disk beside the expired one
-      # Apache was still serving.
+      # prometheus_config promotes the rules file and reloads. If the reload failed, the
+      # file on disk matches the repository while Prometheus holds the previous set.
       - alert: FleetRulesMismatch
         expr: fleet_drift_rules_mismatch > 0
         for: 0m
@@ -618,9 +457,8 @@ groups:
           summary: "{{ $value }} alert name(s) differ between the repository and Prometheus"
           description: "The alert rules Prometheus has loaded are not the rules this repository holds. Either the rules file was never deployed, or it was deployed and the reload did not take."
 
-      # Distinct from the rule above on purpose: that one means the comparison ran
-      # and found a difference, this one means it never ran. Absence of a mismatch
-      # is not agreement.
+      # The rule above means the comparison found a difference; this one means it did not
+      # run.
       - alert: FleetRulesUnverified
         expr: fleet_drift_rules_check_ok == 0
         for: 0m
@@ -630,11 +468,8 @@ groups:
           summary: "Loaded alert rules could not be compared"
           description: "The last sweep could not read /api/v1/rules from the monitoring node, so nothing is checking that Prometheus loaded what the repository holds."
 
-      # Loaded is not the same as working. A rule whose expression errors at
-      # evaluation - a join that turns many-to-many, a function on the wrong type -
-      # produces no result, which a rule written as `> 0` cannot tell from health.
-      # Prometheus counts each failure per group; any in fifteen minutes is a rule
-      # that is currently blind.
+      # A rule whose expression errors at evaluation produces no result, which a `> 0` rule
+      # cannot tell from health. Any failure in fifteen minutes is a blind rule.
       - alert: PrometheusRuleEvaluationFailing
         expr: sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[15m])) > 0
         for: 0m
@@ -646,20 +481,10 @@ groups:
 
   - name: kernel
     rules:
-      # Added 2026-08-20 after a kernel oops cascade wedged the hypervisor for
-      # two hours. node_exporter sets this label whenever a filesystem stops
-      # answering `statfs` within its mount timeout - it is the only collector
-      # with such a timeout, which is why it kept reporting while everything
-      # else on the host blocked.
-      #
-      # During the incident the value read 1 for /var/lib/lxcfs from the first
-      # minute, in every single scrape, and nothing looked at it. Same class as
-      # `smart_health_passed` reading PASSED on a disk with 7680 unreadable
-      # sectors: the measurement existed, the guard did not.
-      #
-      # Five minutes, not fifteen: a wedged FUSE mount is repairable by
-      # restarting its daemon only while sessions can still be created. Past
-      # that point systemd itself is caught and the only way out is a reset.
+      # node_exporter sets this when a filesystem does not answer statfs within its mount
+      # timeout; it keeps reporting while the rest of the host blocks. Five minutes, not
+      # fifteen: a wedged FUSE mount can be fixed by restarting its daemon only while new
+      # sessions can still be created; after that only a reset helps.
       - alert: FilesystemMountTimeout
         expr: node_filesystem_device_error > 0
         for: 5m
@@ -669,33 +494,13 @@ groups:
           summary: "{{ $labels.mountpoint }} on {{ $labels.instance }} is not answering"
           description: "node_exporter cannot stat {{ $labels.mountpoint }} ({{ $labels.fstype }}). If this is a FUSE mount, restart its daemon NOW - once systemd is caught, only a hard reset remains. See runbooks/platform/hard-shutdown-recovery.md."
 
-      # SystemdUnitFailed cannot express this, and the difference is structural
-      # rather than a matter of thresholds. A unit that hangs stays `activating`
-      # forever and never becomes `failed`, because it never reaches a timeout.
-      # Three units sat in `activating` for two hours on 2026-08-20 while the
-      # failed-unit rule read green - correctly, by its own definition.
-      #
-      # Thirty minutes tolerates the slow-but-legitimate cases (a Type=notify
-      # service waiting on a network dependency, a long fsck) without tolerating
-      # a hang.
-      #
-      # `.device` units are excluded, and the exclusion is not a threshold
-      # adjustment. systemd holds a device unit in `activating (tentative)` for
-      # as long as udev has not tagged the device with `systemd`, which for some
-      # devices is forever. Measured on the hypervisor on 2026-09-09:
-      # `dev-fuse.device` reads `activating/tentative` with an empty
-      # `ActiveEnterTimestamp` - it has never been active and never will be -
-      # while `/dev/fuse` is open by lxcfs and pmxcfs and works. The rule was
-      # written on 2026-09-08 and this was its first real firing, on a device
-      # that is not broken, on a host that would have reported it after every
-      # single boot. An alert that is red by construction is one people learn to
-      # dismiss, which would have cost the rule the service hangs it exists for.
-      #
-      # `snapraid-maintenance@` is excluded for a different reason: a oneshot
-      # stays `activating` for its whole run, and a scrub of 12 % took 8095 s on
-      # 2026-10-12, so the rule fired every week on a run that was working. The
-      # units carry `TimeoutStartSec=infinity` by design, and a hung sync or
-      # scrub is what SnapRAIDSyncStale and SnapRAIDScrubStale already report.
+      # A hung unit stays `activating` and never becomes `failed`, so SystemdUnitFailed
+      # cannot see it. 30 minutes tolerates slow but legitimate starts.
+      # Excluded:
+      #   - `.device` units: systemd holds some in `activating (tentative)` indefinitely
+      #     while the device works (dev-fuse.device on the hypervisor).
+      #   - `snapraid-maintenance@`: a oneshot is `activating` for its whole run, and a 12%
+      #     scrub takes over two hours. Hung runs are SnapRAIDSyncStale/ScrubStale.
       - alert: SystemdUnitStuckActivating
         expr: node_systemd_unit_state{state="activating", name!~".*\\.device|snapraid-maintenance@.*\\.service"} == 1
         for: 30m
@@ -707,17 +512,10 @@ groups:
 
   - name: smart
     rules:
-      # The three error counters re-keyed by serial number. smartmon labels
-      # every attribute with `disk`, the kernel letter, and the letters move
-      # between boots: one `disk="/dev/sdi"` series alternates between the
-      # KE-13 aux-disk and an IronWolf reading 0, so any window over it sees a
-      # rise that no disk made. Raw value and device_info come from the same
-      # textfile, so the join is consistent even when a boot still serves the
-      # file the previous boot wrote.
-      #
-      # A daytime reboot is shorter than the five-minute lookback, so for a few
-      # minutes after it two device_info series share one letter and a plain
-      # join fails as many-to-many. This map keeps only the newest per letter.
+      # The three error counters re-keyed by serial number. smartmon labels attributes with
+      # the kernel letter, which moves between boots, so a window over `disk` can see a rise
+      # no disk made. After a short reboot two device_info series can share one letter for a
+      # few minutes; this map keeps only the newest per letter.
       - record: disk:smartmon_device_info:latest
         expr: |
           smartmon_device_info
@@ -742,20 +540,11 @@ groups:
             * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
           )
 
-      # Growth, not level. Three of the nine disks would trip a level-based rule
-      # the day it was written - the KE-13 aux-disk alone reports 21 reported
-      # uncorrectable errors and thousands of pending sectors - and a rule that
-      # is red from the first day is a rule people learn to scroll past. The
-      # question that matters is whether those numbers are still moving.
-      #
-      # Above the 25-hour minimum rather than increase(): these raw values are
-      # gauges, and a pending count that falls when the drive rewrites a sector
-      # would read to increase() as a counter reset followed by a full rise.
-      # 25h, not 24h: the host powers down overnight, so a 24-hour window can
-      # close entirely inside a period with no scrapes in it.
-      #
-      # The join after the `or` only puts the current kernel letter and the model
-      # on the alert, so the summary names something a person can find.
+      # Growth, not level: several disks already carry non-zero counters (the aux-disk,
+      # KE-13), so a level rule would be red on deployment. Compared with the 25-hour minimum
+      # rather than increase(), because these raw values are gauges that can fall. 25h, not
+      # 24h, because the nightly power-down can leave a 24-hour window without scrapes. The
+      # join after `or` adds the current kernel letter and model to the alert.
       - alert: SmartAttributeDegrading
         expr: |
           (
@@ -775,10 +564,8 @@ groups:
           summary: "{{ $labels.device_model }} ({{ $labels.disk }} at this boot) on {{ $labels.instance }} gained unreadable sectors in the last day"
           description: "A SMART error counter on serial {{ $labels.serial_number }} rose above its 25-hour minimum and now reads {{ $value }}. The disk is degrading now, not historically. Read `smartctl -A` on the host via /dev/disk/by-id - the kernel letter in this alert is only valid until the next boot."
 
-      # A level rule is right for this one: every disk on this host reads 0, and
-      # the first reallocation is the event worth waking up for. Reallocation
-      # means the drive has spent a spare block, which pending sectors have not
-      # yet done.
+      # A level rule fits here: every disk reads 0, and a reallocation means a spare block
+      # has been spent.
       - alert: SmartReallocatedSectors
         expr: smartmon_reallocated_sector_ct_raw_value > 0
         for: 1h
@@ -786,13 +573,11 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.disk }} on {{ $labels.instance }} has reallocated sectors"
-          description: "smartmon_reallocated_sector_ct_raw_value is {{ $value }} on {{ $labels.disk }}. Every disk here read 0 when this rule was written, so any value is new."
+          description: "smartmon_reallocated_sector_ct_raw_value is {{ $value }} on {{ $labels.disk }}. A healthy disk reports 0, so any value is a change worth a look."
 
-      # The normalised value, which runs 100 down to the threshold, not the raw
-      # program-erase count. The boot SSD reads 47 at 639 cycles with a threshold
-      # of 0, so 20 leaves roughly the same margin again before the vendor calls
-      # the drive spent. It is the only SSD on this host and therefore the only
-      # disk carrying the attribute.
+      # The normalised value (100 down to the vendor threshold of 0), not the raw cycle
+      # count. 20 leaves margin before the vendor calls the drive spent. Only the boot SSD
+      # carries this attribute (KE-14).
       - alert: SmartWearLevelingLow
         expr: smartmon_wear_leveling_count_value < 20
         for: 1h
@@ -802,13 +587,9 @@ groups:
           summary: "{{ $labels.disk }} on {{ $labels.instance }} is near its rated write endurance"
           description: "Normalised wear leveling is {{ $value }} on {{ $labels.disk }}. This disk carries every guest root disk; see KE-14."
 
-      # The absence rule the other three depend on. A collector that stops
-      # running exports nothing, and nothing is what a healthy disk also looks
-      # like to a rule written as `> 0`. Same construction as
-      # LvmThinMetricsStale and PostgreSQLRestoreTestStale.
-      #
-      # The timer runs every 15 minutes; two hours tolerates a boot window and a
-      # missed run without reporting on a host that is merely asleep.
+      # Guards the three rules above: a stopped collector exports nothing, which looks
+      # healthy to a `> 0` rule. The timer runs every 15 minutes; two hours tolerates a boot
+      # window and a missed run.
       - alert: SmartMetricsStale
         expr: time() - max by (instance) (smartmon_smartctl_run) > 7200
         for: 15m
@@ -816,63 +597,18 @@ groups:
           severity: warning
         annotations:
           summary: "SMART metrics on {{ $labels.instance }} are stale"
-          description: "No smartmon collector run in over two hours. Disk degradation is unobserved while this is firing, which is the state the platform was in until 2026-09-09."
+          description: "No smartmon collector run in over two hours. Disk degradation is unobserved while this is firing."
 
-    # All nine disks are attached to the Proxmox HOST; VM102 reaches seven of them by
-    # `by-id` passthrough and sees only virtio-SCSI devices, so SMART data is
-    # readable only on the host. An earlier version of this comment named VM102 as
-    # the target and was wrong (see KE-14).
-    #
-    # The metrics come from Debian's prometheus-node-exporter-collectors
-    # (`smartmon.sh`), deployed by the `smart_metrics` role. They replaced a
-    # hand-written collector that exported `smart_health_passed` and
-    # `smart_temperature_celsius` and nothing else. The first of those read 1 for
-    # the disk with 7680 unreadable sectors, because Current_Pending_Sector
-    # normalises to VALUE=054 against THRESH=000 and can never trip the drive's
-    # own self-assessment. An alert on it would have been worse than none.
+    # All disks are attached to the Proxmox host; vm102 sees passthrough virtio-SCSI
+    # devices, so SMART data is readable only on the host (KE-14). The metrics come from
+    # Debian's prometheus-node-exporter-collectors (`smartmon.sh`), deployed by the
+    # `smart_metrics` role. The drive's overall health flag is not used: a disk with
+    # thousands of pending sectors still reads PASSED.
 
-  # === heartbeat ===
-  #
-  # An alert that is always firing, on purpose, routed out of this building.
-  #
-  # The measurement behind it, 2026-08-14: PostgreSQLBackupStale could not see
-  # three backup-free days, because Prometheus runs on the host that was off. No
-  # scrape happened, and by the time Prometheus returned, the timer's
-  # Persistent=true catch-up had already refreshed the timestamp. That is not a
-  # threshold to retune. An observer inside the failure domain it observes cannot
-  # report the domain failing - the same shape as the host node_exporter whose own
-  # death is what stops the host reporting.
-  #
-  # The inversion is the whole idea, and it is what kube-prometheus ships this rule
-  # for: every other rule here fires when something is wrong, and this one fires
-  # continuously so that its *absence* is the signal. Silence at the receiver means
-  # the chain is down somewhere between the expression and the notification - which
-  # includes the host being off, Prometheus being dead, Alertmanager being dead, and
-  # the network in between.
-  #
-  # The receiver has to be operated by somebody else. A self-hosted one needs a
-  # watcher of its own and the argument restarts one machine further out. Routing
-  # is in alertmanager.yml (see the `heartbeat` receiver there); nothing about this
-  # rule depends on which provider that is.
-  #
-  # Note this fleet already builds absence-alerts twice - LvmThinMetricsStale and
-  # PostgreSQLRestoreTestStale - both of which live inside the thing they watch.
-  # This one is the same idea applied to the alerting chain, from outside it.
-  # Patch level, which nothing on this platform measured until 2026-09-17. The
-  # numbers that prompted it, read by hand on 2026-09-16: 228 packages pending on
-  # the hypervisor with 55 of them security, 62 and 23 on vm102, 13 and 7 on
-  # lxc220, and `unattended_upgrades` running on exactly one node.
-  #
-  # The threshold is a duration, not a count. One security update outstanding for
-  # an afternoon is normal operation on a fleet patched by hand; the same update
-  # outstanding for a fortnight is the thing worth a message. `for: 14d` is
-  # deliberately longer than the weekly window somebody would patch in, so the
-  # rule fires at a backlog rather than at a Tuesday.
-  #
-  # Origin rather than package name: Debian's apt.sh breaks pending upgrades down
-  # by repository origin, and the security pockets are the only ones that carry
-  # `-Security` or `-security` in their label on both Debian and Ubuntu, which is
-  # the one node that is not Debian.
+  # Patch level from Debian's apt.sh collector, by repository origin: the security
+  # pockets are the only ones labelled `-Security`/`-security` on Debian and Ubuntu.
+  # The threshold is a duration, not a count: for: 14d is longer than the window in
+  # which updates are applied by hand, so the rule fires at a backlog.
   - name: apt
     rules:
       - alert: AptSecurityUpdatesPending
@@ -884,9 +620,8 @@ groups:
           summary: "{{ $value }} security update(s) pending on {{ $labels.instance }} for two weeks"
           description: "Security updates have been outstanding on this node for fourteen days. apt-upgrade.yml is run by hand and is excluded from the weekly drift sweep, so nothing else reports this."
 
-      # Absence of the metric, which is how every other textfile collector here is
-      # guarded. The apt collector runs daily, so a day and a half is one missed
-      # run plus the nightly power-down the host does by design.
+      # Staleness of the collector itself. It runs daily; a day and a half is one missed
+      # run plus the nightly power-down.
       - alert: AptMetricsStale
         expr: (time() - max by (instance) (node_textfile_mtime_seconds{file="apt.prom"})) > 129600
         for: 15m
@@ -896,14 +631,9 @@ groups:
           summary: "Package metrics on {{ $labels.instance }} are stale"
           description: "No apt collector run in 36 hours. Patch level is unobserved on this node while this is firing."
 
-  # The binding rule - services bind the Tailscale address or loopback, never
-  # anything else - as a measurement instead of a sentence. listener_metrics
-  # classifies every listening socket on each node and exports the ones outside
-  # the rule that the node's inventory does not allow on record. Written after
-  # MariaDB on lxc210 listened on [::]:3306 for four days, from a package upgrade
-  # that enabled its socket unit, with every configuration file still saying
-  # 127.0.0.1. 30 minutes is two missed checks: long enough for a restart during
-  # an upgrade, short enough that four days cannot happen again.
+  # Services bind the Tailscale address or loopback. listener_metrics exports every
+  # listening socket outside that rule which the node's inventory does not allow.
+  # 30 minutes is two missed checks: tolerant of a restart during an upgrade.
   - name: listeners
     rules:
       - alert: ListenerOutsideBindingRule
@@ -924,10 +654,9 @@ groups:
           summary: "Listener check on {{ $labels.job }} has not run for an hour"
           description: "listener-metrics.timer runs every 15 minutes. While this fires, a new wildcard listener on the node would not be reported."
 
-      # A node whose exporter answers but carries no listener series was never
-      # reached by the role, or reads a different textfile directory - the shape
-      # DatabaseBackupMetricsMissing exists for. lxc200's containerised exporter
-      # reads no textfile directory at all; its native twin carries the series.
+      # A node that is scraped but carries no listener series was never reached by the role
+      # or reads a different textfile directory. lxc200's containerised exporter reads no
+      # textfile directory; its native twin carries the series.
       - alert: ListenerMetricsMissing
         expr: up{job=~"node-.*", job!="node-lxc200-monitoring"} == 1 unless on (job) node_listener_check_timestamp_seconds
         for: 30m
@@ -937,6 +666,11 @@ groups:
           summary: "No listener metrics from {{ $labels.job }}"
           description: "The node is scraped and exports no node_listener_check_timestamp_seconds. Run listener-metrics.yml against it."
 
+  # Watchdog fires permanently and is routed to an external receiver operated by
+  # somebody else; its absence there is the signal. Prometheus runs on the host it
+  # watches, so no rule here can report the host, Prometheus, Alertmanager or the
+  # network between them being down. Routing: the `heartbeat` receiver in
+  # alertmanager.yml.
   - name: heartbeat
     rules:
       - alert: Watchdog
@@ -961,12 +695,10 @@ groups:
 
   - name: jellyfin
     rules:
-      # Written by jellyfin-cuda-watchdog.sh on vm100 every minute (KE-10). A lost
-      # CUDA context is normally gone within a minute: the watchdog restarts
-      # Jellyfin as soon as no stream plays or a video transcode is among them.
-      # Ten minutes of 0 means one of two things, and the held gauge says which:
-      # direct streams are keeping the restart back, or a restart did not bring
-      # CUDA back, which the restart workaround cannot fix.
+      # Written by jellyfin-cuda-watchdog.sh on vm100 every minute (KE-10). The watchdog
+      # restarts Jellyfin when no stream plays or a video transcode is among them. Ten
+      # minutes of 0 means direct streams are holding the restart back, or a restart did
+      # not bring CUDA back; the held gauge says which.
       - alert: JellyfinCudaLost
         expr: jellyfin_cuda_ok == 0
         for: 10m
