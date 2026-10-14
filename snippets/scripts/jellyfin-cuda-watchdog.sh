@@ -12,8 +12,7 @@
 #   - somebody transcoding video          -> restart now; that stream already
 #                                            depends on the GPU that is gone
 #   - only direct play or direct stream   -> hold, and look again next minute
-#   - Jellyfin's API does not answer      -> restart, the behaviour before the
-#                                            hold existed
+#   - Jellyfin's API does not answer      -> restart
 # The timer runs every minute, so a held restart happens within a minute of the
 # last direct stream ending.
 #

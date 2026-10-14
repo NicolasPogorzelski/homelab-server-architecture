@@ -3,17 +3,14 @@
 # `systemctl --user daemon-reload && systemctl --user start llama-server`.
 # Autostart without login needs `loginctl enable-linger <user>`.
 #
-# Vulkan (RADV), not ROCm: the ROCm runtime Ollama bundles aborts on model load with
-# this kernel and firmware, and on this card Vulkan generates tokens faster anyway.
-#
-# Router mode: no model is resident after boot, so the GPU is free for other
-# workloads until a request arrives. The model sleeps again after 20 minutes idle.
-#
-# Qwen-VL projectors misread small images below 1024 image tokens, which llama.cpp
-# itself warns about at load; one slot is enough for one user.
-#
+# Vulkan (RADV), not ROCm: the bundled ROCm runtime aborts on model load with this
+# kernel and firmware, and Vulkan generates tokens faster on this card.
+# Router mode: no model is resident after boot, so the GPU stays free until a
+# request arrives; the model unloads again after 20 minutes idle.
+# --image-min-tokens 1024: Qwen-VL projectors misread smaller images (llama.cpp
+# warns at load). One slot is enough for one user.
 # Both render nodes are passed because their numbering is not stable across boots;
-# `-dev Vulkan0` selects the discrete card, and the integrated GPU is never used.
+# `-dev Vulkan0` selects the discrete card.
 
 [Unit]
 Description=llama.cpp inference server (Vulkan, discrete GPU)

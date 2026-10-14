@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 # Export LVM thin-pool utilisation to the node_exporter textfile collector.
 #
-# Why a textfile collector and not an existing exporter: a thin pool is a block-layer object
-# with no filesystem and no mount point, so node_filesystem_* cannot observe it -- the metric
-# a DiskSpaceCritical-style rule would need simply does not exist. This is the KE-7 failure
-# class (thin-pool overflow corrupting packages mid-apt), which has hit this platform once.
-# On 2026-08-10 pve/data was found at 92.55% by hand, with no rule capable of catching it.
+# A thin pool is a block-layer object with no filesystem, so node_filesystem_* cannot
+# observe it. Thin-pool overflow is the KE-7 failure.
 #
-# lvm_vg_free_bytes is exported alongside on purpose: when the pool fills, the reflex is
-# `lvextend`, and that only works if the VG has unallocated extents. On this host VFree is 0,
-# so the reflex fails and the runbook's real options are shrinking root/swap or adding a PV.
-# An alert that fires without telling you the escape hatch is shut is only half an alert.
+# lvm_vg_free_bytes is exported alongside because `lvextend` needs unallocated extents in
+# the VG; when there are none, runbooks/platform/lvm-thin-pool-full.md lists the options.
 set -euo pipefail
 
 OUTDIR="/var/lib/node_exporter/textfile_collector"
@@ -23,13 +18,9 @@ umask 022
 
 # Staged in the *same* directory as the target: `mv` is only atomic within one filesystem.
 #
-# A fixed name rather than mktemp, changed 2026-09-11. The predecessor SMART collector used
-# mktemp with no cleanup trap and leaked one file per failed run -- fourteen orphans dating
-# back to 2025-12 were cleared on 2026-09-09. This script had the trap and still left one
-# behind, because a trap on EXIT does not run when the process is killed outright or the
-# machine loses power, and this host powers down on a schedule. A fixed staging name cannot
-# accumulate at all: a run that dies between write and rename leaves exactly one file, which
-# the next run truncates. That is the whole defence, and it needs no trap to work.
+# A fixed name rather than mktemp: an EXIT trap does not run on SIGKILL or power loss, and
+# this host powers down on a schedule. A run that dies between write and rename leaves
+# exactly one file, which the next run truncates.
 TMPFILE="${OUTDIR}/lvm-thin.prom.staged"
 
 scrape_success=1
@@ -58,10 +49,9 @@ vgs_json="$(vgs --reportformat json --units b --nosuffix -o vg_name,vg_free 2>/d
 } > "${TMPFILE}"
 
 if (( scrape_success == 1 )); then
-  # Filter on metadata_percent, not data_percent. Thin *volumes* (vm-210-disk-0 and friends)
-  # also report data_percent, so filtering on that emitted twelve mislabelled series plus an
-  # empty metadata_percent value -- and a metric line with no value is a parse error that makes
-  # node_exporter discard the entire file. Only a thin *pool* carries metadata_percent.
+  # Filter on metadata_percent: thin *volumes* also report data_percent but no
+  # metadata_percent, and a metric line with no value makes node_exporter discard the whole
+  # file. Only a thin *pool* carries metadata_percent.
   jq -r '
     .report[0].lv[]
     | select(.metadata_percent != null and .metadata_percent != "")
@@ -81,7 +71,6 @@ echo "lvm_thin_metrics_scrape_success ${scrape_success}" >> "${TMPFILE}"
 mv -f "${TMPFILE}" "${OUTFILE}"
 chmod 0644 "${OUTFILE}"
 
-# Non-zero exit puts the unit into `failed`, which node_exporter --collector.systemd exports
-# and SystemdUnitFailed picks up. A collector that dies quietly would leave the last .prom
-# file in place and the alert would keep evaluating stale numbers -- so fail loudly instead.
+# Non-zero exit puts the unit into `failed`, which SystemdUnitFailed reports; otherwise the
+# alert would keep evaluating the last file's stale numbers.
 (( scrape_success == 1 ))

@@ -3,15 +3,13 @@ Description=Sample LVM thin-pool utilisation every minute
 Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/platform/lvm-thin-pool-full.md
 
 [Timer]
-# Interval-based, not wall-clock: this samples a gauge rather than performing a scheduled job,
-# so it should start shortly after boot and then run steadily for as long as the host is up.
-# Matches node-exporter-smarttext.timer, the collector already running on this host.
+# Interval-based, not wall-clock: this samples a gauge, so it starts shortly after boot and
+# runs steadily while the host is up.
 OnBootSec=30s
 OnUnitActiveSec=60s
 AccuracySec=5s
 
-# Deliberately NOT Persistent=true. Catch-up semantics are right for jobs that must happen
-# (backups, trims) and wrong for sampling: a missed sample is simply a gap in a time series,
-# and replaying it at boot would write a stale value with a fresh timestamp.
+# No Persistent=true: catch-up is for jobs that must happen, not for sampling, where a
+# missed sample is just a gap in the time series.
 [Install]
 WantedBy=timers.target

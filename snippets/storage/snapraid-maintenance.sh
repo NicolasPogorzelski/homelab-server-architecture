@@ -8,33 +8,14 @@ set -euo pipefail
 # snapraid-sync.timer and snapraid-scrub.timer:
 #   ansible-playbook playbooks/snapraid-maintenance.yml --check --diff
 #
-# Do not schedule this from cron. The host is powered down overnight, so a cron
-# entry at 23:00 is silently skipped on every night the shutdown lands first and is
-# never retried. The timers use Persistent=true and catch up at the next boot.
+# Not from cron: the host powers down nightly and cron never retries a skipped run;
+# the timers use Persistent=true. The textfile directory comes from the
+# `node_exporter` role.
 #
-# Prerequisite: the textfile collector directory, created fleet-wide by the
-# `node_exporter` role (node_exporter_textfile_dir).
-#
-# Why `status` exists as a mode of its own, added 2026-09-11:
-# the two metrics this script wrote until then recorded when a sync and a scrub
-# last succeeded, and SnapRAIDScrubStale read the second one. Measured 2026-08-17,
-# that rule was green while the oldest block in the array had not been verified for
-# 123 days and 74% of the array had never been scrubbed at all. The rule was not
-# wrong about what it measured; it measured that the job ran, not that the job
-# reached anything - the same shape as smart_health_passed reporting PASSED for a
-# disk with 7680 unreadable sectors. `snapraid status` already prints both numbers,
-# so exporting them costs a parse rather than an array operation.
-
-# Why the runs are timed, added 2026-09-12:
-# the coverage metrics answered how much of the array is verified and left the
-# cadence question open, because nobody knew how long a scrub takes here. That is
-# not idle curiosity. The scrub timer fires at 20:00 and the host powers itself
-# down at 23:30, so a run has a three-and-a-half-hour budget; a run that overruns
-# it holds the shutdown for up to three hours, then keeps the host up for the
-# night, and the only trace of a run killed some other way is a
-# last_success timestamp that quietly does not move. Both operations now record
-# their own wall-clock duration, which turns "roughly a year for a full pass at
-# the default 8%" from an estimate into arithmetic on a measured number.
+# `status` exports coverage (oldest block age, unscrubbed share), not just recency:
+# a last-success timestamp proves the job ran, not that it reached the whole array.
+# Sync and scrub record their wall-clock duration, because a scrub must finish
+# before the nightly shutdown (`snapraid_maintenance` and `homelab_schedule` defaults).
 
 MODE="${1:-}"
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
@@ -54,15 +35,9 @@ if [ ! -d "$TEXTFILE_DIR" ]; then
   exit 1
 fi
 
-# Write one .prom file atomically. node_exporter reads *.prom only, so the staging
-# file is invisible to it while being written, and keeping it in the same directory
-# keeps the rename inside one filesystem.
-#
-# A fixed staging name rather than mktemp, deliberately. The retired SMART collector
-# used mktemp without a cleanup trap and leaked one file per failed run: fourteen
-# orphans dating back to 2025-12 were cleared on 2026-09-09. A fixed name cannot
-# accumulate - a run that dies between write and rename leaves exactly one file,
-# which the next run overwrites.
+# Write one .prom file atomically: node_exporter reads *.prom only, and the same
+# directory keeps the rename inside one filesystem. A fixed staging name rather than
+# mktemp, so a run that dies before the rename leaves one file the next run overwrites.
 write_metrics() {
   local name="$1"
   local target="${TEXTFILE_DIR}/${name}.prom"
@@ -71,25 +46,17 @@ write_metrics() {
   mv "${target}.new" "${target}"
 }
 
-# Extract the first capture group of a POSIX ERE from stdin-held text, or print
-# nothing. `grep -o` plus `tr -dc` rather than a PCRE: busybox-free Debian has GNU
-# grep, but -P is a compile-time option and this script is not the place to find out
-# it was omitted.
-# Always exits 0. That is not cosmetic: this runs under `set -e`, and an
-# assignment from a command substitution whose last command exits non-zero kills
-# the script. Without the `|| true` the absence handling further down is
-# unreachable code - which is exactly what happened on 2026-09-12, when the
-# zero-sub-second pattern missed and the unit died at exit 1 before reaching the
-# branch written to tolerate a missing value.
+# Print the first number in the first match of a POSIX ERE, or nothing. ERE, not
+# PCRE: grep -P is a compile-time option.
+# Always exits 0: under `set -e` a failing assignment would kill the script before
+# the absence handling below is reached.
 extract_number() {
   local text="$1" pattern="$2"
   { grep -oE "$pattern" <<<"$text" | head -1 | grep -oE '[0-9]+' | head -1; } || true
 }
 
-# Export coverage rather than recency. Called after a successful sync or scrub and
-# by the `status` mode; a failure to parse leaves snapraid_status_parse_ok at 0
-# instead of failing the run that called it, because a sync that worked must not be
-# reported as failed by a reporting step.
+# Export coverage rather than recency. A parse failure sets snapraid_status_parse_ok
+# to 0 instead of failing a sync or scrub that worked.
 write_status_metrics() {
   local out age unscrubbed zerosub parse_ok=1
 
@@ -106,11 +73,7 @@ write_status_metrics() {
   unscrubbed="$(extract_number "$out" '[0-9]+% of the array is not scrubbed')"
   # "You have 63350 files with zero sub-second timestamp." - likewise absent when
   # there are none, in which case snapraid prints a "No file has ..." sentence.
-  #
-  # The article is optional in the pattern because the version on vm102 does not
-  # print one, and the first draft of this script assumed it did. The wording was
-  # written from memory rather than from the command's output, and it cost a
-  # failed unit on the first scheduled run.
+  # The article is optional: the snapraid version on vm102 prints none.
   zerosub="$(extract_number "$out" 'have [0-9]+ files with (a )?zero sub-second')"
 
   if [[ -z "$age" ]]; then
@@ -134,12 +97,8 @@ write_status_metrics() {
       echo "# TYPE snapraid_scrub_oldest_block_age_days gauge"
       echo "snapraid_scrub_oldest_block_age_days ${age}"
     fi
-    # Both of these are emitted only when the output was recognisable at all.
-    # Treating an absent line as zero is right when snapraid omits it because the
-    # count is zero, and wrong when the whole output is something this script
-    # cannot read - there "0% unscrubbed" would be a confident answer to a
-    # question nobody managed to ask. The age above is the marker for which case
-    # this is, since a recognisable status always carries it.
+    # Emitted only when the output was recognisable (the age line is the marker):
+    # absent-means-zero is right for an omitted line, wrong for unreadable output.
     if (( parse_ok == 1 )); then
       echo "# HELP snapraid_array_unscrubbed_ratio Fraction of the array no scrub has verified."
       echo "# TYPE snapraid_array_unscrubbed_ratio gauge"
@@ -157,13 +116,8 @@ write_status_metrics() {
 
 case "$MODE" in
   sync)
-    # snapraid detects change by size and mtime. A file whose mtime has no
-    # sub-second part is indistinguishable from another written in the same second,
-    # which is why upstream ships `touch` to fill those in. 63322 files carried a
-    # zero sub-second timestamp when this was measured on 2026-08-17. The command
-    # writes metadata only, never file content, and is a no-op once converged.
-    # Non-fatal on purpose: protecting the array tonight matters more than filling
-    # in a timestamp, and `set -e` would otherwise let a touch failure skip the sync.
+    # snapraid detects change by size and mtime; `touch` fills in missing sub-second
+    # mtimes (metadata only). Non-fatal: a touch failure must not skip the sync.
     snapraid touch || echo "WARNING: snapraid touch failed; continuing to sync" >&2
     started=$(date +%s)
     snapraid sync
@@ -180,10 +134,8 @@ case "$MODE" in
     write_status_metrics
     ;;
   scrub)
-    # -p is the share of the array one run verifies. snapraid's own default is 8,
-    # which is what this script used until 2026-09-12 and what the arithmetic
-    # below is measured against. The value comes from the environment so the unit
-    # carries it and this script still behaves like upstream when run by hand.
+    # -p is the share of the array one run verifies. The unit sets it from the
+    # role defaults; run by hand, the script uses snapraid's own default of 8.
     percent="${SNAPRAID_SCRUB_PERCENT:-8}"
     started=$(date +%s)
     snapraid scrub -p "$percent"
