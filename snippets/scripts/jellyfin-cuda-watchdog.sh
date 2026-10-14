@@ -13,12 +13,10 @@
 #                                            depends on the GPU that is gone
 #   - only direct play or direct stream   -> hold, and look again next minute
 #   - Jellyfin's API does not answer      -> restart
-# The timer runs every minute, so a held restart happens within a minute of the
-# last direct stream ending.
+# The timer runs every minute: a held restart runs within a minute of the stream ending.
 #
-# State goes to the textfile collector so a held restart is visible instead of
-# silent: jellyfin_cuda_ok, jellyfin_watchdog_restart_held and the time of the
-# last restart.
+# State goes to the textfile collector so a held restart is visible:
+# jellyfin_cuda_ok, jellyfin_watchdog_restart_held and the last restart time.
 set -euo pipefail
 
 CONTAINER="jellyfin"

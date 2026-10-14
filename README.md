@@ -133,7 +133,7 @@ foundational ones.
 
 - [Proxmox host](docs/platform/proxmox-host.md) - [Ansible](docs/platform/ansible.md) - [Monitoring](docs/platform/monitoring.md) - [Networking](docs/platform/networking.md) - [Tailscale ACL](docs/platform/tailscale-acl.md)
 - [Storage design](docs/platform/storage-design.md) - [Samba](docs/platform/samba.md) - [Storage permissions](docs/platform/storage-permissions.md)
-- [Ansible inventory example](ansible/inventory/hosts.yml.example) - [Repository validator](scripts/validate-repo.sh), 42 checks
+- [Ansible inventory example](ansible/inventory/hosts.yml.example) - [Repository validator](scripts/validate-repo.sh), 46 checks
 - [Documentation conventions](docs/CONVENTIONS.md)
 
 ### Runbooks, nodes and services

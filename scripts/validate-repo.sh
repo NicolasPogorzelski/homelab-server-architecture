@@ -500,7 +500,7 @@ flush_errors
 # Check 30: runbook contract
 # =============================================================================
 # Sections for preconditions, verification, failure modes and rollback ("none, because ..." is a
-# valid rollback), plus a Last exercised line in the header block.
+# valid rollback), plus a Last exercised line that starts with a date or "never".
 echo "Check 30: runbook contract"
 
 while read -r rel; do
@@ -508,7 +508,8 @@ while read -r rel; do
     for section in Precondition Verification Failure Rollback; do
         grep -qiE "^##[[:space:]].*${section}" "${f}" || fail "Missing '${section}' section: ${rel}"
     done
-    grep -qE '^- \*\*Last exercised:\*\* .+' "${f}" || fail "Missing '- **Last exercised:** ...' line: ${rel}"
+    grep -qE '^- \*\*Last exercised:\*\* (never|[0-9]{4}-[0-9]{2}-[0-9]{2})' "${f}" \
+        || fail "Missing '- **Last exercised:** <YYYY-MM-DD, result> | never' line: ${rel}"
 done < <(repo_files -- 'runbooks/*.md' | grep -v 'runbooks/README.md$')
 flush_errors
 
@@ -666,10 +667,11 @@ flush_errors
 # =============================================================================
 # Check 38: every Ansible role is documented in docs/platform/ansible.md
 # =============================================================================
+# Matched as `role_name` in backticks, so a role is not covered by a word in running text.
 echo "Check 38: every Ansible role is documented"
 
 while read -r role; do
-    grep -q "${role}" "${REPO_ROOT}/docs/platform/ansible.md" || fail "Role not documented in docs/platform/ansible.md: ${role}"
+    grep -qF -- "\`${role}\`" "${REPO_ROOT}/docs/platform/ansible.md" || fail "Role not documented in docs/platform/ansible.md: ${role}"
 done < <(repo_files -- 'ansible/roles/' | cut -d/ -f3 | sort -u)
 flush_errors
 
@@ -717,13 +719,82 @@ fi
 flush_errors
 
 # =============================================================================
-# Check 41: ansible-lint on changed Ansible files (local only)
+# Check 41: documents describe the platform, not the tooling or the writing
+# =============================================================================
+# The README section on how the repository is built, CLAUDE.md, .claude/ and CONVENTIONS.md
+# are where the tooling is named. Validator check numbers are cited nowhere: they change.
+echo "Check 41: no tooling, session or check-number narration in documents"
+
+while read -r rel; do
+    case "${rel}" in
+        CLAUDE.md|.claude/*|docs/CONVENTIONS.md) text="" ;;
+        README.md) text="$(awk '/^## How this repository is built/ { skip = 1; next } /^## / { skip = 0 } !skip { printf "%d:%s\n", NR, $0 }' "${REPO_ROOT}/${rel}")" ;;
+        *) text="$(awk '{ printf "%d:%s\n", NR, $0 }' "${REPO_ROOT}/${rel}")" ;;
+    esac
+    { grep -iP '^\d+:.*\b(this session|learning mode|interviewer|claude|assistant)\b' <<< "${text}" || true; } \
+        | while read -r m; do fail "Tooling or session narration: ${rel}:${m%%:*}"; done
+done < <(md_files)
+while read -r rel; do
+    { grep -nP '\bChecks? [0-9]+\b' "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Validator check number cited: ${rel}:${m%%:*}"; done
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 42: assistant rules and agents carry no dates
+# =============================================================================
+# A date in a rules file is a status claim, and status lives in the documents that own it.
+echo "Check 42: CLAUDE.md and agent definitions carry no dates"
+
+while read -r rel; do
+    { grep -nE '\b20[0-9]{2}-[0-9]{2}(-[0-9]{2})?\b' "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Date in a rules file: ${rel}:${m%%:*}"; done
+done < <(md_files | grep -E '^(CLAUDE\.md|\.claude/agents/)')
+flush_errors
+
+# =============================================================================
+# Check 43: no comment block longer than twenty lines in code and configuration
+# =============================================================================
+# Longer reasoning is a decision record or a known-error entry. Exception: platform-restore.sh
+# prints its header as the usage text.
+echo "Check 43: comment blocks stay within twenty lines"
+
+while read -r rel; do
+    [[ "${rel}" == snippets/scripts/platform-restore.sh ]] && continue
+    while read -r finding; do fail "${finding}"; done < <(awk -v file="${rel}" '
+        /^[[:space:]]*#/ { run++; if (run == 21) printf "Comment block over twenty lines: %s:%d\n", file, NR - 20; next }
+        { run = 0 }
+    ' "${REPO_ROOT}/${rel}")
+done < <(text_files | grep -E '\.(ya?ml|j2|sh|conf|service|timer|py|nft|cfg)$')
+flush_errors
+
+# =============================================================================
+# Check 44: image versions are stated only in the compose files
+# =============================================================================
+# A document names the stack; the version it runs is read from docker/<stack>/docker-compose.yml.
+echo "Check 44: image versions are not repeated in documents"
+
+while read -r compose; do
+    while read -r img; do
+        tag="${img##*:}"; short="${img%:*}"; short="${short##*/}"
+        [[ "${tag}" == "${img}" || "${tag}" == *'${'* || "${tag}" != *[0-9]* ]] && continue
+        while read -r rel; do
+            { grep -nwF -- "${tag}" "${REPO_ROOT}/${rel}" | grep -iF -- "${short}" || true; } \
+                | while read -r m; do fail "Image version repeated: ${rel}:${m%%:*} (${short}:${tag}, owned by ${compose})"; done
+        done < <(md_files | grep -E '^(docs/|README\.md$)')
+    done < <(grep -E '^\s*image:' "${REPO_ROOT}/${compose}" \
+             | sed -E "s/.*image:[[:space:]]*//; s/[\"']//g; s/[[:space:]]*(#.*)?$//")
+done < <(repo_files -- 'docker/*docker-compose.yml')
+flush_errors
+
+# =============================================================================
+# Check 45: ansible-lint on changed Ansible files (local only)
 # =============================================================================
 # CI lints every push in .github/workflows/ansible-lint.yml, so this check runs only when the
 # working tree changes something under ansible/. Without the real vault password (it exists only on
 # the control node) a throwaway one is used: the syntax check parses !vault values without
 # decrypting them.
-echo "Check 41: ansible-lint (production profile)"
+echo "Check 45: ansible-lint (production profile)"
 
 changed="$( { git -C "${REPO_ROOT}" diff --cached --name-only; git -C "${REPO_ROOT}" diff --name-only HEAD; \
               git -C "${REPO_ROOT}" ls-files --others --exclude-standard; } 2>/dev/null | sort -u || true)"
@@ -752,10 +823,10 @@ fi
 flush_errors
 
 # =============================================================================
-# Check 42: the commit-message hook is installed (local only)
+# Check 46: the commit-message hook is installed (local only)
 # =============================================================================
 # Under CI the commit-messages workflow is the gate.
-echo "Check 42: commit-message hook installed on this machine"
+echo "Check 46: commit-message hook installed on this machine"
 
 if [[ -n "${CI:-}" ]]; then
     echo "  SKIP: under CI"
