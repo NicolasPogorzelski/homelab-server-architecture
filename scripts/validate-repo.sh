@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
+# Repository validator. Run before every commit (CI runs it on every push and pull request).
+# Each check prints its name, lists findings, and adds them to the error count; the script exits 1
+# if any check found something. The conventions it enforces are in docs/CONVENTIONS.md.
+#
+# Files ignored by git are skipped: a pre-commit gate answers for what a commit can contain, and CI
+# checks out a clean tree in which ignored files do not exist.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SELF="${REPO_ROOT}/scripts/validate-repo.sh"
 ERRORS=0
 ERROR_LOG="$(mktemp)"
 trap 'rm -f "${ERROR_LOG}"' EXIT
@@ -10,1357 +17,73 @@ echo "=== Repo Validation ==="
 echo "Repo root: ${REPO_ROOT}"
 echo ""
 
+# Findings inside pipelines run in subshells, so they are appended to ERROR_LOG and counted here.
+flush_errors() {
+    ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
+    : > "${ERROR_LOG}"
+}
+
+fail() {
+    echo "  $*"
+    echo "x" >> "${ERROR_LOG}"
+}
+
+ignored() {
+    git -C "${REPO_ROOT}" check-ignore -q "$1" 2>/dev/null
+}
+
+# Tracked and untracked-but-not-ignored files, relative to the repository root.
+repo_files() {
+    git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard "$@"
+}
+
+md_files() {
+    repo_files -- '*.md' | while read -r f; do [[ -f "${REPO_ROOT}/${f}" ]] && echo "${f}"; done
+}
+
+text_files() {
+    repo_files | grep -E '\.(md|ya?ml|sh|j2|conf|py|json|example|cfg|nft|service|timer|container)$' \
+        | while read -r f; do [[ -f "${REPO_ROOT}/${f}" ]] && echo "${f}"; done
+}
+
 # =============================================================================
 # Check 1: empty markdown files
 # =============================================================================
 echo "Check 1: empty markdown files"
 
-while read -r file; do
-    echo "  Empty: ${file}"
-    ERRORS=$((ERRORS + 1))
-done < <(find "${REPO_ROOT}" -name "*.md" -empty)
+while read -r rel; do
+    [[ -s "${REPO_ROOT}/${rel}" ]] || fail "Empty: ${rel}"
+done < <(md_files)
+flush_errors
 
 # =============================================================================
-# Check 2: broken internal markdown links
+# Check 2: internal links point at files that exist in the repository
 # =============================================================================
-# Gitignored files are skipped, the same way Check 24 skips them. A scratch file
-# under .claude/ is not repository content, and its links are written for
-# somewhere else - a pull-request body renders on github.com, not from that
-# directory. Before 2026-08-19 such a file could fail the whole validation.
+# A target that exists locally but is git-ignored is broken for everyone else.
 echo "Check 2: broken internal links"
 
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    dir="$(dirname "${mdfile}")"
-    { grep -oP '\]\(\K[^)]+' "${mdfile}" || true; } | while read -r link; do
-        [[ "${link}" =~ ^https?:// ]] && continue
-        link="${link%%#*}"
-        [[ -z "${link}" ]] && continue
-        if [[ ! -f "${dir}/${link}" && ! -d "${dir}/${link}" ]]; then
-            echo "  Broken: ${mdfile} -> ${link}"
-            echo "x" >> "${ERROR_LOG}"
-        else
-            # Existing on this workstation is not the same as existing in the
-            # repository. A target git ignores is absent from every clean checkout,
-            # so the link is broken everywhere except here - which is the worst
-            # place for it to look fine. Found 2026-09-11: `**/backup/` in
-            # .gitignore had swallowed runbooks/backup/, and an off-site backup
-            # runbook sat untracked for two days behind three index links while
-            # every local run passed.
-            target_rel="$(realpath -m --relative-to="${REPO_ROOT}" "${dir}/${link}")"
-            if git -C "${REPO_ROOT}" check-ignore -q "${target_rel}" 2>/dev/null; then
-                echo "  Link target is git-ignored, so it does not exist for anyone else: ${mdfile} -> ${link}"
-                echo "x" >> "${ERROR_LOG}"
-            fi
-        fi
-    done
-done < <(find "${REPO_ROOT}" -name "*.md" -type f)
-
-# Truncate, or Check 7 counts these same entries a second time. Missing until
-# 2026-08-19, and invisible until Check 2 actually found something: two broken
-# links were reported as four errors.
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 3: committed .env files
-# =============================================================================
-echo "Check 3: committed .env files"
-
-while read -r file; do
-    echo "  Found: ${file}"
-    ERRORS=$((ERRORS + 1))
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name ".env" -o -name ".env.*" \) -not -name ".env.example")
-
-# =============================================================================
-# Check 4: Access Model section in service docs
-# =============================================================================
-# Rule from tailscale-acl.md:
-# "Every docs/services/*.md file must include an Access Model (Zero Trust) section"
-echo "Check 4: Access Model section in service docs"
-
-if [[ -d "${REPO_ROOT}/docs/services" ]]; then
-    while read -r file; do
-        if ! grep -q "## Access Model" "${file}"; then
-            echo "  Missing 'Access Model' section: ${file}"
-            ERRORS=$((ERRORS + 1))
-        fi
-    done < <(find "${REPO_ROOT}/docs/services" -name "*.md" -type f)
-fi
-
-# =============================================================================
-# Check 5: Runbook contract - required sections
-# =============================================================================
-# Contract from runbooks/README.md:
-# Preconditions, Commands/steps, Verification, Failure modes, Rollback / abort
-#
-# Rollback became mandatory on 2026-08-15. The contract had listed it as "only if applicable"
-# since the beginning, and the result was that it appeared in 2 runbooks out of 13 - present in
-# exactly the two written most recently, when the danger was fresh. An optional section is a
-# preference, not a contract.
-#
-# "Not applicable" remains a legitimate answer and must be *written down with its reason*. A
-# read-only procedure genuinely has nothing to undo, but a document with no such section cannot
-# be distinguished from one where nobody thought about it - and that difference is the whole
-# value of asking.
-echo "Check 5: runbook contract sections"
-
-RUNBOOK_SECTIONS=("Precondition" "Verification" "Failure" "Rollback")
-
-if [[ -d "${REPO_ROOT}/runbooks" ]]; then
-    while read -r file; do
-        # skip README.md (index file, not a runbook)
-        [[ "$(basename "${file}")" == "README.md" ]] && continue
-        for section in "${RUNBOOK_SECTIONS[@]}"; do
-            if ! grep -qiE "^##[[:space:]].*${section}" "${file}"; then
-                echo "  Missing '${section}' section: ${file}"
-                ERRORS=$((ERRORS + 1))
-            fi
-        done
-    done < <(find "${REPO_ROOT}/runbooks" -name "*.md" -type f)
-fi
-
-# =============================================================================
-# Check 6: Failure Impact section in node docs
-# =============================================================================
-echo "Check 6: Failure Impact in node docs"
-
-if [[ -d "${REPO_ROOT}/docs/nodes" ]]; then
-    while read -r file; do
-        if ! grep -q "## Failure Impact" "${file}"; then
-            echo "  Missing 'Failure Impact' section: ${file}"
-            ERRORS=$((ERRORS + 1))
-        fi
-    done < <(find "${REPO_ROOT}/docs/nodes" -name "*.md" -type f)
-fi
-
-# =============================================================================
-# Check 13: Configuration Management section in node docs
-# =============================================================================
-echo "Check 13: Configuration Management in node docs"
-
-if [[ -d "${REPO_ROOT}/docs/nodes" ]]; then
-    while read -r file; do
-        # lxc250 is the Ansible control node - excluded from inventory, has ## Ansible Setup instead
-        [[ "$(basename "${file}")" == "lxc250.md" ]] && continue
-        if ! grep -q "## Configuration Management" "${file}"; then
-            echo "  Missing 'Configuration Management' section: ${file}"
-            ERRORS=$((ERRORS + 1))
-        fi
-    done < <(find "${REPO_ROOT}/docs/nodes" -name "*.md" -type f)
-fi
-
-# =============================================================================
-# Check 7: no plain Tailscale IPs (100.x.y.z) in docs
-# =============================================================================
-# Legitimate placeholder: <tailscale-ip-...>
-# Violation: bare 100.x.y.z addresses
-# Ignored files are skipped here and in checks 8, 11, 14, 15, 26 and 36, the way
-# checks 2, 18, 20, 24 and 27 have always done it. A gate that runs before a
-# commit answers for what the commit will contain, and an ignored file cannot be
-# in one. Reading them instead made the verdict depend on whatever scratch files
-# a workstation happens to hold, which CI can never reproduce: `actions/checkout`
-# writes a clean tree in which those files do not exist. Local and remote then
-# disagree, and the local side is the one that blocks.
-#
-# The concrete case, measured 2026-09-05: `.gitignore` names
-# `SANITIZATION-LEGEND.local.md`, whose purpose is to map each placeholder to the
-# real value it stands for. Creating the file this repository's own tooling
-# describes made checks 7, 8 and 14 fail on every run afterwards.
-#
-# What this gives up: a real address in a file that is ignored today and tracked
-# tomorrow is no longer caught by the pre-commit run. `git add` on it produces a
-# diff, and the check reads it from that point on, so the exposure lasts until
-# the file is staged rather than until someone notices.
-echo "Check 7: no plain Tailscale IPs"
-
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nP '(?<!<tailscale-ip[->])100\.\d{1,3}\.\d{1,3}\.\d{1,3}' "${mdfile}" || true; } | while read -r match; do
-        echo "  Unsanitized IP: ${mdfile}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
-
-# reset and recount error log
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 14: no plain RFC-1918 LAN IPs in docs
-# =============================================================================
-# Legitimate placeholder: <lan-ip-...>
-# Covers: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
-# File types: .md, .yml, .yaml, .sh
-echo "Check 14: no plain LAN IPs"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${file}" || true; } | while read -r match; do
-        echo "  Unsanitized LAN IP: ${file}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \) -type f)
-
-# reset and recount error log
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 8: no plain tailnet IDs in docs
-# =============================================================================
-# Legitimate placeholder: <tailnet-id>
-# Violation: actual tailnet domain like abc123.ts.net (without placeholder brackets)
-echo "Check 8: no plain tailnet IDs"
-
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nP '(?<!<)[a-z0-9-]+\.ts\.net' "${mdfile}" | grep -vP '<tailnet-id>' || true; } | while read -r match; do
-        echo "  Unsanitized tailnet ID: ${mdfile}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 9: no private keys or certificates in repo
-# =============================================================================
-echo "Check 9: no private keys or certificates"
-
-while read -r file; do
-    echo "  Found: ${file}"
-    ERRORS=$((ERRORS + 1))
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.pem" -o -name "*.key" -o -name "*.crt" -o -name "*.p12" -o -name "*.pfx" \) -type f)
-
-# =============================================================================
-# Check 10: .env.example for each docker-compose directory
-# =============================================================================
-echo "Check 10: .env.example per compose directory"
-
-if [[ -d "${REPO_ROOT}/docker" ]]; then
-    while read -r composefile; do
-        composedir="$(dirname "${composefile}")"
-        if [[ ! -f "${composedir}/.env.example" ]]; then
-            echo "  Missing .env.example: ${composedir}/"
-            ERRORS=$((ERRORS + 1))
-        fi
-    done < <(find "${REPO_ROOT}/docker" -name "docker-compose.yml" -type f)
-fi
-
-# =============================================================================
-# Check 11: no duplicate headings in markdown files
-# =============================================================================
-echo "Check 11: duplicate markdown headings"
-
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nP '^## ' "${mdfile}" || true; } | \
-        sed 's/^[0-9]*://' | \
-        sort | uniq -d | while read -r dup; do
-            echo "  Duplicate heading in ${mdfile}: ${dup}"
-            echo "x" >> "${ERROR_LOG}"
-        done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.md" -type f)
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 12: no files outside defined directory structure
-# =============================================================================
-# Allowed top-level: docs/ docker/ snippets/ runbooks/ scripts/ ansible/ terraform/
-#                    README.md CLAUDE.md LICENSE .gitignore
-# LICENSE must sit in the repository root: GitHub's license detection only looks there, so moving
-# it into a subdirectory would silently drop the license badge and the API field. SECURITY.md is
-# deliberately *not* listed - it lives in .github/, which this check skips as a hidden entry, and
-# GitHub reads it from there just as well.
-echo "Check 12: files outside directory structure"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    case "${rel}" in
-        docs|docker|snippets|runbooks|scripts|ansible|terraform) continue ;;
-        docs/*|docker/*|snippets/*|runbooks/*|scripts/*|ansible/*|terraform/*) continue ;;
-        README.md|CLAUDE.md|LICENSE|.gitignore) continue ;;
-        .*) continue ;;  # hidden files managed by git
-        *)
-           if git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null; then
-               continue
-           fi
-           echo "  Unexpected: ${rel}"
-           ERRORS=$((ERRORS + 1))
-           ;;
-    esac
-done < <(find "${REPO_ROOT}" -maxdepth 1 -not -path "${REPO_ROOT}" -not -name ".git" \( -type f -o -type d \))
-
-# =============================================================================
-# Check 15: no leftover git merge conflict markers
-# =============================================================================
-# A botched merge can leave `<<<<<<<`, `=======`, or `>>>>>>>` lines committed.
-# These are never legitimate content in this repo's tracked files.
-echo "Check 15: no merge conflict markers"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "${file}" || true; } | while read -r match; do
-        echo "  Merge conflict marker: ${file}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" -o -name "*.conf" -o -name "*.j2" \) -type f)
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 16: ansible-lint on staged Ansible changes
-# =============================================================================
-# Structural checks 1-15 never look inside Ansible files, so three commits went
-# out green locally on 2026-07-10 and turned CI red. This closes that gap at the
-# pre-commit hook, not in CI: .github/workflows/ansible-lint.yml already runs a
-# version-pinned lint on every push. Consequently this check SKIPs under CI --
-# actions/checkout leaves a clean tree, so there is no diff to test.
-#
-# ansible-lint exits 2 on findings, which `set -e` would turn into a silent
-# abort before the output is printed. The call is therefore guarded.
-echo "Check 16: ansible-lint (production profile)"
-
-# Staged files first: the PreToolUse hook fires while `git commit` holds an
-# index. `git commit -a` stages at commit time instead, leaving --cached empty,
-# so fall back to the working tree. A clean tree (CI) yields neither.
-changed="$(git -C "${REPO_ROOT}" diff --cached --name-only 2>/dev/null || true)"
-if [[ -z "${changed}" ]]; then
-    changed="$(git -C "${REPO_ROOT}" diff --name-only HEAD 2>/dev/null || true)"
-fi
-
-# Untracked files are part of the change. Without this the gate is inert for the
-# case it matters most in: a whole new role or playbook is untracked until it is
-# staged, so nothing here would have linted it. Found on 2026-09-08, when this
-# check printed "no changes under ansible/" during a commit that added a role and
-# two playbooks.
-untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)"
-if [[ -n "${untracked}" ]]; then
-    changed="$(printf '%s\n%s' "${changed}" "${untracked}" | grep -v '^$' || true)"
-fi
-
-if ! command -v ansible-lint >/dev/null 2>&1; then
-    echo "  SKIP: ansible-lint not in PATH"
-elif ! grep -q '^ansible/' <<< "${changed}"; then
-    echo "  SKIP: no changes under ansible/"
-else
-    # ansible.cfg sets vault_password_file = ~/.vault_pass, and that file exists
-    # by design only on the control node (lxc250) -- it is the single copy this
-    # repo tracks as an irreversible-loss risk. Without it, the per-playbook
-    # `ansible-playbook --syntax-check` that ansible-lint runs aborts with an
-    # internal-error for EVERY playbook, and this check reports dozens of
-    # failures that have nothing to do with the diff. That blocked all Ansible
-    # commits from the admin workstation -- the machine this repo says feature
-    # work belongs on -- and it did so by conflating "cannot run" with "found
-    # problems".
-    #
-    # A throwaway password is sufficient and is what CI already does
-    # (.github/workflows/ansible-lint.yml): --syntax-check parses the committed
-    # !vault vars but never decrypts them. Deliberately NOT written to
-    # ~/.vault_pass: a dummy sitting at the real path would later be mistaken
-    # for the real secret. Skipping instead would reopen the very gap this check
-    # exists to close, silently.
-    vault_pw_file=""
-    if [[ ! -r "${HOME}/.vault_pass" ]]; then
-        vault_pw_file="$(mktemp)"
-        echo 'syntax-check-only' > "${vault_pw_file}"
-        export ANSIBLE_VAULT_PASSWORD_FILE="${vault_pw_file}"
-    fi
-
-    # --nocolor: the output is captured, not written to a TTY, and rich would
-    # otherwise emit ANSI colour and OSC-8 hyperlink escapes into the hook log.
-    lint_output="$(cd "${REPO_ROOT}/ansible" && ansible-lint --nocolor . 2>&1)" && lint_rc=0 || lint_rc=$?
-
-    if [[ -n "${vault_pw_file}" ]]; then
-        rm -f "${vault_pw_file}"
-        unset ANSIBLE_VAULT_PASSWORD_FILE
-    fi
-
-    if [[ "${lint_rc}" -ne 0 ]]; then
-        echo "${lint_output}" | sed 's/^/  /'
-        echo "  ansible-lint failed (exit ${lint_rc})"
-        ERRORS=$((ERRORS + 1))
-    fi
-fi
-
-# =============================================================================
-# Check 17: private *.local.md legend files must never be tracked
-# =============================================================================
-# The sanitization legend maps public placeholders back to real capacities,
-# device paths and disk labels. It is gitignored on purpose; a single tracked
-# copy would re-leak everything the history rewrite removed.
-echo "Check 17: private .local.md files not tracked"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    if git -C "${REPO_ROOT}" ls-files --error-unmatch "${rel}" >/dev/null 2>&1; then
-        echo "  Tracked private file (must stay gitignored): ${rel}"
-        ERRORS=$((ERRORS + 1))
-    fi
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -name "*.local.md" -type f)
-
-# =============================================================================
-# Check 18: no size-encoding disk labels (auxNtb -> use aux-diskN)
-# =============================================================================
-# Labels that encode a disk's capacity in the name were sanitized out of the
-# public history; the sanitized form is `aux-diskN`. Gitignored files (the
-# private legend, which legitimately holds the real labels) are skipped.
-echo "Check 18: no size-encoding disk labels (auxNtb)"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -niE 'aux[0-9]+tb' "${file}" || true; } | while read -r match; do
-        echo "  Size-encoding disk label: ${file}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" -o -name "*.conf" -o -name "*.j2" \) -type f)
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 19: plain-ASCII punctuation only
-# =============================================================================
-# Documentation here is read in terminals, greps and diffs as often as in a
-# browser. Typographic punctuation (em dash, en dash, curly quotes, ellipsis,
-# arrows, multiplication sign, emoji) renders inconsistently across terminals and
-# fonts, is awkward to type, and is easy to search for only if you already know
-# which of the several look-alike codepoints was used. Config files, scripts and
-# unit templates in this repository are ASCII anyway, so the documentation
-# follows the same rule rather than keeping a second convention.
-#
-# Two exceptions, both deliberate:
-#   U+2500-U+257F  box-drawing characters, used in the ASCII architecture
-#                  diagrams, where they are the conventional tool and not a
-#                  stylistic flourish
-#   U+00A7         the section sign, used when citing a document section
-#
-# The check deliberately reports the offending character and its position rather
-# than only the file, because a single stray character in a 400-line document is
-# otherwise a search problem. Gitignored files are skipped.
-echo "Check 19: plain-ASCII punctuation"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -noP '(?![\x{2500}-\x{257F}\x{00A7}])[^\x00-\x7F]' "${file}" || true; } | while read -r match; do
-        echo "  Non-ASCII punctuation: ${rel}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
-              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
-                 -o -name "*.j2" -o -name "*.conf" -o -name "*.py" -o -name "*.json" \
-                 -o -name "*.example" \))
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# Check 20: bold used as a label, not as mid-sentence emphasis
-# =============================================================================
-# CLAUDE.md has required this since 2026-08-15 and nothing enforced it, so it
-# drifted immediately: on 2026-08-16 a review found bold emphasis scattered
-# through freshly written documents. Emphasis inside a running sentence is the
-# habit this repository is trying not to have - it reads as a machine deciding
-# which words matter for you, and after a few paragraphs it stops carrying any
-# signal at all.
-#
-# Legitimate uses start a line or a list item ("- **Precondition:** ..."), sit in
-# a table cell, or follow a heading marker. All of those are preceded by start of
-# line, "- ", "| " or "# ", none of which match the pattern below, which requires
-# a word character or punctuation immediately before the opening marker.
-#
-# Bold spanning a line break is not detected. That is accepted: the check is a
-# net for the common case, not a markdown parser.
-#
-# CLAUDE.md was exempt from this check until 2026-08-20, which left the file that
-# states the rule as the only one never measured against it. It held two
-# violations at the time the exemption was removed.
-echo "Check 20: bold as label, not mid-sentence emphasis"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    { grep -nE "[a-zA-Z0-9,;:)] \*\*[^*]+\*\*" "${file}" || true; } | while read -r match; do
-        echo "  Mid-sentence bold: ${rel}:${match%%:*}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f -name "*.md")
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# Check 21: repository content is English
-# =============================================================================
-# Added 2026-08-16, after a pull request description was drafted in German
-# because the conversation happened to be in German. The repository is public and
-# read by people who do not speak it, and every one of its ~17,600 lines was
-# already English - the rule simply had never been written down or checked.
-#
-# The word list is deliberately short and contains only words with no English
-# homograph, so a false positive means real German text rather than an unlucky
-# identifier. Common articles (der, die, das) are excluded for that reason.
-echo "Check 21: repository content is English"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    # This script carries the word list itself, so it would always match.
-    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
-    { grep -nwiE "nicht|wurde|wurden|werden|damit|deshalb|sondern|jedoch|bereits|zwischen|Lernprojekt|Rechner|Beispiel" "${file}" || true; } | while read -r match; do
-        echo "  German text: ${rel}:${match%%:*}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
-              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
-                 -o -name "*.j2" \))
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 22: no personal media library counts
-# =============================================================================
-# Added 2026-08-17, after a verification step recorded the exact number of films
-# in the Jellyfin library - in a changelog entry and in a pull request description,
-# both public. The count proves nothing operational: "the library enumerates its
-# full expected contents" is the same evidence without describing what the owner
-# of this repository watches, reads and listens to.
-#
-# The other sanitization checks all guard infrastructure (addresses, keys, disk
-# labels). This one guards the person, which is a different category and is why it
-# gets its own check rather than an extra pattern in Check 14.
-#
-# Aggregate counts that scale with the collection - objects swept, files compared -
-# are covered by Check 23 rather than here, because they arrive in a different
-# grammatical shape. If a number would let a reader infer the size of a personal
-# library, it does not belong in this repository.
-echo "Check 22: no personal media library counts"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    # This script carries the pattern itself.
-    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
-    # "series" is also Prometheus vocabulary ("old expression 21 series"), so lines
-    # carrying monitoring terms are dropped rather than the word being given up -
-    # a television count is exactly the kind of hit this check exists for.
-    { grep -nEi "[0-9][0-9,.]*[[:space:]]+(films?|movies|series|seasons?|episodes?|authors?|audiobooks?|ebooks?|albums?|tracks?|titles?)\b" "${file}" \
-        | grep -viE "expression|prometheus|promql|metric|series per node|time series" || true; } | while read -r match; do
-        echo "  Media library count: ${rel}:${match%%:*}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
-              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
-                 -o -name "*.j2" \))
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 23: no measured fill level for the archive pool
-# =============================================================================
-# Added 2026-08-17, one commit after Check 22, because Check 22 did not catch the
-# next occurrence. How full the media pool is says how much content it holds, which
-# is the same disclosure as counting the files - only in a different unit, so a
-# check written around media nouns never sees it.
-#
-# The discriminator is the decimal point. A threshold is a round number somebody
-# chose ("15% free" in the DiskSpaceCritical rule); a fill level is a precise number
-# somebody measured. Requiring a fraction keeps the configured thresholds legal and
-# still catches the measurement.
-#
-# Scoped to lines that also name the archive pool, deliberately. The LVM thin pool
-# on the host carries decimal percentages throughout the documentation and they are
-# infrastructure, not content - flagging twenty of those would make this check the
-# kind of always-red signal the alert rules in this repository are written to avoid.
-#
-# The occurrence that prompted it is worth stating plainly: it was not in the
-# original documentation but in the write-up describing the removal, which quoted
-# both forms of the figure in order to explain them. A text about deleting a value
-# is one more place the value appears.
-echo "Check 23: no measured fill level for the archive pool"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    case "${rel}" in scripts/validate-repo.sh) continue ;; esac
-    { grep -nE "mergerfs|MergerFS|archive pool|fill level" "${file}" \
-        | grep -E "[0-9]+\.[0-9]+[[:space:]]*%" || true; } | while read -r match; do
-        echo "  Archive fill level: ${rel}:${match%%:*}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f \
-              \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o -name "*.sh" \
-                 -o -name "*.j2" \))
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 24: balanced markdown code fences
-# =============================================================================
-# Added 2026-08-17. docs/architecture/exposure-diagram.md was missing its closing
-# ``` and had been that way since 2026-04-07 - four months during which GitHub
-# rendered the Mermaid source as plain text on a page the README advertises as a
-# diagram. Nothing caught it: Check 1 sees a non-empty file, Check 2 sees valid
-# links, and no check has ever looked at markdown structure.
-#
-# The test is deliberately the crudest one that works: an opening and a closing
-# fence are the same token, so a correct file has an even number of lines
-# starting with ```. That makes the check incapable of a false negative on the
-# defect it exists for, and it needs no parser.
-#
-# Known blind spot, accepted: a fence line quoted *inside* another fenced block
-# flips the parity and would be reported. That is rare here and loud when it
-# happens - the alternative is tracking open/closed state, which turns a
-# four-line check into something that itself needs tests. Documentation about
-# markdown syntax should indent its examples rather than fence them.
-echo "Check 24: balanced markdown code fences"
-
-while read -r file; do
-    rel="${file#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    fences="$(grep -c '^```' "${file}" || true)"
-    if (( fences % 2 != 0 )); then
-        echo "  Unbalanced code fence (${fences} found): ${rel}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-done < <(find "${REPO_ROOT}" -not -path "*/.git/*" -type f -name "*.md")
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 25: counted claims in the README match what is countable
-# =============================================================================
-# Added 2026-08-19, after the README had said "Thirteen procedures" for four
-# days while runbooks/ held fourteen - mariadb-backup.md arrived on 2026-08-15
-# and the prose was never recounted. Same class as the seven hand-counted
-# numbers the 2026-08-17 audit found across the documentation: a number written
-# into prose has no owner, and only one possible future.
-#
-# The repository's usual answer is to delete such a number where a table already
-# carries it. These four are kept because they tell a reader the size of the
-# thing, so they are machine-checked instead. Nothing is hardcoded: both sides
-# are computed at run time, so adding a runbook or a role fails this check until
-# the sentence is updated. That is the intended cost.
-#
-# Deliberately not covered: the node counts in the opening line ("ten guests",
-# "nine of eleven nodes"). They cannot be derived from this repository at all -
-# the real inventory is gitignored - so a check could only compare prose against
-# hosts.yml.example, a file that can drift from the fleet just as easily.
-#
-# A missing claim is an error, not a pass. Deleting the sentence therefore fails
-# this check until its entry below is removed as well. That friction is the
-# point: a guard whose pattern silently stops matching is the failure class this
-# platform keeps finding in its own monitoring, and it costs one deliberate edit
-# to retire a claim on purpose.
-#
-# Verified both ways when written: a wrong count, a wrong role number and a
-# deleted claim each produce a named failure, and the clean tree passes.
-echo "Check 25: counted claims match the repository"
-
-README_FILE="${REPO_ROOT}/README.md"
-SELF="${REPO_ROOT}/scripts/validate-repo.sh"
-
-word_to_number() {
-    case "${1,,}" in
-        ten) echo 10 ;;      eleven) echo 11 ;;    twelve) echo 12 ;;
-        thirteen) echo 13 ;; fourteen) echo 14 ;;  fifteen) echo 15 ;;
-        sixteen) echo 16 ;;  seventeen) echo 17 ;; eighteen) echo 18 ;;
-        nineteen) echo 19 ;; twenty) echo 20 ;;
-        *) echo "${1}" ;;
-    esac
-}
-
-compare_claim() {
-    local label="$1" claimed="$2" actual="$3"
-    if [[ -z "${claimed}" ]]; then
-        echo "  Claim not found in README: ${label}"
-        echo "x" >> "${ERROR_LOG}"
-    elif [[ "${claimed}" != "${actual}" ]]; then
-        echo "  ${label}: README says ${claimed}, repository has ${actual}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-}
-
-runbooks_actual="$(find "${REPO_ROOT}/runbooks" -name "*.md" ! -name "README.md" | wc -l)"
-roles_actual="$(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d | wc -l)"
-playbooks_actual="$(find "${REPO_ROOT}/ansible/playbooks" -maxdepth 1 -name "*.yml" | wc -l)"
-checks_actual="$(grep -cE '^echo "Check [0-9]+' "${SELF}" || true)"
-
-runbooks_prose="$(word_to_number "$({ grep -oP '^\K\w+(?= procedures under the same contract)' "${README_FILE}" || true; })")"
-runbooks_list="$(word_to_number "$({ grep -oP '<summary>All \K\w+(?= runbooks</summary>)' "${README_FILE}" || true; })")"
-playbooks_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - \K[0-9]+' "${README_FILE}" || true; })"
-roles_claim="$({ grep -oP 'Roles\]\(ansible/roles/\) - [0-9]+ and \K[0-9]+' "${README_FILE}" || true; })"
-checks_claim="$({ grep -oP 'validate-repo\.sh\) - \K[0-9]+(?= structural checks)' "${README_FILE}" || true; })"
-
-compare_claim "runbook count (section intro)" "${runbooks_prose}" "${runbooks_actual}"
-compare_claim "runbook count (list summary)" "${runbooks_list}" "${runbooks_actual}"
-compare_claim "playbook count" "${playbooks_claim}" "${playbooks_actual}"
-compare_claim "role count" "${roles_claim}" "${roles_actual}"
-compare_claim "validator check count" "${checks_claim}" "${checks_actual}"
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 26: every document is reachable from an index
-# =============================================================================
-# Added 2026-08-19. The 2026-08-17 audit found 26 documents that no index linked
-# to, including the ISO mapping, the data classification, the remediation plan,
-# both incident write-ups, four of eight decision records and twelve of the
-# runbooks. They were found by hand, one at a time. For a repository whose
-# stated purpose is to be read, its strongest evidence was invisible from the
-# front page - and nothing would have reported that.
-#
-# Reachability is defined narrowly on purpose: a document counts as reachable if
-# README.md or runbooks/README.md links it directly. Transitive reachability
-# would be truer to how a reader navigates and would also make the check pass on
-# a chain nobody can find, which is the condition this exists to prevent.
-#
-# Exceptions are listed with a reason and are themselves checked for existence,
-# so an exception cannot outlive the file it excuses. An unjustified exception is
-# how a control catalogue turns into decoration.
-echo "Check 26: every document is reachable from an index"
-
-INDEX_FILES=("README.md" "runbooks/README.md")
-
-# Deliberately not indexed:
-#   docs/platform/ansible-progress.md - per-session learning narrative, written
-#   for whoever runs the platform rather than for a reader of it. Linked from
-#   CLAUDE.md, which is where the learning track is steered from.
-INDEX_EXCEPTIONS=("docs/platform/ansible-progress.md")
-
-LINKED_LIST="$(mktemp)"
-
-for idx in "${INDEX_FILES[@]}"; do
-    idx_dir="$(dirname "${REPO_ROOT}/${idx}")"
+while read -r rel; do
+    dir="$(dirname "${REPO_ROOT}/${rel}")"
     while read -r link; do
-        [[ "${link}" =~ ^https?:// ]] && continue
+        [[ "${link}" =~ ^(https?|mailto): ]] && continue
         link="${link%%#*}"
         [[ -z "${link}" ]] && continue
-        target="$(realpath -m --relative-to="${REPO_ROOT}" "${idx_dir}/${link}" 2>/dev/null || true)"
-        [[ -n "${target}" ]] && echo "${target}" >> "${LINKED_LIST}"
-    done < <({ grep -oP '\]\(\K[^)]+' "${REPO_ROOT}/${idx}" || true; })
-done
-
-for ex in "${INDEX_EXCEPTIONS[@]}"; do
-    if [[ ! -f "${REPO_ROOT}/${ex}" ]]; then
-        echo "  Exception names a file that no longer exists: ${ex}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-done
-
-while read -r doc; do
-    rel="${doc#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    skip=0
-    for ex in "${INDEX_EXCEPTIONS[@]}"; do
-        [[ "${rel}" == "${ex}" ]] && skip=1
-    done
-    (( skip )) && continue
-    if ! grep -qxF "${rel}" "${LINKED_LIST}"; then
-        echo "  Not linked from any index: ${rel}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
-
-rm -f "${LINKED_LIST}"
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 27: backticked repository paths in the docs must exist
-# =============================================================================
-# Added 2026-08-19. Check 2 validates markdown links; nothing validated a path
-# written as prose in backticks, which is how most operational references are
-# written - "the script in `snippets/scripts/lxc-fstrim.sh`". Those rot silently
-# on a rename, and a runbook that names a path which no longer exists fails at
-# the only moment it is ever read.
-#
-# A reference passes if the path exists, or if git deliberately ignores it. The
-# second case is the real inventory, the .env files and the deployed Prometheus
-# config: named on purpose, absent on purpose, and asking git rather than
-# maintaining a second list means the exemption cannot drift from .gitignore.
-#
-# Historical records are excluded. changelog.md and ansible-progress.md describe
-# what was true on a date; a path that was correct in July stays correct in a
-# July entry, and rewriting it to match today would falsify the record.
-echo "Check 27: backticked repository paths exist"
-
-PATH_HISTORY_EXCLUDED=("docs/platform/changelog.md" "docs/platform/ansible-progress.md")
-
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    skip=0
-    for ex in "${PATH_HISTORY_EXCLUDED[@]}"; do
-        [[ "${rel}" == "${ex}" ]] && skip=1
-    done
-    (( skip )) && continue
-    while read -r ref; do
-        [[ -z "${ref}" ]] && continue
-        [[ -e "${REPO_ROOT}/${ref}" ]] && continue
-        git -C "${REPO_ROOT}" check-ignore -q "${ref}" 2>/dev/null && continue
-        echo "  Path does not exist: ${rel} -> ${ref}"
-        echo "x" >> "${ERROR_LOG}"
-    done < <({ grep -oP '`\K(snippets|ansible|scripts|docker|docs|runbooks)/[A-Za-z0-9_./-]+(?=`)' "${mdfile}" || true; } | sort -u)
-done < <(find "${REPO_ROOT}/docs" "${REPO_ROOT}/runbooks" -type f -name "*.md")
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 28: every Ansible role appears in the platform documentation
-# =============================================================================
-# Added 2026-08-19. The role catalogue in docs/platform/ansible.md is the only
-# place a reader can see what the automation actually does. A role that exists
-# and is undocumented is invisible work, and the failure mode is quiet: the
-# mariadb_backup role was written on 2026-08-15 to close a gap that had itself
-# gone unnoticed because a category had been declared complete.
-echo "Check 28: every Ansible role is documented"
-
-if [[ -d "${REPO_ROOT}/ansible/roles" ]]; then
-    while read -r roledir; do
-        role="$(basename "${roledir}")"
-        if ! grep -q "${role}" "${REPO_ROOT}/docs/platform/ansible.md"; then
-            echo "  Role not documented in docs/platform/ansible.md: ${role}"
-            echo "x" >> "${ERROR_LOG}"
+        if [[ ! -e "${dir}/${link}" ]]; then
+            fail "Broken: ${rel} -> ${link}"
+        elif ignored "$(realpath -m --relative-to="${REPO_ROOT}" "${dir}/${link}")"; then
+            fail "Link target is git-ignored: ${rel} -> ${link}"
         fi
-    done < <(find "${REPO_ROOT}/ansible/roles" -mindepth 1 -maxdepth 1 -type d)
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+    done < <(grep -oP '\]\(\K[^)]+' "${REPO_ROOT}/${rel}" || true)
+done < <(md_files)
+flush_errors
 
 # =============================================================================
-# Check 29: every node document declares a tag the ACL model knows
+# Check 3: link fragments resolve to an anchor
 # =============================================================================
-# Added 2026-08-19. Access on this platform is decided by the Tailscale tag a
-# node carries, so a node document without one describes a machine whose reach
-# nobody can look up. A tag that the ACL model does not define is worse: it reads
-# as policy and grants nothing, because Tailscale ACLs are deny-by-default.
-#
-# This is the lxc250 shape one layer up. That node fell outside `hosts: all`
-# because it was in no inventory group, and `all` excludes silently rather than
-# failing. Two lists that are never held against each other produce exactly this.
-echo "Check 29: node documents declare a known Tailscale tag"
-
-ACL_DOC="${REPO_ROOT}/docs/platform/tailscale-acl.md"
-
-if [[ -d "${REPO_ROOT}/docs/nodes" && -f "${ACL_DOC}" ]]; then
-    while read -r nodedoc; do
-        rel="${nodedoc#${REPO_ROOT}/}"
-        tag="$({ grep -oP '^- Tag: `\Ktag:[a-z0-9-]+' "${nodedoc}" || true; } | head -1)"
-        if [[ -z "${tag}" ]]; then
-            echo "  No '- Tag: \`tag:...\`' line: ${rel}"
-            echo "x" >> "${ERROR_LOG}"
-            continue
-        fi
-        if ! grep -q "\"${tag}\":" "${ACL_DOC}"; then
-            echo "  Tag not defined in tailscale-acl.md tagOwners: ${rel} -> ${tag}"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-    done < <(find "${REPO_ROOT}/docs/nodes" -type f -name "*.md")
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 30: container images carry an explicit version tag
-# =============================================================================
-# Added 2026-08-19. The repository pins every image; nothing made that a rule.
-# An unpinned tag has two costs that only appear later: there is no rollback
-# point, because "the version that worked" has no name, and the weekly Trivy
-# scan then measures whatever `:latest` resolved to at scan time rather than
-# what runs.
-#
-# Note what this cannot see. The 2026-08-17 audit measured that no stack on the
-# fleet runs a pinned image - the deployed compose files differ from these. This
-# check guards the repository, and closing the gap on the fleet waits on the
-# aux-disk replacement that the standing hold on docker-compose-update depends on.
-echo "Check 30: container images carry an explicit tag"
-
-while read -r composefile; do
-    rel="${composefile#${REPO_ROOT}/}"
-    while read -r line; do
-        image="$(echo "${line}" | sed -E 's/.*image:[[:space:]]*//; s/[[:space:]]*$//' | tr -d '"'"'"'')"
-        [[ -z "${image}" ]] && continue
-        [[ "${image}" == *'${'* ]] && continue
-        if [[ "${image}" != *:* ]]; then
-            echo "  Image without a tag: ${rel} -> ${image}"
-            echo "x" >> "${ERROR_LOG}"
-        elif [[ "${image}" == *:latest || "${image}" == *:main || "${image}" == *:master || "${image}" == *:stable ]]; then
-            echo "  Image not pinned: ${rel} -> ${image}"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-    done < <({ grep -E '^\s*image:' "${composefile}" || true; })
-done < <(find "${REPO_ROOT}/docker" -name "docker-compose.yml" -type f 2>/dev/null)
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 31: secrets in Ansible variables are vaulted or referenced
-# =============================================================================
-# Added 2026-08-19. Every secret in this repository is currently either an inline
-# `!vault` value in group_vars/all/vault.yml or a `{{ }}` reference to one. That
-# is a practice, and a practice survives only as long as somebody remembers it -
-# this file makes the distinction between a control and an intention its whole
-# subject, so the rule is enforced rather than followed.
-#
-# A key whose name suggests a secret must carry an encrypted value, a variable
-# reference, or nothing. A literal is an error.
-#
-# The name has to *end* in the secret word, not merely contain it. Substring
-# matching flagged `ssh_hardening_password_authentication: "no"` on its first run -
-# an sshd directive, not a credential - and a rule that needs an exception for a
-# correctly named variable is a rule that will need more of them. `postgres_exporter` still keeps
-# its DATA_SOURCE_NAME unencrypted in an env file on lxc260 - outside this
-# repository, and tracked in the remediation plan - which is exactly the kind of
-# addition this check exists to stop from spreading.
-echo "Check 31: secret-looking variables are not literals"
-
-while read -r yamlfile; do
-    rel="${yamlfile#${REPO_ROOT}/}"
-    while read -r line; do
-        value="$(echo "${line}" | sed -E 's/^[^:]*:[[:space:]]*//; s/[[:space:]]*$//')"
-        [[ -z "${value}" ]] && continue
-        [[ "${value}" == '!vault'* ]] && continue
-        [[ "${value}" == *'{{'* ]] && continue
-        [[ "${value}" == '|' || "${value}" == '>' ]] && continue
-        key="$(echo "${line}" | sed -E 's/[[:space:]]*([^:]+):.*/\1/')"
-        echo "  Literal value for a secret-looking key: ${rel} -> ${key}"
-        echo "x" >> "${ERROR_LOG}"
-    done < <({ grep -nE '^[[:space:]]*[a-z_]*(password|passwd|secret|token|api_key|secret_key|private_key)[[:space:]]*:' "${yamlfile}" | sed 's/^[0-9]*://' || true; })
-done < <(find "${REPO_ROOT}/ansible" -type f \( -name "*.yml" -o -name "*.yaml" \))
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 32: an Enforced control names what enforces it
-# =============================================================================
-# Added 2026-08-19. security-controls.md defines Enforced as "a machine refuses
-# the wrong outcome". A row claiming that without naming the machine is the
-# strongest sentence in the document backed by nothing, and this repository has
-# already paid for it: three rows read Enforced until 2026-08-17 while two nodes
-# accepted password authentication. The audit's own conclusion was that a false
-# assurance suppresses discovery more effectively than a stated gap.
-#
-# The test is deliberately shallow - a link or a backticked identifier - because
-# it cannot judge whether the evidence is good. It can only insist that some
-# evidence is offered, which is the difference between a claim and an assertion.
-echo "Check 32: Enforced controls cite their evidence"
-
-SEC_DOC="${REPO_ROOT}/docs/platform/security-controls.md"
-
-if [[ -f "${SEC_DOC}" ]]; then
-    while read -r row; do
-        if ! echo "${row}" | grep -qE '\[[^]]+\]\(|`'; then
-            control="$(echo "${row}" | sed -E 's/^\|[[:space:]]*([^|]+)\|.*/\1/' | sed 's/[[:space:]]*$//')"
-            echo "  Enforced without evidence: ${control}"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-    done < <({ grep -E '^\|[[:space:]]*A\.[0-9.]+ .*\|[[:space:]]*Enforced[[:space:]]*\|' "${SEC_DOC}" || true; })
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 33: service documents name a node that has a node document
-# =============================================================================
-# Added 2026-08-19. A service document that names no node describes software
-# without a machine, and one that names a node with no document points at a
-# machine nobody has to describe. Both are the same defect as lxc250: an entity
-# that exists in one list and not in the other, where nothing holds the two
-# lists against each other.
-#
-# The rule is deliberately weak - at least one node identifier, and every
-# identifier it does use must resolve to docs/nodes/<node>.md. It does not try
-# to decide which node is the primary one, because several services legitimately
-# name three: the node they run on, lxc260 for their database and vm102 for
-# their files.
-echo "Check 33: service documents name a documented node"
-
-if [[ -d "${REPO_ROOT}/docs/services" ]]; then
-    while read -r svc; do
-        rel="${svc#${REPO_ROOT}/}"
-        nodes="$({ grep -ohE '\b(vm[0-9]{3}|lxc[0-9]{3})\b' "${svc}" || true; } | sort -u)"
-        if [[ -z "${nodes}" ]]; then
-            echo "  Service document names no node: ${rel}"
-            echo "x" >> "${ERROR_LOG}"
-            continue
-        fi
-        while read -r node; do
-            [[ -z "${node}" ]] && continue
-            if [[ ! -f "${REPO_ROOT}/docs/nodes/${node}.md" ]]; then
-                echo "  Names a node with no node document: ${rel} -> ${node}"
-                echo "x" >> "${ERROR_LOG}"
-            fi
-        done <<< "${nodes}"
-    done < <(find "${REPO_ROOT}/docs/services" -type f -name "*.md")
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 34: no refs outside the standard namespaces
-# =============================================================================
-# Added 2026-08-20. A ref outside refs/heads is invisible to every habit this
-# repository has for reviewing its own history. `git log`, `git branch` and the
-# publishing commands all work from branches, so a commit that no branch reaches
-# is never read and never reviewed - while a mirror transfer moves every ref
-# there is. "On no branch" is not the same as "not part of this repository", and
-# the distance between those two is where an unreviewed commit can sit for weeks.
-#
-# Tooling leaves refs behind as a matter of course. `git filter-branch` writes
-# refs/original, and this repository still carries an empty one from its history
-# rewrite; editors and sync helpers keep namespaces of their own. Three such refs
-# were found and removed on the day this check was written.
-#
-# refs/stash and refs/notes are legitimate local state and stay allowed. The
-# check reports rather than deletes: removing a ref is a judgement call, and
-# it may still be the only pointer to unfinished work.
-echo "Check 34: no refs outside the standard namespaces"
-
-if git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
-    while read -r ref; do
-        [[ -z "${ref}" ]] && continue
-        case "${ref}" in
-            refs/heads/*|refs/tags/*|refs/remotes/*|refs/stash|refs/notes/*) continue ;;
-        esac
-        echo "  Ref outside standard namespaces: ${ref}"
-        echo "  (remove it with: git update-ref -d ${ref})"
-        echo "x" >> "${ERROR_LOG}"
-    done < <(git -C "${REPO_ROOT}" for-each-ref --format='%(refname)')
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 35: state-changing playbooks import the preflight gate
-# =============================================================================
-# Added 2026-09-04. preflight.yml refuses a run from a working tree that matches
-# no commit, and it protects only the playbooks that import it. The import is
-# four identical lines repeated in every playbook - a hand-maintained list with
-# nothing comparing it to the directory, which is the shape that once left lxc240
-# out of the guest backup and lxc250 out of `hosts: all`.
-#
-# Three files are exempt by design. preflight.yml is the gate. fleet-health-check
-# and fleet-snapshot only read, and a gate that blocks diagnosis during an
-# incident gets removed. Note what the exemption costs: fleet-snapshot runs
-# weekly from a timer, so a control node left on a feature branch would take
-# its baseline with whichever command set that branch carries. The trade is
-# deliberate - a snapshot that refuses to run during an outage is worth less
-# than one taken from a tree nobody checked.
-echo "Check 35: state-changing playbooks import the preflight gate"
-
-PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
-if [[ -d "${PLAYBOOK_DIR}" ]]; then
-    for pb in "${PLAYBOOK_DIR}"/*.yml; do
-        [[ -e "${pb}" ]] || continue
-        base="$(basename "${pb}")"
-        case "${base}" in
-            preflight.yml|fleet-health-check.yml|fleet-snapshot.yml) continue ;;
-        esac
-        if ! grep -q '^  import_playbook: preflight.yml$' "${pb}"; then
-            echo "  Missing preflight import: ansible/playbooks/${base}"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-    done
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 36: markdown table rows stay on one line
-# =============================================================================
-# Added 2026-09-04. A table row in markdown ends at the newline. A row written
-# across several lines still renders - the remainder falls out of the table and
-# sits underneath it as a paragraph, which looks deliberate enough that nobody
-# questions it. The changelog carried one for eleven days, and the text that fell
-# out of the table held the first note that lxc240 was missing from the guest
-# backup. It was found by reading, not by any check.
-#
-# The rule is mechanical: a line that opens a table row must also close one.
-# Fenced code blocks are skipped, because a shell pipeline is not a table.
-#
-# awk reports and the shell counts, one error per broken row. The first version
-# counted awk's exit status instead, so a file with three broken rows printed
-# three lines and raised the total by one - a check that names the defects
-# correctly and then understates how many there are.
-# Ignored files are skipped, the same way Check 24 skips them. `*.local.md` is
-# private scratch space and git does not track it, so a broken
-# row there would fail the run and name a file that is not part of the
-# repository - a commit gate answering for something no commit can contain.
-echo "Check 36: markdown table rows stay on one line"
-
-while IFS= read -r md; do
-    rel="${md#"${REPO_ROOT}/"}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    while IFS= read -r finding; do
-        echo "${finding}"
-        echo "x" >> "${ERROR_LOG}"
-    done < <(awk -v file="${rel}" '
-        /^```/ { fence = !fence; next }
-        fence  { next }
-        /^\|/ {
-            line = $0
-            sub(/[ \t]+$/, "", line)
-            if (line !~ /\|$/) {
-                printf "  Table row broken across lines: %s:%d\n", file, NR
-            }
-        }
-    ' "${md}")
-done < <(find "${REPO_ROOT}" -name '*.md' -not -path '*/.git/*')
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 37: changelog entries stay at index length
-# =============================================================================
-# Added 2026-09-04. Measured that day: the ten oldest entries average 173
-# characters, the ten newest 1888. Nothing decided that; each entry was
-# defensible on its own and the trend was visible only in the aggregate.
-#
-# A changelog is an index. The place for the narrative is the known-error entry,
-# the decision record or the runbook that the row links to, where a reader
-# looking for that fault will actually find it. A row that carries the narrative
-# itself buries the one thing the file is for, which is answering "what changed
-# and when" at a glance.
-#
-# Rows dated before the cutoff are left alone. Rewriting a year of history to a
-# rule invented today would replace one uniform register with another.
-echo "Check 37: changelog entries stay at index length"
-
-CHANGELOG="${REPO_ROOT}/docs/platform/changelog.md"
-CHANGELOG_CUTOFF="2026-09-04"
-CHANGELOG_MAX=600
-
-if [[ -f "${CHANGELOG}" ]]; then
-    while IFS= read -r row; do
-        date="${row:2:10}"
-        [[ "${date}" < "${CHANGELOG_CUTOFF}" ]] && continue
-        if (( ${#row} > CHANGELOG_MAX )); then
-            echo "  Changelog entry ${date} is ${#row} characters, limit ${CHANGELOG_MAX}"
-            echo "  (move the detail to the entry it links to; the row is an index line)"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-    done < <(grep '^| 20' "${CHANGELOG}")
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 38: the alerting table in monitoring.md matches the rules file
-# =============================================================================
-# Added 2026-09-08. `monitoring.md` states in prose that its table *is* the
-# count, after three separate miscounts had been corrected there. On this date
-# the table was two whole groups and five rules behind the file it describes:
-# `backup` and `kernel` had been added and the table never grew. Nothing could
-# see it, because the only mechanised comparison in this area is promtool, which
-# reads the rules file and never opens the document.
-#
-# Compared against the file rather than against the live API on purpose. The
-# repository copy is what `prometheus_config` deploys, so it is the version the
-# documentation is supposed to describe, and the check has to work on a laptop
-# with no route to the fleet.
-echo "Check 38: alerting table matches the rules file"
-
-RULES_FILE="${REPO_ROOT}/docker/monitoring/prometheus/rules/alert.rules.yml"
-MON_DOC="${REPO_ROOT}/docs/platform/monitoring.md"
-
-if [[ -f "${RULES_FILE}" && -f "${MON_DOC}" ]]; then
-    # The table runs from its header to the first blank line after it.
-    doc_table="$(sed -n '/^| Group | Rules |/,/^$/p' "${MON_DOC}")"
-
-    if [[ -z "${doc_table}" ]]; then
-        echo "  No '| Group | Rules |' table found in docs/platform/monitoring.md"
-        echo "x" >> "${ERROR_LOG}"
-    else
-        file_groups="$(grep -oE '^  - name: [a-z_]+' "${RULES_FILE}" | sed 's/.*name: //' | sort -u)"
-        file_rules="$(grep -oE '^      - alert: [A-Za-z]+' "${RULES_FILE}" | sed 's/.*alert: //' | sort -u)"
-        # Group cells are the first backticked word of a row; rule names are the
-        # backticked CamelCase entries anywhere in it.
-        doc_groups="$(grep -oE '^\| `[a-z_]+`' <<< "${doc_table}" | tr -d '|` ' | sort -u)"
-        doc_rules="$(grep -oE '`[A-Z][A-Za-z]+`' <<< "${doc_table}" | tr -d '`' | sort -u)"
-
-        while read -r g; do
-            [[ -z "${g}" ]] && continue
-            echo "  Rule group in ${RULES_FILE#"${REPO_ROOT}/"} but not in the monitoring.md table: ${g}"
-            echo "x" >> "${ERROR_LOG}"
-        done < <(comm -23 <(echo "${file_groups}") <(echo "${doc_groups}"))
-
-        while read -r g; do
-            [[ -z "${g}" ]] && continue
-            echo "  Rule group in the monitoring.md table but not in the rules file: ${g}"
-            echo "x" >> "${ERROR_LOG}"
-        done < <(comm -13 <(echo "${file_groups}") <(echo "${doc_groups}"))
-
-        while read -r r; do
-            [[ -z "${r}" ]] && continue
-            echo "  Alert in ${RULES_FILE#"${REPO_ROOT}/"} but not in the monitoring.md table: ${r}"
-            echo "x" >> "${ERROR_LOG}"
-        done < <(comm -23 <(echo "${file_rules}") <(echo "${doc_rules}"))
-
-        while read -r r; do
-            [[ -z "${r}" ]] && continue
-            echo "  Alert in the monitoring.md table but not in the rules file: ${r}"
-            echo "x" >> "${ERROR_LOG}"
-        done < <(comm -13 <(echo "${file_rules}") <(echo "${doc_rules}"))
-    fi
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 39: a change under docs/ or ansible/ carries a changelog row
-# =============================================================================
-# Added 2026-09-08. The Documentation Audit Rule in CLAUDE.md has required this
-# since the rule was written, and it was the one clause in it that a human had
-# to remember while every neighbouring clause had become a check. The changelog
-# is the only reverse-chronological record of what changed on this platform, so
-# a change that skips it is invisible six weeks later, which is exactly the
-# interval at which this repository keeps rediscovering its own history.
-#
-# Diff-scoped like Check 16, and inert under CI for the same reason: a fresh
-# checkout has no diff, so there is nothing to hold a changelog row against.
-echo "Check 39: changed docs/ or ansible/ carry a changelog row"
-
-cl_changed="$(git -C "${REPO_ROOT}" diff --cached --name-only 2>/dev/null || true)"
-if [[ -z "${cl_changed}" ]]; then
-    cl_changed="$(git -C "${REPO_ROOT}" diff --name-only HEAD 2>/dev/null || true)"
-fi
-
-# Untracked files count too, and this is not a detail: a whole new role or
-# playbook is untracked until it is staged, so a diff-only view would let
-# exactly the largest changes through. Found while writing this check - the
-# first run listed one edited document and none of the five new files beside it.
-cl_untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)"
-if [[ -n "${cl_untracked}" ]]; then
-    cl_changed="$(printf '%s\n%s' "${cl_changed}" "${cl_untracked}" | grep -v '^$' || true)"
-fi
-
-CHANGELOG_REL="docs/platform/changelog.md"
-
-if [[ -z "${cl_changed}" ]]; then
-    echo "  SKIP: no diff against HEAD"
-else
-    # The changelog itself is under docs/, so it must not count as its own trigger.
-    cl_trigger="$(grep -E '^(docs|ansible)/' <<< "${cl_changed}" | grep -vFx "${CHANGELOG_REL}" || true)"
-    if [[ -z "${cl_trigger}" ]]; then
-        echo "  SKIP: no changes under docs/ or ansible/"
-    elif grep -qFx "${CHANGELOG_REL}" <<< "${cl_changed}"; then
-        echo "  OK: changelog row present alongside $(wc -l <<< "${cl_trigger}") changed path(s)"
-    else
-        echo "  ${CHANGELOG_REL} unchanged while these were modified:"
-        sed 's/^/    /' <<< "${cl_trigger}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 40: the commit-message gate is installed on this machine
-# =============================================================================
-# Added 2026-09-12, after nine commits carrying an AI attribution trailer reached
-# the public main branch. The policy forbidding that had been written down since
-# the repository began; scripts/commit-msg-lint.sh existed to enforce it, and on
-# the workstation those commits were made from there was no .git/hooks/commit-msg
-# at all. The script had never run once.
-#
-# That is the same shape as the hooks table in CLAUDE.md, which states an
-# intention that each machine satisfies separately, and as the .claude settings
-# file found without a hooks key on 2026-08-17. A guard whose installation lives
-# outside version control is a guard nobody can confirm by reading a document.
-#
-# Skipped under CI on purpose. A clean checkout has no hooks installed and is not
-# where commits are written; .github/workflows/commit-messages.yml is the gate
-# that applies there, and it reads every message in the pull request plus the
-# pull request's own title and body.
-echo "Check 40: commit-message gate installed on this machine"
-
-if [[ -n "${CI:-}" ]]; then
-    echo "  SKIP: under CI, where the commit-messages workflow is the gate"
-elif ! git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
-    echo "  SKIP: not a git repository"
-else
-    # Two ways to be installed, and the tracked one is preferred: core.hooksPath
-    # pointing at scripts/hooks, where the hook is a file in this repository and
-    # can be read in a diff. A symlink into .git/hooks still counts, because it
-    # runs the same script.
-    hooks_dir="$(git -C "${REPO_ROOT}" config --get core.hooksPath || true)"
-    if [[ -n "${hooks_dir}" ]]; then
-        [[ "${hooks_dir}" = /* ]] || hooks_dir="${REPO_ROOT}/${hooks_dir}"
-    else
-        hooks_dir="$(git -C "${REPO_ROOT}" rev-parse --git-path hooks)"
-        [[ "${hooks_dir}" = /* ]] || hooks_dir="${REPO_ROOT}/${hooks_dir}"
-    fi
-    hook_path="${hooks_dir}/commit-msg"
-
-    if [[ ! -x "${hook_path}" ]]; then
-        echo "  No executable commit-msg hook at ${hook_path}"
-        echo "  (install it with: git config core.hooksPath scripts/hooks)"
-        echo "x" >> "${ERROR_LOG}"
-    elif ! grep -q 'commit-msg-lint' "${hook_path}" 2>/dev/null \
-         && [[ "$(readlink -f "${hook_path}" 2>/dev/null)" != *commit-msg-lint.sh ]]; then
-        echo "  commit-msg hook exists but does not run scripts/commit-msg-lint.sh: ${hook_path}"
-        echo "x" >> "${ERROR_LOG}"
-    fi
-fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
-
-# =============================================================================
-# Check 41: an internal link's fragment lands on an anchor that exists
-# =============================================================================
-# Added 2026-09-16. Check 2 strips the fragment before it tests a link, so it
-# proves the file exists and nothing else. Every cross-reference in this
-# repository is written as file plus fragment, and the fragment half was
-# unverified from the beginning: measured on the day this was written, nine
-# links across seven documents pointed at anchors that were not there. KE-21 had
-# no explicit anchor at all while six links addressed it, and three links carried
-# a slug GitHub derives from a heading, which is what breaks when the heading is
-# reworded.
-#
-# Two kinds of anchor count, because both are in use here. An explicit
-# <a id="..."></a>, which is what known-errors.md and design-decisions.md place
-# above their headings, and the slug GitHub derives from an ATX heading -
-# lowercase, punctuation dropped, spaces to hyphens, underscores kept. The
-# derived form is reproduced rather than forbidden: most documents rely on it
-# and rewriting them all would be a larger change than the one this guard is for.
-#
-# Duplicate headings would make GitHub append -1 to the second slug; Check 11
-# already refuses those, so the simple form is correct here.
-echo "Check 41: internal link fragments resolve to an anchor"
+# Anchors are explicit <a id="..."></a> tags or the slug GitHub derives from a heading.
+echo "Check 3: internal link fragments resolve to an anchor"
 
 ANCHOR_CACHE="$(mktemp -d)"
-
 anchors_of() {
     local f="$1" key
     key="${ANCHOR_CACHE}/$(printf '%s' "${f}" | md5sum | cut -d' ' -f1)"
@@ -1376,9 +99,8 @@ anchors_of() {
     cat "${key}"
 }
 
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
+while read -r rel; do
+    mdfile="${REPO_ROOT}/${rel}"
     dir="$(dirname "${mdfile}")"
     while read -r link; do
         [[ "${link}" =~ ^https?:// ]] && continue
@@ -1386,48 +108,272 @@ while read -r mdfile; do
         frag="${link#*#}"
         target="${link%%#*}"
         [[ -n "${frag}" ]] || continue
-        if [[ -z "${target}" ]]; then
-            tfile="${mdfile}"
-        else
-            tfile="${dir}/${target}"
-        fi
+        if [[ -z "${target}" ]]; then tfile="${mdfile}"; else tfile="${dir}/${target}"; fi
         [[ -f "${tfile}" && "${tfile}" == *.md ]] || continue
-        if ! grep -qxF "${frag}" <(anchors_of "${tfile}"); then
-            echo "  No such anchor: ${rel} -> ${link}"
-            echo "x" >> "${ERROR_LOG}"
-        fi
+        grep -qxF "${frag}" <(anchors_of "${tfile}") || fail "No such anchor: ${rel} -> ${link}"
     done < <(grep -oP '\]\(\K[^)]+' "${mdfile}" 2>/dev/null || true)
-done < <(find "${REPO_ROOT}" -name "*.md" -type f -not -path "*/.git/*")
-
+done < <(md_files)
 rm -rf "${ANCHOR_CACHE}"
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+flush_errors
 
 # =============================================================================
-# Check 42: a paragraph above a rule is a heading, whether or not it meant to be
+# Check 4: no committed .env files
 # =============================================================================
-# Added 2026-09-16, the day after it happened. Markdown has a second heading
-# syntax besides the leading hashes: a paragraph with --- under it is an H2 and
-# with === under it an H1. A blank line is the whole difference between that and
-# a horizontal rule, and this repository separates its sections with --- on
-# every second page. The index paragraph added to design-decisions.md on
-# 2026-09-15 lost its blank line and rendered on GitHub as an H2 carrying three
-# lines of running text; nothing reported it, because every heading check here
-# reads a leading hash.
-#
-# A list item or a table row above a rule is not affected - a thematic break may
-# interrupt those - and YAML frontmatter closes with the same characters, so a
-# file that opens with --- is skipped to its closing marker.
-echo "Check 42: no paragraph turned into a heading by the rule below it"
+echo "Check 4: committed .env files"
 
-while read -r mdfile; do
-    rel="${mdfile#${REPO_ROOT}/}"
-    git -C "${REPO_ROOT}" check-ignore -q "${rel}" 2>/dev/null && continue
-    while read -r finding; do
-        echo "  ${finding}"
-        echo "x" >> "${ERROR_LOG}"
-    done < <(awk -v file="${rel}" '
+while read -r rel; do
+    case "$(basename "${rel}")" in
+        .env.example) ;;
+        .env|.env.*) fail "Found: ${rel}" ;;
+    esac
+done < <(repo_files)
+flush_errors
+
+# =============================================================================
+# Check 5: every compose directory has a .env.example
+# =============================================================================
+echo "Check 5: .env.example per compose directory"
+
+while read -r rel; do
+    [[ -f "${REPO_ROOT}/$(dirname "${rel}")/.env.example" ]] || fail "Missing .env.example: $(dirname "${rel}")/"
+done < <(repo_files -- 'docker/*docker-compose.yml')
+flush_errors
+
+# =============================================================================
+# Check 6: no private keys or certificates
+# =============================================================================
+echo "Check 6: no private keys or certificates"
+
+while read -r rel; do
+    case "${rel}" in
+        *.pem|*.key|*.crt|*.p12|*.pfx) fail "Key or certificate file: ${rel}" ;;
+    esac
+    grep -q 'BEGIN [A-Z ]*PRIVATE KEY' "${REPO_ROOT}/${rel}" 2>/dev/null && fail "Private key block: ${rel}"
+done < <(repo_files | while read -r f; do [[ -f "${REPO_ROOT}/${f}" ]] && echo "${f}"; done \
+         | grep -vx 'scripts/validate-repo.sh')
+flush_errors
+
+# =============================================================================
+# Check 7: no bare Tailscale addresses (use <tailscale-ip-...>)
+# =============================================================================
+# Allowed: the CGNAT range 100.64.0.0/10 and Tailscale's resolver 100.100.100.100, both public.
+echo "Check 7: no plain Tailscale IPs"
+
+while read -r rel; do
+    { grep -nP '(?<!<tailscale-ip[->])\b100\.\d{1,3}\.\d{1,3}\.\d{1,3}\b' "${REPO_ROOT}/${rel}" \
+        | grep -vP '100\.64\.0\.0/10|100\.100\.100\.100' || true; } \
+        | while read -r m; do fail "Unsanitized Tailscale IP: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 8: no bare RFC 1918 addresses (use <lan-ip-...>)
+# =============================================================================
+# The Docker address pool 172.16.0.0/12 is a documented network range, not a host address.
+echo "Check 8: no plain LAN IPs"
+
+while read -r rel; do
+    { grep -nP '\b(192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01]))\.\d{1,3}\.\d{1,3}\b' "${REPO_ROOT}/${rel}" \
+        | grep -vP '172\.16\.0\.0/12' || true; } \
+        | while read -r m; do fail "Unsanitized LAN IP: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 9: no bare tailnet names (use <tailnet-id>)
+# =============================================================================
+echo "Check 9: no plain tailnet IDs"
+
+while read -r rel; do
+    { grep -nP '(?<!<)\b[a-z0-9-]+\.ts\.net\b' "${REPO_ROOT}/${rel}" | grep -vP '<tailnet-id>' || true; } \
+        | while read -r m; do fail "Unsanitized tailnet ID: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 10: no disk labels that encode capacity
+# =============================================================================
+echo "Check 10: no size-encoding disk labels"
+
+while read -r rel; do
+    [[ "${rel}" == scripts/validate-repo.sh ]] && continue
+    { grep -niE 'aux[0-9]+tb' "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Size-encoding disk label: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 11: the private sanitization legend is never tracked
+# =============================================================================
+echo "Check 11: private .local.md files not tracked"
+
+while read -r rel; do
+    fail "Tracked private file: ${rel}"
+done < <(git -C "${REPO_ROOT}" ls-files -- '*.local.md')
+flush_errors
+
+# =============================================================================
+# Check 12: no counts that describe a personal media library
+# =============================================================================
+# "series" is also Prometheus vocabulary, so lines with monitoring terms are skipped.
+echo "Check 12: no personal media library counts"
+
+while read -r rel; do
+    [[ "${rel}" == scripts/validate-repo.sh ]] && continue
+    { grep -nEi "[0-9][0-9,.]*[[:space:]]+(films?|movies|series|seasons?|episodes?|authors?|audiobooks?|ebooks?|albums?|tracks?|titles?)\b" "${REPO_ROOT}/${rel}" \
+        | grep -viE "expression|prometheus|promql|metric|series per node|time series" || true; } \
+        | while read -r m; do fail "Media library count: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 13: no measured fill level for the archive pool
+# =============================================================================
+# A configured threshold is a round number; a measured fill level has a decimal point.
+echo "Check 13: no measured fill level for the archive pool"
+
+while read -r rel; do
+    [[ "${rel}" == scripts/validate-repo.sh ]] && continue
+    { grep -nE "mergerfs|MergerFS|archive pool|fill level" "${REPO_ROOT}/${rel}" \
+        | grep -E "[0-9]+\.[0-9]+[[:space:]]*%" || true; } \
+        | while read -r m; do fail "Archive fill level: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 14: top-level layout
+# =============================================================================
+# LICENSE stays in the root, where GitHub's license detection looks. SECURITY.md lives in .github/.
+echo "Check 14: files outside directory structure"
+
+while read -r entry; do
+    case "${entry}" in
+        docs|docker|snippets|runbooks|scripts|ansible|terraform) ;;
+        README.md|LICENSE|.gitignore|.github) ;;
+        *) fail "Unexpected top-level entry: ${entry}" ;;
+    esac
+done < <(repo_files | cut -d/ -f1 | sort -u)
+flush_errors
+
+# =============================================================================
+# Check 15: no merge conflict markers
+# =============================================================================
+echo "Check 15: no merge conflict markers"
+
+while read -r rel; do
+    { grep -nE '^(<<<<<<< |=======$|>>>>>>> )' "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Merge conflict marker: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 16: no refs outside the standard namespaces
+# =============================================================================
+# A commit that no branch reaches is never reviewed, but a mirror push publishes it.
+echo "Check 16: no refs outside the standard namespaces"
+
+if git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+    while read -r ref; do
+        case "${ref}" in
+            refs/heads/*|refs/tags/*|refs/remotes/*|refs/stash|refs/notes/*) ;;
+            *) fail "Ref outside standard namespaces: ${ref} (remove with: git update-ref -d ${ref})" ;;
+        esac
+    done < <(git -C "${REPO_ROOT}" for-each-ref --format='%(refname)')
+fi
+flush_errors
+
+# =============================================================================
+# Check 17: ASCII punctuation only
+# =============================================================================
+# Allowed exceptions: box-drawing characters (U+2500-U+257F) and the section sign (U+00A7).
+echo "Check 17: plain-ASCII punctuation"
+
+while read -r rel; do
+    { grep -noP '(?![\x{2500}-\x{257F}\x{00A7}])[^\x00-\x7F]' "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Non-ASCII character: ${rel}:${m}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 18: bold marks a label, not emphasis inside a sentence
+# =============================================================================
+echo "Check 18: bold as label, not mid-sentence emphasis"
+
+while read -r rel; do
+    { grep -nE "[a-zA-Z0-9,;:)] \*\*[^*]+\*\*" "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Mid-sentence bold: ${rel}:${m%%:*}"; done
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 19: repository content is English
+# =============================================================================
+# Only German words without an English homograph, so a hit is real German text.
+echo "Check 19: repository content is English"
+
+while read -r rel; do
+    [[ "${rel}" == scripts/validate-repo.sh ]] && continue
+    { grep -nwiE "nicht|wurde|wurden|werden|damit|deshalb|sondern|jedoch|bereits|zwischen|Lernprojekt|Rechner|Beispiel" "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "German text: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 20: house style - the platform is the subject
+# =============================================================================
+# Refused: "the operator", "operator's", and "operator" as a device label.
+echo "Check 20: house style - the platform is the subject"
+
+while read -r rel; do
+    [[ "${rel}" == scripts/validate-repo.sh ]] && continue
+    { grep -noiP "\bthe operator\b|\boperator's\b|\boperators?[ -](phone|workstations?|devices?)\b" "${REPO_ROOT}/${rel}" || true; } \
+        | while read -r m; do fail "Narrated operator: ${rel}:${m%%:*}"; done
+done < <(text_files)
+flush_errors
+
+# =============================================================================
+# Check 21: no duplicate second-level headings within a document
+# =============================================================================
+echo "Check 21: duplicate markdown headings"
+
+while read -r rel; do
+    { grep -P '^## ' "${REPO_ROOT}/${rel}" || true; } | sort | uniq -d \
+        | while read -r dup; do fail "Duplicate heading in ${rel}: ${dup}"; done
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 22: balanced code fences
+# =============================================================================
+echo "Check 22: balanced markdown code fences"
+
+while read -r rel; do
+    fences="$(grep -c '^[[:space:]]*```' "${REPO_ROOT}/${rel}" || true)"
+    (( fences % 2 == 0 )) || fail "Unbalanced code fence (${fences} found): ${rel}"
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 23: table rows stay on one line
+# =============================================================================
+echo "Check 23: markdown table rows stay on one line"
+
+while read -r rel; do
+    while read -r finding; do fail "${finding}"; done < <(awk -v file="${rel}" '
+        /^[[:space:]]*```/ { fence = !fence; next }
+        fence { next }
+        /^\|/ { line = $0; sub(/[ \t]+$/, "", line); if (line !~ /\|$/) printf "Table row broken across lines: %s:%d\n", file, NR }
+    ' "${REPO_ROOT}/${rel}")
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 24: a paragraph directly above --- or === renders as a heading
+# =============================================================================
+echo "Check 24: no paragraph turned into a heading by the rule below it"
+
+while read -r rel; do
+    while read -r finding; do fail "${finding}"; done < <(awk -v file="${rel}" '
         NR == 1 && $0 ~ /^---[[:space:]]*$/ { fm = 1; next }
         fm && $0 ~ /^---[[:space:]]*$/ { fm = 0; next }
         fm { next }
@@ -1435,165 +381,403 @@ while read -r mdfile; do
         fence { prev = $0; next }
         /^(-{3,}|={3,})[[:space:]]*$/ {
             if (prev != "" && prev !~ /^[[:space:]]*$/ && prev !~ /^[[:space:]]*[|>#]/ \
-                && prev !~ /^[[:space:]]*([-*+]|[0-9]+\.)[[:space:]]/) {
-                printf "%s:%d: paragraph renders as a heading, not a rule - blank line missing above the %s\n", \
-                    file, NR, (substr($0,1,1) == "-" ? "---" : "===")
-            }
+                && prev !~ /^[[:space:]]*([-*+]|[0-9]+\.)[[:space:]]/)
+                printf "%s:%d: paragraph renders as a heading - blank line missing above the rule\n", file, NR
         }
         { prev = $0 }
-    ' "${mdfile}")
-done < <(find "${REPO_ROOT}" -name "*.md" -type f -not -path "*/.git/*")
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+    ' "${REPO_ROOT}/${rel}")
+done < <(md_files)
+flush_errors
 
 # =============================================================================
-# Check 43: every register entry is anchored and listed in its own index
+# Check 25: every document under docs/ and runbooks/ is linked from an index
 # =============================================================================
-# Added 2026-09-16, the day after both registers were given an index. An index
-# maintained by hand drifts the moment somebody adds an entry and forgets the
-# table, and it drifts silently: the register still holds the entry, so nothing
-# is lost, and the index still looks complete, so nothing is looked for. This
-# repository has found that shape in its own monitoring often enough to expect
-# it here - the index is a guard over the register, and an unverified guard
-# reports the state it was written in rather than the state that exists.
-#
-# The anchor half is the same argument one layer down. known-errors.md states in
-# its own header that every entry carries an explicit anchor; KE-21 did not, and
-# six links pointed at it (Check 41, added the same day, found them from the
-# other end). Check 41 sees an anchor only where something links to it, so an
-# entry nobody cites yet can still be unreachable by the fragment its neighbours
-# all use.
-echo "Check 43: register entries are anchored and listed in their index"
+# Reachable means linked directly from README.md or runbooks/README.md.
+echo "Check 25: every document is reachable from an index"
+
+LINKED_LIST="$(mktemp)"
+for idx in README.md runbooks/README.md; do
+    idx_dir="$(dirname "${REPO_ROOT}/${idx}")"
+    while read -r link; do
+        [[ "${link}" =~ ^https?:// ]] && continue
+        link="${link%%#*}"
+        [[ -z "${link}" ]] && continue
+        realpath -m --relative-to="${REPO_ROOT}" "${idx_dir}/${link}" >> "${LINKED_LIST}"
+    done < <(grep -oP '\]\(\K[^)]+' "${REPO_ROOT}/${idx}" || true)
+done
+
+while read -r rel; do
+    grep -qxF "${rel}" "${LINKED_LIST}" || fail "Not linked from any index: ${rel}"
+done < <(md_files | grep -E '^(docs|runbooks)/')
+rm -f "${LINKED_LIST}"
+flush_errors
+
+# =============================================================================
+# Check 26: backticked repository paths exist
+# =============================================================================
+# A path that git ignores on purpose (real inventory, .env files) passes.
+echo "Check 26: backticked repository paths exist"
+
+while read -r rel; do
+    while read -r ref; do
+        [[ -z "${ref}" ]] && continue
+        [[ -e "${REPO_ROOT}/${ref}" ]] && continue
+        ignored "${ref}" && continue
+        fail "Path does not exist: ${rel} -> ${ref}"
+    done < <({ grep -oP '`\K(snippets|ansible|scripts|docker|docs|runbooks)/[A-Za-z0-9_./-]+(?=`)' "${REPO_ROOT}/${rel}" || true; } | sort -u)
+done < <(md_files)
+flush_errors
+
+# =============================================================================
+# Check 27: counted claims in the README match the repository
+# =============================================================================
+# A missing claim is an error too, so a sentence cannot drop out of the check unnoticed.
+echo "Check 27: counted claims match the repository"
+
+README_FILE="${REPO_ROOT}/README.md"
+
+compare_claim() {
+    local label="$1" claimed="$2" actual="$3"
+    if [[ -z "${claimed}" ]]; then
+        fail "Claim not found in README: ${label}"
+    elif [[ "${claimed}" != "${actual}" ]]; then
+        fail "${label}: README says ${claimed}, repository has ${actual}"
+    fi
+}
+
+runbooks_actual="$(repo_files -- 'runbooks/*.md' | grep -vc 'runbooks/README.md$' || true)"
+roles_actual="$(repo_files -- 'ansible/roles/' | cut -d/ -f3 | sort -u | wc -l)"
+playbooks_actual="$(repo_files -- 'ansible/playbooks/*.yml' | wc -l)"
+decisions_actual="$(repo_files -- 'docs/decisions/*.md' | wc -l)"
+checks_actual="$(grep -cE '^echo "Check [0-9]+' "${SELF}" || true)"
+
+compare_claim "runbook count" "$({ grep -oP '\b\K[0-9]+(?= runbooks\b)' "${README_FILE}" || true; } | head -1)" "${runbooks_actual}"
+compare_claim "playbook count" "$({ grep -oP '\b\K[0-9]+(?= playbooks\b)' "${README_FILE}" || true; } | head -1)" "${playbooks_actual}"
+compare_claim "role count" "$({ grep -oP '\b\K[0-9]+(?= roles\b)' "${README_FILE}" || true; } | head -1)" "${roles_actual}"
+compare_claim "decision record count" "$({ grep -oP '\b\K[0-9]+(?= decision records\b)' "${README_FILE}" || true; } | head -1)" "${decisions_actual}"
+compare_claim "validator check count" "$({ grep -oP '\b\K[0-9]+(?= checks\b)' "${README_FILE}" || true; } | head -1)" "${checks_actual}"
+flush_errors
+
+# =============================================================================
+# Check 28: service documents
+# =============================================================================
+# Each has an Access Model, and every node it names has a node document.
+echo "Check 28: service documents have an access model and name documented nodes"
+
+while read -r rel; do
+    f="${REPO_ROOT}/${rel}"
+    grep -q '^## Access Model' "${f}" || fail "Missing '## Access Model': ${rel}"
+    nodes="$({ grep -ohE '\b(vm[0-9]{3}|lxc[0-9]{3})\b' "${f}" || true; } | sort -u)"
+    [[ -n "${nodes}" ]] || fail "Service document names no node: ${rel}"
+    while read -r node; do
+        [[ -z "${node}" ]] && continue
+        [[ -f "${REPO_ROOT}/docs/nodes/${node}.md" ]] || fail "Names a node with no node document: ${rel} -> ${node}"
+    done <<< "${nodes}"
+done < <(repo_files -- 'docs/services/*.md')
+flush_errors
+
+# =============================================================================
+# Check 29: node documents
+# =============================================================================
+# Required sections, and a Tailscale tag that tailscale-acl.md defines in tagOwners.
+echo "Check 29: node documents carry tag, configuration management and failure impact"
+
+ACL_DOC="${REPO_ROOT}/docs/platform/tailscale-acl.md"
+while read -r rel; do
+    f="${REPO_ROOT}/${rel}"
+    grep -q '^## Failure Impact' "${f}" || fail "Missing '## Failure Impact': ${rel}"
+    grep -q '^## Configuration Management' "${f}" || fail "Missing '## Configuration Management': ${rel}"
+    tag="$({ grep -oP '^- Tag: `\Ktag:[a-z0-9-]+' "${f}" || true; } | head -1)"
+    if [[ -z "${tag}" ]]; then
+        fail "No '- Tag: \`tag:...\`' line: ${rel}"
+    elif ! grep -q "\"${tag}\":" "${ACL_DOC}"; then
+        fail "Tag not defined in tailscale-acl.md tagOwners: ${rel} -> ${tag}"
+    fi
+done < <(repo_files -- 'docs/nodes/*.md')
+flush_errors
+
+# =============================================================================
+# Check 30: runbook contract
+# =============================================================================
+# Sections for preconditions, verification, failure modes and rollback ("none, because ..." is a
+# valid rollback), plus a Last exercised line in the header block.
+echo "Check 30: runbook contract"
+
+while read -r rel; do
+    f="${REPO_ROOT}/${rel}"
+    for section in Precondition Verification Failure Rollback; do
+        grep -qiE "^##[[:space:]].*${section}" "${f}" || fail "Missing '${section}' section: ${rel}"
+    done
+    grep -qE '^- \*\*Last exercised:\*\* .+' "${f}" || fail "Missing '- **Last exercised:** ...' line: ${rel}"
+done < <(repo_files -- 'runbooks/*.md' | grep -v 'runbooks/README.md$')
+flush_errors
+
+# =============================================================================
+# Check 31: decision records carry a status
+# =============================================================================
+echo "Check 31: decision records carry a status"
+
+while read -r rel; do
+    [[ "${rel}" == docs/decisions/design-decisions.md ]] && continue
+    status="$(awk '/^## Status/ { found = 1; next } found && NF { print; exit }' "${REPO_ROOT}/${rel}")"
+    if [[ -z "${status}" ]]; then
+        fail "Missing '## Status' section: ${rel}"
+    elif ! grep -qE '^(Proposed|Accepted|Implemented|Superseded|Withdrawn)\b' <<< "${status}"; then
+        fail "Status must start with Proposed, Accepted, Implemented, Superseded or Withdrawn: ${rel}"
+    fi
+done < <(repo_files -- 'docs/decisions/*.md')
+flush_errors
+
+# =============================================================================
+# Check 32: documents stay within their length ceiling
+# =============================================================================
+# Ceilings are in docs/CONVENTIONS.md. known-errors.md is measured per entry instead of as a whole.
+echo "Check 32: documents stay within their length ceiling"
+
+ceiling_for() {
+    case "$1" in
+        README.md) echo 160 ;;
+        docs/CONVENTIONS.md) echo 200 ;;
+        docs/decisions/design-decisions.md) echo 320 ;;
+        docs/decisions/*) echo 130 ;;
+        docs/nodes/*|docs/services/*) echo 130 ;;
+        docs/architecture/*) echo 180 ;;
+        docs/platform/incidents/*) echo 160 ;;
+        docs/platform/known-errors.md) echo 0 ;;
+        # Carries the full ACL policy and its tests as JSON, which is the point of the page.
+        docs/platform/tailscale-acl.md) echo 560 ;;
+        docs/platform/*) echo 320 ;;
+        runbooks/*) echo 180 ;;
+        *) echo 0 ;;
+    esac
+}
+
+while read -r rel; do
+    limit="$(ceiling_for "${rel}")"
+    (( limit > 0 )) || continue
+    lines="$(wc -l < "${REPO_ROOT}/${rel}")"
+    (( lines <= limit )) || fail "${rel} has ${lines} lines, ceiling ${limit}"
+done < <(md_files)
 
 KE_FILE="${REPO_ROOT}/docs/platform/known-errors.md"
-DD_FILE="${REPO_ROOT}/docs/decisions/design-decisions.md"
+if [[ -f "${KE_FILE}" ]]; then
+    while read -r finding; do fail "${finding}"; done < <(awk '
+        /^## / { if (id != "" && NR - start > 70) printf "known-errors.md %s has %d lines, ceiling 70\n", id, NR - start; id = ""; }
+        /^## KE-[0-9]+:/ { id = $2; sub(/:$/, "", id); start = NR }
+        END { if (id != "" && NR - start + 1 > 70) printf "known-errors.md %s has %d lines, ceiling 70\n", id, NR - start + 1 }
+    ' "${KE_FILE}")
+fi
+flush_errors
 
+# =============================================================================
+# Check 33: register entries are anchored and listed in their index
+# =============================================================================
+echo "Check 33: register entries are anchored and listed in their index"
+
+DD_FILE="${REPO_ROOT}/docs/decisions/design-decisions.md"
 if [[ -f "${KE_FILE}" ]]; then
     while read -r n; do
-        [[ -z "${n}" ]] && continue
-        if ! grep -qF "<a id=\"ke-${n}\"></a>" "${KE_FILE}"; then
-            echo "  KE-${n} carries no explicit <a id=\"ke-${n}\"></a> anchor"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-        if ! grep -qE "^\| \[KE-${n}\]\(#ke-${n}\) \|" "${KE_FILE}"; then
-            echo "  KE-${n} is missing from the entry index in the same file"
-            echo "x" >> "${ERROR_LOG}"
-        fi
+        grep -qF "<a id=\"ke-${n}\"></a>" "${KE_FILE}" || fail "KE-${n} carries no <a id=\"ke-${n}\"></a> anchor"
+        grep -qE "^\| \[KE-${n}\]\(#ke-${n}\) \|" "${KE_FILE}" || fail "KE-${n} is missing from the index"
     done < <(grep -oP '^## KE-\K[0-9]+(?=:)' "${KE_FILE}" || true)
 fi
-
 if [[ -f "${DD_FILE}" ]]; then
     while read -r n; do
-        [[ -z "${n}" ]] && continue
-        if ! grep -qF "<a id=\"dd-${n}\"></a>" "${DD_FILE}"; then
-            echo "  Decision ${n} carries no explicit <a id=\"dd-${n}\"></a> anchor"
-            echo "x" >> "${ERROR_LOG}"
-        fi
-        if ! grep -qE "^\| \[${n}\]\(#dd-${n}\) \|" "${DD_FILE}"; then
-            echo "  Decision ${n} is missing from the decision index in the same file"
-            echo "x" >> "${ERROR_LOG}"
-        fi
+        grep -qF "<a id=\"dd-${n}\"></a>" "${DD_FILE}" || fail "Decision ${n} carries no <a id=\"dd-${n}\"></a> anchor"
+        grep -qE "^\| \[${n}\]\(#dd-${n}\) \|" "${DD_FILE}" || fail "Decision ${n} is missing from the index"
     done < <(grep -oP '^## \K[0-9]+(?=\. )' "${DD_FILE}" || true)
 fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+flush_errors
 
 # =============================================================================
-# Check 44: every gated playbook is either swept for drift or excluded on record
+# Check 34: an Enforced control cites its evidence
 # =============================================================================
-# Added 2026-09-16. A playbook that imports preflight.yml changes live state, and
-# the weekly sweep in ansible/drift-sweep.conf is what notices when the fleet
-# stops matching it. Membership of that list was hand-maintained and unread:
-# measured the day this was written, three gated playbooks were in neither the
-# list nor the prose block of exclusions above it - timezone, fleet-drift and
-# fleet-snapshot-schedule - and the deployed fleet-drift.sh on the control node
-# was a commit behind this repository with nothing able to report it, because
-# the playbook that would have was the one left out of its own sweep.
-#
-# The exclusions moved into an [excluded] section for this check to read. They
-# keep their reasons in the comment above it: the machine needs the names, the
-# reader needs the argument, and neither substitutes for the other.
-#
-# The check refuses a name in both sections as well. Swept and excluded at once
-# is not a state anybody meant, and the sweep would silently take the first.
-echo "Check 44: gated playbooks are swept or excluded on record"
+# Shallow on purpose: it cannot judge the evidence, only insist that a link or path is given.
+echo "Check 34: Enforced controls cite their evidence"
+
+SEC_DOC="${REPO_ROOT}/docs/platform/security-controls.md"
+if [[ -f "${SEC_DOC}" ]]; then
+    while read -r row; do
+        grep -qE '\[[^]]+\]\(|`' <<< "${row}" \
+            || fail "Enforced without evidence: $(sed -E 's/^\|[[:space:]]*([^|]+)\|.*/\1/; s/[[:space:]]*$//' <<< "${row}")"
+    done < <(grep -E '^\|[[:space:]]*A\.[0-9.]+ .*\|[[:space:]]*Enforced[[:space:]]*\|' "${SEC_DOC}" || true)
+fi
+flush_errors
+
+# =============================================================================
+# Check 35: the alerting table in monitoring.md matches the rules file
+# =============================================================================
+echo "Check 35: alerting table matches the rules file"
+
+RULES_FILE="${REPO_ROOT}/docker/monitoring/prometheus/rules/alert.rules.yml"
+MON_DOC="${REPO_ROOT}/docs/platform/monitoring.md"
+if [[ -f "${RULES_FILE}" && -f "${MON_DOC}" ]]; then
+    doc_table="$(sed -n '/^| Group | Rules |/,/^$/p' "${MON_DOC}")"
+    if [[ -z "${doc_table}" ]]; then
+        fail "No '| Group | Rules |' table in docs/platform/monitoring.md"
+    else
+        file_groups="$(grep -oE '^  - name: [a-z_]+' "${RULES_FILE}" | sed 's/.*name: //' | sort -u)"
+        file_rules="$(grep -oE '^      - alert: [A-Za-z]+' "${RULES_FILE}" | sed 's/.*alert: //' | sort -u)"
+        doc_groups="$(grep -oE '^\| `[a-z_]+`' <<< "${doc_table}" | tr -d '|` ' | sort -u)"
+        doc_rules="$(grep -oE '`[A-Z][A-Za-z]+`' <<< "${doc_table}" | tr -d '`' | sort -u)"
+        while read -r x; do [[ -n "${x}" ]] && fail "Group missing from monitoring.md table: ${x}"; done < <(comm -23 <(echo "${file_groups}") <(echo "${doc_groups}"))
+        while read -r x; do [[ -n "${x}" ]] && fail "Group in monitoring.md table but not in rules: ${x}"; done < <(comm -13 <(echo "${file_groups}") <(echo "${doc_groups}"))
+        while read -r x; do [[ -n "${x}" ]] && fail "Alert missing from monitoring.md table: ${x}"; done < <(comm -23 <(echo "${file_rules}") <(echo "${doc_rules}"))
+        while read -r x; do [[ -n "${x}" ]] && fail "Alert in monitoring.md table but not in rules: ${x}"; done < <(comm -13 <(echo "${file_rules}") <(echo "${doc_rules}"))
+    fi
+fi
+flush_errors
+
+# =============================================================================
+# Check 36: container images carry an explicit version
+# =============================================================================
+echo "Check 36: container images carry an explicit tag"
+
+while read -r rel; do
+    while read -r line; do
+        image="$(sed -E 's/.*image:[[:space:]]*//; s/[[:space:]]*(#.*)?$//' <<< "${line}" | tr -d "\"'")"
+        [[ -z "${image}" || "${image}" == *'${'* ]] && continue
+        if [[ "${image}" != *:* ]]; then
+            fail "Image without a tag: ${rel} -> ${image}"
+        elif [[ "${image}" =~ :(latest|main|master|stable)$ ]]; then
+            fail "Image not pinned: ${rel} -> ${image}"
+        fi
+    done < <(grep -E '^\s*image:' "${REPO_ROOT}/${rel}" || true)
+done < <(repo_files -- 'docker/*docker-compose.yml')
+flush_errors
+
+# =============================================================================
+# Check 37: secret-looking Ansible variables are vaulted or referenced
+# =============================================================================
+# The key name must end in the secret word; "password_authentication" is an sshd setting.
+echo "Check 37: secret-looking variables are not literals"
+
+while read -r rel; do
+    while read -r line; do
+        value="$(sed -E 's/^[^:]*:[[:space:]]*//; s/[[:space:]]*$//' <<< "${line}")"
+        [[ -z "${value}" || "${value}" == '!vault'* || "${value}" == *'{{'* || "${value}" == '|' || "${value}" == '>' ]] && continue
+        fail "Literal value for a secret-looking key: ${rel} -> $(sed -E 's/[[:space:]]*([^:]+):.*/\1/' <<< "${line}")"
+    done < <(grep -E '^[[:space:]]*[a-z_]*(password|passwd|secret|token|api_key|secret_key|private_key)[[:space:]]*:' "${REPO_ROOT}/${rel}" || true)
+done < <(repo_files -- 'ansible/*.yml' 'ansible/*.yaml')
+flush_errors
+
+# =============================================================================
+# Check 38: every Ansible role is documented in docs/platform/ansible.md
+# =============================================================================
+echo "Check 38: every Ansible role is documented"
+
+while read -r role; do
+    grep -q "${role}" "${REPO_ROOT}/docs/platform/ansible.md" || fail "Role not documented in docs/platform/ansible.md: ${role}"
+done < <(repo_files -- 'ansible/roles/' | cut -d/ -f3 | sort -u)
+flush_errors
+
+# =============================================================================
+# Check 39: state-changing playbooks import the preflight gate
+# =============================================================================
+# Exempt: the gate itself and the two read-only playbooks, which must run during an incident.
+echo "Check 39: state-changing playbooks import the preflight gate"
+
+while read -r rel; do
+    case "$(basename "${rel}")" in
+        preflight.yml|fleet-health-check.yml|fleet-snapshot.yml) continue ;;
+    esac
+    grep -q '^  import_playbook: preflight.yml$' "${REPO_ROOT}/${rel}" || fail "Missing preflight import: ${rel}"
+done < <(repo_files -- 'ansible/playbooks/*.yml')
+flush_errors
+
+# =============================================================================
+# Check 40: every gated playbook is swept for drift or excluded on record
+# =============================================================================
+echo "Check 40: gated playbooks are swept or excluded on record"
 
 DRIFT_CONF="${REPO_ROOT}/ansible/drift-sweep.conf"
 PLAYBOOK_DIR="${REPO_ROOT}/ansible/playbooks"
-
-if [[ -f "${DRIFT_CONF}" && -d "${PLAYBOOK_DIR}" ]]; then
-    # Same sed ranges the sweep script itself uses, so this check and the sweep
-    # cannot disagree about what the file says.
+if [[ -f "${DRIFT_CONF}" ]]; then
+    # Same section ranges the sweep script reads.
     swept="$(sed -n '/^\[playbooks\]/,/^\[baseline\]/p' "${DRIFT_CONF}" | grep -E '^[a-z0-9-]+$' || true)"
     excluded="$(sed -n '/^\[excluded\]/,/^\[playbooks\]/p' "${DRIFT_CONF}" | grep -E '^[a-z0-9-]+$' || true)"
-
     while read -r pbfile; do
         [[ -z "${pbfile}" ]] && continue
         pb="$(basename "${pbfile}" .yml)"
         in_swept=0; in_excluded=0
         grep -qxF "${pb}" <<< "${swept}" && in_swept=1
         grep -qxF "${pb}" <<< "${excluded}" && in_excluded=1
-        if [[ "${in_swept}" -eq 1 && "${in_excluded}" -eq 1 ]]; then
-            echo "  ${pb} is both swept and excluded in drift-sweep.conf"
-            echo "x" >> "${ERROR_LOG}"
-        elif [[ "${in_swept}" -eq 0 && "${in_excluded}" -eq 0 ]]; then
-            echo "  ${pb} imports the preflight gate but drift-sweep.conf neither sweeps nor excludes it"
-            echo "x" >> "${ERROR_LOG}"
+        if (( in_swept && in_excluded )); then
+            fail "${pb} is both swept and excluded in drift-sweep.conf"
+        elif (( ! in_swept && ! in_excluded )); then
+            fail "${pb} imports the preflight gate but drift-sweep.conf neither sweeps nor excludes it"
         fi
     done < <(grep -lE '^[[:space:]]*import_playbook:[[:space:]]*preflight\.yml' "${PLAYBOOK_DIR}"/*.yml 2>/dev/null || true)
-
-    # A name in the config that matches no playbook is the other direction, and
-    # the sweep only reports it at run time, once a week, on the control node.
     while read -r name; do
-        [[ -z "${name}" ]] && continue
-        [[ -f "${PLAYBOOK_DIR}/${name}.yml" ]] || {
-            echo "  drift-sweep.conf names ${name}, which is not a playbook"
-            echo "x" >> "${ERROR_LOG}"
-        }
+        [[ -f "${PLAYBOOK_DIR}/${name}.yml" ]] || fail "drift-sweep.conf names ${name}, which is not a playbook"
     done < <(printf '%s\n%s\n' "${swept}" "${excluded}" | grep -vE '^$' || true)
 fi
-
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+flush_errors
 
 # =============================================================================
-# Check 45: house style - the platform is the subject
+# Check 41: ansible-lint on changed Ansible files (local only)
 # =============================================================================
-# Added 2026-10-12. The documentation states what the platform does and what was
-# decided, without a narrator and without a first person, and names devices after
-# their tag (admin phone, admin workstations). Refused: "the operator" and
-# "operator's", and "operator" as a device label. Allowed: the generic role, as in
-# "a single-operator homelab" or "an operator with a console". CLAUDE.md and
-# .claude/ are excluded; they address an assistant, for which the operator is a
-# real party.
-echo "Check 45: house style - the platform is the subject"
+# CI lints every push in .github/workflows/ansible-lint.yml, so this check runs only when the
+# working tree changes something under ansible/. Without the real vault password (it exists only on
+# the control node) a throwaway one is used: the syntax check parses !vault values without
+# decrypting them.
+echo "Check 41: ansible-lint (production profile)"
 
-while read -r rel; do
-    [[ -f "${REPO_ROOT}/${rel}" ]] || continue
-    { grep -noiP "\bthe operator\b|\boperator's\b|\boperators?[ -](phone|workstations?|devices?)\b" \
-        "${REPO_ROOT}/${rel}" || true; } | while read -r match; do
-        echo "  Narrated operator: ${rel}:${match}"
-        echo "x" >> "${ERROR_LOG}"
-    done
-done < <(git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard \
-             -- ':!CLAUDE.md' ':!.claude/' ':!scripts/validate-repo.sh' \
-         | grep -E '\.(md|ya?ml|sh|j2|conf|py|json|example|cfg)$')
+changed="$( { git -C "${REPO_ROOT}" diff --cached --name-only; git -C "${REPO_ROOT}" diff --name-only HEAD; \
+              git -C "${REPO_ROOT}" ls-files --others --exclude-standard; } 2>/dev/null | sort -u || true)"
 
-ERRORS=$((ERRORS + $(wc -l < "${ERROR_LOG}")))
-: > "${ERROR_LOG}"
+if ! command -v ansible-lint >/dev/null 2>&1; then
+    echo "  SKIP: ansible-lint not in PATH"
+elif ! grep -q '^ansible/' <<< "${changed}"; then
+    echo "  SKIP: no changes under ansible/"
+else
+    vault_pw_file=""
+    if [[ ! -r "${HOME}/.vault_pass" ]]; then
+        vault_pw_file="$(mktemp)"
+        echo 'syntax-check-only' > "${vault_pw_file}"
+        export ANSIBLE_VAULT_PASSWORD_FILE="${vault_pw_file}"
+    fi
+    lint_output="$(cd "${REPO_ROOT}/ansible" && ansible-lint --nocolor . 2>&1)" && lint_rc=0 || lint_rc=$?
+    if [[ -n "${vault_pw_file}" ]]; then
+        rm -f "${vault_pw_file}"
+        unset ANSIBLE_VAULT_PASSWORD_FILE
+    fi
+    if (( lint_rc != 0 )); then
+        sed 's/^/  /' <<< "${lint_output}"
+        fail "ansible-lint failed (exit ${lint_rc})"
+    fi
+fi
+flush_errors
+
+# =============================================================================
+# Check 42: the commit-message hook is installed (local only)
+# =============================================================================
+# Under CI the commit-messages workflow is the gate.
+echo "Check 42: commit-message hook installed on this machine"
+
+if [[ -n "${CI:-}" ]]; then
+    echo "  SKIP: under CI"
+elif git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+    hooks_dir="$(git -C "${REPO_ROOT}" config --get core.hooksPath || git -C "${REPO_ROOT}" rev-parse --git-path hooks)"
+    [[ "${hooks_dir}" = /* ]] || hooks_dir="${REPO_ROOT}/${hooks_dir}"
+    hook_path="${hooks_dir}/commit-msg"
+    if [[ ! -x "${hook_path}" ]]; then
+        fail "No executable commit-msg hook at ${hook_path} (install: git config core.hooksPath scripts/hooks)"
+    elif ! grep -q 'commit-msg-lint' "${hook_path}" 2>/dev/null \
+         && [[ "$(readlink -f "${hook_path}" 2>/dev/null)" != *commit-msg-lint.sh ]]; then
+        fail "commit-msg hook does not run scripts/commit-msg-lint.sh: ${hook_path}"
+    fi
+fi
+flush_errors
 
 # =============================================================================
 # Results
 # =============================================================================
 echo ""
 echo "=== Done ==="
-echo "Checks run: 45"
-if [[ "${ERRORS}" -gt 0 ]]; then
+echo "Checks run: $(grep -cE '^echo "Check [0-9]+' "${SELF}")"
+if (( ERRORS > 0 )); then
     echo "FAIL: ${ERRORS} error(s) found."
     exit 1
-else
-    echo "PASS: All checks passed."
-    exit 0
 fi
+echo "PASS: All checks passed."
