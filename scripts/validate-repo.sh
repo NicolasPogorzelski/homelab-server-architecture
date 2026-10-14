@@ -249,7 +249,7 @@ echo "Check 14: files outside directory structure"
 while read -r entry; do
     case "${entry}" in
         docs|docker|snippets|runbooks|scripts|ansible|terraform) ;;
-        README.md|LICENSE|.gitignore|.github) ;;
+        README.md|CLAUDE.md|LICENSE|.gitignore|.github|.claude) ;;
         *) fail "Unexpected top-level entry: ${entry}" ;;
     esac
 done < <(repo_files | cut -d/ -f1 | sort -u)
@@ -537,6 +537,8 @@ echo "Check 32: documents stay within their length ceiling"
 ceiling_for() {
     case "$1" in
         README.md) echo 160 ;;
+        CLAUDE.md) echo 120 ;;
+        .claude/agents/*) echo 60 ;;
         docs/CONVENTIONS.md) echo 200 ;;
         docs/decisions/design-decisions.md) echo 320 ;;
         docs/decisions/*) echo 130 ;;

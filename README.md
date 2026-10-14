@@ -94,9 +94,10 @@ part of the workflow, in two modes:
 
 Research and first drafts of documents are AI-assisted in both modes. Every change reaches `main`
 through a pull request with the validator, ansible-lint, gitleaks and the commit-message check
-green. The assistant's own configuration is kept outside this repository, and commits carry no
-attribution trailers; nine commits from September 2026 still carry one from before that rule.
-Documentation conventions are in [CONVENTIONS.md](docs/CONVENTIONS.md).
+green. The rules the assistant works under are in [CLAUDE.md](CLAUDE.md), with its project hooks
+and review agents in `.claude/`. Commits carry no attribution trailers; nine commits from
+September 2026 still carry one from before that rule. Documentation conventions are in
+[CONVENTIONS.md](docs/CONVENTIONS.md).
 
 ## Documentation
 

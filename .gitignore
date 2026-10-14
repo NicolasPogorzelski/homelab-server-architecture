@@ -106,11 +106,15 @@ ansible/.ansible/
 .aider.tags.cache.v4/
 
 # =====================================================
-# Claude Code: local assistant configuration, not repository content
+# Claude Code: CLAUDE.md, .claude/settings.json and two review agents are tracked;
+# machine-specific settings, session files and patches stay local
 # =====================================================
-CLAUDE.md
-.claude/
-scripts/hooks/pre-commit-guard.sh
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/state-claims.md
+!.claude/agents/prose-tics.md
 
 # =====================================================
 # Private sanitization legend (placeholders -> real values, NEVER COMMIT)

@@ -40,6 +40,8 @@ Budgets are ceilings, not targets. The validator fails a document above its ceil
 | Type | Location | Ceiling (lines) | Required |
 |---|---|---|---|
 | README | `README.md` | 160 | counted claims validated |
+| Assistant rules | `CLAUDE.md` | 120 | rules only: no dates, no status |
+| Assistant agent | `.claude/agents/*.md` | 60 | `tools:` field, no dates |
 | Decision record | `docs/decisions/*.md` | 130 | `## Status` |
 | Node document | `docs/nodes/*.md` | 130 | `- Tag:` line, `## Configuration Management`, `## Failure Impact` |
 | Service document | `docs/services/*.md` | 130 | `## Access Model` |
@@ -102,7 +104,9 @@ Purpose in one sentence, then: `- Tag:`, `## Resources`, `## Services`, `## Stor
 ```
 
 Steps come before background. Every destructive step is preceded by the step that makes it
-reversible.
+reversible. `## Background` explains why a step works (what `systemctl reset-failed` clears,
+why an order matters), so the runbook can be followed without knowing it already. It carries
+no history.
 
 ### Known-error entry
 
@@ -133,7 +137,9 @@ removed; the pull request that closed them is the record.
 - A comment says why a value is what it is, in one to three lines.
 - Reasoning longer than that is a decision record or a known-error entry; the comment links it,
   for example `# see KE-14`.
-- A file header may explain the whole file in up to fifteen lines.
+- A file header may explain the whole file in up to fifteen lines. The validator refuses any run
+  of more than twenty comment lines; a header that the script prints as its usage text is the
+  listed exception.
 - No dates of change, no history, no anecdotes. Git carries those.
 
 ## Writing
@@ -170,4 +176,5 @@ removed; the pull request that closed them is the record.
 - `scripts/commit-msg-lint.sh` runs as the `commit-msg` hook (`git config core.hooksPath
   scripts/hooks`).
 
-How AI assistance is used in this repository is stated in the [README](../README.md#how-this-repository-is-built).
+How AI assistance is used in this repository is stated in the [README](../README.md#how-this-repository-is-built);
+the rules the assistant works under are in [CLAUDE.md](../CLAUDE.md).
