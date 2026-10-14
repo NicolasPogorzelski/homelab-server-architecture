@@ -1,17 +1,30 @@
 # Homelab Platform Architecture
 
-[![Validate Repository](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml) [![Ansible-lint](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml) [![Image vulnerability scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml) [![Secret scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/secret-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/secret-scan.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Validate Repository](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/validate-repo.yml) [![Ansible-lint](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/ansible-lint.yml) [![Secret scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/secret-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/secret-scan.yml) [![Image vulnerability scan](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml/badge.svg?branch=main)](https://github.com/NicolasPogorzelski/homelab-server-architecture/actions/workflows/image-scan.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-[![Proxmox](https://img.shields.io/badge/Proxmox-Virtualization-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/) [![Ansible](https://img.shields.io/badge/Ansible-Configuration--Management-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/) [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Tailscale](https://img.shields.io/badge/Tailscale-Overlay--Network-0047AB?logo=tailscale&logoColor=white)](https://tailscale.com/) [![Zero Trust](https://img.shields.io/badge/Security-Zero--Trust-111111)](https://en.wikipedia.org/wiki/Zero_trust_security_model) [![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?logo=grafana&logoColor=white)](https://grafana.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Platform--Database-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![SnapRAID](https://img.shields.io/badge/SnapRAID-Parity--Based-6A5ACD)](https://www.snapraid.it/)
+A single-host Proxmox platform with nine guests, reachable only over Tailscale, and every node -
+hypervisor and control node included - managed by Ansible. Built and operated by Nicolas
+Pogorzelski as a learning platform for DevOps and security engineering, running real services with
+real data.
 
-A single-host Proxmox platform: nine guests, Zero-Trust access over Tailscale, and every node -
-the hypervisor and the control node included - managed by Ansible.
+## What this repository shows
 
-Built and operated by Nicolas Pogorzelski. Claims here are checked against the running system, and
-the repository carries an [ISO/IEC 27001 Annex A self-assessment](docs/platform/security-controls.md)
-- a mapping against the control catalogue, not a compliance claim - a
-[root-caused incident register](docs/platform/known-errors.md) and a
-[ranked plan of what is still open](docs/platform/remediation-plan.md).
+- **Configuration management:** 52 playbooks and 47 roles, secrets in Ansible Vault, deployed from a
+  control node that refuses to run from a tree that matches no published commit
+  ([Ansible](docs/platform/ansible.md)).
+- **CI and supply chain:** every push runs the repository validator, ansible-lint and gitleaks over
+  the full history; container images are scanned with Trivy and get an SBOM; every action is pinned
+  to a commit SHA ([workflows](.github/workflows/)).
+- **Zero-trust access:** no public ingress and no port forwarding; identity-based Tailscale ACLs per
+  tag, and a LAN guard on every node ([networking](docs/platform/networking.md),
+  [ACL model](docs/platform/tailscale-acl.md)).
+- **Backup and recovery:** database dumps with monthly automated restore tests, weekly guest
+  backups, recovery runbooks ([backup flow](docs/architecture/backup-flow.md)).
+- **Monitoring:** Prometheus, Grafana and Alertmanager, with alert rules covered by promtool unit
+  tests ([monitoring](docs/platform/monitoring.md)).
+- **Security assessment:** an ISO/IEC 27001 Annex A mapping that separates enforced controls from
+  practices - a self-assessment, not a compliance claim
+  ([security controls](docs/platform/security-controls.md)).
 
 ## At a glance
 
@@ -20,13 +33,13 @@ flowchart TB
   Admin(["Admin devices"])
   TVs(["TV devices"])
 
-  TS["Tailscale overlay<br/>identity-based ACL, tier model<br/>no port-forwarding, no public reverse proxy"]
+  TS["Tailscale overlay<br/>identity-based ACL per tag<br/>no port forwarding, no public reverse proxy"]
 
   subgraph host["Proxmox host - single node, recovery-oriented, no HA"]
-    PVE["Hypervisor<br/>Proxmox VE, an Ansible node since 2026-08-21"]
+    PVE["Hypervisor<br/>Proxmox VE"]
     VM100["VM100 - GPU compute<br/>Jellyfin, Audiobookshelf, llama-server"]
     LXC["6 service LXCs<br/>Nextcloud, Paperless-ngx, Calibre-Web,<br/>OpenWebUI, PostgreSQL, Monitoring"]
-    CTRL["LXC250 - Ansible control node<br/>manages the fleet, in the inventory since 2026-08-20"]
+    CTRL["LXC250 - Ansible control node"]
     VM102["VM102 - storage<br/>SnapRAID + MergerFS + Samba"]
   end
 
@@ -39,7 +52,7 @@ flowchart TB
   CTRL -->|SSH| VM100
   CTRL -->|SSH| LXC
   CTRL -->|SSH| VM102
-  VM102 -->|SMB over the LAN, mounted by VM100 itself| VM100
+  VM102 -->|SMB over the LAN, mounted by VM100| VM100
   VM102 -->|SMB, mounted by the host, bound into the LXCs| LXC
 
   classDef access fill:#0b3d6b,stroke:#0b3d6b,color:#ffffff
@@ -52,224 +65,95 @@ flowchart TB
   class CTRL control
 ```
 
-Every arrow follows what is delivered - a request to the service it reaches, storage to the node
-that mounts it, configuration to the node it configures. The same rule holds across all the detailed
-views. Worth reading for what is missing: no arrow from a device reaches a node over the LAN. Since
-2026-10-01 every node drops new inbound LAN connections, and the only service paths left there are SMB
-from vm100 and the hypervisor to vm102, and break-glass SSH to the hypervisor. LXC250 configures itself
-as well as the nine other nodes; that arrow is left out of the picture.
+Arrows follow what is delivered: requests to services, storage to the node that mounts it,
+configuration to the node it configures. No device reaches a node over the LAN; the only LAN paths
+left are SMB from vm100 and the hypervisor to vm102, and break-glass SSH to the hypervisor.
 
-Four detailed views follow from here: the [logical architecture](docs/architecture/diagram.md) -
-access policy by Tailscale tag, the three storage layers, and monitoring coverage by exporter class
-- plus [failure domains](docs/architecture/failure-domains.md),
-[backup and recovery](docs/architecture/backup-flow.md) and the
-[exposure model](docs/architecture/exposure-diagram.md).
+High availability is not a goal on a single host. The design invests in recovery instead: modelled
+dependencies, tested restores and a runbook per failure. All copies are on site today; the off-site
+copy is the first item of the [remediation plan](docs/platform/remediation-plan.md).
 
-| Layer | Component | Purpose |
-|---|---|---|
-| Hypervisor | Proxmox | Virtualization platform |
-| Storage | SnapRAID + MergerFS | Parity protection + flexible expansion |
-| Compute | Docker on VM100 | GPU-enabled workloads |
-| Services | Unprivileged LXCs | Isolation and segmentation |
-| Configuration | Ansible | Declarative management of every node; roles, inventory, vault |
-| Access | Tailscale | Identity-based remote access (Zero Trust) |
-| Monitoring | Prometheus + Grafana | Observability layer |
+## Where to start
 
-High availability is not implemented, and not intended. A single host cannot fail over, so the
-effort goes into recovery: explicit dependency modelling, documented failure procedures, a runbook
-for each of them, and restores that are tested on a timer rather than assumed. Every copy is local
-so far; the off-site copy of the most critical datasets is the first open item of the
-[remediation plan](docs/platform/remediation-plan.md).
-
----
-
-## Why this exists
-
-A deliberate learning environment for a career transition into DevOps and platform engineering. It
-holds live data with defined recovery objectives, classified per dataset in
-[data classification](docs/platform/data-classification.md). Incidents are documented, post-mortems
-written, and every failure turned into a runbook or a known-error entry.
-
-The emphasis throughout is on cost-aware, risk-conscious engineering. Every component here has a
-stated reason for being present, the trust boundaries between them are defined in the ACL, and the
-trade-offs behind both are written down in the design decisions.
-
----
-
-## How to read this repository
-
-Three entry points, depending on what you came for. Each is one document that links onward.
-
-| If you want to see | Start at |
+| To see | Read |
 |---|---|
-| How it is built and why the trade-offs went the way they did | [Design Decisions](docs/decisions/design-decisions.md), then the [architecture diagram](docs/architecture/diagram.md) |
-| How it is run, and what has broken | [Known Errors](docs/platform/known-errors.md) and the [Platform Changelog](docs/platform/changelog.md) |
-| How it is secured, and where it is not | [Security Controls](docs/platform/security-controls.md) and [Data Classification](docs/platform/data-classification.md) |
+| How it is built and why | [Design decisions](docs/decisions/design-decisions.md), then the [architecture diagram](docs/architecture/diagram.md) |
+| How it is run and what has broken | [Known errors](docs/platform/known-errors.md) and the [remediation plan](docs/platform/remediation-plan.md) |
+| How it is secured, and where it is not | [Security controls](docs/platform/security-controls.md) and [data classification](docs/platform/data-classification.md) |
+| One decision end to end | [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md) |
 
-The single best illustration of how decisions are made here is
-[SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md): a rule the platform sets for
-itself, a service that cannot follow it, three attempts measured and rejected, and the boundary
-moved one layer down instead - with the reboot that proves it.
+## How this repository is built
 
----
+The platform is designed, built and operated by Nicolas Pogorzelski. AI assistance (Claude Code) is
+part of the workflow, in two modes:
 
-## Documentation standard
+- **Maintenance:** the assistant drafts changes - documentation, Ansible roles and playbooks,
+  scripts - which are reviewed and merged by hand through a pull request.
+- **Learning:** for a new topic the code is written by hand first; the assistant explains,
+  researches and reviews afterwards.
 
-Any statement here that carries a number was measured against the running system rather than
-estimated, and the command that produced it is usually quoted alongside. Where a claim later turned
-out to be wrong, it is corrected in place with the correction visible, not silently overwritten -
-the [changelog](docs/platform/changelog.md) and the [known-error
-register](docs/platform/known-errors.md) carry more corrections than announcements, on purpose.
-
-Runbooks that have been executed record the date and the result in the document itself. Most have
-not been run against a real incident, and saying so is more useful than a claim the files do not
-support. This paragraph asserted that every runbook carried such a record until an audit on
-2026-08-17 checked it, and carried a count of its own until that count drifted too.
-
----
-
-## Learning Roadmap
-
-| Phase | Topic | Status |
-|---|---|---|
-| 1 | Linux, Bash, Git, Networking | Done |
-| 2 | Docker + Compose | Done |
-| 3 | Monitoring - Prometheus, Grafana, Alertmanager | Done |
-| 4 | Zero Trust Networking - Tailscale, ACL design | Done |
-| 5 | Ansible - playbooks, roles, vault, hardening | Done |
-| 5.5 | Identity - LDAP directory and OIDC provider, [decision](docs/decisions/identity-before-terraform.md) | Planned; the weekend scheduled for it, 2026-09-25 to 2026-09-27, did not start it |
-| 6 | Terraform - IaC on AWS (free tier) + Proxmox provisioning | Planned |
-| 7 | Kubernetes - k3s in the homelab | Planned |
-| 8 | Cloud depth (AWS) + Python | Planned |
-
-`Done` means the phase's learning arc is complete, not that its part of the platform has no open
-work; what remains for each is in the remediation plan. Bash scripting runs cross-cutting throughout; Disaster Recovery and Security are practiced continuously rather than as a single phase. Targeted certifications: Terraform Associate, then AWS Solutions Architect Associate.
-
-What is currently open, ranked by what its loss would cost, is in the
-[remediation plan](docs/platform/remediation-plan.md).
-
----
+Research and first drafts of documents are AI-assisted in both modes. Every change reaches `main`
+through a pull request with the validator, ansible-lint, gitleaks and the commit-message check
+green. The assistant's own configuration is kept outside this repository, and commits carry no
+attribution trailers; nine commits from September 2026 still carry one from before that rule.
+Documentation conventions are in [CONVENTIONS.md](docs/CONVENTIONS.md).
 
 ## Documentation
 
 ### Architecture
 
-- [Architecture Overview](docs/architecture/overview.md)
-- [Logical Architecture Diagram](docs/architecture/diagram.md) (Mermaid - access policy, storage, monitoring coverage)
-- [Failure Domains](docs/architecture/failure-domains.md) (Mermaid - what dies with which disk)
-- [Backup and Recovery Flow](docs/architecture/backup-flow.md) (Mermaid - what is copied, and what is not)
-- [Exposure Model Diagram](docs/architecture/exposure-diagram.md) (Mermaid)
+- [Overview](docs/architecture/overview.md)
+- [Logical architecture](docs/architecture/diagram.md) - access policy, storage, monitoring coverage
+- [Failure domains](docs/architecture/failure-domains.md) - what fails with which disk
+- [Backup and recovery](docs/architecture/backup-flow.md) - what is copied, and what is not
+- [Exposure model](docs/architecture/exposure-diagram.md)
 
 ### Decisions
 
-- [Design Decisions](docs/decisions/design-decisions.md) (trade-offs and rationale)
-- [SMB Bind and LAN Access](docs/decisions/smb-bind-and-lan-access.md) (a rule the service cannot follow, enforced one layer down)
-- [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) (binding pattern ADR)
-- [Calibre Auto-Import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) (SQLite byte-range locking over SMB)
-- [PostgreSQL Tailscale Boot Ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) (ordering is not readiness)
-- [pveproxy Tailscale Boot Ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) (the same race on the hypervisor)
-- [LXC250 DevOps Workstation](docs/decisions/lxc250-devops.md) (central management node ADR)
-- [Local AI Coding Assistant](docs/decisions/local-ai-assistant-eval.md) (model and harness evaluation for the admin workstation)
-- [Headscale Migration](docs/decisions/headscale-migration.md) (control plane sovereignty - deferred to Phase 6)
-- [Vaultwarden Decommissioning](docs/decisions/vaultwarden-decommission.md) (retiring a service instead of repairing it)
-- [Off-Site Backup Target](docs/decisions/offsite-backup-target.md) (append-only VPS, and why not object storage)
-- [Hypervisor Panic Policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) (a machine with no way in should not survive an oops)
-- [sshd Binding](docs/decisions/sshd-listen-address.md) (socket activation made the directive inert on six containers; the hypervisor stays unpinned by decision)
-- [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) (the correct answer was in a file nothing read)
-- [LXC200 systemd Visibility](docs/decisions/lxc200-systemd-visibility.md) (the monitoring node is the one nothing watches)
-- [Controls Built to Be Learned](docs/decisions/exercise-scope-before-terraform.md) (four controls this platform does not need, labelled as the exercise they are)
-- [Media Over the Tailnet](docs/decisions/media-over-the-tailnet.md) (the LAN exception withdrawn: same-LAN peers never went through the uplink)
-- [Identity Before Terraform](docs/decisions/identity-before-terraform.md) (one directory and one OIDC provider, and which clients cannot use it)
+17 decision records; the [design decisions](docs/decisions/design-decisions.md) collect the
+foundational ones.
 
-### Security, risk and change
+- [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md) - [Media over the tailnet](docs/decisions/media-over-the-tailnet.md) - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) - [sshd binding](docs/decisions/sshd-listen-address.md)
+- [PostgreSQL boot ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) - [pveproxy boot ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) - [LXC200 systemd visibility](docs/decisions/lxc200-systemd-visibility.md)
+- [Hypervisor panic policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) - [Calibre auto-import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) - [LXC250 control node](docs/decisions/lxc250-devops.md) - [Off-site backup target](docs/decisions/offsite-backup-target.md) - [Vaultwarden decommissioning](docs/decisions/vaultwarden-decommission.md) - [Headscale migration](docs/decisions/headscale-migration.md) - [Identity before Terraform](docs/decisions/identity-before-terraform.md) - [Controls built to be learned](docs/decisions/exercise-scope-before-terraform.md)
 
-- [Security Controls](docs/platform/security-controls.md) (ISO/IEC 27001 Annex A mapping - what is enforced, what is merely practised)
-- [Data Classification](docs/platform/data-classification.md) (classification, recovery objectives, data protection assessment)
-- [HA Mechanics](docs/platform/ha-mechanics.md) (what Proxmox HA does, measured on one node, and why it stays off)
-- [Remediation Plan](docs/platform/remediation-plan.md) (open work ordered by loss risk and dependency)
-- [Known Errors](docs/platform/known-errors.md) (the corrective-action log, 28 entries with root causes)
-- [Platform Changelog](docs/platform/changelog.md) (every change with the measurement that verified it)
+### Security, risk and operations
+
+- [Security controls](docs/platform/security-controls.md) - ISO/IEC 27001 Annex A mapping
+- [Data classification](docs/platform/data-classification.md) - recovery objectives per dataset
+- [Physical and environmental controls](docs/platform/physical-controls.md)
+- [Remediation plan](docs/platform/remediation-plan.md) - open work, ranked by risk
+- [Known errors](docs/platform/known-errors.md) - root-caused faults and their fixes
+- [Operations](docs/platform/operations.md) - dependency layers and maintenance
+- [HA mechanics](docs/platform/ha-mechanics.md) - what Proxmox HA would do here, and why it stays off
+- Incidents: [aux-disk failure](docs/platform/incidents/2026-06-25-aux-disk-failure-and-recovery.md), [vm100 silent freeze](docs/platform/incidents/2026-07-11-vm100-silent-freeze.md)
 
 ### Platform
 
-- [Storage Design](docs/platform/storage-design.md) (SnapRAID + MergerFS)
-- [Samba](docs/platform/samba.md) (segmented exports, least privilege)
-- [Monitoring](docs/platform/monitoring.md) (Prometheus + Grafana stack)
-- [Networking](docs/platform/networking.md) (Zero-Trust model)
-- [Tailscale ACL](docs/platform/tailscale-acl.md) (policy-as-code, tier model)
-- [Ansible](docs/platform/ansible.md) (control node, inventory, vault, roles)
-- [Proxmox Host](docs/platform/proxmox-host.md) (hypervisor-level config, boot ordering, power schedule)
-- [Storage Permissions](docs/platform/storage-permissions.md) (the filesystem side of the share model, verified daily)
-- [Operations](docs/platform/operations.md) (operational model, dependency layers, incident playbooks)
-- [Physical and Environmental Controls](docs/platform/physical-controls.md) (Annex A.7, rated honestly - power, disposal, encryption at rest)
+- [Proxmox host](docs/platform/proxmox-host.md) - [Ansible](docs/platform/ansible.md) - [Monitoring](docs/platform/monitoring.md) - [Networking](docs/platform/networking.md) - [Tailscale ACL](docs/platform/tailscale-acl.md)
+- [Storage design](docs/platform/storage-design.md) - [Samba](docs/platform/samba.md) - [Storage permissions](docs/platform/storage-permissions.md)
+- [Ansible inventory example](ansible/inventory/hosts.yml.example) - [Repository validator](scripts/validate-repo.sh), 42 checks
+- [Documentation conventions](docs/CONVENTIONS.md)
 
-### Incidents
+### Runbooks, nodes and services
 
-- [aux-disk failure and recovery](docs/platform/incidents/2026-06-25-aux-disk-failure-and-recovery.md) (2026-06-25)
-- [VM100 silent freeze](docs/platform/incidents/2026-07-11-vm100-silent-freeze.md) (2026-07-11)
-
-### Automation
-
-Everything guest-side is Ansible-managed, and every scheduled job is a systemd timer with
-`Persistent=true` - the host powers down overnight, so cron silently loses every slot it sleeps
-through.
-
-- [Ansible Platform Doc](docs/platform/ansible.md) - control node, inventory, vault, and the full
-  catalogue of playbooks and roles
-- [Playbooks](ansible/playbooks/) and [Roles](ansible/roles/) - 52 and 47 respectively
-- [Ansible Inventory](ansible/inventory/hosts.yml.example) (sanitized - real IPs gitignored)
-- [Repository validator](scripts/validate-repo.sh) - 45 structural checks, run by a pre-commit
-  hook and by CI on every push
-
-### Runbooks
-
-23 procedures under the same contract: every one states its preconditions, its verification
-step, its failure modes and its rollback - or records that no rollback exists and why, which for
-`snapraid sync` is the whole point. Enforced by the validator, not by habit.
+23 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
+exercised. Index: [runbooks/README.md](runbooks/README.md).
 
 <details>
-<summary>All 23 runbooks</summary>
+<summary>Nine node documents and eight service documents</summary>
 
-- [Runbook Index](runbooks/README.md)
-- Database: [PostgreSQL backup](runbooks/database/pg-backup.md) - [PostgreSQL restore](runbooks/database/pg-restore.md) - [MariaDB backup](runbooks/database/mariadb-backup.md) - [MariaDB restore](runbooks/database/mariadb-restore.md)
-- Storage: [SnapRAID sync](runbooks/storage/snapraid-sync.md) - [SnapRAID scrub](runbooks/storage/snapraid-scrub.md) - [aux-disk failure rescue](runbooks/storage/aux-disk-failure-rescue.md) - [SMB automount trigger](runbooks/storage/smb-autofs-trigger.md)
-- Platform: [platform restore](runbooks/platform/platform-restore.md) - [boot SSD replacement](runbooks/platform/boot-ssd-replacement.md) - [KE-14 power-path check](runbooks/platform/ke14-power-path-check.md) - [escrow restore drill](runbooks/platform/escrow-restore-drill.md) - [hard shutdown recovery](runbooks/platform/hard-shutdown-recovery.md) - [host console through a GPU swap](runbooks/platform/host-console-gpu-swap.md) - [LVM thin pool full](runbooks/platform/lvm-thin-pool-full.md) - [guest backup and restore](runbooks/platform/guest-backup-restore.md) - [LXC250 rebuild](runbooks/platform/lxc250-rebuild.md) - [pveproxy boot race](runbooks/platform/pveproxy-tailscale-boot-race.md) - [Docker data-root migration](runbooks/platform/docker-data-root-migration.md)
-- Backup: [off-site backup with restic](runbooks/backup/offsite-backup.md) - [off-site VPS provisioning](runbooks/platform/offsite-vps-provision.md)
-- Services: [OpenWebUI health](runbooks/ai-stack/openwebui-health.md) - [Nextcloud/Paperless integration](runbooks/integration/nextcloud-paperless.md)
+- Nodes: [vm100](docs/nodes/vm100.md) - [vm102](docs/nodes/vm102.md) - [lxc200](docs/nodes/lxc200.md) - [lxc210](docs/nodes/lxc210.md) - [lxc211](docs/nodes/lxc211.md) - [lxc220](docs/nodes/lxc220.md) - [lxc230](docs/nodes/lxc230.md) - [lxc250](docs/nodes/lxc250.md) - [lxc260](docs/nodes/lxc260.md)
+- Services: [Jellyfin](docs/services/jellyfin.md) - [Audiobookshelf](docs/services/audiobookshelf.md) - [Nextcloud](docs/services/nextcloud.md) - [Paperless-ngx](docs/services/paperless.md) - [Calibre-Web](docs/services/calibre-web.md) - [OpenWebUI](docs/services/openwebui.md) - [LLM inference](docs/services/llm-inference.md) - [PostgreSQL platform](docs/services/postgresql-platform.md)
 
 </details>
 
-### Nodes
+## Roadmap
 
-<details>
-<summary>Nine guests and one withdrawn, one document each</summary>
-
-- [VM100 - GPU / Compute](docs/nodes/vm100.md) (Docker, NVIDIA, Jellyfin, Audiobookshelf)
-- [VM102 - Storage](docs/nodes/vm102.md) (SnapRAID, MergerFS, Samba)
-- [LXC200 - Monitoring](docs/nodes/lxc200.md) (Prometheus, Grafana, Node Exporter)
-- [LXC210 - Nextcloud](docs/nodes/lxc210.md) (Apache, PHP, MariaDB, Redis)
-- [LXC211 - Paperless-ngx](docs/nodes/lxc211.md) (Docker in LXC, document management)
-- [LXC220 - Calibre-Web](docs/nodes/lxc220.md) (Docker in LXC)
-- [LXC230 - OpenWebUI](docs/nodes/lxc230.md) (AI stack, Docker in LXC)
-- [LXC240 - Vaultwarden](docs/nodes/lxc240.md) (withdrawn 2026-09-01, container destroyed 2026-09-29)
-- [LXC250 - DevOps](docs/nodes/lxc250.md) (Git, Ansible, IaC)
-- [LXC260 - PostgreSQL](docs/nodes/lxc260.md) (centralized platform database)
-
-</details>
-
-### Services
-
-<details>
-<summary>Nine service documents, each with its access model</summary>
-
-- [Jellyfin](docs/services/jellyfin.md)
-- [Audiobookshelf](docs/services/audiobookshelf.md)
-- [Nextcloud](docs/services/nextcloud.md)
-- [Paperless-ngx](docs/services/paperless.md)
-- [Calibre-Web](docs/services/calibre-web.md)
-- [OpenWebUI](docs/services/openwebui.md)
-- [LLM Inference](docs/services/llm-inference.md)
-- [Vaultwarden](docs/services/vaultwarden.md) (withdrawn 2026-09-01)
-- [PostgreSQL Platform](docs/services/postgresql-platform.md)
-
-</details>
+| Phase | Topic | Status |
+|---|---|---|
+| 1-5 | Linux, Docker, monitoring, Tailscale ACLs, Ansible | Done |
+| 5.5 | Identity: LDAP directory and OIDC provider ([decision](docs/decisions/identity-before-terraform.md)) | Planned |
+| 6 | Terraform: AWS free tier and Proxmox provisioning | Planned |
+| 7 | Kubernetes: k3s | Planned |
+| 8 | AWS depth and Python | Planned |
