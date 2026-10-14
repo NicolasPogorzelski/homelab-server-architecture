@@ -1,4 +1,4 @@
-# Tailscale ACL & Tagging Model (Policy-as-Code)
+# Tailscale ACL & Tagging Model
 
 ## Purpose
 
@@ -10,17 +10,16 @@ Principles:
 - No public ingress / no port-forwarding
 - Access is identity-based and explicitly allowed
 - Every grant names a port and, where a tag holds more than one service, a host
-- Policy is managed as code (Tailscale ACL JSON), not ad-hoc per service
+- The policy is one JSON document with tests, not ad-hoc per service
 
-Source of truth: The active policy is the Tailscale ACL JSON in the Tailscale admin console.
-This document mirrors it, sanitized: addresses are placeholders, and people appear by role, never
-by name, device name or e-mail address.
+**Source of truth:** the policy in the Tailscale admin console. This document mirrors it,
+sanitized: addresses are placeholders, and people appear by role, never by name, device name or
+e-mail address. Nothing synchronises the two: a change is written here, applied to the console by
+hand, and the console's `tests` block rejects a policy that breaks an assertion on save. A drift
+between this file and the console is found only by comparing them.
 
-The model was rebuilt on 2026-09-26 from a device-by-device review and from the flows measured on
-the fleet that day. Every rule below answers to one of two sources: a connection observed on a node,
-or a need the owner of a device stated. Anything else is closed.
-
----
+Every rule answers to one of two sources: a connection observed on a node, or a need the owner of
+a device stated. Anything else is closed.
 
 ## Tier Model
 
@@ -43,20 +42,17 @@ carry the tag of the role they are used in.
 | `tag:reader` | E-book reader | one device |
 | `tag:untrusted` | A TV outside the home network, administered by nobody here | one device |
 | `tag:media-player` | Streaming box at the TV: Jellyfin only | a streaming box |
-| `tag:isolated` | No access at all: Mullvad-only devices and quarantine | none since 2026-10-01 |
+| `tag:isolated` | No access at all: Mullvad-only devices and quarantine | none |
 
 **Exception:** Calibre-Web (lxc220) is tagged `tag:tier1`, not `tag:tier2`, despite being an
-application service by the table above. Confirmed intentional (2026-07-08). Since the rebuild the
-tag decides less than it did: every grant to a tier1 service names the host, so the three tier1
-services are reachable independently of each other.
+application service by the table above; this is intentional. The tag decides little: every grant to
+a tier1 service names the host, so the three tier1 services are reachable independently of each
+other.
 
-**Why lxc250 has its own tag.** Until 2026-09-26 the control node shared `tag:admin` with the
-admin workstations, and `tag:admin:*` connected all of them on every port. The node that holds the
-vault password, the Ansible key and root on the hypervisor was reachable on every port from a phone,
-and could itself reach every port on the workstations. A human endpoint and an automation server are
-two identities with two jobs; each now gets only its own.
-
----
+**Why lxc250 has its own tag.** The control node holds the vault password, the Ansible key and root
+access to the hypervisor. Sharing a tag with the admin workstations would make it reachable from
+every admin device and let it reach them. A human endpoint and an automation server are two
+identities with two jobs; `tag:control` gives the control node only its own.
 
 ## Tag Ownership
 
@@ -84,8 +80,6 @@ Tags are assigned to nodes via the Tailscale admin console, and lxc250 advertise
 }
 ```
 
----
-
 ## Host Aliases
 
 Where a tag holds several services, a grant names the host instead, so that reaching one service
@@ -106,8 +100,6 @@ does not mean reaching its neighbours.
 An alias is an address, and a node keeps its address only while it stays registered. A node that
 is removed and added again gets a new one, and every rule naming its alias then points at nothing
 or at a stranger. Re-read this block after any re-registration.
-
----
 
 ## ACL Rules (Sanitized)
 
@@ -135,8 +127,8 @@ a person's device.
 desktop is off much of the time, and a probe against it would page for a machine that is simply
 switched off.
 
-lxc200 also scrapes its own native exporter on its Tailscale address, port 9101. That works without
-a rule; measured 2026-09-26, both before and after the rebuild.
+lxc200 also scrapes its own native exporter on its Tailscale address, port 9101; a node reaching
+itself needs no rule (verified 2026-09-26).
 
 ### Rule 2 - Journal upload (exercise)
 
@@ -171,8 +163,8 @@ every other node.
 
 ### Rule 4 - Hypervisor: SMB from vm102
 
-Measured 2026-09-26: the host mounts eight shares from vm102, two of them over the tailnet and six
-over the LAN, where the `smb_guard` table on vm102 admits the host and vm100 only
+Verified 2026-09-26: the host mounts eight shares from vm102, two of them over the tailnet and six
+over the LAN, where `smb_guard` and `lan_guard` on vm102 admit the host and vm100 only
 ([samba.md](samba.md)). Nothing else the host does crosses the tailnet; guests are managed through
 `pct` and `qm` on the host itself.
 
@@ -210,8 +202,7 @@ primary and vm100 as fallback ([llm-inference.md](../services/llm-inference.md))
 }
 ```
 
-Port 11434 is closed on both hosts, and the tests below assert it: vm100's native Ollama was removed
-on 2026-10-01, and nothing on the desktop listens there.
+Port 11434 is closed on both hosts, and the tests below assert it: nothing listens there.
 
 ### Rule 7 - Admin workstations
 
@@ -241,10 +232,10 @@ Not granted: PostgreSQL from a workstation (nothing in the repository uses it), 
 
 ### Rule 8 - Admin phone
 
-The phone held `tag:admin` so that the host could be shut down from it. It now reaches the Proxmox
-interface and the services its owner uses, and nothing else. The Proxmox side is meant to match: a
-dedicated user whose role holds only `Sys.PowerMgmt`, with a second factor, so a stolen phone can
-switch the host off and do nothing more. Until that user exists the login is still root's.
+The phone reaches the Proxmox interface, so the host can be shut down from it, and the services its
+owner uses; nothing else. The Proxmox side is meant to match: a dedicated user whose role holds only
+`Sys.PowerMgmt`, with a second factor, so a stolen phone can switch the host off and do nothing
+more. That user does not exist yet; the login is still root's ([remediation plan](remediation-plan.md)).
 
 ```json
 {
@@ -258,9 +249,8 @@ switch the host off and do nothing more. Until that user exists the login is sti
 }
 ```
 
-`openwebui:443` serves a mobile client for Open WebUI. Ollama's request log on vm100 over the
-preceding 30 days held requests from lxc230 only, none from the phone, which is how the client's
-path was established.
+`openwebui:443` serves a mobile client for Open WebUI; the phone never talks to an inference
+backend directly.
 
 ### Rules 9 and 10 - End-user devices
 
@@ -312,9 +302,9 @@ tagged individually by the admin (`tagOwners: autogroup:admin`).
 
 ### Rule 13 - External user, through machine sharing
 
-One external user reaches Jellyfin, Audiobookshelf and Nextcloud Talk. Until 2026-09-26 that user's
-devices were members of this tailnet; now vm100 and lxc210 are shared into the user's own tailnet
-instead. Tailscale's sharing documentation: "Sharing gives the recipient access to only the shared
+One external user reaches Jellyfin, Audiobookshelf and Nextcloud Talk. vm100 and lxc210 are shared
+into the user's own tailnet rather than the user's devices joining this one. Tailscale's sharing
+documentation: "Sharing gives the recipient access to only the shared
 machine in your tailnet, and nothing else", and the shared machine stays subject to this policy. The
 user's devices no longer sit in this network, cannot be added to it, and a rule written too broadly
 here cannot reach them.
@@ -329,16 +319,14 @@ here cannot reach them.
 
 The rule names the user's account rather than `autogroup:shared`, so a later share with somebody else
 does not inherit these rights. A grant to an account covers all of its devices; per-device limits
-would require keeping those devices in this tailnet, which is the arrangement this replaced.
+would require keeping those devices in this tailnet.
 
 ### Rule 14 - Media player: the streaming box at the TV
 
-The streaming box gets Jellyfin over the tailnet and nothing else. Until 2026-10-01 it carried
-`tag:isolated` and reached Jellyfin over the LAN instead: in the 90 days to that date it opened 145
-Jellyfin sessions from its LAN address and none from the tailnet, read from Jellyfin's activity log
-and identified by its NVIDIA MAC prefix. Its own tag rather than a grant under `tag:isolated`,
-because that tag promises no access at all. The Mullvad attribute stays, since it is bound to the
-device's address, not to the tag.
+The streaming box gets Jellyfin over the tailnet and nothing else; media clients use the tailnet,
+not the LAN ([decision](../decisions/media-over-the-tailnet.md)). It has its own tag rather than a
+grant under `tag:isolated`, because that tag promises no access at all. Its Mullvad attribute is
+bound to the device's address, not to the tag.
 
 ```json
 {
@@ -352,10 +340,9 @@ device's address, not to the tag.
 
 Nextcloud's External Storage writes uploads into two SMB shares on vm102 that land in Paperless's
 consumption directory ([nextcloud.md](../services/nextcloud.md#external-storage-paperless-integration)).
-The rebuild of 2026-09-26 left this flow out, and its test asserted the opposite; with the LAN path
-closed by `smb_guard`, both mounts had failed since at least 2026-09-29. The grant is the one
-service, not `tag:tier1`, and the mounts address vm102 by its full MagicDNS name, because the short
-name `storage` also resolves on the LAN.
+The LAN path to vm102 is closed, so this grant is the only route. It names the one service, not
+`tag:tier1`, and the mounts address vm102 by its full MagicDNS name, because the short name
+`storage` also resolves on the LAN.
 
 ```json
 {
@@ -369,8 +356,6 @@ name `storage` also resolves on the LAN.
 
 A device carrying it can reach nothing and be reached by nothing. It exists for devices that use
 the tailnet for a Mullvad exit node only, and as a quarantine tag.
-
----
 
 ## Node Attributes
 
@@ -389,15 +374,12 @@ an end-user phone and a streaming box.
 ]
 ```
 
-Two things about this block were measured rather than read. The admin desktop had a Mullvad exit
-node active on 2026-09-26 with no `autogroup:internet` grant in the policy, so the attribute alone
-is enough for Mullvad, although Tailscale's own exit nodes need that grant. And the targets are
-addresses, which Tailscale's policy reference does not list as a `nodeAttrs` selector (it names tags,
-users, groups and `*`); the form was kept because it is the one that demonstrably works. Three
-targets named addresses no device held any more and were removed in the rebuild - a new device
-receiving one of them would have inherited the attribute.
-
----
+Verified 2026-09-26: the admin desktop used a Mullvad exit node with no `autogroup:internet` grant
+in the policy, so the attribute alone is enough for Mullvad (Tailscale's own exit nodes need that
+grant). The targets are addresses, which Tailscale's policy reference does not list as a
+`nodeAttrs` selector (it names tags, users, groups and `*`); the form is kept because it works.
+Because the targets are addresses, a target whose device is gone must be removed: a new device
+receiving that address would inherit the attribute.
 
 ## Access Matrix (Summary)
 
@@ -424,8 +406,6 @@ Rows are sources, columns destinations. Host names in a cell mean that only that
 Two columns are left out because every cell in them is empty for the servers: no rule targets
 `tag:admin` except `ai-stack -> bazzite:8080`, and no rule targets any other device tag at all.
 
----
-
 ## Administrative Access Model
 
 Administrative access is separated from service-to-service communication.
@@ -439,21 +419,17 @@ Administrative access is separated from service-to-service communication.
 Note: the admin workstations are intentionally absent from `docs/nodes/`. They are documented
 through their tag and through the hardening notes in the [remediation plan](remediation-plan.md).
 
----
-
 ## Service Onboarding Checklist (Network)
 
 For every new service that must be reachable remotely or must reach other services:
 
 1. Decide the node tag(s) for this service, and whether a host alias is needed because the tag
    already holds another service
-2. Update the Tailscale ACL JSON (allow rules)
-3. Add a `tests` entry for the new path and for one path that must stay closed
+2. Update the grant in this document and apply the same change in the admin console
+3. Add a `tests` entry for the new path and for one path that must stay closed, in both places
 4. Verify connectivity with a TCP probe from the source node, both directions of the claim
 5. Ensure the service itself binds only to Tailscale (or loopback + Tailscale proxy)
 6. Document the access model in the service doc
-
----
 
 ## Binding Rules (Zero Trust)
 
@@ -471,11 +447,10 @@ most nodes - would stay reachable from the home network and, over IPv6, from any
 prefix. Since 2026-10-01 the `lan_guard` role enforces the LAN side on each node instead: an
 nftables table on the LAN interface drops every new inbound connection except replies, ICMP, DHCP,
 Tailscale's UDP port and a short named list (SMB to vm102 from its two mounting nodes, break-glass
-SSH and netconsole to the hypervisor). See [ansible.md](ansible.md) and the rollout state in the
-[remediation plan](remediation-plan.md#added-on-2026-10-01). The router admits nothing inbound from
-the internet (measured on 2026-09-26: no port shares, no exposed host, no MyFRITZ! shares).
+SSH and netconsole to the hypervisor). See the `lan_guard` role in [ansible.md](ansible.md#roles).
 
----
+Verified 2026-09-26: the router admits nothing inbound from the internet (no port shares, no
+exposed host, no MyFRITZ! shares).
 
 ## Policy Tests
 
@@ -483,9 +458,7 @@ The tailnet policy file is HuJSON and accepts a `tests` block. Each entry names 
 identity and lists destinations that must be reachable and destinations that must not be;
 when an assertion fails, Tailscale rejects the edited policy on save rather than applying it.
 
-Deployed on 2026-09-26 with the rebuilt policy: eighteen entries, one for each role and for the
-tier1 hosts individually. Until then the block was a proposal in this document, and the model had
-been verified by hand once, during the 2026-08-17 audit.
+The block below has one entry per source role, per tier1 host and for the external user.
 
 Deny assertions carry the weight here. An allow that breaks announces itself the next time somebody
 uses the service; a deny that breaks is silent. Where a rule's source is a host alias, the test names
@@ -549,40 +522,15 @@ three tier1 nodes it describes.
 ]
 ```
 
-The tests check the policy, not the fleet. After the policy was saved and the devices re-tagged,
-the fleet was probed as well: 70 TCP connections from the ten servers and the admin notebook, every
-allowed path open and every denied one closed, all ten nodes reachable by Ansible and all nineteen
-Prometheus targets up. A service that binds the wrong address is still reachable by anything the
+The tests check the policy, not the fleet. The fleet is checked by TCP probes from the source nodes.
+
+Verified 2026-09-26: 70 TCP connections from the servers and the admin notebook, every allowed path
+open and every denied one closed, every node reachable by Ansible and every Prometheus target up.
+
+A service that binds the wrong address is still reachable by anything the
 kernel lets through, which is why [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)
 had to answer port 445 one layer further down.
 
 ## Documentation Rule
 
-Every `docs/services/*.md` file must include an "Access Model (Zero Trust)" section and reference this document.
-
----
-
-## Changelog
-
-| Date | Change | Reason |
-|---|---|---|
-| 2026-10-10 | Rule 15 grants `nextcloud` -> `tag:storage:445`, and its test moves from deny to accept. Written in the repository; the console policy is applied by hand. | Nextcloud's ingest mounts to Paperless had no path since the 2026-09-26 rebuild: the flow was not in the measured set, and `smb_guard` closes the LAN route. |
-| 2026-10-01 | New `tag:media-player` with Rule 14 (`gpu-vm:8096` only) and a test; the streaming box moves to it from `tag:isolated`. Verified on vm100's packet filter: a new rule for 8096 with the device's two addresses | The box streamed over the LAN, the path that closes once vm100 stops publishing on it ([remediation plan](remediation-plan.md#added-on-2026-10-01)) |
-| 2026-10-01 | Policy applied in the console: Rule 6 grants `bazzite:8080` and `gpu-vm:8080`, monitoring `gpu-vm:8080`; `gpu-vm:11434` removed with vm100's Ollama and asserted as denied. Verified on vm100's packet filter and by probes from lxc230, lxc200 and the admin notebook: allowed paths 200, denied paths time out | The 2026-09-29 change had reached the documentation only ([llm-inference.md](../services/llm-inference.md#rollout-state)) |
-| 2026-09-29 | Inference moves to `llama-server` on 8080: Rule 6 grants `bazzite:8080` and `gpu-vm:8080` and drops `bazzite:11434`; `gpu-vm:11434` stays until vm100's Ollama is removed. Monitoring may probe `gpu-vm:8080`. Tests follow. Correction 2026-10-01: documentation only - the console policy was not changed that day, and vm100's packet filter carried no rule for 8080 until 2026-10-01 | [llm-inference.md](../services/llm-inference.md) |
-| 2026-09-26 | Policy rebuilt. New tags `tag:control`, `tag:admin-mobile`, `tag:reader`, `tag:isolated`; `tag:client` narrowed to named services; `tag:gaming` and `tag:maintenance` retired. Grants by host and port; no `*` grant left; tier1 lateral access, tier0 workload access and unused SMB grants removed; journal upload added; an external user moved to machine sharing; three stale Mullvad targets dropped; eighteen tests deployed | Device-by-device review against measured flows; see the rules above |
-| 2026-09-01 | Documentation only, no policy change: Vaultwarden removed from the tier1 service lists in Rule 1c and Rule 6. The `tag:tier1` definition stays, and so does the node's tag assignment in the Tailscale console, until the container is removed in phase 2 | Service decommissioned and the guest stopped ([decision](../decisions/vaultwarden-decommission.md)) |
-| 2026-07-14 | Documentation only, no policy change: `tag:untrusted` re-described from "Guest / restricted devices" to the enumerated set it actually is (TVs). Rule 7 now states that the tier is admin-assigned per device and is not a guest-invite mechanism | The old wording described a broader and more open population than the tag has ever held, and read as if any invited device could join. The ACL itself is unchanged - `tagOwners: autogroup:admin` already made self-assignment impossible |
-| (predates changelog) | LXC210 Nextcloud onboarded: `tag:tier1`, host alias added, Apache-managed TLS on :443 (not Tailscale Serve) | Nextcloud initial deployment; predates changelog start 2026-03-04 |
-| 2026-03-04 | Added `tag:admin:*` to admin dst | Enable admin-to-admin communication (required after adding LXC250 devops) |
-| 2026-03-04 | Changed tier1/tier2 storage port from 2049 (NFS) to 445 (SMB) | NFS was replaced by SMB; port rule was a leftover |
-| 2026-03-09 | Added `tag:monitoring` to tier model, tag ownership, admin dst, and access matrix | Monitoring tag was missing from documentation |
-| 2026-03-09 | Added Rule 1b (monitoring outbound scrape access on port 9100) | Container restart revealed missing outbound ACL (DD#11) |
-| 2026-03-20 | Added `tag:database` to tier model, tag ownership, admin dst, monitoring scrape, and access matrix | PostgreSQL platform service (lxc260) uses dedicated platform tag (DD#12) |
-| 2026-03-24 | Added `tag:ai-stack` to tier model, tag ownership, access matrix; added Rule 5 (ai-stack -> database:5432) | First database consumer (OpenWebUI CT230) onboarding |
-| 2026-03-25 | Added `tag:ai-stack:*` to admin/tier0 dst; merged monitoring scrape into single rule with all tags; added storage:445 to ai-stack rule; added ai-stack:443 to client rule | OpenWebUI (CT230) ACL deployment and E2E verification |
-| 2026-04-02 | Extended Rule 5 (ai-stack dst): added tag:admin:11434 and tag:tier2:11434 for Ollama inference backends | OpenWebUI requires direct Ollama access (admin workstation + VM100) |
-| 2026-04-07 | Extended Rule 3 (tier1 dst): added tag:database:5432 | Paperless-ngx (CT211, tag:tier1) requires PostgreSQL access to lxc260 |
-| 2026-04-10 | CT211 Paperless-ngx fully onboarded: tag:tier1, TS Serve https=443->8000, paperless_db@lxc260, E2E verified | Paperless-ngx operational and documented |
-| 2026-04-22 | Extended Rule 1b (monitoring outbound): added `tag:monitoring:9100` (self-scrape), `tag:admin:9100`, `tag:database:9187` (postgres_exporter) | node_exporter fleet deployment + postgres_exporter on lxc260 |
-| 2026-06-08 | Added Rule 1c (monitoring outbound service-probe): `tag:tier2:8096`, `tag:tier2:13378`, `tag:tier1:443`, `tag:ai-stack:443` | blackbox_exporter service-level probes (KE-8 remediation) require reaching service ports, not just node_exporter |
+Every service document under `docs/services/` must include an `## Access Model` section and reference this document.

@@ -10,47 +10,24 @@ never involved at all.
 
 ## Why this document exists
 
-On 2026-08-16 a sweep of the MergerFS branches found objects carrying the wrong group, and several
-directories missing their setgid bit. No consumer was affected. Jellyfin, Audiobookshelf and
-Calibre-Web read their libraries throughout.
+Samba masks apply only when Samba creates an object, so they cannot describe what is on disk:
+directories made over SSH bypass them, and older files keep their mode. A target state for the
+filesystem is needed to compare against.
 
-They were not reading through their groups. Every object also carried read permission for `other`,
-and that is the path access actually took. Nothing could detect this, because the only observable
-signal - whether the service works - stayed green.
-
-Dating it: the pool and all six branches were created on 26 December 2025, so the model had been
-in this state for a little under eight months. The wrong groups themselves are younger. MergerFS
-places new writes on the branch with the most free space, so the aux branch only started receiving
-content once the larger disks filled up, and its oldest media directory dates from 2026-05-07.
-`Books` is the older half of the finding: it was never assigned to its service group at all, from
-the day the pool was built.
-
-Three things had to be true at once for that to happen. Each is a class rather than an incident:
-
-1. **A second mechanism did the job of the first.** As long as the permission bits for `other`
-   were open, group membership never had to be correct, and no observation distinguished the two
-   cases. `smart_health_passed` reporting PASSED over 7680 unreadable sectors
-   ([KE-13](known-errors.md#ke-13)) is the same problem in a different layer.
-2. **The enforcement point and the objects did not overlap.** `create mask` in `smb.conf` applies
-   when Samba creates a file, and never afterwards. Directories made over SSH bypass it entirely,
-   which is how five top-level directories came to be mode 0755. Files predating a mask keep their
-   old mode forever, which is why Vaultwarden still held 0644 private keys from January under a
-   0660 mask set in spring.
-3. **Nothing stated the target state, so nothing could be compared against it.** The share
-   configuration was documented in three places. The filesystem was documented nowhere.
-
-This file addresses the third point; the [`storage_permissions`](../../ansible/roles/storage_permissions)
-role checks the result daily so it does not drift back.
+Verified 2026-08-16: a sweep of the MergerFS branches found objects with the wrong group and
+directories without setgid. No consumer noticed, because every object also carried read
+permission for `other`, and that was the path access actually took. A working service did not
+distinguish the intended group path from the redundant world path. The matrix below states the
+target; the [`storage_permissions`](../../ansible/roles/storage_permissions) role checks it daily.
 
 ---
 
 ## The matrix
 
 Modes are read as maxima rather than as exact values. An object violates the matrix if it carries a bit the
-maximum does not allow. Stricter is always acceptable - that is what lets Vaultwarden keep its
-private keys at 0600 under a 0660 allowance without being reported as drift, and it keeps the check
-answering the question that matters ("can anyone reach this who should not") rather than enforcing
-cosmetic uniformity.
+maximum does not allow. Stricter is always acceptable (a 0600 file under a 0660 allowance is not
+drift), which keeps the check on the question that matters - can anyone reach this who should
+not - rather than on cosmetic uniformity.
 
 | Path | Owner | Group | Directories | Files | setgid | Read path |
 |---|---|---|---|---|---|---|
@@ -64,7 +41,6 @@ cosmetic uniformity.
 | `openwebui` | storage | storage | 2770 | 0660 | yes | owner only |
 | `Postgres-Backups` | storage | storage | 2770 | 0660 | yes | owner only |
 | `DB-Backups` | storage | storage | 2770 | 0660 | yes | owner only |
-| `Vaultwarden` | storage | storage | 0770 | 0660, keys 0600 | no | owner only |
 
 Two rules govern the table:
 
@@ -74,8 +50,7 @@ Two rules govern the table:
 - **The matrix applies per branch, never to the union.** MergerFS answers a stat from the first
   branch holding the path (`category.search=ff`), so `ls /mnt/mergerfs/...` shows one disk out of
   six and hides any disagreement between them. Every check and every repair iterates branches
-  directly. The branch whose missing setgid bit caused the finding was the sixth of six, and the
-  union view never displayed it.
+  directly.
 
 ### Why the owner is `storage` and not the service
 
@@ -88,8 +63,8 @@ declares read-only. Keeping ownership at `storage` and giving the consumer group
 removes that possibility.
 
 A share without `force user` is the exception: its files legitimately belong to whichever account
-wrote them, so the owner column is left unpinned there. Pinning it would produce a violation count
-that never reaches zero, for the same reason `DiskSpaceCritical` was rewritten in July 2026.
+wrote them, so the owner column is left unpinned there; pinning it would produce a violation count
+that never reaches zero.
 
 ---
 
@@ -103,23 +78,22 @@ Owned by the [`storage_permissions`](../../ansible/roles/storage_permissions) ro
 - `/etc/storage-permissions.conf` - the matrix above, rendered from the role's `defaults/main.yml`
 - optionally `/etc/storage-permissions.local.conf` - additional entries kept off the repository;
   the script reads it alongside the managed file and Ansible neither writes nor removes it
-- `storage-permissions.timer` - daily at 23:15, `Persistent=true`, before the host powers off at 23:30
+- `storage-permissions.timer` - daily, `Persistent=true`, before the nightly power-off (schedule in
+  the role defaults; the shutdown script waits for it)
 - every share directory of the matrix on every branch, created with its owner, group and directory
   mode where the branch does not have it yet; existing directories are left as they are
 
-The last item closes a gap the check found on 2026-10-12. MergerFS places a new file on the branch
+Pre-creating the share directories is necessary because MergerFS places a new file on the branch
 with the most free space (`category.create=mfs`) and, if the share does not exist there, recreates
-its directory with `mkdir`. That call keeps only the `0777` bits of the requested mode and sets
-setgid only under a setgid parent (`man 2 mkdir`); a branch root has none. `DB-Backups` appeared on
-a fourth branch that morning without the bit, and three more shares were missing from at least one
-branch. With every share present on every branch there is nothing left to recreate, and
-subdirectories inherit setgid from their share.
+its directory with `mkdir`, which keeps only the `0777` bits and sets setgid only under a setgid
+parent (`man 2 mkdir`); a branch root has none. With every share present on every branch there is
+nothing left to recreate, and subdirectories inherit setgid from their share.
 
 The branch list is not kept in the repository. The script reads it from the running MergerFS
 instance (`user.mergerfs.branches` on the pool's control file), for three reasons: a disk added to
 the pool is covered on the next run without editing anything; the control file reports what is
-mounted rather than what fstab intended; and the real disk labels are kept out of version control
-by `validate-repo.sh` Check 18.
+mounted rather than what fstab intended; and the real disk labels stay out of version control
+(enforced by the repository validator).
 
 ### Modes
 
@@ -152,9 +126,9 @@ done
 
 Expected: each account sees its own libraries and nothing else.
 
-The stronger test is the negative one. A positive result confirms every redundant path along with
-the intended one, which is exactly how this defect survived. To prove the group is load-bearing,
-remove the world bits from a copy and confirm access continues.
+The stronger test is the negative one: a positive result confirms every redundant path along with
+the intended one. To prove the group is load-bearing, remove the world bits from a copy and
+confirm access continues.
 
 ---
 
@@ -173,23 +147,16 @@ passing, because the textfile metric holds its last value indefinitely.
 
 ## Failure Impact
 
-A violated matrix is a weakened boundary, not an outage. Consumers keep working - that is precisely
-the problem, and the reason this is monitored rather than left to be noticed.
-
-The realistic damage path is a service account reading data outside its own library. Before
-2026-08-16 that was live: Jellyfin's and Audiobookshelf's accounts could read `Books` and `openwebui`,
-because both held read-only shares scoped to the entire pool rather than to their libraries. Their containers only ever received their own directories, which limited the
-blast radius by accident rather than by design.
+A violated matrix is a weakened boundary, not an outage. Consumers keep working, which is why it
+is monitored rather than left to be noticed. The realistic damage path is a service account
+reading data outside its own library.
 
 ---
 
 ## Deliberately out of scope
 
-- **Share scope - done 2026-08-16.** `[media-jf]` and `[media-abs]` exported the whole pool and
-  were replaced by four scoped shares, one per library. The change avoided unmounting anything on
-  a running VM100: new mount units on new paths, the two `.env` files repointed, containers
-  recreated, and the old automount units merely disabled so the nightly power-off retires them.
-  Removal of the superseded share definitions is pending until those mounts have cleared.
+- **Share scope.** Each consumer share is scoped to one library; that is Samba's half of the
+  boundary ([samba.md](samba.md)).
 - **`smb.conf` itself.** The four workstation shares carry `create mask = 0640` and
   `directory mask = 2750` so that new content is born compliant, but the role verifies the result
   on disk rather than the configuration that produced it. That separation is deliberate: masks

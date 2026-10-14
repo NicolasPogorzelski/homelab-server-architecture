@@ -1,11 +1,10 @@
 # Operations & Maintenance
 
-This document describes the operational model of the homelab infrastructure: monitoring, maintenance routines, dependency ordering, recovery procedures, and the security posture.
+The operational model of the platform: what is monitored, how data is protected, how the platform
+comes up after a power-on, how common failures are handled, and which routines keep it healthy.
+The goal is reboot-safe, least-privilege infrastructure whose recovery is written down.
 
-The goal is reboot-safe, least-privilege, and operationally explainable infrastructure (runbook-friendly, deterministic recovery).
-
-See: [Runbook index](../../runbooks/README.md)
-See: [Known Errors & Workarounds](./known-errors.md)
+See: [Runbook index](../../runbooks/README.md), [Known errors](known-errors.md)
 
 ---
 
@@ -13,400 +12,267 @@ See: [Known Errors & Workarounds](./known-errors.md)
 
 ### Core Building Blocks
 
-- **Proxmox Host** (hypervisor): runs VMs and LXCs, provides boot ordering and isolation boundaries
-- **VM102 (Storage VM)**: SnapRAID + MergerFS + Samba exports (single source of truth for persistent data)
-- **VM100 (GPU/Compute VM)**: Docker workloads for media services (Jellyfin/Audiobookshelf), GPU passthrough
-- **Service LXCs**:
-  - **LXC200**: Monitoring (Prometheus + Grafana + Node Exporter)
-  - **LXC210**: Nextcloud (classic stack: Apache + PHP + MariaDB + Redis)
-  - **LXC211**: Paperless-ngx (document management, Docker in LXC)
-  - **LXC220**: Calibre-Web (Docker in LXC)
-  - **LXC230**: OpenWebUI (AI stack entrypoint)
-  - **LXC250**: DevOps (central management workstation; Git, Ansible, IaC)
-  - **LXC260**: PostgreSQL platform service (centralized database)
+- **Proxmox host:** runs every VM and LXC, owns boot ordering and the nightly power schedule.
+- **vm102 (storage):** SnapRAID + MergerFS + Samba; the single source of truth for persistent data.
+- **vm100 (GPU compute):** Docker workloads for Jellyfin and Audiobookshelf, llama-server fallback
+  backend, GPU passthrough.
+- **Service LXCs:** lxc200 monitoring, lxc210 Nextcloud (native Apache/PHP/MariaDB/Redis), lxc211
+  Paperless-ngx, lxc220 Calibre-Web, lxc230 OpenWebUI, lxc250 Ansible control node, lxc260
+  PostgreSQL platform database.
+
+Node detail lives in `docs/nodes/`; membership in `ansible/inventory/hosts.yml.example`.
 
 ### Trust Boundaries
 
-- **Public Internet:** no direct exposure, no router port-forwarding
-- **LAN:** no service exposure since 2026-10-01; `lan_guard` admits only SMB to vm102 from vm100 and the hypervisor, and break-glass SSH to the hypervisor
-- **Overlay network (Tailscale):** identity-based access for administration and remote usage
-- **Storage boundary:** strong segmentation at SMB layer (RW vs RO consumer identities)
+- **Public Internet:** no exposure, no router port forwarding.
+- **LAN:** no service is reachable; `lan_guard` admits only SMB to vm102 from vm100 and the
+  hypervisor, and break-glass SSH and netconsole to the hypervisor.
+- **Tailnet:** identity-based access for administration and use ([tailscale-acl.md](tailscale-acl.md)).
+- **Storage:** segmentation at the SMB layer with separate read-write and read-only identities
+  ([samba.md](samba.md)).
 
 ---
 
-## 1. Monitoring (Observability Baseline)
+## 1. Monitoring
 
-### Stack (LXC200)
+Prometheus, Grafana and Alertmanager run on lxc200, bind loopback and are reached through
+`tailscale serve` ([lxc200.md](../nodes/lxc200.md)). Every node, lxc250 and the hypervisor
+included, is scraped; the target list and every alert rule are in [monitoring.md](monitoring.md),
+rendered from the inventory.
 
-- **Prometheus**: metrics collection
-- **Node Exporter**: system metrics
-- **Grafana**: dashboards (visualization)
+Covered layers: compute (CPU, RAM, swap), storage (filesystems, thin pool, SnapRAID sync, scrub
+and coverage, SMART), systemd unit state on every node, backups (database dumps, restore tests,
+guest and host-config backup), service reachability (blackbox probes), pending security updates,
+listeners outside the binding rule, and configuration drift.
 
-### Exposure Model
-
-The monitoring stack binds loopback and is reached through Tailscale Serve; per-port detail is in
-[`lxc200.md`](../nodes/lxc200.md), including the one exception (Alertmanager's cluster port). Note
-that the loopback binding described there applies to this stack only - it is not a fleet-wide
-statement, and the node documents carry the per-node reality.
-
-### Monitored Layers
-
-The target list lives in [`monitoring.md`](monitoring.md) and is rendered from the inventory, so it
-cannot drift from what Prometheus actually scrapes. It is not repeated here - this section carried a
-hand-maintained copy until 2026-08-17 and had inverted the two facts that matter: it listed the
-DevOps LXC, which is in no inventory group and therefore scraped by nobody, and omitted lxc230 and
-lxc260, which are scraped. A duplicated list is worse than no list when the duplicate is the one
-somebody reads.
-
-### Key Metrics (Minimum Set)
-
-- **Compute:** CPU load, RAM usage, swap pressure
-- **Storage:** disk usage, inode usage, filesystem saturation, IO wait
-- **Containers:** uptime, restart count, healthchecks
-- **Network:** interface errors, bandwidth (where relevant)
-- **SnapRAID:** last sync age (`SnapRAIDSyncStale` alert, >26h), scrub age (`SnapRAIDScrubStale` alert, >32d); automated via `snapraid-maintenance.sh` on VM102
-
-### Planned Enhancements
-
-- "Golden signals" dashboards per tier (Storage/Compute/Services)
-- An external heartbeat, so a total outage produces an alert rather than silence - see the Tier 4
-  entry in the [remediation plan](remediation-plan.md)
-
-(Alertmanager was listed here as planned until 2026-08-17. It has been deployed on lxc200 with a
-webhook receiver since June.)
+Open: an external heartbeat, so that a total outage produces an alert instead of silence
+([monitoring.md](monitoring.md#watchdog-and-the-missing-heartbeat)).
 
 ---
 
 ## 2. Data Protection & Backup Strategy
 
-### 2.1 SnapRAID (VM102)
+### 2.1 SnapRAID (vm102)
 
-SnapRAID provides parity-based protection for the MergerFS-backed data disks.
+SnapRAID gives parity protection to the MergerFS data disks. It is not real-time: data written
+since the last sync is unprotected.
 
-- Protection type: not real-time
-- Sync model: scheduled/manual
-- Integrity model: scrub/rehash over time
+- Sync daily, scrub weekly, status daily, each a systemd timer with `Persistent=true` driving the
+  template unit `snapraid-maintenance@.service`. Times and the scrub percentage are in the
+  `snapraid_maintenance` role defaults.
+- `SnapRAIDSyncStale`, `SnapRAIDScrubStale` (10 days without a scrub) and the coverage rules alert
+  on missed or ineffective runs ([monitoring.md](monitoring.md#notes-on-specific-rules)).
+- Inspect with `systemctl list-timers 'snapraid-*'` and `journalctl -u snapraid-maintenance@sync`.
+- Runbooks: [snapraid-sync](../../runbooks/storage/snapraid-sync.md),
+  [snapraid-scrub](../../runbooks/storage/snapraid-scrub.md).
 
-Operational expectations:
+Suited to mostly static large libraries; dynamic datasets depend on the sync cadence.
 
-- Run `snapraid status` regularly
-- `snapraid sync` runs daily at 23:00 via `snapraid-sync.timer`; run manually after large write operations if needed
-- `snapraid scrub` runs monthly on the 1st at 20:00 via `snapraid-scrub.timer`
-- Both timers trigger the template unit `snapraid-maintenance@.service` (instance = `sync` / `scrub`)
-  and are managed by the `snapraid_maintenance` Ansible role. They replaced `/etc/cron.d/snapraid`
-  on 2026-07-10: the host powers down before 23:00 on many nights, so the cron sync was skipped
-  without a trace and never retried. `Persistent=true` runs the overdue sync at the next boot,
-  and a failed run now raises the `SystemdUnitFailed` alert.
-- Inspect with `systemctl list-timers 'snapraid-*'` and `journalctl -u snapraid-maintenance@sync`
+### 2.2 MergerFS (vm102)
 
-Risk profile:
+MergerFS provides one namespace over the data disks: no redundancy, no parity, no replication. It
+keeps service paths stable while disks are added or replaced ([storage-design.md](storage-design.md)).
 
-- Good for mostly-static large media libraries
-- Less optimal for highly dynamic datasets unless sync/scrub is frequent and procedures are tight
+### 2.3 Service Data
 
-### 2.2 MergerFS (VM102)
-
-MergerFS provides a unified namespace only:
-
-- No redundancy
-- No parity
-- No replication
-
-It is an abstraction layer to keep service paths stable while disks are added/removed/rebalanced.
-
-### 2.3 Service Data (Current State)
-
-- **Vaultwarden**: withdrawn 2026-09-01, container destroyed 2026-09-29, data on the share and
-  the share itself removed 2026-10-10; only the cold archive of the
-  [decommissioning decision](../decisions/vaultwarden-decommission.md) remains. See
-  [`lxc240.md`](../nodes/lxc240.md).
-- **Nextcloud**:
-  - User data lives on mounted storage (`/mnt/nextcloud` in LXC210)
-  - DB is local MariaDB (inside the container), dumped nightly to a dedicated share since
-    2026-08-15 by the `mariadb_backup` role, verified at write time, with `MariaDBBackupStale`
-    watching it - see the [runbook](../../runbooks/database/mariadb-backup.md)
-  - The two halves live on different disks with different protection: files on the archive pool,
-    database on the boot SSD. Restoring one without the other yields unusable data.
-- **PostgreSQL Platform (LXC260)**:
-  - Dedicated infrastructure container
-  - Databases on local block storage (no CIFS) - on the host's aux-disk, which is the failing
-    KE-13 drive; see [`lxc260.md`](../nodes/lxc260.md)
-  - Nightly `pg_dumpall` via timer, verified at write time before the file gets its real name,
-    stored on SMB separately from the runtime data
-  - A full-cluster restore into a throwaway cluster runs monthly and is alerted on when stale
-    (`PostgreSQLRestoreTestStale`). This line said the procedure "must be periodically validated"
-    until 2026-08-17; it has been automated since 2026-08-13.
-- **Paperless-ngx (LXC211)**:
-  - Document files on MergerFS/SMB (originals, archive, thumbnails)
-  - Database in centralized PostgreSQL (lxc260)
-  - Backups via pg_dump (paperless_db) + document export
-  - Runtime state on local block storage (aux-disk)
+- **Nextcloud (lxc210):** user files on the archive pool via CIFS (`/mnt/nextcloud`); MariaDB local
+  to the container, dumped daily to a dedicated share by `mariadb_backup` and restored monthly by
+  `mariadb_restore_test` ([runbook](../../runbooks/database/mariadb-backup.md)). Files and database
+  sit on different disks; restoring one without the other yields unusable data.
+- **PostgreSQL platform (lxc260):** databases on local block storage on the host's aux-disk
+  ([KE-13](known-errors.md#ke-13), [lxc260.md](../nodes/lxc260.md)). Daily `pg_dumpall`, verified
+  at write time, stored on SMB; a monthly restore into a throwaway cluster is watched by
+  `PostgreSQLRestoreTestStale`.
+- **Paperless-ngx (lxc211):** documents on the archive pool via SMB, database in the PostgreSQL
+  platform (covered by its dump), runtime state on local storage.
+- **Machines:** weekly `vzdump` of all nine guests and a daily host-config backup on the host
+  (`guest_backup` role, [runbook](../../runbooks/platform/guest-backup-restore.md)).
 
 ### 2.4 Backup Scope & Residual Risk
 
-Current stance:
+Protected: single disk failure (within SnapRAID limits), database corruption (dumps plus tested
+restores), loss of a guest (guest backup).
 
-- Protects against single disk failures (within SnapRAID constraints)
-- Does not protect against:
-  - accidental deletion if synced after deletion
-  - ransomware inside RW shares
-  - full-site disasters (no off-site)
+Not protected:
 
-Planned improvements:
-
-- Off-site backup for critical subsets (password vault exports, Nextcloud DB + config, important documents)
-- Immutable or append-only backup target (e.g. restic + append-only repo, or object storage)
+- deletion that is synced before it is noticed;
+- ransomware with write access to a read-write share;
+- site loss: no off-site copy exists. The `offsite_backup` role (restic to an append-only
+  `rest-server`) and its [runbook](../../runbooks/backup/offsite-backup.md) are built; the target
+  VPS is not provisioned and the role is not deployed. This is the first item of the
+  [remediation plan](remediation-plan.md).
 
 ---
 
-## 3. Startup & Dependency Modeling (Reboot-Safe Operation)
+## 3. Startup & Dependency Modeling
 
 ### 3.1 Dependency Layers (Boot Order)
 
-**Layer 0: Hypervisor**
-- Proxmox up, networking stable
+**Layer 0: Hypervisor** - Proxmox up, networking and Tailscale up.
 
-**Layer 1: Storage**
-- VM102 online
-- All disks mounted (`/mnt/disk*`, `/mnt/parity`)
-- MergerFS mounted at `/mnt/mergerfs`
-- Samba running and reachable
+**Layer 1: Storage** - vm102 online, data and parity disks mounted, MergerFS at `/mnt/mergerfs`,
+Samba reachable.
 
-**Layer 2: Compute**
-- VM100 online
-- Media mounts available under `/srv/media/*` (systemd automount, one unit per library since
-  2026-08-16). This said `/mnt/vm-data` until 2026-08-17 - a path that no longer carries a mount.
+**Layer 2: Compute** - vm100 online; media libraries under `/srv/media/*` through one systemd
+automount per library.
 
-**Layer 3: Services**
-- LXCs online (200/210/211/220/230/240/250/260 - the list here omitted 230 and 260 until
-  2026-08-17)
-- Each service has its mounts online before starting critical workloads
-- Docker containers restart via `restart: unless-stopped` (where applicable)
+**Layer 3: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
+before critical workloads start; Docker containers use `restart: unless-stopped`, and
+`docker_boot_retry` restarts containers whose first start failed.
 
-**Layer 4: Validation**
-- Monitoring confirms that targets are UP
-- Spot-check service endpoints via loopback/Tailscale
+**Layer 4: Validation** - monitoring confirms every target is up; spot-check endpoints over
+loopback or the tailnet.
 
-### 3.2 Mount Strategy (Principle)
+The startup order and delays are set on the host ([proxmox-host.md](proxmox-host.md)).
 
-- Storage VM: `/etc/fstab` (systemd-generated mount units) for ext4 + MergerFS
-- Consumers: systemd automount for CIFS (reboot-safe, avoids hard failure on boot if storage temporarily unavailable)
-- Services mount RO where possible (least-privilege)
+### 3.2 Mount Strategy
+
+- Storage VM: `/etc/fstab` (systemd-generated mount units) for ext4 and MergerFS.
+- Consumers: systemd automount for CIFS, so a boot does not fail while storage is still starting.
+- Docker is ordered after the `.automount` units it binds, never the `.mount` units
+  ([KE-15](known-errors.md#ke-15)).
+- Services mount read-only wherever they do not own the data.
 
 ### 3.3 Operational Invariant
 
-After a reboot, the system should converge automatically to:
-
-- mounts present
-- services running
-- monitoring reporting healthy states
-
-No manual "click-to-mount" steps should exist.
+After a power-on the platform converges without manual steps: mounts present, services running,
+monitoring reporting healthy.
 
 ---
 
-## 4. Incident Response Playbooks (Common Failure Scenarios)
+## 4. Incident Response (Common Failure Scenarios)
 
 ### 4.1 Disk Failure (SnapRAID Data Disk)
 
-Symptoms:
+Symptoms: missing `/mnt/diskXX`, I/O errors or a read-only remount, SnapRAID reports a missing
+disk.
 
-- missing `/mnt/diskXX`
-- IO errors, filesystem read-only remount
-- SnapRAID reports missing disk/content
-
-High-level recovery steps:
-
-1. Replace disk (hardware)
-2. Recreate filesystem and mountpoint
-3. Restore data using SnapRAID (`fix` workflow)
-4. Validate integrity and re-sync parity
+1. Replace the disk.
+2. Recreate the filesystem and mountpoint.
+3. Restore the data with `snapraid fix`.
+4. Verify integrity and re-sync parity.
 
 ### 4.2 Parity Disk Failure
 
-Symptoms:
+Symptoms: `/mnt/parity` missing or unreadable.
 
-- `/mnt/parity` missing or unreadable
-- SnapRAID parity file inaccessible
-
-Recovery steps:
-
-1. Replace parity disk
-2. Recreate filesystem and mountpoint
-3. Rebuild parity (`snapraid sync`)
-4. Run scrub cycle after rebuild
+1. Replace the parity disk.
+2. Recreate the filesystem and mountpoint.
+3. Rebuild parity with `snapraid sync`.
+4. Run a scrub after the rebuild.
 
 ### 4.3 MergerFS Mount Failure
 
-Symptoms:
+Symptoms: `/mnt/mergerfs` missing, services failing on missing paths.
 
-- `/mnt/mergerfs` missing
-- services fail due to missing paths
+- Confirm every underlying disk mount exists.
+- Inspect the systemd mount unit generated from fstab and the journal for fuse/mergerfs errors.
+- Check `allow_other` / `user_allow_other`.
 
-Actions:
+### 4.4 CIFS Mount Failure in a Service LXC/VM
 
-- Validate all underlying disk mounts exist
-- Inspect systemd mount unit generated from fstab
-- Check journal for fuse/mergerfs errors
-- Ensure `allow_other` and `user_allow_other` are correct (if applicable)
+Symptoms: `/books`, `/mnt/nextcloud` or similar missing or empty; the service reports a missing
+library or data directory; `systemctl --failed` lists a mount or automount unit.
 
-### 4.4 CIFS Mount Failure in Service LXC/VM
-
-Symptoms:
-
-- `/books`, `/mnt/nextcloud`, etc. missing or empty
-- services start but show "library missing" / "data dir missing"
-- `systemctl --failed` shows mount/automount unit failure
-
-Actions:
-
-- Inspect `findmnt -T <path>`
-- Inspect corresponding systemd unit and logs
-- Verify credentials file permissions and username correctness
-- Verify Samba service availability on VM102
-- Validate UID/GID mapping expectations (especially unprivileged LXCs)
+- `findmnt -T <path>`, then the unit and its journal.
+- Credentials file permissions and username.
+- Samba on vm102 reachable.
+- UID/GID mapping, especially in unprivileged LXCs.
+- Runbook: [smb-autofs-trigger](../../runbooks/storage/smb-autofs-trigger.md).
 
 ### 4.5 Container Failure / Restart Loops
 
-Symptoms:
+Symptoms: restarts in `docker ps`, unhealthy healthcheck, logs naming missing mounts or
+permissions.
 
-- `docker ps` shows restarts
-- unhealthy healthcheck
-- application logs indicate missing mounts or permissions
-
-Actions:
-
-- Confirm mounts exist before debugging app-level issues
-- Check container logs
-- Verify container user/UID/GID alignment
-- Verify loopback-only binding where intended
+- Confirm mounts before debugging the application.
+- Check container logs and UID/GID alignment.
+- Confirm the intended loopback binding.
 
 ### 4.6 PostgreSQL Platform Failure
 
-Symptoms:
-- Applications cannot connect (connection refused / timeout)
-- `pg_isready` fails
-- Monitoring shows DB node down
+Symptoms: applications cannot connect, `pg_isready` fails, `PostgreSQLDown` or `NodeDown` for
+lxc260.
 
-Actions:
-1. Verify Tailscale interface up
-2. Validate bind address (Tailscale IP only)
-3. Inspect PostgreSQL logs
-4. Confirm pg_hba rules not modified
-5. Restore from backup if corruption detected
+1. Confirm the Tailscale interface is up and PostgreSQL bound its Tailscale address
+   ([KE-9](known-errors.md#ke-9)).
+2. Read the PostgreSQL log.
+3. Confirm `pg_hba` is unchanged.
+4. Restore from the dump if data is corrupt ([pg-restore](../../runbooks/database/pg-restore.md)).
 
-Note:
-Database runtime storage is local block storage.
-Backups reside on SMB and are isolated from runtime failure.
+Runtime data is on local block storage; the dumps are on SMB and survive a runtime failure.
 
 ---
 
-## 5. Security Posture (Current State)
+## 5. Security Posture
 
 ### 5.1 Exposure Rules
 
-- No public reverse proxy
-- No router port-forwarding
-- Internal services bind to loopback where possible
-- Infrastructure services bind to Tailscale only
-- No service is exposed on the LAN; storage traffic between nodes is the only LAN path, and it is named
+- No public reverse proxy, no router port forwarding.
+- Internal services bind loopback where possible; infrastructure services bind the Tailscale
+  address.
+- No service is reachable from the LAN; the SMB path to vm102 is the only named LAN flow.
 
-**These are the rules, not a description of the current state.** Measured 2026-10-08, the fleet
-deviates in several places that are documented on the nodes themselves rather than summarised here:
-sshd binds the wildcard everywhere except lxc250, Apache on lxc210 binds `*:80`/`*:443` and
-`coolwsd` `*:9983`, and Samba on vm102 binds `0.0.0.0:445` for a reason it cannot avoid. None of
-them is reachable from the LAN, because the `lan_guard` table drops the connection before it reaches
-the socket - the answer the [SMB bind decision](../decisions/smb-bind-and-lan-access.md) first gave
-for port 445, applied fleet-wide on 2026-10-01. The binds themselves are tracked in the
-[remediation plan](remediation-plan.md).
+Where a daemon cannot bind narrowly (Samba on vm102, Apache and `coolwsd` on lxc210), the
+`lan_guard` table drops LAN connections before they reach the socket
+([SMB bind decision](../decisions/smb-bind-and-lan-access.md)). sshd is pinned to the Tailscale
+address on every guest; the hypervisor is deliberately unpinned
+([decision](../decisions/sshd-listen-address.md)). Remaining wildcard binds are tracked in the
+[remediation plan](remediation-plan.md) and reported by `ListenerOutsideBindingRule`.
 
-### 5.2 Zero-Trust Overlay (Tailscale)
+### 5.2 Tailnet Access
 
-Remote access and service-to-service communication are enforced via an identity-based overlay network (Tailscale).
+- Every remote access requires an authenticated Tailscale identity.
+- Service-to-service permissions are tag-based and port-scoped; there is no subnet-wide trust.
+- The Tailscale admin console is the source of truth for the policy;
+  [tailscale-acl.md](tailscale-acl.md) mirrors it and changes are applied by hand.
 
-- All remote access requires authenticated Tailscale identity
-- Service-to-service permissions are tag-based
-- ACL rules are explicitly defined and port-scoped
-- No subnet-wide implicit trust
+### 5.3 Change Control
 
-The active ACL policy is managed as JSON in the Tailscale admin console (source of truth).
-This repository documents the intended tagging model and enforcement structure.
-
-See: [Tailscale ACL model](./tailscale-acl.md)
-
-### 5.3 Governance & Change Control
-
-- ACL changes are intentional and documented
-- Service onboarding requires tag assignment and ACL review
-- Binding rules (loopback or Tailscale-only) must be validated during deployment
-- Security exceptions (e.g., LAN-bound services) require architectural justification
+- ACL changes are made in the policy file and the console together, with tests.
+- Onboarding a service requires a tag assignment and an ACL review.
+- Binding rules (loopback or Tailscale only) are checked at deployment and by
+  `listener_metrics` afterwards.
+- A LAN-bound service needs a decision record.
 
 ### 5.4 Least Privilege (Storage + Services)
 
-The share model - which identity may write where, and which consumer share is scoped to which
-library - is owned by [`samba.md`](samba.md), and the filesystem side of it by
-[`storage-permissions.md`](storage-permissions.md). This section listed two RW shares out of the
-twelve that exist until 2026-08-17; it now points instead of counting.
-
-The principle it exists to state: read-only for consumers, read-write only for the service that
-owns the data, and consistent UID/GID handling across the LXC namespace boundary so permissions do
-not drift.
+Consumers get read-only access, the owning service alone gets read-write, and UID/GID handling
+is consistent across the LXC namespace boundary. The share model is in [samba.md](samba.md), the
+filesystem side in [storage-permissions.md](storage-permissions.md).
 
 ---
 
-## 6. Maintenance Routines (Recommended Cadence)
+## 6. Maintenance Routines
 
-### Hourly (automated)
+### Automated
 
-- Nextcloud Paperless Inbox scan (`/usr/local/sbin/scan-paperless-inbox.sh` on LXC210)
-  - Synchronizes Nextcloud file cache after Paperless consumes documents from External Storage mounts
-  - Log: `/var/log/nextcloud-paperless-scan.log`
+All scheduled jobs are systemd timers with `Persistent=true`; schedules are in each role's
+defaults ([ansible.md](ansible.md#conventions)).
 
-### Daily (lightweight)
+- Hourly: Nextcloud rescan of the Paperless inbox on lxc210 (`paperless_inbox_scan`); output in
+  the journal of its service.
+- Daily: database dumps, SnapRAID sync and status, host-config backup.
+- Weekly: SnapRAID scrub, guest backup, fleet snapshot and drift sweep.
+- Monthly: PostgreSQL and MariaDB restore tests.
 
-- Check monitoring dashboards for anomalies
-- Quick sanity:
-  - key services reachable (loopback/Tailscale)
-  - storage usage not near saturation
+### Manual
 
-### Weekly
-
-- `snapraid status` review
-- check scrub age and plan scrub window
-- review container restarts / errors
-
-### Monthly
-
-- SnapRAID scrub runs from a timer on the 1st. Review the *coverage*, not only the run date:
-  `snapraid status` reports how much of the array is unscrubbed and how old the oldest block is,
-  and `SnapRAIDScrubStale` can see neither - it measures when a scrub last ran
-- Review disk SMART health by hand (`smartctl -A` per disk, identified by `by-id`). Since
-  2026-09-09 the exported metrics can show degradation on their own and
-  `SmartAttributeDegrading` fires on any counter that rises within 25 hours, so this is a
-  cross-check rather than the only detection path it used to be
-- Confirm the automated restore test passed (it runs on the 1st and raises
-  `PostgreSQLRestoreTestStale` if it does not). Manual spot tests are no longer the mechanism -
-  this line said so until 2026-08-17
+- **Daily:** glance at dashboards and active alerts.
+- **Weekly:** review container restarts and errors.
+- **Monthly:** review SnapRAID coverage (`snapraid status`: unscrubbed share and oldest block age),
+  not only the scrub date; cross-check SMART by hand (`smartctl -A` per disk by `by-id`) against
+  the `smart` alert group; confirm both restore tests passed.
 
 ### After Major Changes
 
-- Reboot-safe validation:
-  - reboot storage -> confirm mergerfs + samba
-  - reboot service nodes -> confirm automount + services
-  - check monitoring target health after each layer
+Reboot in layers and check monitoring after each: storage (MergerFS and Samba), then service
+nodes (automounts and services).
 
 ---
 
-## 7. Future Improvements (Roadmap)
+## 7. Open Work
 
-- ~~Automated SnapRAID sync + scrub schedule~~ (done: `snapraid-maintenance.sh`, Prometheus alerts)
-- ~~IaC-style documentation: sanitized compose files, systemd unit snippets, ACL documentation~~
-  (done; the `docker/`, `snippets/` and `docs/platform/tailscale-acl.md` trees are the result)
-- Off-site backups for the C1 datasets defined in [`data-classification.md`](data-classification.md)
-
-This list is a summary. The ordered version, with the dependencies that decide what can start
-when, is the [remediation plan](remediation-plan.md) - which is the document to update when
-something moves.
-
-
-See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
+The ordered list, with dependencies, is the [remediation plan](remediation-plan.md). The largest
+open items: the off-site copy of the C1 datasets ([data-classification.md](data-classification.md))
+and the external heartbeat.
