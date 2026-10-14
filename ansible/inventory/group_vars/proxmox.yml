@@ -34,7 +34,7 @@ systemd_hygiene_masked_units:
     reason: "no NFS storage on this node; the socket is what holds port 111 open, so masking the service alone leaves it listening"
     action: mask
   - name: rpcbind.service
-    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it (measured 2026-09-12)"
+    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it"
     action: mask
 
 # === Journal retention ===

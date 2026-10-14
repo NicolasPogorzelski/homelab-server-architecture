@@ -2,13 +2,13 @@
 
 The target state of the filesystem underneath the Samba shares, and how it is verified.
 
-[`samba.md`](samba.md) documents what Samba enforces. This document covers the other half: what
-the objects on the disks are supposed to look like once Samba is done with them, or when Samba was
-never involved at all.
+[`samba.md`](samba.md) documents what Samba enforces. This page covers the filesystem underneath:
+what the objects on the disks must look like after Samba has written them, or when Samba was never
+involved.
 
 ---
 
-## Why this document exists
+## Why a filesystem target is needed
 
 Samba masks apply only when Samba creates an object, so they cannot describe what is on disk:
 directories made over SSH bypass them, and older files keep their mode. A target state for the
@@ -24,10 +24,9 @@ target; the [`storage_permissions`](../../ansible/roles/storage_permissions) rol
 
 ## The matrix
 
-Modes are read as maxima rather than as exact values. An object violates the matrix if it carries a bit the
-maximum does not allow. Stricter is always acceptable (a 0600 file under a 0660 allowance is not
-drift), which keeps the check on the question that matters - can anyone reach this who should
-not - rather than on cosmetic uniformity.
+Modes are maxima. An object violates the matrix if it carries a bit the maximum does not allow;
+stricter is acceptable (a 0600 file under a 0660 allowance is not drift). The check answers one
+question: can an account reach an object it should not.
 
 | Path | Owner | Group | Directories | Files | setgid | Read path |
 |---|---|---|---|---|---|---|
@@ -44,9 +43,9 @@ not - rather than on cosmetic uniformity.
 
 Two rules govern the table:
 
-- **`other` gets nothing, anywhere.** Where world bits still exist they are legacy, not intent. A
-  service that loses its group membership must lose access immediately and visibly, rather than
-  falling through to a second mechanism nobody knew was load-bearing.
+- **`other` gets nothing, anywhere.** Remaining world bits are legacy. A service that loses its
+  group membership must lose access at once and visibly, instead of keeping it through a world bit
+  that nobody counted on.
 - **The matrix applies per branch, never to the union.** MergerFS answers a stat from the first
   branch holding the path (`category.search=ff`), so `ls /mnt/mergerfs/...` shows one disk out of
   six and hides any disagreement between them. Every check and every repair iterates branches
@@ -57,8 +56,7 @@ Two rules govern the table:
 Service accounts do not own their data. They read it as group members, and the shares carry
 `force user = storage` so that writes land as `storage` regardless of who connects.
 
-That is deliberate. Whoever owns a file may always change its permissions, whatever the mode
-says, so an account owning the media library could grant itself write access to a share the model
+Whoever owns a file may always change its permissions, whatever the mode says, so an account owning the media library could grant itself write access to a share the model
 declares read-only. Keeping ownership at `storage` and giving the consumer group read access
 removes that possibility.
 
@@ -140,28 +138,26 @@ confirm access continues.
 | `StoragePermissionCheckStale` | no completed check for 48h |
 
 Both live in [`alert.rules.yml`](../../docker/monitoring/prometheus/rules/alert.rules.yml). The
-staleness rule is not optional: a check that stops running looks exactly like a check that keeps
-passing, because the textfile metric holds its last value indefinitely.
+staleness rule is required: the textfile metric holds its last value indefinitely, so a check that
+stops running keeps reporting its last pass.
 
 ---
 
 ## Failure Impact
 
-A violated matrix is a weakened boundary, not an outage. Consumers keep working, which is why it
-is monitored rather than left to be noticed. The realistic damage path is a service account
-reading data outside its own library.
+A violated matrix weakens a boundary and breaks nothing: consumers keep working, so only the alert
+reveals it. The realistic damage path is a service account reading data outside its own library.
 
 ---
 
-## Deliberately out of scope
+## Out of scope
 
 - **Share scope.** Each consumer share is scoped to one library; that is Samba's half of the
   boundary ([samba.md](samba.md)).
 - **`smb.conf` itself.** The four workstation shares carry `create mask = 0640` and
   `directory mask = 2750` so that new content is born compliant, but the role verifies the result
-  on disk rather than the configuration that produced it. That separation is deliberate: masks
-  govern one of three ways an object comes into being, and a check that trusted them would be
-  blind to the other two.
+  on disk. Masks govern one of three ways an object comes into being; a check that trusted them
+  would miss the other two.
 
 ---
 

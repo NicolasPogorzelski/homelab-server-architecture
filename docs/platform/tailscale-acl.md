@@ -45,7 +45,7 @@ carry the tag of the role they are used in.
 | `tag:isolated` | No access at all: Mullvad-only devices and quarantine | none |
 
 **Exception:** Calibre-Web (lxc220) is tagged `tag:tier1`, not `tag:tier2`, despite being an
-application service by the table above; this is intentional. The tag decides little: every grant to
+application service by the table above. The tag decides little: every grant to
 a tier1 service names the host, so the three tier1 services are reachable independently of each
 other.
 
@@ -288,7 +288,7 @@ updates and connects only when a book is downloaded.
 "Untrusted" is a statement about device administration, not about the people: the TV stands outside
 the home network, nobody here manages or patches it, and its Android release is years past its last
 update. It gets Jellyfin and nothing else, and no rule anywhere lets another node reach it. Key
-expiry is disabled for this device on purpose, because nobody on site could re-authenticate it; the
+expiry is disabled for this device, because nobody on site could re-authenticate it; the
 single grant is what carries the risk instead. The tier is not a guest-invite mechanism - devices are
 tagged individually by the admin (`tagOwners: autogroup:admin`).
 
@@ -414,9 +414,9 @@ Administrative access is separated from service-to-service communication.
 - The control node is a separate identity from the admin devices
 - Service-to-service communication is controlled via tags, and via host aliases where a tag holds
   several services
-- Break-glass access is documented and intentionally minimal
+- Break-glass access is documented and kept minimal
 
-Note: the admin workstations are intentionally absent from `docs/nodes/`. They are documented
+Note: the admin workstations have no document in `docs/nodes/`. They are documented
 through their tag and through the hardening notes in the [remediation plan](remediation-plan.md).
 
 ## Service Onboarding Checklist (Network)
