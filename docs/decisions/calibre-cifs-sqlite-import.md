@@ -1,13 +1,14 @@
-# Calibre Auto-Import: Working Around SQLite-on-CIFS Locking
+# Calibre Auto-Import Works on a Local Copy of the Library Database
+
+## Status
+Implemented 2026-06-08 by the `calibre_importer` role; the deletion order below since 2026-06-09.
+Supersedes / superseded by: -.
 
 ## Context
-
-LXC220 runs Calibre-Web against a library whose `metadata.db` (a SQLite
-database) lives on the SMB/CIFS Books share served by VM102. The auto-import job
-(`calibre_importer` role, see [Calibre-Web service doc](../services/calibre-web.md#auto-import))
-needs to run `calibredb add` to insert dropped ebooks into that library.
-
-`calibredb add` fails on the CIFS-hosted DB:
+lxc220 runs Calibre-Web against a library whose SQLite database `metadata.db` lies on the Books
+share from vm102, mounted over CIFS. The auto-import job
+([Calibre-Web](../services/calibre-web.md#auto-import)) has to run `calibredb add` against that
+library, and it fails:
 
 ```
 apsw.BusyError: BusyError: database is locked
@@ -15,136 +16,61 @@ apsw.BusyError: BusyError: database is locked
     db.execute('BEGIN EXCLUSIVE TRANSACTION')
 ```
 
-The failure persists even with the `calibre-web` container stopped - so it is
-not process contention.
+The error persists with the `calibre-web` container stopped, so it is not contention. SQLite
+coordinates access with POSIX advisory byte-range locks (`fcntl` `F_SETLK`); the Linux CIFS client
+turns them into SMB byte-range locks, which do not give SQLite the semantics it expects, and the
+lock request is refused. Control test, same binary and database, only the filesystem differs:
 
-### Root cause
+- `calibredb add --with-library /books-rw ...` (CIFS): `BusyError`
+- `calibredb add --with-library /tmp/lib ...` (local copy of `metadata.db`): `Added book ids: ...`
 
-SQLite coordinates access with POSIX advisory byte-range locks (`fcntl`
-`F_SETLK` on offsets inside the DB file). The Linux CIFS client translates these
-into mandatory SMB locks, and most SMB servers do not honor the advisory
-semantics SQLite expects. The lock acquisition itself is refused over CIFS ->
-`database is locked`. This is a filesystem-layer limitation, not contention.
+Constraints: the MergerFS pool on vm102 is the only large store and lxc220's root disk is 8 GB, so
+the book files cannot move to the container. Calibre keeps `metadata.db` in the library directory,
+so the database cannot be relocated on its own. One node writes the library and imports are rare.
 
-Proven by a control test (same binary, same DB, only the filesystem differs):
-
-- `calibredb add --with-library /books-rw ...` (CIFS) -> `BusyError`
-- `calibredb add --with-library /tmp/lib ...` (local copy of `metadata.db`) -> `Added book ids: ...`
-
-### Operational constraints
-
-- The MergerFS pool on VM102 is the only large storage; LXC220's root disk is
-  8 GB. The book files cannot live locally.
-- Calibre couples `metadata.db` to its library directory - the DB cannot be
-  trivially relocated away from the book files.
-- Single operator, single host writes the library, infrequent imports.
-
----
+## Options
+- **`nobrl` on the CIFS mount.** Lost: the client stops sending byte-range locks and SQLite works,
+  but a loud failure becomes silent corruption the first time two writers coincide. It also changes
+  the host mount for every consumer of the share and needs a remount while the container holds it.
+- **Library (database and files) on local block storage.** Deferred: the correct separation of
+  state from bulk data, but there is no block volume large enough for the books. Revisit when one
+  exists.
+- **One owning service, others through its API.** Not applicable: one node already owns the
+  library; the problem is where the database lives, not how many consumers it has.
+- **Keep `metadata.db` on CIFS and never let SQLite open it there.** Chosen.
 
 ## Decision
-
-Keep `metadata.db` on CIFS, but never let SQLite open the CIFS copy. The
-import job operates on a local snapshot and writes results back with lock-free
-file operations:
+The import job works on a local copy and writes back with operations that take no byte-range
+locks. Implementation: `snippets/scripts/calibre-import.sh`, deployed by `calibre_importer`.
 
 ```
-stop calibre-web                       # consistent DB snapshot, no concurrent writer
-cp  metadata.db  ->  /tmp/work/          # local working library (local disk, not CIFS)
-calibredb add --with-library /tmp/work  # SQLite only ever touches the LOCAL file
-tar new book dirs  /tmp/work -> /books-rw # plain copy: no byte-range locks
-atomic swap: cp metadata.db -> .new && mv -f .new metadata.db
-restart calibre-web                     # guaranteed via EXIT trap
+flock                                   # one import run at a time
+stop calibre-web                        # no concurrent writer, consistent snapshot
+cp metadata.db -> /tmp/work/            # local working library
+calibredb add --with-library /tmp/work  # SQLite only touches the local file; rejects are quarantined
+tar new book dirs /tmp/work -> /books-rw
+cp metadata.db -> .new && mv -f .new metadata.db   # atomic swap on the share
+delete the source from _import          # only now, after the write-back
+restart calibre-web                     # EXIT trap
 ```
 
-Book files are written before the DB is swapped in (so the DB never
-references missing files). The DB swap is a write-then-rename, so a reader never
-sees a half-written file. Calibre stores book paths relative to the library
-root, so a DB built against `/tmp/work` resolves correctly at `/books-rw`.
-
-The full implementation is `snippets/scripts/calibre-import.sh`.
-
----
-
-## Alternatives Considered
-
-### `nobrl` mount option (rejected)
-
-Adding `nobrl` to the CIFS mount makes the client skip byte-range lock requests
-entirely, so SQLite proceeds. It is the conventional "fix" and would let the
-script write straight to CIFS with no workaround.
-
-Rejected because:
-
-- It disables the locking safety mechanism - it converts a loud, safe failure
-  (`database is locked` -> import aborts, file is quarantined) into a silent risk
-  (DB corruption the moment two writers ever coincide). "Fix locking errors by
-  turning locking off" is only acceptable when single-writer is *architecturally
-  enforced*, not merely currently true.
-- It changes the host mount, affecting every consumer of the Books share, for
-  a problem scoped to one job.
-- It requires a controlled remount on the Proxmox host while the LXC holds the
-  mount open (busy-mount handling).
-
-### Library (DB + files) on local/block storage (deferred - the "correct" fix)
-
-The professional default is to separate state (the DB - small, lock-sensitive,
-belongs on local/block storage with working locks and proper backups) from
-**bulk data** (the book files - large, belongs on the share). The problem then
-disappears: `calibredb` runs locally with real locks.
-
-Deferred because the book files have nowhere else to live (the MergerFS pool is
-the only large store, LXC220 root is 8 GB) and Calibre couples the DB to the
-library directory. Revisit if a dedicated block volume becomes available.
-
-### Single-owner + API access (not applicable here)
-
-Where multiple consumers share a database, the pattern is: one service owns the
-state, others use its API/wire protocol (the reason LXC260 PostgreSQL exists).
-Not applicable here - a single node already owns this library; the issue is the
-DB's storage *location*, not multi-consumer access.
-
----
+Book files are written before the database is swapped in, so the database never references a
+missing file, and the rename means a reader never sees a half-written database. Calibre stores paths
+relative to the library root, so a database built under `/tmp/work` resolves under `/books-rw`.
 
 ## Consequences
-
-### Accepted
-
-- `calibre-web` is briefly stopped during each import that has work to do
-  (seconds; no downtime when the drop folder is empty).
-- The import job is the only writer to the library besides calibre-web, and
-  the two never run concurrently (calibre-web is stopped during the critical
-  section; a `flock` guards against overlapping import runs). This single-writer
-  invariant is what makes the local-snapshot-then-swap safe.
-- Slightly more moving parts than a direct `calibredb add` (local copy, tar-back,
-  atomic swap), all contained in one script with an EXIT-trap cleanup.
-
-### Durability ordering (delete-after-persist)
-
-Because the MergerFS pool is near full, the import keeps no second copy: the
-source file in `_import` is deleted after a successful import. The ordering of
-that deletion matters. `calibredb add` writes into the *local* `/tmp` working
-copy, which is discarded on exit - so a source must not be deleted just
-because it landed there. The source is deleted only after the new book
-directories are written back to the share and the updated `metadata.db` has
-been swapped in (i.e. after the book is durable on CIFS).
-
-If the run is interrupted between `calibredb add` and the write-back, `set -e`
-aborts with the sources still in `_import`; the next timer run retries them, and
-`calibredb --automerge ignore` keeps the retry idempotent. The invariant -
-*delete only after durable write-back* - is what prevents an interrupted run from
-silently losing a book on a node that intentionally keeps no backup copy.
-
-### Verification caveat
-
-`calibredb list --with-library /books-rw` also fails the CIFS lock and prints
-nothing (looks like an empty library, not an error). Always verify against a
-**local copy** of `metadata.db`, never the CIFS path.
-
----
+- `calibre-web` stops for a few seconds during each import that has work; an empty drop folder
+  causes no stop.
+- Safety rests on a single-writer invariant: the import job and Calibre-Web never run at the same
+  time, and `flock` prevents overlapping imports.
+- The pool keeps no second copy of an imported book, so the source in `_import` is deleted only after
+  the book directories and the swapped database are on the share. An interrupted run leaves the
+  sources in place; the next timer run retries them, and `calibredb --automerge ignore` keeps the
+  retry idempotent.
+- `calibredb list --with-library /books-rw` hits the same lock and prints nothing, which looks like
+  an empty library rather than an error. Verify against a local copy of `metadata.db`.
 
 ## Related Documents
-
-- [Calibre-Web Service -> Auto-Import](../services/calibre-web.md#auto-import)
-- [LXC220 Node](../nodes/lxc220.md)
-- [Storage Design](../platform/storage-design.md)
-- devops-til: `storage/sqlite-on-cifs-locking.md` (the transferable concept)
+- [Calibre-Web: auto-import](../services/calibre-web.md#auto-import)
+- [lxc220](../nodes/lxc220.md)
+- [Storage design](../platform/storage-design.md)

@@ -1,8 +1,9 @@
 # Architecture Design Decisions
 
-# Design Philosophy
+The platform's foundational decisions, each with its rationale and trade-offs. Later decisions have
+records of their own in this directory.
 
-The system prioritizes:
+## Design Principles
 
 - Deterministic recovery
 - Explicit dependency modeling
@@ -11,34 +12,25 @@ The system prioritizes:
 - Minimal coupling between layers
 - Operational predictability over theoretical elegance
 
-
----
-
-This document outlines key architectural decisions, alternatives considered, and trade-offs.
-
----
-
 ## Decisions
 
-| # | Decision | Why |
-|---|---|---|
-| [1](#dd-1) | SnapRAID + MergerFS instead of ZFS | Lower RAM than ZFS, heterogeneous disk sizes, incremental expansion; parity and namespace stay separable |
-| [2](#dd-2) | Dedicated Storage VM instead of Direct Host Mounting | Separates storage from compute, so a rebuild or migration touches one guest |
-| [3](#dd-3) | SMB instead of NFS (after evaluation) | Per-service identities and deterministic ownership through `force user` and the masks |
-| [4](#dd-4) | Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy | No port-forwarding at all; access is tied to device identity rather than to the network |
-| [5](#dd-5) | Unprivileged LXC Containers | No root-equivalence between container and host, at the cost of UID mapping work |
-| [6](#dd-6) | Read-Only Media Consumers | Producers and consumers of the archive are separated, so a consumer cannot delete |
-| [7](#dd-7) | Monitoring via Dedicated LXC | Observability that does not depend on the services it watches |
-| [8](#dd-8) | LAN Exposure for Performance-Critical Workloads | Superseded by [Media Over the Tailnet](media-over-the-tailnet.md): same-LAN peers connect directly, so the uplink was never the limit |
-| [9](#dd-9) | Planned Architectural Evolution (Network Hardening - Phase 2) | What would have to change before the LAN exposure in 8 can be withdrawn |
-| [10](#dd-10) | Docker Host Networking Eliminates Container DNS | `network_mode: host` removes Docker's DNS resolver, so container names stop resolving |
-| [11](#dd-11) | Monitoring Requires Explicit Outbound ACLs for Scrape Targets | Tailscale ACLs are deny-by-default in both directions; inbound access implies no outbound |
-| [12](#dd-12) | PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag | A tier tag would grant every service in that tier access to the database on all ports |
-| [13](#dd-13) | Standardized TUN Configuration for Tailscale-Capable LXCs | Both the cgroup rule and the mount entry are required; either alone leaves TUN unusable |
+| # | Decision | Status | Why |
+|---|---|---|---|
+| [1](#dd-1) | SnapRAID + MergerFS instead of ZFS | Implemented | Lower RAM than ZFS, heterogeneous disk sizes, incremental expansion; parity and namespace stay separable |
+| [2](#dd-2) | Dedicated Storage VM instead of Direct Host Mounting | Implemented | Separates storage from compute, so a rebuild or migration touches one guest |
+| [3](#dd-3) | SMB instead of NFS (after evaluation) | Implemented | Per-service identities and deterministic ownership through `force user` and the masks |
+| [4](#dd-4) | Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy | Implemented | No port-forwarding at all; access is tied to device identity rather than to the network |
+| [5](#dd-5) | Unprivileged LXC Containers | Implemented | No root-equivalence between container and host, at the cost of UID mapping work |
+| [6](#dd-6) | Read-Only Media Consumers | Implemented | Producers and consumers of the archive are separated, so a consumer cannot delete |
+| [7](#dd-7) | Monitoring via Dedicated LXC | Implemented | Observability that does not depend on the services it watches |
+| [8](#dd-8) | LAN Exposure for Performance-Critical Workloads | Superseded 2026-10-01 by [Media Over the Tailnet](media-over-the-tailnet.md) | Same-LAN peers connect directly, so the uplink was never the limit |
+| [9](#dd-9) | Planned Architectural Evolution (Network Hardening - Phase 2) | Superseded in part 2026-10-01 by [Media Over the Tailnet](media-over-the-tailnet.md) | The LAN service exposure is gone; the SMB storage path and VLANs remain open |
+| [10](#dd-10) | Docker Host Networking Eliminates Container DNS | Implemented | `network_mode: host` removes Docker's DNS resolver, so container names stop resolving |
+| [11](#dd-11) | Monitoring Requires Explicit Outbound ACLs for Scrape Targets | Implemented | Tailscale ACLs are deny-by-default in both directions; inbound access implies no outbound |
+| [12](#dd-12) | PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag | Implemented | A tier tag would grant every service in that tier access to the database on all ports |
+| [13](#dd-13) | Standardized TUN Configuration for Tailscale-Capable LXCs | Implemented | Both the cgroup rule and the mount entry are required; either alone leaves TUN unusable |
 
-Anchors are explicit `dd-<n>` ids rather than the slugs GitHub derives from the headings.
-A derived slug changes when a heading is reworded, and `validate-repo.sh` Check 2 strips the
-fragment before it tests a link, so nothing here would report the break.
+Anchors are explicit `dd-<n>` ids, so rewording a heading does not break links to it.
 
 ---
 
@@ -46,20 +38,14 @@ fragment before it tests a link, so nothing here would report the break.
 
 ## 1. SnapRAID + MergerFS instead of ZFS
 
-### Decision
-Use SnapRAID for parity and MergerFS for namespace abstraction.
+**Decision.** SnapRAID provides parity, MergerFS the pooled namespace.
 
-### Rationale
-- Lower RAM requirements compared to ZFS
-- Heterogeneous disk sizes supported
-- Optimized for mostly-static media workloads
-- Easier incremental expansion
-- Clear separation between redundancy (SnapRAID) and namespace abstraction (MergerFS)
+**Rationale.** Lower RAM requirements than ZFS; heterogeneous disk sizes; suited to mostly static
+media; incremental expansion one disk at a time; redundancy (SnapRAID) and namespace (MergerFS)
+stay separate.
 
-### Trade-offs
-- No real-time redundancy
-- Sync window vulnerability
-- Operational discipline required (sync + scrub cadence)
+**Trade-offs.** No real-time redundancy: data written since the last sync is unprotected. Sync and
+scrub run on a schedule (`snapraid_maintenance` defaults), and the alerts watch that they do.
 
 ---
 
@@ -67,19 +53,12 @@ Use SnapRAID for parity and MergerFS for namespace abstraction.
 
 ## 2. Dedicated Storage VM instead of Direct Host Mounting
 
-### Decision
-Isolate storage services in VM102.
+**Decision.** Storage services run in vm102.
 
-### Rationale
-- Clear separation of responsibilities
-- Reduced blast radius
-- Easier rebuild and migration
-- Clean abstraction boundary between storage and compute layers
-- Simplifies backup/export logic
+**Rationale.** Clear separation of responsibilities and a smaller blast radius; a clean boundary
+between storage and compute; rebuild, migration and export logic touch one guest.
 
-### Trade-offs
-- Slight virtualization overhead
-- Additional internal network hop
+**Trade-offs.** Slight virtualization overhead and one more network hop.
 
 ---
 
@@ -87,37 +66,18 @@ Isolate storage services in VM102.
 
 ## 3. SMB instead of NFS (after evaluation)
 
-### Initial Evaluation
-NFS was initially tested as the primary storage export protocol.
+**Evaluation.** NFS was tested first as the export protocol. Combined with unprivileged LXCs, UID/GID
+shifting (the 100000+ namespace mapping), root squash and identity mapping across host, VM and LXC
+boundaries, it made permission handling complex and unstable.
 
-### Observed Challenges
-When combined with:
-- Unprivileged LXC containers
-- UID/GID shifting (100000+ namespace mapping)
-- Root-squash behavior
-- Consistent identity mapping across host, VM and LXC boundaries
+**Decision.** SMB with per-service authentication and enforced ownership.
 
-NFS introduced increased complexity and instability in permission handling.
+**Rationale.** Explicit per-service identities (`valid users`); deterministic ownership through
+`force user`, `force group`, `create mask` and `directory mask`; permission boundaries that are
+easier to reason about across isolation layers.
 
-### Decision
-Switch to SMB with explicit per-service authentication and ownership enforcement.
-
-### Rationale
-- Explicit per-service identities (`valid users`)
-- Deterministic ownership control via:
-  - `force user`
-  - `force group`
-  - `create mask`
-  - `directory mask`
-- Easier reasoning about permission boundaries
-- Reduced ambiguity in UID mapping across isolation layers
-
-### Trade-offs
-- Slight protocol overhead
-- More configuration surface compared to basic NFS
-- Requires credential management per service
-
-The decision prioritizes operational predictability over theoretical performance gains.
+**Trade-offs.** Some protocol overhead, more configuration than basic NFS, and credentials to manage
+per service.
 
 ---
 
@@ -125,19 +85,14 @@ The decision prioritizes operational predictability over theoretical performance
 
 ## 4. Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy
 
-### Decision
-No public ingress. Remote access via identity-based overlay network.
+**Decision.** No public ingress. Remote access through an identity-based overlay network.
 
-### Rationale
-- Significantly reduced attack surface
-- No router port-forwarding
-- Access tied to device identity
-- Clear separation between LAN exposure and remote access
+**Rationale.** A much smaller attack surface; no router port forwarding; access tied to device
+identity. How services bind inside the overlay is decided in
+[Loopback + Tailscale Serve](loopback-tailscale-serve.md).
 
-### Trade-offs
-- Requires client installation
-- Not suitable for public-facing multi-user services
-- Overlay dependency
+**Trade-offs.** Every client needs Tailscale; unsuitable for public multi-user services; the platform
+depends on the overlay and on its control plane ([Headscale migration](headscale-migration.md)).
 
 ---
 
@@ -145,19 +100,13 @@ No public ingress. Remote access via identity-based overlay network.
 
 ## 5. Unprivileged LXC Containers
 
-### Decision
-All service LXCs run unprivileged.
+**Decision.** All service LXCs run unprivileged.
 
-### Rationale
-- Prevent root-equivalence between container and host
-- Stronger isolation guarantees
-- Aligns with least-privilege philosophy
-- Minimizes blast radius of container compromise
+**Rationale.** No root-equivalence between container and host; stronger isolation; least privilege;
+a smaller blast radius when a container is compromised.
 
-### Trade-offs
-- Increased complexity in UID/GID mapping
-- Mount permissions require deliberate configuration
-- Some kernel features unavailable
+**Trade-offs.** UID/GID mapping work, deliberate mount permissions, and some kernel features
+unavailable.
 
 ---
 
@@ -165,17 +114,14 @@ All service LXCs run unprivileged.
 
 ## 6. Read-Only Media Consumers
 
-### Decision
-Media services receive read-only access to storage.
+**Decision.** Media services get read-only access to storage.
 
-### Rationale
-- Minimize blast radius
-- Prevent accidental modification/deletion
-- Strict separation between producers (Nextcloud, Vaultwarden) and consumers (Jellyfin, Audiobookshelf, Calibre-Web)
+**Rationale.** Producers and consumers are separated: Nextcloud and the admin workstation's media
+shares write; Jellyfin, Audiobookshelf and Calibre-Web read. A compromised or misbehaving consumer
+cannot modify or delete the archive.
 
-### Trade-offs
-- Write operations require controlled ingest paths
-- Additional planning for content workflows
+**Trade-offs.** Writes need controlled ingest paths, such as the Calibre import job
+([Calibre auto-import](calibre-cifs-sqlite-import.md)).
 
 ---
 
@@ -183,17 +129,12 @@ Media services receive read-only access to storage.
 
 ## 7. Monitoring via Dedicated LXC
 
-### Decision
-Monitoring stack isolated in LXC200.
+**Decision.** The monitoring stack runs in lxc200.
 
-### Rationale
-- Observability independent from application failures
-- Easier troubleshooting
-- Clear layering (monitoring does not depend on service containers)
+**Rationale.** Observability independent of application failures; monitoring does not depend on the
+service containers it watches.
 
-### Trade-offs
-- Slight resource overhead
-- Additional configuration and maintenance surface
+**Trade-offs.** Some resource overhead and one more node to maintain.
 
 ---
 
@@ -201,40 +142,15 @@ Monitoring stack isolated in LXC200.
 
 ## 8. LAN Exposure for Performance-Critical Workloads
 
-**Status: superseded since 2026-10-01** by
-[Media Over the Tailnet](media-over-the-tailnet.md), for every service named below. The rationale
-assumed overlay traffic is capped by the internet uplink; nodes on the same LAN connect directly,
-and `lan_guard` has dropped new inbound LAN connections to Nextcloud as well since that day. Kept
-for the history of the trade-off.
+**Status.** Superseded 2026-10-01 by [Media Over the Tailnet](media-over-the-tailnet.md). No service
+is reachable on the LAN; `lan_guard` drops new inbound LAN connections on every node.
 
-### Decision
+**Decision (superseded).** Jellyfin and Audiobookshelf on vm100 and Nextcloud on lxc210 stayed
+reachable on the LAN, for high-bitrate streaming and large uploads at home.
 
-Performance-critical services remain reachable from the local network:
-
-- Media services (Jellyfin, Audiobookshelf on VM100) - for high-bitrate LAN streaming
-- Nextcloud (LXC210) - for high-volume LAN uploads (e.g. multi-GB file imports)
-
-### Rationale
-
-Remote access is secured via Tailscale (identity-based Zero-Trust overlay).
-
-However, local media streaming is intentionally allowed over LAN to avoid unnecessary bandwidth constraints.
-
-The current upstream bandwidth (~50 Mbit/s) would significantly limit high-bitrate media streaming if all traffic were forced through the overlay network.
-
-LAN access is therefore maintained as a performance-oriented exception.
-
-### Security Consideration
-
-- No public exposure
-- Identity-based remote access enforced via Tailscale
-- LAN exposure restricted to performance-critical workloads only
-- Vaultwarden is not LAN-exposed (loopback-only + Tailscale Serve)
-- Nextcloud is LAN-exposed but protected by Apache TLS and application-level authentication
-- All LAN-exposed services still require authentication - no anonymous access
-
-This represents a deliberate trade-off between strict network isolation and practical throughput requirements.
-
+**Rationale (superseded).** The uplink (about 50 Mbit/s) was assumed to cap all overlay traffic.
+Measured 2026-10-01, peers on the same LAN connect directly at close to link speed, so the
+assumption did not hold.
 
 ---
 
@@ -242,35 +158,21 @@ This represents a deliberate trade-off between strict network isolation and prac
 
 ## 9. Planned Architectural Evolution (Network Hardening - Phase 2)
 
-The current hybrid LAN + Tailscale access model is a documented performance trade-off influenced by upstream bandwidth limitations (~50 Mbit upload).
+**Status.** Superseded in part 2026-10-01. The LAN-exposure items were carried out by
+[Media Over the Tailnet](media-over-the-tailnet.md) and `lan_guard`, without waiting for a faster
+uplink.
 
-Media workloads (e.g., Jellyfin, Audiobookshelf) are intentionally reachable via LAN to avoid performance bottlenecks and unnecessary overlay overhead.
+**Plan and state.**
 
-With increased upstream capacity (~500 Mbit planned), the architecture is designed to evolve toward a stricter identity-bound model:
+| Planned change | State |
+|---|---|
+| Eliminate direct LAN service exposure, media included | Done 2026-10-01 ([Media Over the Tailnet](media-over-the-tailnet.md)) |
+| Remove implicit LAN trust | Done 2026-10-01: `lan_guard` drops new inbound LAN connections on every node |
+| Restrict SMB to identity-bound paths | Open: vm100 and the hypervisor still mount over the LAN ([SMB bind](smb-bind-and-lan-access.md), storage network item in the [remediation plan](../platform/remediation-plan.md)) |
+| Optional VLAN segmentation for internal traffic | Not started |
 
-### Planned Changes
-
-- Restrict SMB exposure to the Tailscale interface only
-- Remove implicit LAN trust for storage services
-- Enforce identity-bound access for all service mounts
-- Eliminate direct LAN service exposure (media included)
-- Introduce optional VLAN-based segmentation for internal traffic separation
-
-### Rationale
-
-This evolution reflects a shift from a pragmatic hybrid networking model toward full zero-trust enforcement once bandwidth constraints no longer justify LAN-level exposure.
-
-The design prioritizes:
-
-- Explicit trust boundaries
-- Reduced lateral movement potential
-- Consistent access control semantics
-- Security model clarity over convenience
-
-The current implementation is therefore intentionally transitional and documented as such.
-
-
-See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+**Rationale.** Explicit trust boundaries, less room for lateral movement, and one access-control
+model for every path. Access rules: [tailscale-acl.md](../platform/tailscale-acl.md).
 
 ---
 
@@ -278,44 +180,28 @@ See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
 
 ## 10. Docker Host Networking Eliminates Container DNS
 
-### Context
+**Context.** The monitoring stack (`docker/monitoring/docker-compose.yml`) runs every service with
+`network_mode: host`, so each binds loopback directly and `tailscale serve` publishes it without a
+listener on `0.0.0.0`.
 
-All Docker services in the monitoring stack (Prometheus, Grafana, Node Exporter) use `network_mode: host` to bind directly to loopback (`127.0.0.1`). This enables the Tailscale Serve reverse proxy pattern without exposing services on `0.0.0.0`.
+**Decision.** Services in host-networked stacks reach each other at `127.0.0.1` (or an explicit
+host address), never by container name.
 
-### Decision
+**Rationale.** With host networking Docker creates no virtual network and so no DNS between
+containers. Grafana's provisioned datasource pointed at `http://prometheus:9090`, which stopped
+resolving after the switch; dashboards failed silently until it read `http://127.0.0.1:9090`.
 
-All inter-service communication in host-networked Docker stacks must use `127.0.0.1` (or explicit host IPs) instead of container names.
+**Implications.** Every service reference in configuration, environment or provisioning uses an
+address. The Grafana datasource is a template with placeholders
+(`docker/monitoring/grafana/provisioning/datasources/prometheus.yml.example`).
 
-### Rationale
+**Alternative.** Bridge mode with loopback port mappings (`127.0.0.1:3000:3000`) keeps container DNS
+and Docker's isolation between containers. Not chosen: the stack runs in a dedicated unprivileged
+LXC (DD-7, DD-5) whose containers are meant to talk freely, so that isolation buys little, and host
+networking removes custom networks, port mappings and NAT.
 
-In Docker's default bridge mode, an internal DNS resolver allows containers to reach each other by name (e.g., `http://prometheus:9090`). When `network_mode: host` is enabled, containers share the host's network stack directly - Docker does not create a virtual network and therefore provides no DNS resolution between containers.
-
-This caused a concrete failure: Grafana's provisioned datasource referenced `http://prometheus:9090`, which became unresolvable after the switch to host networking. Dashboards failed silently until the URL was corrected to `http://127.0.0.1:9090`.
-
-### Implications
-
-- Any service-to-service reference in configuration files, environment variables, or provisioning templates must use `127.0.0.1` (or the host's Tailscale IP) - never container names
-- This applies to all current and future Docker stacks using `network_mode: host`
-- Provisioning files (e.g., Grafana datasources) are managed as IaC templates (`.example` with placeholders) to make this explicit
-
-### Considered Alternative
-
-Bridge mode with loopback port mapping was evaluated as an alternative:
-```yaml
-ports:
-  - "127.0.0.1:3000:3000"
-```
-
-This would preserve Docker's internal DNS (containers reachable by name) and maintain Docker-level network isolation between containers. Each port would be bound to `127.0.0.1` on the host side, remaining compatible with Tailscale Serve.
-
-This approach was not chosen because the monitoring stack runs in a dedicated unprivileged LXC (DD#7, DD#5) where all containers are expected to communicate freely. Docker-internal isolation provides no meaningful security benefit in this context. Host networking reduces configuration complexity by eliminating custom networks, port mappings, and NAT overhead.
-
-### Trade-offs
-
-- Loss of Docker's built-in service discovery and inter-container isolation
-- Configuration requires explicit address management
-- Accepted trade-off for reduced complexity, loopback-only binding, and Tailscale Serve compatibility
-- Isolation is enforced at deeper layers: unprivileged LXC (DD#5), loopback binding, and Tailscale ACL (DD#4)
+**Trade-offs.** No built-in service discovery or inter-container isolation; addresses are managed
+explicitly. Isolation sits in the unprivileged LXC, the loopback bind and the Tailscale ACL.
 
 ---
 
@@ -323,49 +209,22 @@ This approach was not chosen because the monitoring stack runs in a dedicated un
 
 ## 11. Monitoring Requires Explicit Outbound ACLs for Scrape Targets
 
-### Context
+**Context.** Prometheus on lxc200 (`tag:monitoring`) scrapes exporters across the tailnet. The first
+policy granted access to `tag:monitoring` but nothing from it. After a container restart, Prometheus
+lost the host's node_exporter: the previous WireGuard connection had outlived the missing rule, and
+the fresh connection was denied.
 
-Prometheus (LXC200, `tag:monitoring`) scrapes Node Exporter on the Proxmox host (`tag:tier0`, port 9100) via Tailscale. The initial ACL policy defined inbound access to `tag:monitoring` (from `tag:admin`) but no outbound rules for `tag:monitoring` itself.
+**Decision.** `tag:monitoring` is granted each scrape and probe target explicitly, port by port, and
+nothing else. The current grant is
+[Rule 1 in tailscale-acl.md](../platform/tailscale-acl.md#rule-1---monitoring-scrapes-and-service-probes).
 
-### Incident
+**Rationale.** Tailscale ACLs are deny-by-default in every direction; access to a node implies no
+access from it. A pre-existing tunnel can hide a missing rule until the next reconnect. Port-level
+grants let Prometheus read metrics without reaching SSH or the services.
 
-After a container restart (RAM reallocation), Prometheus lost connectivity to the host Node Exporter. Disk temperature metrics (`smart_temperature_celsius`) stopped appearing in Grafana.
-
-Root cause: Tailscale evaluates ACLs when establishing new peer connections. The previous connection had survived as a pre-existing WireGuard tunnel despite the missing rule. The container restart forced a fresh connection attempt, which was correctly denied by the ACL policy.
-
-### Decision
-
-`tag:monitoring` requires explicit outbound ACL rules to all scrape targets. Access is restricted to the Node Exporter port only.
-```jsonc
-{
-    "action": "accept",
-    "src":    ["tag:monitoring"],
-    "dst": [
-        "tag:tier0:9100",
-        "tag:tier1:9100",
-        "tag:tier2:9100",
-        "tag:storage:9100",
-    ],
-}
-```
-
-### Rationale
-
-- Tailscale ACLs are deny-by-default - every direction of traffic requires an explicit rule
-- Inbound access (admin -> monitoring) does not imply outbound access (monitoring -> targets)
-- Pre-existing tunnels can mask missing rules until the next connection reset
-- Port restriction (9100 only) enforces least-privilege: Prometheus can scrape metrics but cannot SSH or access other services
-
-### Implications
-
-- Every new scrape target tag must be added to this rule
-- ACL changes should be validated after any container or Tailscale restart, not only after policy edits
-- Pre-existing connections are not proof that ACLs are correct
-
-### Trade-offs
-
-- Additional ACL maintenance when adding new monitoring targets
-- Accepted for explicit, auditable access control over implicit tunnel persistence
+**Implications.** A new scrape target or tag needs a rule change. After a container or Tailscale
+restart, check the targets, not only after policy edits: a working existing connection does not
+prove the policy.
 
 ---
 
@@ -373,33 +232,22 @@ Root cause: Tailscale evaluates ACLs when establishing new peer connections. The
 
 ## 12. PostgreSQL Uses a Dedicated Platform Tag Instead of a Tier Tag
 
-### Context
+**Context.** lxc260 runs one PostgreSQL instance for consumers in different tags: Paperless-ngx in
+`tag:tier1` and OpenWebUI in `tag:ai-stack`.
 
-lxc260 runs a centralized PostgreSQL instance that serves multiple consumers across different tiers (e.g., OpenWebUI in tier 2, potential future services in tier 1). A tagging decision was required to integrate the database node into the existing Tailscale ACL model.
+**Decision.** lxc260 carries `tag:database`, outside the tier hierarchy. Each consumer is granted
+`tag:database:5432` by its own rule.
 
-### Decision
+**Rationale.** Inside a tier, intra-tier rules would give every service in that tier the database on
+all ports, and consumers in other tags would need exceptions that erode the tier model. A platform
+tag makes every consumer explicit by tag and port. `tag:monitoring` (DD-11) follows the same
+pattern, and a future shared platform service should too.
 
-PostgreSQL is assigned `tag:database` - a new platform-level tag outside the tier hierarchy. Consumer access is granted per-service via explicit ACL rules restricted to port 5432.
+**Implications.** One ACL rule per consumer
+([tailscale-acl.md](../platform/tailscale-acl.md), Rules 5 and 6). Management reaches lxc260 over
+SSH from the control node only; no workstation is granted 5432.
 
-### Rationale
-
-Placing PostgreSQL in an existing tier (e.g., `tag:tier1` or `tag:tier2`) would create a conflict: tier rules allow intra-tier communication on all ports, which would grant unrelated services in that tier full access to the database. Cross-tier consumers would require exception rules that erode the tier isolation model.
-
-A dedicated `tag:database` avoids this by decoupling the database from the application tier hierarchy entirely. Each consumer must be explicitly allowed by tag and port - no implicit access through shared tier membership.
-
-This follows the same pattern established for `tag:monitoring` (DD#11): platform services that serve multiple tiers receive their own tag rather than being placed inside a tier.
-
-### Implications
-
-- Every new database consumer requires an explicit ACL rule (`consumer-tag -> tag:database:5432`)
-- `tag:database` must be added to the admin destination list for management access
-- The tier model table and access matrix in `tailscale-acl.md` must include the new tag
-- Future shared platform services (e.g., a central Redis or message broker) should follow the same pattern
-
-### Trade-offs
-
-- Additional ACL maintenance per consumer (one rule per service)
-- Accepted for explicit, auditable, per-service access control over implicit tier-based access
+**Trade-offs.** More ACL maintenance per consumer, in exchange for explicit, auditable access.
 
 ---
 
@@ -407,46 +255,24 @@ This follows the same pattern established for `tag:monitoring` (DD#11): platform
 
 ## 13. Standardized TUN Configuration for Tailscale-Capable LXCs
 
-### Context
+**Context.** During initial provisioning TUN was configured inconsistently: some containers lacked
+the cgroup2 device rule or the mount entry, and lxc200 ran with AppArmor disabled and no capability
+restrictions.
 
-Multiple unprivileged LXCs require Tailscale for identity-based network access.
-During initial provisioning, TUN configuration was applied inconsistently:
-some containers were missing cgroup2 device rules or mount entries, and LXC200
-had AppArmor disabled and no capability restrictions - likely left over from
-debugging sessions.
-
-### Decision
-
-Every unprivileged LXC running Tailscale must include exactly the following
-TUN configuration (CT210-pattern):
+**Decision.** Every unprivileged LXC running Tailscale carries exactly this TUN configuration (the
+CT210 pattern):
 
     lxc.cgroup2.devices.allow: c 10:200 rwm
     lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 
-No additional permissive overrides are acceptable:
-- `lxc.apparmor.profile: unconfined` must not be set
-- `lxc.cap.drop:` must not be set to an empty value
+No permissive overrides: `lxc.apparmor.profile: unconfined` is not set, and `lxc.cap.drop:` is not
+set to an empty value.
 
-### Rationale
+**Rationale.** Without the cgroup rule the kernel denies the TUN device whatever is mounted; without
+the mount entry the device does not exist in the container. Missing either, Tailscale falls back to
+userspace networking, which is harder to observe and debug. `unconfined` removes mandatory access
+control for every process in the container, and an empty `cap.drop` grants maximum capabilities;
+no service here needs either.
 
-Without `cgroup2.devices.allow`, the kernel denies access to the TUN device
-regardless of mount visibility. Without `mount.entry`, the device does not exist
-inside the container namespace. Both lines are required for Tailscale to use
-kernel-mode WireGuard - the absence of either causes a silent fallback to
-userspace networking, which is harder to observe and debug.
-
-`apparmor: unconfined` disables the kernel's mandatory access control layer
-for all processes in the container. Combined with an empty `cap.drop`, this
-grants the container maximum kernel privileges - unnecessary for any service
-workload and inconsistent with the least-privilege principle.
-
-### Implications
-
-- CT210-pattern is the reference for all new Tailscale-capable LXCs
-- Deviations from this pattern must be justified and documented
-- Service onboarding checklist must include TUN config verification
-
-### Trade-offs
-
-- None significant. The pattern is minimal and does not restrict
-  legitimate service operation.
+**Implications.** The CT210 pattern is the reference for new Tailscale-capable LXCs; a deviation is
+justified in the node document. Onboarding checks the TUN configuration.

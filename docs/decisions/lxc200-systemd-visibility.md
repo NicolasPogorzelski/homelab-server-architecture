@@ -1,105 +1,60 @@
-# lxc200: the Node That Watches the Fleet and Not Itself
+# lxc200 Runs a Native node_exporter for systemd Unit State
 
 ## Status
-
-Decided 2026-09-11. Chosen option is a native `node_exporter` beside the container, not a
-privileged container.
-
-Built 2026-09-12, not yet applied: `node-exporter.yml` no longer excludes the node, the port is
-`node_exporter_port: 9101` in `host_vars/lxc200.yml`, and the rendered Prometheus config carries
-the second job. Applying it changes the monitoring stack's own configuration, so it belongs to a
-session that is watching that stack rather than to a sweep.
-
-One thing the build settled that the decision left open. The second job cannot be swept in by the
-loop that renders the other nodes: that loop names a job after the node's `prometheus_label`, which
-for this node is `monitoring`, so it would emit a second `node-lxc200-monitoring` - and Prometheus
-refuses a configuration with two jobs of one name by failing the whole file, not the duplicate. The
-native target is therefore written out explicitly and named `node-lxc200-monitoring-systemd`.
+Implemented 2026-09-15. Decided 2026-09-11. Supersedes / superseded by: -.
 
 ## Context
+lxc200's `node_exporter` is a container in the monitoring compose stack. It sees the container's
+process namespace, not the node's systemd, so `--collector.systemd` has nothing to collect and
+`SystemdUnitFailed` could not cover lxc200. Every other node reports unit state.
 
-`SystemdUnitFailed` covers every node except lxc200, and the reason is structural rather than an
-oversight. lxc200's `node_exporter` is a Docker container from the monitoring compose stack. It
-sees the container's own process namespace, not the host's systemd, so `--collector.systemd` has
-nothing to collect. `node-exporter.yml` therefore runs against `all:!lxc200`.
-
-lxc250 was the second such node until 2026-08-20, for a different reason - nothing scraped it - and
-that one is closed. lxc200 is now the only blind spot, and it is the monitoring node.
-
-That last sentence is the whole weight of this decision. A failed unit on the node that runs
-Prometheus, Grafana, Alertmanager and the blackbox exporter reaches no alert. The failure would be
-invisible in the same way the host `node_exporter` outage was invisible: the component that would
-report the fault is the component that is down.
+lxc200 runs Prometheus, Grafana, Alertmanager and the blackbox exporter. A failed unit there reached
+no alert: the component that would report the fault was the one that was blind
+([KE-15](../platform/known-errors.md#ke-15) shows what a month of unseen failed units costs).
 
 ## Options
-
-**Privileged container with `/run/systemd` bind-mounted.** Gives the containerised exporter access
-to the host's systemd. Rejected. It means either running the exporter container privileged or
-bind-mounting a socket that carries the ability to start and stop units on the node - a large
-authority grant to close a monitoring gap, on the node that holds the alerting stack. The
-[data classification](../platform/data-classification.md) has this node one tier from the top for
-good reason.
-
-**Accept the gap and say so.** The current state. Rejected on the grounds above: it is not the
-node to be blind on.
-
-**A second, native `node_exporter` on lxc200 beside the container.** Chosen.
-
-**Replace the container exporter with a native one.** The tidier end state, and the one to reach
-eventually. Not chosen as the first step because lxc200's Prometheus scrapes `127.0.0.1:9100` today
-and that target is wired into a config this repository renders; changing it is a change to the
-monitoring stack's own configuration at the same time as a change to what it measures.
+- **Privileged exporter container with `/run/systemd` bind-mounted.** Lost: grants the ability to
+  start and stop units on the node holding the alerting stack, to close a monitoring gap.
+- **Accept the gap.** Lost: the monitoring node is the one node not to be blind on.
+- **Replace the container exporter with a native one.** Lost as a first step: Prometheus scrapes
+  `127.0.0.1:9100` today, so it changes the monitoring configuration and what it measures at once.
+  It remains the tidier end state.
+- **A second, native `node_exporter` beside the container.** Chosen.
 
 ## Decision
+`node_exporter` is installed on lxc200 as a systemd unit through the `node_exporter` role, bound to
+the node's Tailscale address on port 9101 (`node_exporter_port` in `host_vars/lxc200.yml`, since the
+container holds 9100), with `--collector.systemd` enabled. The container exporter stays on loopback
+and reports resources like every other node; the native unit reports systemd unit state.
 
-Install `node_exporter` on lxc200 as a systemd unit through the existing role, bound to the node's
-Tailscale address on a port other than 9100, with `--collector.systemd` enabled and the container's
-exporter left alone on loopback. One new scrape target, one new job in the rendered Prometheus
-config.
-
-Two exporters on one node is not elegant and the inelegance is the point of writing this down: it
-is a deliberate duplication with one job each. The container reports the node's resources as every
-other node reports them; the native unit reports systemd unit state, which the container
-structurally cannot. When the container exporter is eventually retired, this decision is what says
-which of the two was load-bearing.
-
-The port is not 9100 because that is taken by the container. Any free port above 9100 will do; what
-matters is that it is recorded in the Prometheus target table in
-[`monitoring.md`](../platform/monitoring.md) rather than remembered.
+The rendered Prometheus configuration names the native target explicitly as
+`node-lxc200-monitoring-systemd` (`ansible/roles/prometheus_config/templates/prometheus.yml.j2`).
+The per-node loop would have emitted a second `node-lxc200-monitoring` job, and Prometheus rejects a
+whole configuration that contains two jobs of one name.
 
 ## Consequences
-
-- `SystemdUnitFailed` covers eleven of eleven nodes for the first time.
-- One more thing on lxc200 that can fail. It is a small Go binary with a readiness gate, which is
-  the same thing running on nine other nodes.
-- `node-exporter.yml` loses its `all:!lxc200` exclusion, which has been carrying an explanation in
-  a comment since it was written.
+- `SystemdUnitFailed` covers all ten nodes.
+- Two exporters on one node, each with one job. When the container exporter is retired, the native
+  unit is the one that carries systemd state.
+- One more unit on lxc200 that can fail; the same binary and readiness gate run on every other node.
+- The port is recorded in the target table in [`monitoring.md`](../platform/monitoring.md).
 
 ## Verification
-
 ```bash
-# On lxc200, after the role:
-ss -tlnp | grep node_exporter          # two listeners: loopback 9100, Tailscale <new port>
-curl -s <tailscale-ip-lxc200>:<port>/metrics | grep -c node_systemd_unit_state
+# On lxc200:
+ss -tlnp | grep node_exporter          # two listeners: loopback 9100, Tailscale 9101
+curl -s <tailscale-ip-lxc200>:9101/metrics | grep -c node_systemd_unit_state
 ```
 
-The second command returning a count in the hundreds is the proof. On lxc250 the equivalent
-adoption produced 850 `node_systemd_unit_state` time series, and that number is what made
-`SystemdUnitFailed` real there rather than nominal.
-
-In Prometheus, the target must be `up` and the rule must evaluate against it - the
-`FleetRulesMismatch` check compares loaded rules against this repository, which does not catch a
-rule that is loaded but has no series to read. Confirm by name:
+A count in the hundreds is the proof. In Prometheus the target must be `up` and the rule must have
+series to read; `FleetRulesMismatch` compares loaded rules, not whether a rule has data:
 
 ```promql
 count by (instance) (node_systemd_unit_state)
 ```
 
-Eleven instances, not ten.
+Expected: ten instances.
 
 ## Related Documents
-
 - [Monitoring](../platform/monitoring.md)
 - [LXC200 node document](../nodes/lxc200.md)
-- [Remediation plan](../platform/remediation-plan.md)
-- [KE-15 - the month of failed units nobody could see](../platform/known-errors.md#ke-15)

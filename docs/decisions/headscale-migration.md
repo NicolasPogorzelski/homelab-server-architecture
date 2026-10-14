@@ -1,171 +1,71 @@
-# Decision: Migrate Control Plane from Tailscale SaaS to Headscale
+# The Tailscale Control Plane Moves to Headscale
 
 ## Status
-
-**Deferred** - planned as entry point for Phase 6 (Terraform/IaC).
-Not implemented. Decision to migrate is made; timing is not yet.
-
----
+Proposed 2026-05-07, deferred. Not started. Runs after the
+[identity track](identity-before-terraform.md), whose OIDC provider it needs for user sign-in, as
+part of the Terraform track. Supersedes / superseded by: -.
 
 ## Context
+Tailscale has two parts: the WireGuard client `tailscaled`, open source and run on every node, and
+the coordination server (`login.tailscale.com`), operated by Tailscale Inc. Payload is encrypted end
+to end, but the coordination server holds:
 
-The current access layer relies on Tailscale, which consists of two distinct components:
+- the full topology: every node, its name, operating system, Tailscale address and last-seen time;
+  node names map the service inventory;
+- the complete ACL policy;
+- authentication events: registrations, pre-auth keys, logins;
+- connection metadata: which device connects to which node, when and for how long. Media and
+  document services produce recognisable patterns (a client on the Jellyfin node for 90 minutes in
+  the evening);
+- relayed traffic, encrypted, whenever two peers fall back to a Tailscale-operated DERP server.
 
-| Component | Description | Who operates it |
-|---|---|---|
-| Tailscale client (`tailscaled`) | WireGuard-based mesh client, open source | Self (on every node) |
-| Control plane (`login.tailscale.com`) | Key distribution, node discovery, ACL enforcement, DERP coordination | Tailscale Inc. (SaaS) |
+Every service on the platform is reached through the tailnet
+([loopback + Tailscale Serve](loopback-tailscale-serve.md),
+[media over the tailnet](media-over-the-tailnet.md)), so this metadata covers all use of it. The
+platform's goal of self-hosting its data does not hold for the metadata as long as a third party
+runs the control plane.
 
-This platform's Zero-Trust model (see [Design Decisions #4](design-decisions.md#dd-4))
-was designed around minimizing data exposure and attack surface.
-The control plane dependency introduces a structural contradiction with that goal.
-
-### What Tailscale SaaS sees
-
-Tailscale traffic is WireGuard end-to-end encrypted - Tailscale cannot see payload content.
-However, the SaaS control plane has persistent visibility into:
-
-- **Full network topology**: every node, its name, OS, Tailscale IP, last-seen timestamp
-- **Device names**: node names like `lxc240-vaultwarden`, `lxc220-calibreweb` reveal service inventory
-- **ACL policy**: the complete access control ruleset - what is allowed to talk to what
-- **Authentication events**: device registration, pre-auth key usage, login events
-- **DERP relay traffic**: when P2P connections fail (NAT traversal), encrypted traffic transits Tailscale-operated relay servers
-- **Behavioral metadata**: connection timing, duration, frequency - which device connects to which node, and when
-
-The last point is the primary privacy concern for this platform.
-Services like Jellyfin (media), Audiobookshelf, and Calibre-Web produce recognizable connection patterns
-(e.g. a client connecting to the Jellyfin node for 90 minutes at 22:00).
-Combined with device identity, this constitutes a detailed behavioral profile held by a third party.
-
-This directly contradicts the platform's stated goal of maximum data sovereignty and self-hosting.
-
----
+## Options
+- **Stay on Tailscale SaaS.** Lost: simplest, and payload stays private, but the usage metadata
+  above stays with a vendor and the ACL lives in its console.
+- **Plain WireGuard without a control plane.** Lost: manual key distribution, no ACL layer, no mesh;
+  a regression in operation for every node.
+- **Headscale with Tailscale's DERP servers.** Acceptable as an intermediate state, not as the
+  target: relay metadata stays visible to Tailscale.
+- **Headscale plus a self-hosted DERP relay.** Chosen.
 
 ## Decision
+The coordination server is replaced by Headscale, the open-source reimplementation
+(https://headscale.net/), with a self-hosted DERP relay beside it. Both run on a small public VPS
+outside the Proxmox host, because every client, including mobile ones outside the home, must reach
+the control plane, and the platform has no public ingress by design.
 
-Migrate the Tailscale control plane to Headscale, a self-hosted open-source
-reimplementation of the Tailscale coordination server.
+Order of work:
 
-Official documentation: https://headscale.net/
+1. A throwaway Headscale on a temporary VPS, to learn its configuration, policy format and
+   registration flow. Discarded afterwards.
+2. Terraform provisions the VPS, its DNS record and firewall.
+3. Ansible configures Headscale and DERP and re-registers each node, one node at a time with
+   connectivity checked before the next.
+4. The ACL in [tailscale-acl.md](../platform/tailscale-acl.md) is translated to Headscale's policy
+   file; every accept and deny the policy tests there assert must still hold.
 
-**Timing:** After Phase 5 (Ansible) is complete.
-Headscale will serve as the entry point for Phase 6 (Terraform/IaC).
+The start waits for two reasons. A hand-built control plane would be an unreproducible node that
+every other node depends on. And re-registering all ten nodes plus the client devices without
+playbooks is high effort with a hard rollback, against a risk that is metadata only.
 
-### Why not immediately
-
-- Phase 5 (Ansible) is currently in progress. Completing it first is the higher priority.
-- A manual Headscale setup would produce an undocumented snowflake node with no reproducibility.
-- The migration affects every node on the platform (~10+ nodes). Without Ansible playbooks for
-  the node-migration step, this is significant manual effort with high rollback complexity.
-- The operational benefit of implementing this as a full IaC project outweighs the marginal
-  privacy benefit of acting immediately. Tailscale's data access is metadata-only; no payload
-  content is at risk.
-
----
-
-## Scope of the Full Solution
-
-Headscale replaces the control plane, but does not eliminate all Tailscale SaaS dependencies.
-By default, Tailscale clients fall back to Tailscale-operated DERP relay servers when P2P
-connections fail. Full independence requires:
-
-1. **Headscale** - self-hosted control plane (replaces `login.tailscale.com`)
-2. **Self-hosted DERP** - relay server for NAT traversal fallback (Tailscale publishes the DERP server code as open source)
-
-Both components are in scope for the Phase 6 implementation.
-
----
-
-## Infrastructure Requirements
-
-Headscale must be reachable from all nodes, including remote devices outside the home network.
-This requires a publicly addressable server - the current platform has no public ingress by design.
-
-**Planned approach:** Hetzner VPS (CX22, ~4 EUR/month) dedicated to the control plane.
-This node sits outside the Proxmox infrastructure and is not subject to homelab downtime.
-
-Note: existing WireGuard mesh connections survive a control plane outage temporarily.
-New connections and key rotations require Headscale to be reachable.
-A dedicated VPS provides availability independent of local infrastructure.
-
----
-
-## Planned Implementation Approach
-
-### Phase 6 project structure
-
-1. **Exploration run (manual):** Set up Headscale on a temporary VPS manually.
-   Understand the configuration model, ACL format differences, node registration flow.
-   This run is intentionally discarded - it is a learning exercise, not production.
-
-2. **Terraform:** Provision the Hetzner VPS, DNS record, firewall rules declaratively.
-
-3. **Ansible:** Configure Headscale and DERP on the VPS. Write a playbook for
-   re-registering each platform node to the new control server.
-
-4. **Migration:** Execute node migration sequentially per node. Verify connectivity
-   before proceeding to the next. Document rollback path.
-
-5. **ACL migration:** Translate the existing Tailscale ACL policy to Headscale's
-   policy format. Verify tier segmentation is preserved.
-
-### ACL policy note
-
-The current ACL source of truth is managed in the Tailscale web interface.
-Before migration, the policy must be exported and committed to this repository
-as a version-controlled file. Headscale uses file-based policy configuration -
-this is an improvement over the current model.
-
----
-
-## Alternatives Considered
-
-### Plain WireGuard (no control plane)
-
-Full control, no SaaS dependency, no Headscale infrastructure to maintain.
-
-Rejected because:
-- Manual key management does not scale beyond a small number of nodes
-- No ACL enforcement layer
-- Loses the mesh topology (point-to-point only)
-- Significant regression in operational model
-
-### Stay with Tailscale SaaS indefinitely
-
-Operationally simplest. Privacy concern is metadata-only - no payload exposure.
-
-Rejected because:
-- Contradicts the platform's long-term goal of full data sovereignty
-- Behavioral metadata is a real privacy concern for personal media and document services
-- Vendor dependency acknowledged in [loopback-tailscale-serve.md](loopback-tailscale-serve.md) as a known risk
-
-### Headscale without self-hosted DERP
-
-Partial improvement: control plane self-hosted, DERP still Tailscale-operated.
-
-Acceptable as an intermediate state, but not the target.
-Metadata from DERP relay usage (timing, endpoints) remains visible to Tailscale.
-Full solution includes self-hosted DERP.
-
----
-
-## Trade-offs
-
-| Advantage | Cost |
-|---|---|
-| Control plane data sovereignty | Additional infrastructure to operate and monitor |
-| Behavioral metadata no longer visible to third party | Headscale becomes a critical dependency |
-| ACL policy becomes a version-controlled file | Tailscale SSH feature not supported by Headscale |
-| No vendor lock-in for control plane | iOS requires a modified Tailscale client build (`TS_HEADSCALE`) |
-| Free tier limits irrelevant | Full solution requires self-hosted DERP in addition to Headscale |
-| Reproducible infrastructure via IaC | One-time migration effort across all nodes |
-
----
+## Consequences
+- The ACL becomes a file in the repository. Today the Tailscale admin console is its source of
+  truth and `tailscale-acl.md` is a hand-applied mirror.
+- Headscale becomes a dependency of every connection. Established tunnels survive its outage for a
+  while; new connections, registrations and key rotations do not. It needs monitoring and backup of
+  its own.
+- One more public machine to patch, on a monthly cost.
+- Client features that depend on Tailscale's server have to be checked against the Headscale
+  version deployed before the migration.
 
 ## Related Documents
-
-- [Design Decisions #4: Zero-Trust Overlay (Tailscale)](design-decisions.md#dd-4)
-- [Design Decisions #9: Planned Network Hardening](design-decisions.md#dd-9)
-- [Loopback + Tailscale Serve - Vendor Lock-in Awareness](loopback-tailscale-serve.md#vendor-lock-in-awareness)
-- [Networking & Zero-Trust Model](../platform/networking.md)
-- [Tailscale ACL Model](../platform/tailscale-acl.md)
+- [DD-4: Zero-trust overlay](design-decisions.md#dd-4)
+- [Identity before Terraform](identity-before-terraform.md)
+- [Tailscale ACL model](../platform/tailscale-acl.md)
+- [Networking](../platform/networking.md)

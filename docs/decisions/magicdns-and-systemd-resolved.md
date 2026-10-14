@@ -1,119 +1,78 @@
-# MagicDNS on the Debian Containers: Take resolved Out of the Path
+# MagicDNS on lxc250: systemd-resolved Leaves the Lookup Path
 
 ## Status
+Implemented 2026-09-17 on lxc250, the only node it applies to. Decided 2026-09-11. Supersedes /
+superseded by: -.
 
-Decided 2026-09-11 for lxc250, where the fault was found. Applied to that node first and to the
-rest only after a boot proves it there, because the same configuration is on every Debian container
-here and a name-resolution change that goes wrong goes wrong everywhere at once.
+The `nsswitch` role is applied: on 2026-09-15 it set lxc250's `hosts:` line, and on 2026-09-17 it
+stopped and disabled `systemd-resolved` there (`ansible/inventory/host_vars/lxc250.yml`). The
+playbook `ansible/playbooks/nsswitch.yml` runs against all guests and is a no-op where
+`nsswitch_hosts` is unset; it is in the weekly drift sweep (`ansible/drift-sweep.conf`), so a changed
+line on any guest is reported.
 
-**Measured 2026-09-12, and that last premise does not hold.** All seven containers were read rather
-than the one that misbehaved. lxc250 is the only node carrying `resolve` in its `hosts:` line and
-the only one where `systemd-resolved` is active; lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260
-read `files dns` with resolved inactive. Those six resolve a short MagicDNS name and a fully
-qualified one; lxc250 resolves neither. So the staged rollout this section describes has nothing to
-roll out to, and the change carries the risk of one node rather than of seven. Two smaller
-corrections from the same reading: the line on lxc250 is `files myhostname resolve
-[!UNAVAIL=return] dns` - `myhostname` is present and stays - and the first lookup to fail is the
-short name, not only the fully qualified one.
-
-The role that implements this is `nsswitch`, built the same day. It is not applied.
+Verified 2026-09-15: `hosts:` reads `files myhostname dns`, and `getent` resolves a short and a fully
+qualified MagicDNS name on lxc250.
 
 ## Context
+Found 2026-09-08: on lxc250 every lookup of a node's `.ts.net` name failed, so tooling on the
+control node that addresses nodes by name broke (`fleet-drift.sh` was the first to fail). The ACL
+was ruled out first. The mechanism, measured:
 
-Found 2026-09-08: anything on lxc250 that addresses a node by its `.ts.net` name fails to resolve.
-The control node is the one place where tooling addresses nodes by name rather than by inventory
-variable, so this was found by `fleet-drift.sh` failing rather than by a person noticing.
+- `systemd-resolved` was active, and `/etc/nsswitch.conf` read
+  `hosts: files myhostname resolve [!UNAVAIL=return] dns`.
+- `resolved` had never been given the Tailscale resolver.
+- `[!UNAVAIL=return]` ends the lookup whenever `resolve` answers at all. `resolved` was available,
+  did not know the name and returned NXDOMAIN, so the `dns` source was never consulted.
+- `/etc/resolv.conf`, which `dns` reads, was correct: `tailscaled` had written the MagicDNS
+  nameserver and search domain into it. A direct UDP query to that resolver answered at once.
 
-The ACL is not the cause, and ruling that out first was worth the minute it took: the node holds
-`tag:admin` and reaches every port.
-
-The mechanism, measured:
-
-- `systemd-resolved` is active.
-- `/etc/nsswitch.conf` has `hosts: files resolve [!UNAVAIL=return] dns`.
-- `resolved` knows nothing about the Tailscale resolver - it was never told.
-- `[!UNAVAIL=return]` ends the lookup as soon as `resolve` answers at all. `resolve` is available,
-  it simply does not know the name, so it returns NXDOMAIN and the `dns` source after it is never
-  consulted.
-- `/etc/resolv.conf`, which `dns` would have read, is correct. `tailscaled` wrote it with the right
-  nameserver and the right search domain.
-- A direct UDP query to the MagicDNS resolver answers immediately.
-
-So two resolvers are present, one of them knows the answer, and the lookup never reaches it. The
-file that would have worked was correct the whole time, which is the detail worth keeping: nothing
-was misconfigured in the sense anybody would grep for.
-
-`fleet-drift.sh` works around it with `curl --resolve`, which keeps SNI and certificate
-verification intact rather than disabling them. That is a workaround in the right place and it
-stays.
+Measured 2026-09-12 on all seven containers: lxc250 alone carried `resolve` in `hosts:` and ran
+`systemd-resolved`. lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260 read `files dns` with
+`resolved` inactive and resolve both short and fully qualified names. The fault is one node, not a
+fleet-wide setting.
 
 ## Options
-
-**Point resolved at the Tailscale resolver.** A drop-in giving `resolved` the MagicDNS address for
-the `.ts.net` domain. Correct in principle, and it is what Tailscale does by itself on a host where
-it detects `resolved` through D-Bus. Rejected here: it adds a second place where the tailnet's
-resolver address is written down, and that address is exactly the kind of thing that changes
-without anybody editing a drop-in. The failure mode is a container that resolves names right up
-until it silently does not.
-
-**Let tailscaled drive resolved.** The supported path, and the reason it is not already happening
-is not established - `tailscaled` wrote `/etc/resolv.conf` directly instead, which is its fallback
-when it cannot use the `resolved` D-Bus interface. Finding out why would be the most correct fix
-and is the one that depends on something not yet measured. Worth doing; not worth blocking on.
-
-**Take `resolve` out of `nsswitch.conf`.** One line, container-local, no daemon configuration, and
-it makes glibc read the `/etc/resolv.conf` that is already correct. Chosen.
-
-**Remove `systemd-resolved` entirely.** Cleaner in the sense that a dead mechanism is better than a
-bypassed one, and it is the option to revisit. Not chosen now because removing the package changes
-who owns `/etc/resolv.conf`, and doing that in the same change as the fix would make a failure
-ambiguous between two causes.
+- **Give `resolved` the MagicDNS resolver in a drop-in.** Lost: a second place that records the
+  tailnet's resolver address, which can change without anyone editing the drop-in.
+- **Let `tailscaled` drive `resolved` over D-Bus.** The supported path; why `tailscaled` fell back
+  to writing `/etc/resolv.conf` directly was never established. Not pursued.
+- **Leave `resolved` running, remove `resolve` from `nsswitch.conf`.** One line, and glibc reads the
+  `/etc/resolv.conf` that is already correct. Chosen first.
+- **Also stop `resolved`.** Added on 2026-09-17: out of the lookup path, it only served
+  unauthenticated LLMNR and mDNS on `0.0.0.0:5355` on the LAN, which the binding rule forbids. The
+  package stays installed.
 
 ## Decision
+On lxc250 `hosts:` is `files myhostname dns`, and `systemd-resolved` is stopped and disabled.
+`myhostname` stays because it resolves the node's own name without a lookup. The `nsswitch` role
+owns both settings; it refuses to stop `resolved` while `/etc/resolv.conf` still names the
+`127.0.0.53` stub, fails if anything still listens on 5355, and resolves the node's own MagicDNS name
+through `getent` after every change.
 
-On lxc250, `hosts:` in `/etc/nsswitch.conf` becomes `files dns`, and `systemd-resolved` is left
-running but out of the resolution path.
-
-The reasoning in one line: the correct answer is already in `/etc/resolv.conf`, so the smallest
-honest fix is to stop short-circuiting the lookup before it gets there.
-
-What makes this safe to do first on the control node rather than last: lxc250 is reachable by
-`pct exec` from the hypervisor without any name resolution at all, and its own Ansible runs address
-nodes by the IP addresses in `hosts.yml`. A broken resolver there cannot lock anybody out.
-
-## Rollout
-
-1. lxc250, by hand, then a reboot to prove it survives one.
-2. Read the same three facts back on the other six containers before touching them - `nsswitch.conf`
-   ordering, whether `resolved` is active, and whether `/etc/resolv.conf` carries the MagicDNS
-   nameserver. The assumption that they are identical is exactly the assumption
-   [KE-23](../platform/known-errors.md#ke-23) punished.
-3. Only then a role, if the answer is the same on all of them. A single-node fix does not need one.
+lxc250 was a safe first node: it is reachable through `pct exec` from the hypervisor without name
+resolution, and its Ansible runs address nodes by the IP addresses in the inventory.
 
 ## Consequences
-
-- Name resolution on the changed node no longer benefits from `resolved`'s cache or its per-link
-  configuration. Neither is in use here.
-- `resolved` keeps running and keeps listening on 127.0.0.53. That is untidy and deliberate: the
-  point of this change is to alter one thing.
-- If `tailscaled` ever stops writing `/etc/resolv.conf`, resolution breaks completely rather than
-  partially. That is a louder failure than the current one, which is an improvement - the present
-  fault has been silent since the container was built.
+- lxc250 loses `resolved`'s cache and per-link configuration; neither was in use.
+- If `tailscaled` stops writing `/etc/resolv.conf`, resolution on lxc250 fails completely rather
+  than for MagicDNS names only, which is the louder failure.
+- `fleet-drift.sh` keeps its `curl --resolve` workaround, which preserves SNI and certificate
+  verification and does not depend on this fix.
+- A new container from a template that ships `resolved` would repeat the fault, and the drift sweep
+  would not report it: the role checks only nodes that declare `nsswitch_hosts`.
 
 ## Verification
-
 ```bash
-getent hosts <node>.<tailnet>.ts.net     # must return the 100.x address
-grep '^hosts:' /etc/nsswitch.conf        # files dns
-resolvectl status | head -20             # resolved still running, no longer consulted
+getent hosts <node>.<tailnet-id>.ts.net   # returns the node's Tailscale address
+grep '^hosts:' /etc/nsswitch.conf          # files myhostname dns
+systemctl is-enabled systemd-resolved      # disabled
+ss -tulnH | grep ':5355'                   # prints nothing
 ```
 
-After a reboot, repeat the first command before concluding anything: the file `tailscaled` writes
-is recreated at every start, and this whole entry exists because a correct file was not being read.
+Repeat the first command after a reboot: `tailscaled` rewrites `/etc/resolv.conf` at every start.
 
 ## Related Documents
-
-- [KE-23 - a role gained a task and seven nodes never received it](../platform/known-errors.md#ke-23)
+- [KE-23 - a role change that never reached seven nodes](../platform/known-errors.md#ke-23)
 - [Tailscale ACL](../platform/tailscale-acl.md)
-- [LXC250 DevOps Workstation](lxc250-devops.md)
-- [Ansible platform doc](../platform/ansible.md)
+- [lxc250 DevOps workstation](lxc250-devops.md)
+- [Ansible](../platform/ansible.md)

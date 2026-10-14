@@ -1,135 +1,74 @@
-# pveproxy Boot Ordering: Gate Startup on the Tailscale IP
+# pveproxy Starts Only After the Tailscale Address Exists
+
+## Status
+Implemented 2026-06-25; managed by the `tailscale_boot_gate` role since 2026-09-11. Supersedes /
+superseded by: -.
+
+Cold boot verified 2026-08-13, and exercised every day since: the host powers down nightly and
+boots cold each morning ([KE-12](../platform/known-errors.md#ke-12)).
 
 ## Context
-
-The Proxmox web UI / API proxy (`pveproxy`) is configured to bind **only the host
-Tailscale IP** via `/etc/default/pveproxy`:
+`pveproxy`, the Proxmox web UI and API proxy, binds only the host's Tailscale address through
+`/etc/default/pveproxy`:
 
 ```
 LISTEN_IP=<tailscale-ip-proxmox-host>
 ```
 
-This is intentional: it keeps the management UI on the tailnet, off the LAN. It
-also means pveproxy can only start if that IP already exists on an interface.
-
-On boot, `pveproxy.service` starts before `tailscaled` has assigned the Tailscale
-IP. pveproxy can only bind an address that exists at startup, so it fails:
+This keeps port 8006 off the LAN, and means pveproxy can start only once that address exists. At
+boot `pveproxy.service` started before `tailscaled` had assigned it:
 
 ```
 start failed - unable to create socket - Cannot assign requested address
-```
-
-(kernel `EADDRNOTAVAIL`). The default unit retries quickly and systemd gives up
-after five attempts:
-
-```
 pveproxy.service: Start request repeated too quickly.
 pveproxy.service: Failed with result 'exit-code'.
 ```
 
-Unlike PostgreSQL (KE-9), pveproxy does not fall back to a partial bind - it
-exits non-zero and stays dead until a manual `systemctl restart pveproxy`. The web
-UI is then unreachable after every boot until someone intervenes (and they can
-only intervene over SSH, which is the failure this hardening was meant to avoid).
-Full incident:
-[KE-12](../platform/known-errors.md#ke-12-pveproxy-fails-to-start-after-boot-tailscale-ip-bind-race).
+Five `EADDRNOTAVAIL` failures within about 4 s of boot, then systemd gave up. Unlike PostgreSQL
+([KE-9](../platform/known-errors.md#ke-9)), pveproxy has no partial bind: the web UI stayed down
+until a manual `systemctl restart pveproxy`, after which it bound `<tailscale-ip-proxmox-host>:8006`.
+Same fault class as the [PostgreSQL boot race](postgresql-tailscale-boot-ordering.md) and
+[KE-18](../platform/known-errors.md#ke-18).
 
-Verified root cause (not inferred): the journal shows five `Cannot assign
-requested address` failures within ~4 s of boot, and a clean bind to
-`<tailscale-ip-proxmox-host>:8006` only after a manual restart once the IP was
-present.
-
-This is the same fault class as the PostgreSQL boot race; see
-[PostgreSQL Boot Ordering ADR](./postgresql-tailscale-boot-ordering.md).
+## Options
+- **Remove `LISTEN_IP` and bind all interfaces.** Lost: puts the management UI back on the LAN.
+- **`net.ipv4.ip_nonlocal_bind=1`.** Lost: changes bind semantics for every process on the host to
+  fix one unit's ordering.
+- **`After=tailscaled.service` alone.** Lost: the daemon being up does not mean the address is
+  assigned; assignment is asynchronous.
+- **Order after `tailscaled` and gate on the address being present.** Chosen.
 
 ## Decision
+A drop-in on `pveproxy.service` orders it after `tailscaled.service` (`After=` and `Wants=`) and
+runs `wait-for-tailscale-ip.sh` as an additional `ExecStartPre`, after the packaged
+`pvecm updatecerts` step. The script polls until the node's `tailscale ip -4` address is present.
 
-Gate pveproxy startup on the Tailscale IP actually being present, via a systemd
-drop-in at `/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf`:
-
-```ini
-[Unit]
-After=tailscaled.service
-Wants=tailscaled.service
-
-[Service]
-ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do ip -4 addr show tailscale0 2>/dev/null | grep -q <tailscale-ip-proxmox-host> && exit 0; sleep 1; done; exit 1'
-```
-
-Two parts, both required (identical reasoning to the PostgreSQL ADR):
-
-1. **Ordering** (`After=`/`Wants=tailscaled.service`) - start after the tailscaled
-   *daemon*. Necessary but not sufficient: the daemon being up does not mean the IP
-   is assigned yet (assignment is asynchronous).
-2. **Wait-for-IP gate** (`ExecStartPre`) - poll until the Tailscale IP is present
-   on `tailscale0`, up to 30 s, then let pveproxy start. This closes the race the
-   ordering alone leaves open.
-
-The gate runs as an additional `ExecStartPre`, after the existing
-`pvecm updatecerts` step. Validated by a controlled restart with the drop-in
-active: the wait returned immediately (IP already present) and pveproxy bound
-`<tailscale-ip-proxmox-host>:8006` (HTTP 200).
-
-## Alternatives Considered
-
-### Remove `LISTEN_IP` / bind all interfaces (rejected)
-
-Letting pveproxy bind `0.0.0.0` sidesteps the race. Rejected for the same reason as
-`listen_addresses = '*'` in the PostgreSQL ADR: it re-exposes the management UI on
-the LAN, violating the platform binding rule (bind to Tailscale, never LAN).
-The whole point of `LISTEN_IP` here is to keep `:8006` off the LAN.
-
-### `net.ipv4.ip_nonlocal_bind=1` (rejected)
-
-A sysctl that lets any process bind an address that does not yet exist would let
-pveproxy bind the Tailscale IP before `tailscaled` assigns it. Rejected: it is a
-**system-wide** change to bind semantics for every process on the host, to fix one
-service's ordering - too broad a blast radius for a targeted boot race.
-
-### `After=tailscaled.service` alone (insufficient)
-
-Ordering after the daemon does not guarantee the IP is assigned (asynchronous).
-Same conclusion as the PostgreSQL ADR - the explicit poll is what closes the race.
+The drop-in is rendered by `tailscale_boot_gate` from `ansible/inventory/group_vars/proxmox.yml`
+(`tailscale_boot_gate_units: [pveproxy.service]`). The script has one source,
+`snippets/scripts/wait-for-tailscale-ip.sh`, shared with `postgresql_boot_order` on lxc260. The role
+removes the hand-written `wait-tailscale.conf` from June, which hardcoded the address and would
+otherwise override the role's file on filename order.
 
 ## Consequences
+- pveproxy starts as soon as the address appears; the wait is bounded by the role's timeout
+  (`tailscale_boot_gate` defaults).
+- The shared script is fail-open: on timeout it logs a warning and exits 0, and pveproxy then fails
+  its bind as before. The original inline gate failed closed; with no loopback mode to preserve, the
+  visible outcome is the same - a dead web UI recoverable over SSH or by the runbook below.
+- One more `ExecStartPre` on a host-level service.
 
-### Accepted
-
-- pveproxy startup is delayed until the Tailscale IP appears (observed
-  immediately when the IP is already up after a warm restart; the cold-boot delay
-  is bounded by the 30 s poll).
-- One more `ExecStartPre` step on a host-level service.
-- The gate fails closed on timeout (`exit 1` after 30 s) - if the Tailscale IP
-  never appears, pveproxy does not start. This differs from the PostgreSQL gate
-  (fail-open). It is acceptable here because pveproxy is a management plane, not a
-  data service: a hard fail is visible and recoverable over SSH, and there is no
-  "loopback-only degraded mode" worth preserving for a UI bound to one IP.
-
-### Verification
-
-Reboot the host and confirm pveproxy bound on a *fresh* boot (the only test that
-exercises the race):
+## Verification
+After a boot (only a fresh boot exercises the race):
 
 ```bash
 systemctl is-active pveproxy
-ss -ltnp | grep 8006        # bound on <tailscale-ip-proxmox-host>:8006 ?
+ss -ltnp | grep 8006        # bound on <tailscale-ip-proxmox-host>:8006
+journalctl -u pveproxy -b 0 | grep -i "wait-for-tailscale-ip\|Cannot assign"
 ```
 
-Cold-boot verification is still pending - the fix was validated only by a warm
-restart so far; the next reboot (e.g. during the planned GPU swap) is the real test.
-
-## Follow-up: align with the canonical pattern
-
-The repo already solves this exact class for PostgreSQL with a reusable
-`wait-for-tailscale-ip.sh` (`snippets/scripts/`) deployed by the
-`postgresql-boot-order` Ansible role. The pveproxy fix is currently an inline poll
-loop. The durable form is to reuse the shared script and manage the drop-in via
-Ansible, so both services share one source of truth for "wait for the Tailscale
-IP". Deferred to a host-Ansible-management work item.
-
 ## Related Documents
-
-- [KE-12 - pveproxy Tailscale-IP bind race](../platform/known-errors.md#ke-12-pveproxy-fails-to-start-after-boot-tailscale-ip-bind-race)
-- [PostgreSQL Boot Ordering ADR](./postgresql-tailscale-boot-ordering.md) - same fault class, fail-open variant
+- [KE-12 - pveproxy Tailscale-IP bind race](../platform/known-errors.md#ke-12)
+- [PostgreSQL boot ordering](postgresql-tailscale-boot-ordering.md) - same class, a service with a
+  loopback fallback
 - [Runbook - pveproxy boot-race recovery](../../runbooks/platform/pveproxy-tailscale-boot-race.md)
 - [Proxmox Host](../platform/proxmox-host.md)
