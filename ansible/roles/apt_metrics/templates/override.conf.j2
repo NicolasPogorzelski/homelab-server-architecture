@@ -12,6 +12,11 @@
 # a wrong script name produced "Finished successfully" and a zero-byte metric
 # file. A collector that runs, succeeds and writes nothing is the exact shape
 # this platform has on file three times over.
+#
+# TMPDIR is set because the packaged unit points it at Debian's node_exporter
+# directory, which exists only while that package is installed; sponge creates
+# its temporary file there and fails without it.
 [Service]
+Environment=TMPDIR={{ apt_metrics_textfile_dir }}
 ExecStart=
 ExecStart=/bin/bash -c 'set -o pipefail; {{ apt_metrics_collector }} | sponge {{ apt_metrics_textfile_dir }}/apt.prom'
