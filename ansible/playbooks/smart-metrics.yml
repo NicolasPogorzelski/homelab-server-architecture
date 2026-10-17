@@ -1,7 +1,7 @@
 ---
 # Per-attribute SMART export on the Proxmox host. Targets the `proxmox` group
-# because all nine disks are attached to the hypervisor: vm102 reaches seven of
-# them through by-id passthrough and sees virtio-SCSI devices, whose SMART data
+# because every disk is attached to the hypervisor: vm102 reaches its pool disks
+# through by-id passthrough and sees virtio-SCSI devices, whose SMART data
 # is the virtual device's and therefore empty. Reading them anywhere but here is
 # not a configuration choice, it is impossible.
 #

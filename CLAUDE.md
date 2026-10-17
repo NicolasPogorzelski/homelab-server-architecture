@@ -837,7 +837,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   ([KE-25](docs/platform/known-errors.md#ke-25)), and so did its place in the list after the
   container was destroyed - so `GuestBackupPartial` names a real gap rather than a lost week.
   Two preconditions the role cannot assert and the runbook therefore carries: a VM's passthrough
-  disks need `backup=0` (vm102's seven would otherwise pull 55.5 TiB into a 916 GB target), and the only
+  disks need `backup=0` (vm102's eight would otherwise pull some 72 TiB into a 916 GB target), and the only
   storage accepting a container rootfs is the thin pool, so a restore test uses the *smallest*
   archive. Restore verified 2026-08-21 via `pct mount` without starting the clone - it carries the
   original's Tailscale node key. **The target is the KE-13 disk and there is no off-site copy.**
@@ -859,7 +859,7 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   `rules: []`, and they alert on *growth over 25 hours* rather than on level: three disks would
   have made a level rule red from the first day, and the question nobody could answer between
   2026-06-25 and 2026-08-13 - are the counters still moving? - was answered by reading them by hand
-  on four separate dates. All nine disks are attached to the Proxmox host; vm102 reaches seven of
+  on four separate dates. All ten disks are attached to the Proxmox host; vm102 reaches eight of
   them via `by-id` passthrough and sees only virtio-SCSI devices, so SMART is readable *only on the
   host*. The prerequisite this waited on, the host becoming an Ansible node, was met on 2026-08-21.
   **This entry read RESOLVED for six days while the host ran neither half of it.** Measured

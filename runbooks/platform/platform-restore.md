@@ -75,7 +75,7 @@ again, followed by `fleet-health-check.yml` and a drift sweep.
 ## Verification
 
 - `platform-restore.sh verify`: every guest listed and running.
-- `qm config 102` names all seven passthrough disks, `qm config 100` its `scsi1`.
+- `qm config 102` names all eight passthrough disks, `qm config 100` its `scsi1`.
 - On the host: `ls /mnt/smb/*` answers, `systemctl --failed` is empty, `uname -r` is the expected
   kernel.
 - The fleet: `fleet-health-check.yml` green, the drift sweep reports nothing, no alert but

@@ -163,7 +163,7 @@ flowchart TB
   end
 
   subgraph pool["vm102 archive pool - disks passed through from the host by-id"]
-    DISKS[("disk01 - disk05 + aux-pool")]
+    DISKS[("disk01 - disk06 + aux-pool")]
     PARITY[("parity1 - outside the union")]
     MERGER["/mnt/mergerfs union"]
     SAMBA["Samba - segmented shares"]
