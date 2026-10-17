@@ -633,7 +633,8 @@ Do not flag these as new issues - they are documented tradeoffs or known quirks:
   when it is redeclared, so without them the regular archive would have stayed enabled.
   **vm100 is Ubuntu 22.04** (`/etc/os-release`, verified 2026-07-10) - the only non-Debian node;
   vm102 and every LXC are Debian 12. The role's origin ids and package names are Ubuntu-specific
-  and do not transfer unchanged, which is why it targets `hosts: vm100` and not a group.
+  and do not transfer unchanged; since 2026-10-17 the role loads them per distribution from
+  `vars/Ubuntu.yml` and `vars/Debian.yml` and runs on every guest. The hypervisor stays manual.
 - **LXC220 (Calibre-Web) tagged `tag:tier1`, not `tag:tier2`:** application service tiering
   exception, confirmed intentional 2026-07-08 and closed as a question on 2026-10-12. Since the ACL
   rebuild of 2026-09-26 every grant to a tier1 service names its host, so the tag no longer decides
