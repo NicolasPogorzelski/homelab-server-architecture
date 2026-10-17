@@ -398,9 +398,9 @@ process 10:52:30, `NRestarts=0`. Verified 2026-09-12: `pveproxy.service.d/` hold
 ## KE-13: aux-disk physical disk failure (medium errors)
 
 - **Status:** Open - degrading, in service, replacement planned
-- **Affects:** Proxmox host aux-disk (`/mnt/aux-disk`), which holds the Docker data-roots of
-  lxc200, lxc211, lxc220, lxc230 and lxc260, vm100's `scsi1` (qcow2), and the guest backup target
-  (`/mnt/vzdump`)
+- **Affects:** Proxmox host aux-disk (`/mnt/aux-disk`), which holds the Docker data-roots of lxc200,
+  lxc211, lxc220 and lxc230, the PostgreSQL data directory of lxc260, vm100's `scsi1` (qcow2), and
+  the guest backup target (`/mnt/vzdump`)
 
 **Symptom.** 2026-06-25: the disk would not mount at boot; the host dropped into emergency mode,
 and later the five containers above refused to start because their bind-mount sources were missing

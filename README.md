@@ -67,7 +67,8 @@ flowchart TB
 
 Arrows follow what is delivered: requests to services, storage to the node that mounts it,
 configuration to the node it configures. No device reaches a node over the LAN; the only LAN paths
-left are SMB from vm100 and the hypervisor to vm102, and break-glass SSH to the hypervisor.
+left are SMB from vm100 and the hypervisor to vm102, break-glass SSH to the hypervisor, and
+netconsole from vm100 to the hypervisor.
 
 High availability is not a goal on a single host. The design invests in recovery instead: modelled
 dependencies, tested restores and a runbook per failure. All copies are on site today; the off-site
