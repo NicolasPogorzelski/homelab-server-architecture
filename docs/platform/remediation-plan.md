@@ -223,6 +223,12 @@ applied.
 
 **Small open items.** A few lines each, collected because none of them blocks anything else.
 
+- **Trailers before films and the Letterboxd diary, gone with Jellyfin 12.** Cinema Mode and
+  LetterboxdSync have no 12 build. Candidates checked 2026-10-13: Jellyscribe for the diary (one
+  build for 10.11.9+ and 12.x, actively maintained), Trailer Preroll 2.x for trailers (built
+  against 12.1, but a single new maintainer and downloads from YouTube - read its code before it
+  runs on the GPU node). GetAvatar is not replaced: Jellyfin uploads profile pictures itself, and
+  the gallery alternative injects JavaScript into every session.
 - ~~The lxc250 `preflight.yml` gate~~ Done 2026-09-01, imported by every playbook that changes live
   state. The drift *metric* the original plan bundled with it is not part of this and is not
   scheduled yet. A metric written only when a playbook runs cannot see a control node drifting
@@ -581,7 +587,11 @@ Found while reading the alert backlog of 2026-10-06 and 2026-10-07.
   (`occ maintenance:repair --include-expensive`), which walks every file on the CIFS data
   directory and belongs in its own window.
 
-- **Jellyfin 12 is prepared, not applied.** 10.11.11 receives no further releases. 12.x migrates the
+- ~~**Jellyfin 12 is prepared, not applied.**~~ Applied 2026-10-13: 12.2.0 behind a snapshot of
+  vm100 and an archive of `/config`, migrations clean, user names free of case collisions. Of the
+  five plugins, Chapter Segments and Intro Skipper have 12 builds; Cinema Mode, GetAvatar and
+  LetterboxdSync have none and are not reinstalled - see the small open items. The finding as
+  written: 10.11.11 receives no further releases. 12.x migrates the
   database with no way back except a restore, requires a full library scan afterwards, removes
   the global subtitle settings in favour of per-library ones, and ignores `X-Emby-Token` - the
   last is handled, `jellyfin_user_prefs` sends the `Authorization` header since 2026-10-08. Before

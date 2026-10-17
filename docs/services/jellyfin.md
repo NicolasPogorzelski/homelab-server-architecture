@@ -4,7 +4,7 @@ Jellyfin is deployed via Docker Compose on VM100 with NVIDIA GPU hardware transc
 
 ## Deployment
 
-- Image: `jellyfin/jellyfin:10.11.11`
+- Image: `jellyfin/jellyfin:12.2`
 - Compose path (runtime): `/opt/docker/jellyfin/docker-compose.yml`
 - GPU acceleration: enabled (`gpus: all`, NVIDIA runtime)
 - Runs as non-root user (`user: 1000:1000`)
