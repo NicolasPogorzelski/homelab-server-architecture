@@ -84,19 +84,15 @@ copy is the first item of the [remediation plan](docs/platform/remediation-plan.
 
 ## How this repository is built
 
-The platform is designed, built and operated by Nicolas Pogorzelski. AI assistance (Claude Code) is
-part of the workflow, in two modes:
-
-- **Maintenance:** the assistant drafts changes - documentation, Ansible roles and playbooks,
-  scripts - which are reviewed and merged by hand through a pull request.
-- **Learning:** for a new topic the code is written by hand first; the assistant explains,
-  researches and reviews afterwards.
-
-Research and first drafts of documents are AI-assisted in both modes. Every change reaches `main`
-through a pull request with the validator, ansible-lint, gitleaks and the commit-message check
-green. The rules the assistant works under are in [CLAUDE.md](CLAUDE.md), with its project hooks
-and review agents in `.claude/`. Commits carry no attribution trailers; nine commits from
-September 2026 still carry one from before that rule. Documentation conventions are in
+The platform is designed, built and operated by Nicolas Pogorzelski, with the help of an LLM-based
+coding assistant (Claude Code). It is used for research (locating and summarising official
+documentation), for explaining concepts and commands, for reviewing configuration, and for drafting
+changes and the documentation. Code for a new topic is written by hand first and reviewed
+afterwards. Every change is reviewed before it is committed, every decision recorded in the
+decision records can be explained by the author, and every change reaches `main` through a pull
+request that the author opens and merges, with the validator, ansible-lint, gitleaks and the
+commit-message check green. The rules the assistant works under are in [CLAUDE.md](CLAUDE.md), with
+its project hooks and review agents in `.claude/`; documentation conventions are in
 [CONVENTIONS.md](docs/CONVENTIONS.md).
 
 ## Documentation
@@ -153,7 +149,7 @@ exercised. Index: [runbooks/README.md](runbooks/README.md).
 
 | Phase | Topic | Status |
 |---|---|---|
-| 1-5 | Linux, Docker, monitoring, Tailscale ACLs, Ansible | Done |
+| 1-5 | Linux, Docker, monitoring, Tailscale ACLs, Ansible ([learning log](https://github.com/NicolasPogorzelski/devops-til/blob/main/ansible/homelab-ansible-track.md)) | Done |
 | 5.5 | Identity: LDAP directory and OIDC provider ([decision](docs/decisions/identity-before-terraform.md)) | Planned |
 | 6 | Terraform: AWS free tier and Proxmox provisioning | Planned |
 | 7 | Kubernetes: k3s | Planned |

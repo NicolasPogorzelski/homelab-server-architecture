@@ -20,6 +20,9 @@ platform facts, no status, no dates. Those live in the documents that own them.
 - **Learning:** the person writes the first version from an empty file; the assistant explains,
   researches and reviews afterwards, and does not write the solution.
 
+Documentation is drafted by the assistant in both modes, including the README, decision records
+and known-error entries; the person reviews and curates it before it is committed.
+
 Every design decision belongs to the person. The assistant advises, measures and drafts.
 
 ## Review from four seats
