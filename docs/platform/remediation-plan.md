@@ -897,7 +897,8 @@ drift and are corrected in place; these are the ones that are work rather than w
   the `snapraid status` output, so exporting them from `snapraid-maintenance.sh` as two more
   textfile metrics is small. Run `snapraid touch` in the same pass: 63322 files carry a zero
   sub-second timestamp, which weakens change detection.
-- **The archive pool has months, not years.** 198 GiB free against a 100 GiB alert threshold, with
+- ~~**The archive pool has months, not years.**~~ Closed 2026-10-17: `disk06`, 18 TB, joined the
+  pool, see [Adding a data disk](storage-design.md#adding-a-data-disk). The finding read: 198 GiB free against a 100 GiB alert threshold, with
   every member disk between 29 and 37 GiB. The alert still fires before writes fail, so this is
   runway rather than a defect - but it belongs on a plan with the hardware order rather than in
   prose as "small and shrinking".
