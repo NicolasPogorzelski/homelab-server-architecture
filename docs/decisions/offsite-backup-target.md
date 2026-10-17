@@ -26,8 +26,8 @@ Measured on vm102, 2026-09-01: the user files and both dump sets together are un
 
 Two copies outside the server exist, neither running nor restored from (recorded 2026-09-01): a
 rescue of the aux-disk's contents on an administrator workstation, taken 2026-06-25, and a disk at a
-second residential site holding a mirror from May 2026. The second is off site and air-gapped but
-refreshed only during irregular visits, and its scope is the guest root filesystems; the archive
+second site holding a mirror from May 2026. The second is off site and air-gapped but refreshed
+only at irregular intervals, and its scope is the guest root filesystems; the archive
 pool, and so the Nextcloud files, Paperless documents and dump sets, has no off-site copy.
 
 Requirements:

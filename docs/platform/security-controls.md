@@ -71,17 +71,17 @@ off), are in [`physical-controls.md`](physical-controls.md).
 
 | Control | Status | Evidence | Residual risk |
 |---|---|---|---|
-| A.7.1 Physical security perimeter | Partial | The flat's door. | No second boundary between the door and the machine. |
+| A.7.1 Physical security perimeter | Partial | The site entrance. | No second boundary between the door and the machine. |
 | A.7.2 Physical entry | Partial | Occupants only. | No entry record. |
-| A.7.3 Securing offices and rooms | Gap | The server shares a room with ordinary living space. | Anyone in the flat can reach the machine. |
+| A.7.3 Securing offices and rooms | Gap | No dedicated, lockable room. | Anyone with access to the site can reach the machine. |
 | A.7.4 Physical security monitoring | Gap | No camera, door contact or tamper seal. | Physical tampering would go unnoticed. |
-| A.7.5 Physical and environmental threats | Partial | Smoke detection in the flat. | No water detection or fire suppression near the machine. |
+| A.7.5 Physical and environmental threats | Partial | Smoke detection. | No water detection or fire suppression near the machine. |
 | A.7.8 Equipment siting and protection | Partial | Off the floor, clear airflow. | Not in a locked enclosure. |
 | A.7.10 Storage media | Partial | Disks are not encrypted at rest, by decision. | Anyone holding the disks can read the C1 data. |
 | A.7.11 Supporting utilities | Gap | A consumer UPS, never load-tested; the power path is the leading [KE-14](known-errors.md#ke-14) hypothesis. | A mains event or a sagging rail can take down every guest at once. |
 | A.7.12 Cabling security | Partial | Internal cabling reseated during the KE-13 diagnosis. | Cabling is undocumented. |
 | A.7.13 Equipment maintenance | Partial | `smart_metrics` on the hypervisor exports every SMART attribute of every disk it sees; `SmartAttributeDegrading` fires on any counter rising within 25 hours; SnapRAID scrub runs weekly (`snapraid_maintenance`). | Physical maintenance is reactive. |
-| A.7.14 Secure disposal or re-use | Gap | No disposal procedure; the KE-13 disk is due for replacement and holds C1 data on sectors an overwrite cannot reach. | Data leaves the flat with a disposed disk unless the method is decided first. |
+| A.7.14 Secure disposal or re-use | Gap | No disposal procedure; the KE-13 disk is due for replacement and holds C1 data on sectors an overwrite cannot reach. | Data leaves the site with a disposed disk unless the method is decided first. |
 
 ## Technological controls (A.8)
 
