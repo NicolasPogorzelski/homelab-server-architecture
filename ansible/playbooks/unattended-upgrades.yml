@@ -1,15 +1,14 @@
 ---
-# vm100 only for now: it is the node where an autonomous kernel upgrade couples to
-# the NVIDIA DKMS module. The Debian LXCs need different origin ids and are a
-# separate decision.
+# Every guest: security updates only, kernels held back. The hypervisor is not
+# included; a Proxmox update applied unattended can take the whole platform down.
 #
 # Playbooks run from the working tree on lxc250, not from a commit.
 # preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 
-- name: Restrict unattended-upgrades to security updates, excluding kernel and NVIDIA
-  hosts: vm100
+- name: Install security updates unattended on every guest, kernels excluded
+  hosts: guests
   become: true
   roles:
     - unattended_upgrades

@@ -1,4 +1,18 @@
 ---
+- name: Load the origins and held-back packages for this distribution
+  ansible.builtin.include_vars: "{{ ansible_distribution }}.yml"
+
+# Without Recommends, as everywhere else on the fleet. The cache is refreshed only
+# on a real run: this playbook is in the weekly drift sweep, which runs in check
+# mode, and a cache refresh is a write.
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    install_recommends: false
+    update_cache: "{{ not ansible_check_mode }}"
+    cache_valid_time: 3600
+
 - name: Deploy the unattended-upgrades policy override
   ansible.builtin.template:
     src: 52-homelab-unattended.conf.j2
@@ -8,3 +22,29 @@
     mode: "0644"
     # apt parses this file on every invocation; a syntax error breaks apt itself.
     validate: apt-config -c %s dump
+
+# What APT will act on, read back after every file in apt.conf.d is merged. A
+# drop-in that lands but loses to a later file would otherwise pass unnoticed.
+- name: Read the merged unattended-upgrades configuration
+  ansible.builtin.command:
+    cmd: apt-config dump APT::Periodic Unattended-Upgrade
+  register: unattended_upgrades_effective
+  changed_when: false
+  check_mode: false
+
+- name: Prove the daily run is on and only the security origins are allowed
+  ansible.builtin.assert:
+    that:
+      - >-
+        'APT::Periodic::Unattended-Upgrade "1";' in unattended_upgrades_effective.stdout
+      - >-
+        unattended_upgrades_effective.stdout_lines
+        | select('match', '^Unattended-Upgrade::(Allowed-Origins|Origins-Pattern):: ')
+        | reject('search', 'security|Security')
+        | list | length == 0
+    fail_msg: >-
+      apt-config reports a configuration other than the one deployed:
+      {{ unattended_upgrades_effective.stdout_lines
+         | select('match', '^(APT::Periodic::Unattended-Upgrade|Unattended-Upgrade::(Allowed-Origins|Origins-Pattern)::) ')
+         | list }}
+  when: not ansible_check_mode

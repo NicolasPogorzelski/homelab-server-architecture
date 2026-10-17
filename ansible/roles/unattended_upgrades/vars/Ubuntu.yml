@@ -1,0 +1,20 @@
+---
+# vm100. Origins carry the `Ubuntu`/`UbuntuESM` ids. The plain
+# "${distro_id}:${distro_codename}" entry from the stock config is absent.
+unattended_upgrades_allowed_origins:
+  - "${distro_id}:${distro_codename}-security"
+  - "${distro_id}ESMApps:${distro_codename}-apps-security"
+  - "${distro_id}ESM:${distro_codename}-infra-security"
+
+unattended_upgrades_origins_pattern: []
+
+# Matched as regular expressions against the package name. A new kernel needs its
+# NVIDIA DKMS module rebuilt, and a driver bump must be paired with a matching
+# container toolkit, so both are upgraded by hand.
+unattended_upgrades_blacklist:
+  - "linux-image"
+  - "linux-headers"
+  - "linux-generic"
+  - "linux-modules"
+  - "nvidia-"
+  - "libnvidia-"
