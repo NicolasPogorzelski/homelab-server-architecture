@@ -17,7 +17,7 @@ Measured 2026-09-01, before deciding:
 |---|---|
 | `db.sqlite3` last modified | 2026-02-16 |
 | Total data | 677 KB |
-| Contents | one user, eleven vault items, four devices |
+| Contents | one account |
 | Image | `vaultwarden/server:latest`, not re-pulled since June |
 | Guest backup | absent from the vzdump guest list until 2026-09-01 |
 | Consistent export | never existed |
