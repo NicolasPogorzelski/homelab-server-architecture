@@ -1,6 +1,7 @@
 modules:
-  # Plain HTTP services bound directly to a port (Jellyfin, Audiobookshelf).
-  # "up" = the endpoint answered with a 2xx status.
+  # Plain HTTP on vm100's Tailscale address: Jellyfin (bound directly),
+  # Audiobookshelf and llama-server (loopback behind `tailscale serve --tcp`).
+  # Up = a 2xx answer.
   http_2xx:
     prober: http
     timeout: 5s
@@ -10,10 +11,9 @@ modules:
       preferred_ip_protocol: ip4
       ip_protocol_fallback: false
 
-  # HTTPS services behind `tailscale serve` (Paperless, OpenWebUI, Nextcloud,
-  # Calibre-Web, Vaultwarden). Reached by MagicDNS name on :443.
-  # "up" = the service answered HTTP at all; auth redirects/denials still mean
-  # the process is alive, so 3xx/401/403 count as up (not 5xx / no-response).
+  # HTTPS services reached by MagicDNS name on :443 (Paperless, OpenWebUI,
+  # Nextcloud, Calibre-Web). Auth redirects and denials prove the process is
+  # alive, so 3xx/401/403 count as up; 5xx and no answer do not.
   http_service_up:
     prober: http
     timeout: 5s

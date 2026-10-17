@@ -1,163 +1,140 @@
-# Runbook: provisioning the off-site backup VPS
+# Runbook: Provision the off-site backup VPS
 
-## Problem
+- **Use when:** building the off-site target, once
+  ([remediation plan](../../docs/platform/remediation-plan.md#off-site-backup)); after it,
+  [`backup/offsite-backup.md`](../backup/offsite-backup.md) takes over.
+- **Duration:** about 1 hour.
+- **Risk:** a REST port reachable from the internet; a repository password that is lost makes the
+  repository unreadable; destroying the volume after the first backup destroys the only off-site
+  copy.
+- **Last exercised:** never
 
-The [off-site backup target decision](../../docs/decisions/offsite-backup-target.md) names a small
-VPS running `rest-server` in append-only mode. Nothing exists yet. This procedure builds it by hand,
-once, and stops at the point where [`backup/offsite-backup.md`](../backup/offsite-backup.md) takes
-over.
-
-By hand and not by Terraform on purpose. The Terraform track is deferred, and a backup target that
-waits for a learning track is a backup target that does not exist. The machine is adopted into
-Terraform state later, which is a smaller job than creating it there now.
+Target per [`offsite-backup-target.md`](../../docs/decisions/offsite-backup-target.md): a small VPS
+running `rest-server` in append-only mode with `--private-repos`, written to by `restic` from vm102
+and lxc250, one repository and one account each. Built by hand; Terraform adopts it later.
 
 ## Preconditions
 
-1. **An account with a European provider.** Hetzner Cloud is the working assumption in the
-   decision; anything with an hourly-billed small instance and an attachable volume fits.
-2. **A payment method.** Single-digit euros per month at 41 GB.
-3. **An SSH key for the VPS**, distinct from the automation key on lxc250. The point of a second
-   site is defeated by a credential that a compromise of the first site already holds.
-4. **A decision on the DNS name**, or none - an IP address in the repository URL works and puts
-   nothing in a public zone.
+- An account with a European provider offering a small hourly-billed instance and an attachable
+  volume (Hetzner Cloud is the working assumption).
+- An SSH key for the VPS, distinct from the Ansible key on lxc250.
+- A DNS name decided, or none: the Tailscale address in the repository URL needs no public zone.
 
-## Commands
+## Steps
 
-Everything below runs on the VPS as root unless stated otherwise.
+Everything runs on the VPS as root unless stated otherwise.
 
-**1. Instance and volume.** Smallest instance; a volume sized for the data plus history. 41 GB of
-source data compresses and deduplicates, so 100 GB is generous and leaves room for the retention
-the server applies.
+1. Create the smallest instance and a volume (100 GB covers the C1 set plus history).
+   Check: `ls /dev/disk/by-id/` lists the volume.
+2. Base packages and SSH hardening before anything is stored.
+   ```bash
+   apt-get update && apt-get -y upgrade
+   apt-get -y install ufw fail2ban rest-server restic apache2-utils
+   sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+   sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+   systemctl restart ssh
+   ```
+   Check: `sshd -T | grep -E '^(passwordauthentication|permitrootlogin)'` prints `no` and
+   `prohibit-password`; a new key-based session works before the old one closes.
+3. Tailscale.
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   tailscale up --advertise-tags=tag:offsite --ssh=false
+   tailscale ip -4
+   ```
+   In the admin console, grant vm102 and lxc250 access to `tag:offsite` on TCP 8000 and nothing
+   else; mirror it in [`tailscale-acl.md`](../../docs/platform/tailscale-acl.md).
+   Check: `tailscale status` shows the node with `tag:offsite`.
+4. Firewall: SSH public, the REST port on the tailnet interface only.
+   ```bash
+   ufw default deny incoming
+   ufw allow OpenSSH
+   ufw allow in on tailscale0 to any port 8000 proto tcp
+   ufw enable
+   ```
+   Check: `ufw status verbose` shows `8000/tcp on tailscale0 ALLOW IN` and no other 8000 rule.
+5. Storage and service account.
+   ```bash
+   mkfs.ext4 /dev/disk/by-id/<volume>          # never a kernel letter
+   mkdir -p /srv/restic
+   echo '/dev/disk/by-id/<volume> /srv/restic ext4 defaults,nofail 0 2' >> /etc/fstab
+   mount /srv/restic
+   useradd --system --home /srv/restic --shell /usr/sbin/nologin restic
+   chown -R restic:restic /srv/restic
+   ```
+   Check: `findmnt -no SOURCE,FSTYPE /srv/restic` shows the volume and `ext4`.
+6. Accounts for the REST server.
+   ```bash
+   htpasswd -B -c /srv/restic/.htpasswd vm102
+   htpasswd -B /srv/restic/.htpasswd lxc250
+   chown restic:restic /srv/restic/.htpasswd && chmod 600 /srv/restic/.htpasswd
+   ```
+   Check: the file has two lines.
+7. The append-only unit, `/etc/systemd/system/rest-server.service`:
+   ```ini
+   [Unit]
+   Description=restic REST server, append-only
+   After=network-online.target tailscaled.service
+   Wants=network-online.target
 
-**2. Base hardening before anything is stored.**
+   [Service]
+   User=restic
+   # --append-only: clients can create and read snapshots, never remove them.
+   # --private-repos: each account is confined to its own path.
+   # Tailscale address only: the port is never public.
+   ExecStart=/usr/bin/rest-server --path /srv/restic --append-only --private-repos \
+     --htpasswd-file /srv/restic/.htpasswd --listen <tailscale-ip-offsite>:8000
+   Restart=on-failure
 
-```bash
-apt-get update && apt-get -y upgrade
-apt-get -y install ufw fail2ban rest-server
-ufw default deny incoming
-ufw allow OpenSSH
-ufw enable
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-systemctl restart ssh
-```
-
-**3. Put it on the tailnet, and keep the REST port off the public internet.** This is the step that
-makes the firewall rule above sufficient: the backup traffic never traverses a public port.
-
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --advertise-tags=tag:offsite --ssh=false
-tailscale ip -4
-```
-
-Add `tag:offsite` to the policy in the Tailscale admin console, granting vm102 and lxc250 access to
-port 8000 and nothing else, and mirror it in
-[`tailscale-acl.md`](../../docs/platform/tailscale-acl.md).
-
-**4. Storage and accounts.**
-
-```bash
-mkfs.ext4 /dev/disk/by-id/<volume>          # the provider names it; never a kernel letter
-mkdir -p /srv/restic
-mount /dev/disk/by-id/<volume> /srv/restic
-echo '/dev/disk/by-id/<volume> /srv/restic ext4 defaults,nofail 0 2' >> /etc/fstab
-useradd --system --home /srv/restic --shell /usr/sbin/nologin restic
-chown -R restic:restic /srv/restic
-```
-
-**5. The REST server, append-only.**
-
-```bash
-htpasswd -B -c /srv/restic/.htpasswd vm102
-htpasswd -B /srv/restic/.htpasswd lxc250
-chown restic:restic /srv/restic/.htpasswd && chmod 600 /srv/restic/.htpasswd
-```
-
-Unit at `/etc/systemd/system/rest-server.service`:
-
-```ini
-[Unit]
-Description=restic REST server, append-only
-After=network-online.target tailscaled.service
-Wants=network-online.target
-
-[Service]
-User=restic
-# --append-only is the control this whole target was chosen for: this listener
-# can create and read snapshots and cannot remove anything, so a credential
-# stolen from the homelab cannot destroy the copy it was stolen to reach.
-# --private-repos keeps each account inside its own path, so a compromise of one
-# source node cannot read the other's.
-# The listen address is the Tailscale one: the port is never public.
-ExecStart=/usr/bin/rest-server --path /srv/restic --append-only --private-repos \
-  --htpasswd-file /srv/restic/.htpasswd --listen <tailscale-ip-offsite>:8000
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl enable --now rest-server
-```
-
-**6. Initialise both repositories - from here, not from the homelab.** `restic init` writes a
-config object, which an append-only account is not allowed to do. This is the one operation that
-belongs on the server side, and forgetting it produces a first backup run that fails with a message
-about a missing repository.
-
-```bash
-sudo -u restic restic -r /srv/restic/vm102  init
-sudo -u restic restic -r /srv/restic/lxc250 init
-```
-
-Record both passwords on paper, in the same envelope as the Ansible vault password. A repository
-whose password is lost is indistinguishable from one that was never taken.
-
-**7. Server-side retention**, since the clients cannot prune. A timer on the VPS, running as
-`restic` with direct filesystem access rather than through the append-only listener:
-
-```bash
-sudo -u restic restic -r /srv/restic/vm102 forget \
-  --keep-daily 7 --keep-weekly 5 --keep-monthly 12 --prune
-```
-
-Retention in time classes and not in a snapshot count, which is the `-mtime +7` lesson
-`postgresql_backup` already paid for: seven *snapshots* and seven *days* are the same number only
-while nothing goes wrong.
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   ```bash
+   systemctl daemon-reload && systemctl enable --now rest-server
+   ```
+   Check: `ss -ltnp | grep 8000` shows `<tailscale-ip-offsite>:8000`, not `0.0.0.0`.
+8. Initialise both repositories on the server; an append-only account cannot write the config
+   object `restic init` creates.
+   ```bash
+   sudo -u restic restic -r /srv/restic/vm102  init
+   sudo -u restic restic -r /srv/restic/lxc250 init
+   ```
+   Record both passwords on paper with the Ansible vault password escrow.
+   Check: `sudo -u restic restic -r /srv/restic/vm102 snapshots` prompts for the password and
+   lists none.
+9. Server-side retention, since clients cannot prune: a timer running as `restic` with direct
+   filesystem access, per repository:
+   ```bash
+   sudo -u restic restic -r /srv/restic/vm102 forget \
+     --keep-daily 7 --keep-weekly 5 --keep-monthly 12 --prune
+   ```
+   Check: `systemctl list-timers` shows the retention timer with a `NEXT` time.
 
 ## Verification
 
-1. `systemctl is-active rest-server` reads `active`, and `ss -ltnp | grep 8000` shows the
-   **Tailscale** address, not `0.0.0.0`. A wildcard bind here would be the platform binding rule
-   broken on the one machine whose job is to survive the others.
-2. From vm102: `restic -r rest:http://<tailscale-ip-offsite>:8000/vm102 snapshots` answers with an
-   empty list rather than an error.
-3. Append-only actually holds. From vm102, after the first snapshot exists:
-   `restic forget --keep-last 1 --prune` has to fail. If it succeeds, `--append-only` is not in
-   effect and the control does not exist - which is worth knowing now rather than after an
-   incident.
-4. From a node that is not vm102 or lxc250, the port does not answer at all.
+1. `systemctl is-active rest-server` is `active`; the listener is the Tailscale address only.
+2. From vm102: `restic -r rest:http://vm102:<password>@<tailscale-ip-offsite>:8000/vm102/ snapshots`
+   returns an empty list, not an error.
+3. After the first snapshot, from vm102: `restic forget --keep-last 1 --prune` fails. If it
+   succeeds, `--append-only` is not in effect.
+4. From a node other than vm102 and lxc250, port 8000 does not answer; from the internet neither.
 
 ## Failure modes
 
-- **`restic init` refused from the homelab.** Expected; see step 6.
-- **The volume is not mounted after a reboot and `rest-server` writes into the mountpoint on the
-  root filesystem.** The `nofail` entry above allows the boot to continue, which is the same
-  trade [KE-15](../../docs/platform/known-errors.md#ke-15) is about: it keeps the machine reachable
-  and lets a mount failure go unnoticed. Check `findmnt /srv/restic` before trusting a run.
-- **Tailscale not up when `rest-server` starts.** The unit orders after `tailscaled` and binds a
-  fixed address, which is exactly the [KE-18](../../docs/platform/known-errors.md#ke-18) shape:
-  ordering is not readiness. If it fails at boot, give it the same gate the fleet uses -
-  `wait-for-tailscale-ip.sh` - rather than a restart loop.
+| Symptom | Cause | Action |
+|---|---|---|
+| `restic init` refused from the homelab | Append-only account | Expected; step 8 runs on the server |
+| `rest-server` writes into `/srv/restic` on the root filesystem | Volume not mounted at boot (`nofail`) | `findmnt /srv/restic` before trusting a run ([KE-15](../../docs/platform/known-errors.md#ke-15)) |
+| `rest-server` fails at boot with `cannot assign requested address` | Started before `tailscaled` had its address ([KE-18](../../docs/platform/known-errors.md#ke-18)) | Add an `ExecStartPre=` gate like `snippets/scripts/wait-for-tailscale-ip.sh`, not a restart loop |
+| Clients time out on 8000 | No `ufw` rule on `tailscale0`, or no ACL grant | Step 4; step 3 grant |
 
 ## Rollback
 
-Destroy the instance and the volume. Nothing on the homelab side depends on the VPS existing: the
-`offsite_backup` role fails its own preflight against an unreachable repository and leaves every
-local copy untouched.
+Destroy the instance and the volume. Nothing in the homelab depends on the VPS while the
+`offsite_backup` role is not deployed. Once the first backup has completed, the volume holds the
+only off-site copy: do not destroy it without a replacement target.
 
-**Abort criteria, since destroying the volume is irreversible:** do not destroy it while it holds
-the only copy of anything. That is not the case during provisioning and becomes the case the moment
-the first backup completes.
+## Background
+
+Retention runs in time classes, not a snapshot count, so a run of failed days does not shorten the
+history. Residual risk accepted in the decision: root on the VPS can still delete the repositories.

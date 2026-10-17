@@ -1,12 +1,7 @@
 ---
-# Per-attribute SMART export on the Proxmox host. Targets the `proxmox` group
-# because every disk is attached to the hypervisor: vm102 reaches its pool disks
-# through by-id passthrough and sees virtio-SCSI devices, whose SMART data
-# is the virtual device's and therefore empty. Reading them anywhere but here is
-# not a configuration choice, it is impossible.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Per-attribute SMART export on the Proxmox host. Every disk is attached to the
+# hypervisor; vm102 sees its passthrough disks as virtio-SCSI devices whose
+# SMART data is empty, so the host is the only place they can be read.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

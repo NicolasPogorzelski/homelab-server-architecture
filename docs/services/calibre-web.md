@@ -1,73 +1,60 @@
-# Calibre-Web (LXC220)
+# Calibre-Web
 
-Calibre-Web is deployed via Docker Compose inside an unprivileged Debian LXC container.
+Web front end for the e-book library on lxc220, with a timer that imports new books into the
+library. Node details: [lxc220](../nodes/lxc220.md).
 
 ## Deployment
 
-- Image: `lscr.io/linuxserver/calibre-web:latest`
-- Compose path (runtime): `/srv/calibreweb/docker-compose.yml`
-- Persistent config: `/srv/calibreweb/config` mounted to `/config`
+- Compose stack in `/srv/calibreweb`, source `docker/calibre-web/docker-compose.yml`; the image is
+  pinned there, synced by `docker_compose_update`
+- Config in `/config` (bind mount), container user from `PUID`/`PGID` in the node's `.env`
+- Published on `127.0.0.1:8083`
 
-## Data / Storage Integration
+## Storage
 
-| Data type | Location | Mount |
+| Data | Mount | Mode |
 |---|---|---|
-| Book library (web UI) | MergerFS/SMB | `mp0: /mnt/smb/books -> /books` (read-only) |
-| Docker engine (containerd, volumes) | aux-disk | `mp1: /mnt/aux-disk/calibreweb -> /var/lib/calibreweb` |
-| Book library (auto-import) | MergerFS/SMB | `mp2: /mnt/smb/books-rw -> /books-rw` (read-write, host-side only) |
+| Library for the web UI | `mp0: /mnt/smb/books -> /books`, bound into the container as `/books:ro` | read-only |
+| Local state | `mp1: /mnt/aux-disk/calibreweb -> /var/lib/calibreweb` | read-write |
+| Library for the import job | `mp2: /mnt/smb/books-rw -> /books-rw`, never seen by the container | read-write |
 
-- Library mount (web UI): `/books` (CIFS-mounted storage from the dedicated storage VM)
-- Mount mode: read-only (`/books:/books:ro`) to enforce least-privilege for the web service
-- Import mount (auto-import job only): `/books-rw` - a separate read-write mount of the same Books share, used exclusively by the host-side import job (see [Auto-Import](#auto-import)), never by the container
-
-Important:
-- The Calibre-Web container sees the library read-only and never modifies library files.
-- The only writer to the library is the systemd-timed import job on the LXC host (not the container).
-- No database or stateful workload is written by the container on CIFS.
+The container never writes the library. The only writer is the import job on the node.
 
 ## Auto-Import
 
-Ebooks dropped into `/books-rw/_import` (over SMB) are imported into the library automatically.
+Books dropped into `/books-rw/_import` over SMB are added to the library.
 
-- **Mechanism:** Ansible role `calibre_importer` deploys `/usr/local/bin/calibre-import.sh` and a `calibre-import.timer` that polls every 2 minutes (polling, not inotify - inotify does not observe writes made by the SMB server).
-- **CIFS / SQLite-locking constraint:** `metadata.db` lives on CIFS. Calibre opens it with `BEGIN EXCLUSIVE TRANSACTION` (a POSIX byte-range lock the SMB client does not translate reliably), so `calibredb add` straight onto the CIFS copy fails with `apsw.BusyError: database is locked` - even with the container stopped. Verified: the identical add against a local copy of `metadata.db` succeeds. The CIFS mount carries no `nobrl` option, which would otherwise suppress the byte-range locks.
-- **Workaround the script uses:** stop `calibre-web` (consistent DB snapshot, no concurrent writer) -> copy `metadata.db` to a local working library under `/tmp` -> `calibredb add` there -> `tar` the new book directories back onto the CIFS library (plain copy, no byte-range locks) -> atomically swap the updated `metadata.db` in -> restart `calibre-web` (guaranteed via an EXIT trap).
-- **On success** the source file is deleted (the MergerFS pool is near full - no second copy is kept); on failure it is quarantined under `/books-rw/_import/.failed`.
+- Role `calibre_importer` installs `calibre`, `/usr/local/bin/calibre-import.sh` and
+  `calibre-import.timer`, which polls every 2 minutes; inotify does not see writes made by the SMB
+  server.
+- `metadata.db` lives on CIFS, and `calibredb add` on it fails with `apsw.BusyError: database is
+  locked`, because Calibre's exclusive transaction takes byte-range locks the SMB client does not
+  translate. The same add against a local copy succeeds.
+- The script therefore stops `calibre-web`, copies `metadata.db` to a local working library under
+  `/tmp`, adds the books there, copies the new book directories back with `tar`, swaps the updated
+  `metadata.db` in atomically, and starts `calibre-web` again from an EXIT trap.
+- Success deletes the source file; failure moves it to `/books-rw/_import/.failed`.
+- The script exits 1 unless `/books-rw` is a CIFS mount, so a missing mount raises
+  `SystemdUnitFailed` ([KE-15](../platform/known-errors.md#ke-15)).
 
-## Security / Exposure
+Decision and alternatives: [Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md).
 
-- Loopback-only binding: `127.0.0.1:8083 -> container:8083`
-- No LAN exposure.
-- No public ingress / no router port forwarding.
-- Remote access is provided exclusively via Tailscale (identity-based overlay).
+## Access Model
 
-## Identity / Permissions
-
-- Container process UID/GID configured via:
-  - `PUID=1000`
-  - `PGID=1000`
-- Library is mounted read-only via CIFS.
-- No stateful or write-heavy workload is stored on network mounts.
-- Ownership consistency is preserved across unprivileged LXC + CIFS boundaries.
-
-## Access Model (Zero Trust)
-
-- Service acts as a read-only consumer node in the platform.
-- No service-to-service provider role.
-- Network segmentation is enforced via Tailscale ACL (node tags + policy rules).
-- See: [docs/platform/tailscale-acl.md](../platform/tailscale-acl.md)
+- Calibre-Web binds loopback and is published through `tailscale serve` on 443:
+  `https://calibreweb.<tailnet-id>.ts.net` ([decision](../decisions/loopback-tailscale-serve.md)).
+- No LAN or public path; `lan_guard` drops new inbound LAN connections on lxc220.
+- Grants: the admin workstations, the client notebook, the e-book reader and the monitoring probe
+  ([tailscale-acl.md](../platform/tailscale-acl.md)). The service reaches nothing on the tailnet
+  itself.
 
 ## Failure Impact
 
-If the CIFS mount (`/books`) becomes unavailable:
-
-- Calibre-Web may start but show an empty or inaccessible library.
-- No data loss occurs due to read-only mount configuration.
-- Monitoring should detect mount degradation.
+- `/books` missing: Calibre-Web starts with an empty or unreadable library; no data loss, the mount
+  is read-only.
+- lxc220 down: no web access; dropped files wait in `_import`.
 
 ## Related Documents
 
-- [LXC220 Node](../nodes/lxc220.md)
-- [ADR: Calibre Auto-Import / SQLite-on-CIFS](../decisions/calibre-cifs-sqlite-import.md)
-- [Storage Design](../platform/storage-design.md)
-- [Tailscale ACL](../platform/tailscale-acl.md)
+- [lxc220](../nodes/lxc220.md)
+- [Storage design](../platform/storage-design.md)

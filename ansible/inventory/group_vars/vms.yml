@@ -1,5 +1,6 @@
 ---
-# Break-glass admin public key(s) for VMs (public key, not secret).
+# Break-glass public keys for the VMs (public, not secret). admin-workstation is
+# the admin desktop and admin-laptop the admin notebook in hosts.yml.example.
 breakglass_pubkeys:
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJm20IWwM60DwGrqfYnvvozMGL1Jl7elUUm1iGEw02N6 admin-workstation"
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMFCoJ/egMG2QTijY+1YdMWkZundShlfWJJtzc2Dn3cy admin-laptop"

@@ -1,8 +1,7 @@
 # {{ ansible_managed }}
-# KE-9 remediation: gate PostgreSQL startup on the Tailscale IP being present.
-# postgresql@15-main binds listen_addresses including the Tailscale IP directly;
-# at boot it must not start before tailscaled has assigned that IP, otherwise the
-# bind is silently skipped and only loopback is served (EADDRNOTAVAIL).
+# Gate PostgreSQL startup on the Tailscale IP being present (KE-9). Started before
+# tailscaled assigns it, the bind fails with EADDRNOTAVAIL and only loopback is
+# served.
 [Unit]
 Wants=tailscaled.service
 After=tailscaled.service

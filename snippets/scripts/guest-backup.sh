@@ -2,62 +2,32 @@
 #
 # Full guest backup of every VM and LXC on the Proxmox host, via vzdump.
 #
-# Deployed by the guest_backup role. Edit this file, never the copy on the node.
+# Deployed by the guest_backup role; edit this file, never the node copy.
 #
-# Why this exists: measured 2026-08-20, there was no guest backup at all.
-# /etc/pve/jobs.cfg did not exist, the vzdump cron file held no entry, and the
-# only artefacts in the dump directory were two log files from February. Eleven
-# machines, none of them recoverable.
-#
-# The gap lasted so long because the existing backups answered the word
-# "backup". pg-backup.sh and mariadb-backup.sh run nightly and are alerted on.
-# They restore data into a machine that already exists, and Ansible restores
-# configuration. Paperless' document index, Grafana's dashboards and its
-# first-boot admin password, and Nextcloud's app configuration are in neither.
-# Every guest root disk also lives in one thin pool on one six-year-old SSD
-# behind an HBA with unexplained boot-time I/O errors (KE-14), so all eleven
-# machines share one failure domain.
-#
-# runbooks/platform/lxc250-rebuild.md is the clearest sign: a rebuild runbook
-# exists because there was no restore path. This script creates one.
+# The database dumps restore data into a machine that already exists, and Ansible
+# restores configuration; state such as Paperless' index, Grafana's dashboards
+# and Nextcloud's app configuration is in neither. All 9 guest root disks share
+# one thin pool on the boot SSD (KE-14), so they share one failure domain.
+# Restore procedure: runbooks/platform/guest-backup-restore.md.
 
 set -euo pipefail
 
 # === Configuration ===
 
-# A generic mountpoint, deliberately not the physical target. The host binds
-# whatever disk is currently in that role onto this path, so migrating from the
-# interim disk to the replacement hardware is an fstab change and not a code
-# change. It also keeps the real disk label out of a public repository, the same
-# reason /etc/snapraid.conf's device lines stay hand-written.
+# A generic mountpoint, not the physical target: swapping the backup disk is an
+# fstab change, and the real disk label stays out of the public repository.
 BACKUP_DIR="/mnt/vzdump"
 
-# Guests to back up, most-valuable first so that a run aborted halfway still
-# leaves the irreplaceable ones done. lxc250 leads: it is the control node, and
-# it holds the only copy of the real inventory and the Ansible SSH key.
-#
-# VM100 comes last and contributes its root disk only: its 300 GB data disk on
-# the auxiliary disk carries `backup=0`, and the size guard below refuses the
-# guest rather than pull that disk in if the flag is ever lost. The root disk
-# lives on the boot SSD with every other guest, and without it a rebuild of the
-# host would have to reinstall the GPU node by hand.
-#
-# lxc240 was missing from this array from the first version until 2026-09-01.
-# That was not a decision - it went unnoticed. `pct list`
-# is the authority on which guests exist; this line is a hand-maintained copy
-# of it and nothing compares the two. The same shape once left lxc250 out of
-# the fstrim array and out of `hosts: all`.
-#
-# Recheck this line against `pct list` when the fleet changes. lxc240 is not
-# listed because the container no longer exists; its archives stay in the dump
-# directory, because vzdump prunes per guest and only within that guest's run.
+# Guests to back up, most valuable first, so an aborted run still has the
+# irreplaceable ones. lxc250 leads: it holds the only copy of the real inventory
+# and the Ansible SSH key. vm100 contributes its root disk only; its data disk
+# carries `backup=0`, and the size guard below refuses the guest if that flag is
+# ever lost. This list is a hand-maintained copy of `qm list` / `pct list`:
+# recheck it when the fleet changes.
 GUESTS=(250 260 210 211 200 220 230 102 100)
 
-# Retention is expressed in time, not in a number of files. The distinction is
-# not pedantic: the PostgreSQL retention reads `-mtime +7`, which means seven
-# DAYS, so on a host that sleeps at night a week of failures leaves nothing
-# behind. vzdump's own pruner takes the same shape - these keep counts are
-# per-class, so keep-weekly=8 is eight weeks, not eight files.
+# Keep counts are per class, in time: keep-weekly=8 is eight weeks, not eight
+# files.
 PRUNE="keep-daily=3,keep-weekly=8,keep-monthly=6"
 
 # A VM disk larger than this without `backup=0` stops that guest's backup. The
@@ -65,8 +35,8 @@ PRUNE="keep-daily=3,keep-weekly=8,keep-monthly=6"
 # one lost flag would otherwise fill the target in a single run.
 MAX_DISK_GB=128
 
-# zstd, not gzip or lzo. It reaches roughly the same ratio as gzip at several
-# times the speed, and the run happens while the host is awake and in use.
+# zstd: about gzip's ratio at several times the speed; the run happens while the
+# host is in use.
 COMPRESS="zstd"
 
 TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
@@ -74,14 +44,9 @@ PROM_FILE="${TEXTFILE_DIR}/guest-backup.prom"
 
 # === Metrics ===
 #
-# Written whether the run succeeded or not. A collector that only emits on
-# success cannot distinguish "failed" from "never ran", which is the same
-# blindness LvmThinMetricsStale was added to cover.
-#
-# Note what these metrics can and cannot see. They prove a run happened and how
-# it ended. They do not prove the archives are restorable - only an actual
-# restore does that, which is why runbooks/platform/guest-backup-restore.md
-# carries a recorded-date discipline, the same one pg-restore.md uses.
+# Written whether the run succeeded or not, so "failed" and "never ran" stay
+# distinguishable. They prove a run happened and how it ended, not that the
+# archives restore; that is runbooks/platform/guest-backup-restore.md.
 
 START_TS="$(date +%s)"
 FAILED=0
@@ -113,12 +78,10 @@ METRICS
   METRICS_WRITTEN=1
 }
 
-# A run that ends early - a failed pre-flight check, an error under set -e such
-# as the size guard of 2026-10-12, or the 23:30 shutdown stopping the unit -
-# would otherwise leave the previous run's metric in place, failed guests 0
-# included, and GuestBackupPartial could not see it. Every guest the run did not
-# finish counts as failed. bash runs no EXIT trap on a fatal signal, so TERM and
-# INT are turned into an ordinary exit first.
+# A run that ends early (failed pre-flight, an error under set -e, the nightly
+# shutdown stopping the unit) would otherwise leave the previous metric in place
+# and hide from GuestBackupPartial: every unfinished guest counts as failed. bash
+# runs no EXIT trap on a fatal signal, so TERM and INT become an ordinary exit.
 on_exit() {
   local rc=$?
   if [ "$METRICS_WRITTEN" -eq 0 ]; then
@@ -132,14 +95,9 @@ trap 'exit 130' INT
 
 # === Pre-flight checks ===
 
-# Test the mount's identity, not merely that the path exists.
-#
-# This is the KE-7 failure class and it is why the check is first. If the backup
-# disk fails to mount, /mnt/vzdump still exists as an empty directory on
-# pve-root, `[ -d ]` passes, and vzdump happily writes ten gigabytes per run into
-# the thin pool on the boot SSD - filling the disk that carries every guest, in
-# order to back up those guests. The `appdata` storage had exactly this defect
-# until `is_mountpoint 1` was set on 2026-08-17.
+# Test the mount, not the path: without the backup disk, /mnt/vzdump is an empty
+# directory on pve-root and vzdump would fill the boot SSD that carries every
+# guest. See KE-7.
 if ! mountpoint -q "$BACKUP_DIR"; then
   echo "ERROR: ${BACKUP_DIR} is not a mountpoint - refusing to write backups onto the root filesystem" >&2
   exit 1
@@ -183,23 +141,15 @@ for id in "${GUESTS[@]}"; do
       continue
     fi
   fi
-  # --mode snapshot takes an LVM-thin snapshot and backs that up, so the guest
-  # keeps running. `stop` would be consistent but takes everything down once a
-  # week; `suspend` freezes the guest for the whole run. Snapshot is the only
-  # one of the three compatible with a host that is in use.
+  # --mode snapshot keeps the guest running; `stop` takes it down and `suspend`
+  # freezes it for the whole run.
   #
-  # A failing guest must not abort the loop: the guests are ordered by value, and
-  # stopping at the first error would sacrifice every guest after it to a fault
-  # in one. `set -e` is suspended for the call and the failure recorded instead.
+  # A failing guest must not abort the loop and sacrifice every guest after it:
+  # `set -e` is suspended for the call and the failure recorded instead.
   #
-  # No --notes-template here, and it must not be re-added while the destination
-  # is a dumpdir. PVE/VZDump/Common.pm declares that option with
-  # `requires => 'storage'`, so passing it alongside --dumpdir fails parameter
-  # verification before any guest is touched: "400 Parameter verification
-  # failed. storage: missing property required by 'notes-template'". The notes
-  # are written next to the archive by the storage layer, which a dumpdir does
-  # not go through, so the option could never have done anything here anyway.
-  # `protected` carries the same requirement.
+  # No --notes-template or --protected: vzdump declares both with
+  # `requires => 'storage'`, so either fails parameter verification alongside
+  # --dumpdir before any guest is touched.
   set +e
   vzdump "$id" \
     --mode snapshot \

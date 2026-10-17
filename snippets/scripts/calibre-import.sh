@@ -2,36 +2,19 @@
 #
 # calibre-import.sh - auto-import dropped ebooks into the Calibre library.
 #
-# Deployed on LXC220 by the Ansible role `calibre-importer`, triggered by the
-# systemd timer `calibre-import.timer` (polling, NOT inotify: the library is a
-# CIFS network mount and inotify does not see writes made by the SMB server).
+# Deployed on lxc220 by the calibre_importer role, run by calibre-import.timer
+# (polling: inotify does not see writes made by the SMB server).
 #
-# CIFS / SQLite locking (the core constraint):
-#   metadata.db lives on a CIFS mount (//VM102/Books). Calibre opens the DB with
-#   `BEGIN EXCLUSIVE TRANSACTION`, i.e. a POSIX byte-range lock that the SMB
-#   client does not translate reliably -> `apsw.BusyError: database is locked`,
-#   even with calibre-web stopped. Verified: a `calibredb add` straight onto the
-#   CIFS copy fails, the identical add against a LOCAL copy of metadata.db
-#   succeeds. So we never let SQLite touch the CIFS file:
-#     1. stop calibre-web (consistent DB snapshot + no concurrent writer)
-#     2. copy metadata.db to a LOCAL working library under /tmp
-#     3. `calibredb add` into the LOCAL library (book files + DB rows land there)
-#     4. push the new book directories back onto the CIFS library (plain tar,
-#        no byte-range locks) and atomically swap the updated metadata.db in
-#     5. delete each source file ONLY now - after it is durably on the share
-#     6. restart calibre-web (guaranteed via an EXIT trap)
-#
-# Flow: find *settled* ebooks in $IMPORT_DIR; a file that fails `calibredb add`
-# is quarantined under $FAILED_DIR; a file that imports successfully is deleted
-# only AFTER the new books are written back to the share (the MergerFS pool is
-# near full, so we keep no second copy). If the run is interrupted before that
-# write-back, the sources stay in $IMPORT_DIR and are retried on the next run
-# (`calibredb --automerge ignore` makes a retry idempotent) - so a crash mid-run
-# never loses a book.
-#
-# Paths fixed by homelab convention: the Proxmox host binds the rw CIFS mount
-# (//VM102/Books) into the container as mp2 -> /books-rw.
-#
+# SQLite byte-range locks fail on CIFS ("database is locked"), so metadata.db is
+# never written in place (KE-1, docs/decisions/calibre-cifs-sqlite-import.md):
+#   1. stop calibre-web, copy metadata.db to a local working library under /tmp
+#   2. `calibredb add` into the local library
+#   3. tar the new book directories back to the share, swap metadata.db in
+#   4. only then delete the sources; calibre-web restarts from an EXIT trap
+# Files that fail to import are quarantined in $FAILED_DIR. An interrupted run
+# leaves the sources in $IMPORT_DIR for the next run (--automerge ignore keeps
+# the retry idempotent). The host binds //VM102/Books into the container as
+# mp2 -> /books-rw.
 set -euo pipefail
 
 LIBRARY="/books-rw"                 # rw view of the Calibre library (metadata.db lives here, on CIFS)
@@ -45,14 +28,9 @@ WORK=""                             # local working library (mktemp, set below)
 exec 9>"${LOCK}"
 flock -n 9 || { echo "another import run is active - exiting"; exit 0; }
 
-# Verify the library is the CIFS share itself, not the directory underneath it.
-# `mountpoint -q` is NOT sufficient: the Proxmox host binds /mnt/smb/books-rw into
-# the container as mp2, and that bind is a mountpoint even when the host-side CIFS
-# mount failed - in which case the bind exposes an empty, host-root-owned directory
-# on pve-root. The guard then passed and the script died on `mkdir` (Permission
-# denied) every 2 min for a month, unnoticed. Test the mount's identity, not its
-# existence: a healthy bind of a CIFS mount reports fstype `cifs` inside the
-# container; the failed one reports `ext4`.
+# Test the mount's identity, not its existence: the mp2 bind is a mountpoint even
+# when the host-side CIFS mount failed, and then shows an empty ext4 directory on
+# pve-root. A healthy bind reports fstype `cifs`. See KE-15.
 fstype="$(findmnt -no FSTYPE "${LIBRARY}" 2>/dev/null || true)"
 if [ "${fstype}" != "cifs" ]; then
     echo "library ${LIBRARY} is not a CIFS mount (fstype='${fstype:-none}') - host share not mounted" >&2
@@ -121,10 +99,8 @@ if [ "${#imported_srcs[@]}" -gt 0 ]; then
     cp "${WORK}/metadata.db" "${LIBRARY}/.metadata.db.new"
     mv -f "${LIBRARY}/.metadata.db.new" "${LIBRARY}/metadata.db"
 
-    # Durable now: the books are on the share AND referenced by the swapped-in DB.
-    # Only here is it safe to delete the sources (no second copy is kept). Had the
-    # script died before this point, `set -e` would have aborted with the sources
-    # still in $IMPORT_DIR - they would simply be retried on the next run.
+    # Durable now: the books are on the share and referenced by the swapped-in DB,
+    # so the sources can go (no second copy is kept).
     for f in "${imported_srcs[@]}"; do
         rm -f "${f}"
         echo "source removed (durably imported): ${f}"

@@ -4,10 +4,9 @@
 compose_projects:
   - { dest: /opt/paperless, src: paperless }
 
-# Ships this node's journal to the receiver on lxc200. EXERCISE, not a control
-# this platform needs - see docs/decisions/exercise-scope-before-terraform.md.
-# Two nodes opt in rather than ten: one sender demonstrates nothing about
-# correlation and ten would be the noise the assessment warned about.
+# Ships this node's journal to the receiver on lxc200. Exercise, not a needed
+# control (docs/decisions/exercise-scope-before-terraform.md). Two nodes opt in:
+# enough to correlate across senders without shipping every journal.
 journal_upload_enabled: true
 
 # === sshd bound to the Tailscale address only ===

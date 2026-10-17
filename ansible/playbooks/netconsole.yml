@@ -1,11 +1,7 @@
 ---
-# Only vm100 for now. It is the node with an unexplained freeze (KE-20) and no
-# rollback path, so it is the one where the next occurrence must leave evidence.
-# The role is node-agnostic; widening it is a decision about where kernel logs
-# should travel, not a change to the role.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# vm100 only: it is the node with an unexplained freeze (KE-20), where the next
+# occurrence must leave kernel evidence. The role is node-agnostic; adding
+# nodes is a decision about where kernel logs travel, not a role change.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

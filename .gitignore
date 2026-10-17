@@ -33,12 +33,8 @@
 **/db.sqlite3*
 **/data/
 **/backup/
-# `**/backup/` is aimed at backup *data* directories anywhere in the tree. It also
-# swallowed runbooks/backup/, so the off-site backup runbook written on 2026-09-09 was
-# never committed while three index files linked to it - green locally, because the
-# checks skip what git ignores, and three broken links on a clean CI checkout. A
-# negation on the file alone cannot work: git does not re-include a file whose parent
-# directory is excluded, so the directory is what has to come back.
+# `**/backup/` targets backup data directories; the runbook directory is re-included
+# (git cannot re-include a file whose parent directory is excluded).
 !runbooks/backup/
 
 # =====================================================
@@ -93,12 +89,8 @@ docker/monitoring/alertmanager/alertmanager.yml
 # Ansible - real inventory (contains Tailscale IPs)
 # =====================================================
 
-# The pattern is deliberately wider than the file. On 2026-08-20 a pre-change
-# backup written as hosts.yml.bak-20260820 sat untracked in the working tree on
-# the control node, holding every Tailscale address and the LAN address, because
-# the rule below used to name the exact filename. Nothing on that node runs the
-# pre-commit gate, so `git add -A` there was the whole distance to publishing it.
-# The example file is excluded from the exclusion - it is the sanitized one.
+# Wider than the file on purpose, so backup copies such as hosts.yml.bak-* stay out
+# too. The sanitized example is re-included.
 ansible/inventory/hosts.yml*
 !ansible/inventory/hosts.yml.example
 # ansible-lint's cache, written when validate-repo.sh lints locally
@@ -114,18 +106,15 @@ ansible/.ansible/
 .aider.tags.cache.v4/
 
 # =====================================================
-# Claude Code (default-deny: local state ignored, shared assets opted in)
+# Claude Code: CLAUDE.md, .claude/settings.json and two review agents are tracked;
+# machine-specific settings, session files and patches stay local
 # =====================================================
-# `.claude/*` excludes the *contents*, not the directory itself. That distinction
-# matters: excluding `.claude/` outright would stop git descending into it, and a
-# later `!.claude/...` negation would silently have no effect (see gitignore(5),
-# "It is not possible to re-include a file if a parent directory is excluded").
-# Verified empirically before choosing this form. New files the tool writes here
-# are ignored by default; anything meant to be versioned is opted in below.
-
 .claude/*
-!.claude/skills/
+!.claude/settings.json
 !.claude/agents/
+.claude/agents/*
+!.claude/agents/state-claims.md
+!.claude/agents/prose-tics.md
 
 # =====================================================
 # Private sanitization legend (placeholders -> real values, NEVER COMMIT)

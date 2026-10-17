@@ -3,15 +3,12 @@
 # storage-permissions.sh - verify (and optionally repair) the filesystem side of
 # the VM102 share model.
 #
-# Why this exists: smb.conf documents what Samba enforces when Samba is involved.
-# It says nothing about what is actually on the disks. Between those two things a
-# gap opened, and it went unnoticed from the pool's creation on 2025-12-26 until
-# 2026-08-16 - see docs/platform/storage-permissions.md for the full account.
+# smb.conf governs access through Samba, not what is on the disks; this checks the
+# filesystem side. See docs/platform/storage-permissions.md.
 #
-# The check runs per branch, never against /mnt/mergerfs. MergerFS answers a stat
-# from the first branch that holds the path (category.search=ff), so the union
-# view shows one of six disks and hides disagreement between them. That is
-# precisely how the original defect stayed invisible.
+# The check runs per branch, never against /mnt/mergerfs: MergerFS answers a stat
+# from the first branch holding the path (category.search=ff), which hides
+# disagreement between branches.
 #
 # Modes:
 #   --check     report deviations, exit 1 if any were found (default)
@@ -47,28 +44,15 @@ done < <(cat "$CONF" "${CONF%.conf}.local.conf" 2>/dev/null | sed 's/#.*//')
 # not carried in the public repository. Ansible never writes or removes it, so a
 # tree listed only there keeps its protection without being documented publicly.
 
-# The branch list is read from the running mergerfs instance, not from a config
-# file and not from fstab. Three reasons, in order of weight:
-#   1. Add a disk to the pool and the check covers it on the next run. A hand-kept
-#      list would have to be remembered at exactly the moment everyone is busy
-#      moving data - which is how the branch that broke this model got missed.
-#   2. The control file reports what is mounted; fstab reports what was intended.
-#   3. The repository must not carry the real disk labels (validate-repo.sh
-#      Check 18), so the list cannot live in the Ansible role either.
+# The branch list is read from the running mergerfs instance, not a config file or
+# fstab: a new disk is covered on the next run, the control file reports what is
+# mounted rather than intended, and the real disk labels stay out of the repository.
 branch_spec=$(getfattr --only-values -n user.mergerfs.branches "${POOL}/.mergerfs" 2>/dev/null || true)
 [ -n "$branch_spec" ] || { echo "cannot read mergerfs branches from ${POOL}/.mergerfs" >&2; exit 2; }
 
-# Two guards on one line of parsing, both earned the hard way on 2026-08-16.
-#
-# `printf '%s\n'` and the `|| [ -n "$b" ]`: getfattr --only-values emits no
-# trailing newline, and `while read` discards a final unterminated line without a
-# word of complaint. The first version of this script therefore checked five of
-# six branches and reported "matrix intact" - skipping precisely the branch whose
-# missing setgid bit this whole role exists to catch. A checker that is silently
-# blind to the thing it checks is the exact defect it was written to find.
-#
-# The count assertion below is the second guard: it makes the omission loud
-# rather than trusting that the parsing stays correct.
+# getfattr --only-values emits no trailing newline, and `while read` silently drops
+# a final unterminated line, which would skip the last branch. `printf '%s\n'` and
+# `|| [ -n "$b" ]` prevent that; the count assertion below makes any loss loud.
 branches=()
 while IFS= read -r b || [ -n "$b" ]; do
   [ -n "$b" ] && branches+=("${b%%=*}")
@@ -81,16 +65,13 @@ if [ "${#branches[@]}" -ne "$expected" ]; then
   exit 2
 fi
 
-# Violations are counted per kind, not per path. Six branches times twelve paths
-# times five kinds would be 360 Prometheus series to answer one question: is the
-# model intact. The per-path detail goes to stdout, which the timer captures into
-# the journal, so it is there when the answer is no.
+# Violations are counted per kind, not per path, to keep Prometheus series few; the
+# per-path detail goes to stdout and the journal.
 declare -A count=([owner]=0 [group]=0 [dir_mode]=0 [file_mode]=0 [setgid]=0)
 findings=""
 
-# find's -perm /MASK matches "any of these bits set". Turning a maximum into the
-# bits that must NOT appear is therefore the whole trick: everything outside the
-# allowance is a violation, and one find call finds all of it.
+# find's -perm /MASK matches "any of these bits set", so a maximum mode becomes the
+# mask of bits that must not appear.
 forbidden() { printf '%04o' $(( 07777 & ~8#$1 )); }
 
 for branch in "${branches[@]}"; do
@@ -100,10 +81,8 @@ for branch in "${branches[@]}"; do
     [ -d "$path" ] || continue
 
     declare -A hit=()
-    # A literal "-" means the owner is deliberately not pinned. It applies to a
-    # share without `force user`, where files legitimately belong to whichever
-    # account wrote them. Checking it would produce a violation count that never
-    # reaches zero, and a check that is always red is not read.
+    # A literal "-" leaves the owner unpinned, for a share without `force user`
+    # where files belong to whichever account wrote them.
     if [ "$owner" = "-" ]; then
       hit[owner]=0
     else
@@ -132,9 +111,8 @@ for branch in "${branches[@]}"; do
       find "$path" -type d -perm "/$(forbidden "$dir_max")" -exec chmod "$dir_max" {} +
     [ "${hit[file_mode]}" -gt 0 ] && \
       find "$path" -type f -perm "/$(forbidden "$file_max")" -exec chmod "$file_max" {} +
-    # Deliberately g+s and not the absolute mode: a directory can be missing the
-    # setgid bit while its other bits are stricter than the maximum, and applying
-    # the maximum would then hand out access the check never asked for.
+    # g+s, not the absolute mode: applying the maximum to a stricter directory
+    # would widen access.
     [ "${hit[setgid]}" -gt 0 ] && find "$path" -type d ! -perm -g+s -exec chmod g+s {} +
   done
 done
@@ -146,8 +124,7 @@ done
 
 if [ "$mode" = metrics ]; then
   mkdir -p "$TEXTFILE_DIR"
-  # Written to a temporary file and moved into place: node_exporter reads this
-  # directory every 15 s and would otherwise be able to read a half-written file.
+  # Temporary file and rename, so node_exporter never reads a half-written file.
   tmp=$(mktemp "${PROM_FILE}.XXXXXX")
   {
     echo "# HELP storage_permission_violations Objects deviating from the target matrix on vm102."

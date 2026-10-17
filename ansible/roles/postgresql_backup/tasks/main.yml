@@ -15,9 +15,8 @@
     group: postgres
     mode: "0755"
 
-# The cron entry is removed, not merely superseded: if both survived, a night on
-# which the host stayed up would fire the dump twice. It also has to go because a
-# cron failure is invisible to monitoring, whereas a failed timer unit now raises
+# The legacy cron entry is removed: with both present the dump would run twice, and
+# a cron failure is invisible to monitoring while a failed unit raises
 # SystemdUnitFailed.
 - name: Remove the legacy pg-backup cron entry
   ansible.builtin.cron:

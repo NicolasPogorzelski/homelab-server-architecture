@@ -1,278 +1,166 @@
 # Runbook: Guest backup and restore (vzdump)
 
-## Problem
+- **Use when:** deploying or changing the guest backup, `GuestBackupStale`, `GuestBackupPartial` or
+  `GuestBackupMetricsMissing` fires, a guest has to be restored, or the quarterly restore test is
+  due.
+- **Duration:** 15 minutes to deploy; a test restore 10-20 minutes; a recovery restore depends on
+  the archive size.
+- **Risk:** `pct restore --force` / `qmrestore --force` destroy the existing guest; a restore into
+  `local-lvm` can push the thin pool past its critical threshold; a restored clone that boots on the
+  network takes over the original's Tailscale identity.
+- **Last exercised:** 2026-08-21, pass (lxc260 restored into ID 999, not started, verified through
+  `pct mount`).
 
-Measured 2026-08-20: the platform had no guest backup at all. `/etc/pve/jobs.cfg` did not exist,
-`/etc/cron.d/vzdump` held no entry, and the only artefacts under `/var/lib/vz/dump/` were two log
-files from 2026-02-27. Eleven machines, none of them restorable.
-
-The gap lasted because the backups that do exist look like coverage. `pg-backup.sh` and
-`mariadb-backup.sh` run nightly and both raise a staleness alert, so the word "backup" was
-answered - by two jobs that dump data. Neither of them produces a machine. Ansible produces
-configuration, not state: the Paperless document index, Grafana's dashboards and its first-boot
-admin password, and Nextcloud's app configuration appear in no role.
-
-The exposure is concentrated rather than spread. Every VM and LXC root disk lives in the `pve/data`
-thin pool on a single Samsung 840 EVO with 58,540 power-on hours, attached to the LSI SAS2008 HBA
-that produces the unexplained boot-window I/O errors of
-[KE-14](../../docs/platform/known-errors.md#ke-14). One disk, eleven machines, no copy.
-
-The clearest evidence that this was understood and unaddressed is
-[`lxc250-rebuild.md`](lxc250-rebuild.md): a rebuild runbook exists for the control node precisely
-because there is no restore path. This job is what turns that rebuild into a restore.
-
-## Solution
-
-A weekly `vzdump --mode snapshot` of nine guests, written by a systemd timer to a generic
-mountpoint that the host binds to whichever disk currently holds the backup role, pruned on a
-time-expressed schedule, and exposed to Prometheus through a textfile metric so a silent stop
-raises `GuestBackupStale`.
-
-VM100 joined on 2026-10-12 with its root disk only: its 300 GB data disk carries `backup=0`, and the
-script skips any VM that would pull in a disk over 128 GB without that flag. Until then it was
-excluded deliberately, on the reasoning below, which held while its root disk was the least
-valuable copy on the platform and stopped holding once the boot SSD was due for replacement:
-it is 25 GB of root plus 18 GB of Jellyfin metadata and transcoding
-cache, reproducible from its compose stack in minutes, and its media lives on vm102. Including it
-would roughly triple a run to protect the guest that needs it least.
-
-lxc240 joined the list on 2026-09-01, having been absent since the job was written. That was an
-oversight rather than an exclusion. Compare this count against `pct list` whenever the fleet
-changes; nothing does it for you.
-
-### Why the target is a generic path
-
-`BACKUP_DIR` is `/mnt/vzdump`, never a physical disk. The host binds the current target onto
-that path, so changing disks is an fstab edit and nothing else. Two reasons this matters here
-beyond tidiness:
-
-- The backup target is expected to change. The interim target is the auxiliary disk; replacement
-  hardware is on order. A path baked into a script would make that migration a code change with a
-  review, on the day somebody is already handling disks.
-- The real disk label stays out of a public repository, the same reason `/etc/snapraid.conf`'s
-  device lines remain hand-written.
+The [`guest_backup`](../../ansible/roles/guest_backup/) role deploys
+`snippets/scripts/guest-backup.sh` with a systemd timer on the Proxmox host (schedule in the role
+defaults, `Persistent=true`). It runs `vzdump --mode snapshot` for nine guests (`GUESTS` in the
+script: 250 260 210 211 200 220 230 102 100) into `/mnt/vzdump`, prunes per guest, and writes
+`guest_backup_*` metrics to the node_exporter textfile directory. The same role deploys the daily
+host configuration backup (see [platform-restore.md](platform-restore.md)).
 
 ## Preconditions
 
-The role asserts these and refuses to deploy if they are missing.
+The role asserts 1 to 3 and refuses to deploy without them.
 
-1. **The Proxmox host is in the Ansible inventory** as the `proxmox` group. `vzdump` is a
-   host-level tool, so this playbook targets the hypervisor and nothing else. Until that group
-   exists, `ansible-playbook` prints `skipping: no hosts matched` and exits 0 - reporting success
-   while doing nothing.
-2. **`/mnt/vzdump` is a mountpoint**, and its backing device is not the root device. Both
-   conditions are checked, because a bind mount of a local directory satisfies the first and fails
-   the purpose. If the backup disk does not mount, the path still exists as an empty directory on
-   `pve-root` and `vzdump` would write ten gigabytes a week into the thin pool on the boot SSD -
-   filling the disk that carries every guest, in order to back up those guests. That is the KE-7
-   failure class, and it is why the role asserts the mount instead of creating the directory.
-3. **At least 25 GB free** on the target - two full runs. `vzdump` prunes only after a successful
-   write, so a target with no room produces a failed run rather than a rotated one, and the newest
-   backup stays whatever it happened to be.
-4. **Every passthrough disk on a VM carries `backup=0`.** The role cannot assert this one, and it is
-   the precondition with the largest blast radius. For a VM, `vzdump` backs up *all* attached
-   disks; it is the guest config, not the backup job, that decides what is in scope. vm102 has
-   seven `by-id` passthrough disks - the SnapRAID array - and without `backup=0` a run announces
-   `0% (519.4 MiB of 55.5 TiB)` and writes until the target is full. Measured 2026-08-21 on the
-   first real run: 90 GB in fifteen minutes before it was interrupted. Audit with
-   `qm config <vmid> | grep -E '^(scsi|virtio|sata)[0-9]'` - every line that names a
-   `/dev/disk/by-id/` path must end in `backup=0`. The check belongs here rather than in the role
-   because it lives in the guest's config, which a VM rebuild resets and no Ansible task owns.
-   Verified after setting it: the run reports `include disk 'scsi0' ... 16G` followed by seven
-   `exclude disk ... (backup=no)` lines, and finishes in 20 s with a 1.67 GB archive.
+1. The host is in the `proxmox` inventory group; otherwise the playbook matches no host and exits 0.
+2. `/mnt/vzdump` is a mountpoint on a device other than root. A missing mount would leave an empty
+   directory on `pve-root` and the run would fill the boot SSD
+   ([KE-7](../../docs/platform/known-errors.md#ke-7)).
+3. At least 25 GB free on `/mnt/vzdump`. vzdump prunes only after a successful write, so a full
+   target fails instead of rotating.
+4. Every passthrough disk on a VM carries `backup=0` (not asserted; it lives in the guest config):
+   ```bash
+   qm config <vmid> | grep -E '^(scsi|virtio|sata)[0-9]'
+   ```
+   Every line naming `/dev/disk/by-id/` ends in `backup=0`. vm102's SnapRAID disks without it make
+   a run try to read the whole array. vm100's data disk carries `backup=0`; the script also skips a
+   VM that would pull in a disk over 128 GB without the flag.
+5. For a restore: thin-pool headroom. `lvs pve/data` shows `Data%`; the VG has no free extents, so
+   the pool cannot be extended. `local-lvm` is the only storage that accepts a container rootfs.
 
-### Binding the target (one time, and again on every disk change)
-
-The host is the node being changed, so this is done there directly:
-
+The target is bound by fstab, identified by ID, never by kernel letter:
 ```
-# Identify the disk by ID, never by kernel letter. sd* names follow probe order
-# and change between boots - the boot SSD was documented as sdc for a month and
-# enumerated as sda on 2026-08-13.
-ls -l /dev/disk/by-id/ | grep -v part
-
-mkdir -p /mnt/vzdump
+/dev/disk/by-id/<disk-id>      /mnt/vzdump  ext4  defaults,nofail,noatime  0  2
+/mnt/<existing-mount>/vzdump   /mnt/vzdump  none  bind,nofail              0  0
 ```
+Use the second form for a directory on an already-mounted disk. Changing the backup disk is an fstab
+change only.
 
-Add to `/etc/fstab`, substituting the real identifier:
+## Steps
 
-```
-/dev/disk/by-id/<disk-id>  /mnt/vzdump  ext4  defaults,nofail,noatime  0  2
-```
+### Deploy
 
-`nofail` keeps a missing disk out of emergency mode; the role's mount assert is what turns that
-tolerated absence into a visible refusal instead of a silent write to the wrong disk.
+1. From `ansible/` on lxc250, dry run first.
+   ```bash
+   ansible-playbook playbooks/guest-backup.yml --check --diff
+   ansible-playbook playbooks/guest-backup.yml
+   ```
+   Check: the mount and free-space asserts pass; a second run reports `changed=0`.
+2. Run once on demand.
+   ```bash
+   systemctl start guest-backup.service
+   journalctl -u guest-backup.service -f
+   ```
+   Check: every guest in `GUESTS` has a new archive in `/mnt/vzdump`; vm102 shows
+   `exclude disk ... (backup=no)` for each passthrough disk.
 
-For an interim target that is a directory on an already-mounted disk, bind it instead:
+### Test restore (quarterly; never started)
 
-```
-/mnt/<existing-mount>/vzdump  /mnt/vzdump  none  bind,nofail  0  0
-```
+3. Pick the smallest container archive and confirm headroom.
+   Check: `lvs pve/data` plus the archive size stays below the `LvmThinPoolCritical` threshold
+   (`alert.rules.yml`, group `lvm`).
+4. Restore into a free ID.
+   ```bash
+   pct restore 999 /mnt/vzdump/vzdump-lxc-<ctid>-<timestamp>.tar.zst --storage local-lvm --unprivileged 1
+   ```
+   Check: `pct config 999` shows the original's hostname. Do not start it.
+5. Inspect without starting.
+   ```bash
+   pct mount 999
+   R=/var/lib/lxc/999/rootfs
+   grep PRETTY_NAME $R/etc/os-release
+   md5sum $R/etc/<config-file>; pct exec <ctid> -- md5sum /etc/<config-file>
+   ```
+   Check: the OS is present and config files are byte-identical to the live guest.
+6. Tear down.
+   ```bash
+   pct unmount 999 && pct destroy 999
+   ```
+   Check: `lvs pve/data` is back at the value from step 3. Record the date in the header.
 
-Note the assert compares backing devices, so a bind whose source lives on the root filesystem is
-refused. That is intended.
+### Recovery restore over the original
 
-## Deployment
-
-```
-cd ~/git/homelab-server-architecture/ansible
-ansible-playbook playbooks/guest-backup.yml --check --diff
-ansible-playbook playbooks/guest-backup.yml
-```
-
-First run, on demand rather than waiting a week for the timer:
-
-```
-systemctl start guest-backup.service
-journalctl -u guest-backup.service -f
-```
+7. Restore the chosen archive into a free ID first and inspect it as in step 5.
+   Check: the content is what is expected; then destroy the test ID.
+8. Make the overwrite reversible: back up the current guest if it still runs, or keep its volume.
+   ```bash
+   vzdump <ctid> --dumpdir /mnt/vzdump --mode stop --compress zstd
+   ```
+   Check: a new `vzdump-*-<ctid>-*` archive exists. If the guest cannot be dumped, step 9 is not
+   reversible; proceed only if the guest is lost anyway.
+9. Overwrite.
+   ```bash
+   pct stop <ctid>
+   pct restore <ctid> /mnt/vzdump/vzdump-lxc-<ctid>-<timestamp>.tar.zst --force --storage local-lvm
+   pct start <ctid>
+   ```
+   For a VM: `qm stop <vmid>`, `qmrestore <archive> <vmid> --force`, `qm start <vmid>`.
+   Check: the guest starts and its services pass their own checks. For lxc260 and lxc210, replay the
+   newest database dump afterwards ([pg-restore.md](../database/pg-restore.md),
+   [mariadb-restore.md](../database/mariadb-restore.md)): a snapshot backup of a running database is
+   crash-consistent only.
 
 ## Verification
 
-Run all five. The first four prove the mechanism; only the fifth proves a backup.
-
-```
-# 1. The timer is scheduled and will catch up after a missed slot
+```bash
 systemctl list-timers guest-backup.timer
-systemctl cat guest-backup.timer | grep Persistent
-
-# 2. The run finished and every guest is present
-journalctl -u guest-backup.service -b | tail -40
-ls -la /mnt/vzdump/
-
-# 3. The archives are internally readable (structure, not content)
-# Both extensions, and this is not pedantry: containers produce .tar.zst and VMs
-# produce .vma.zst. A loop over *.tar.zst alone walks every container, reports OK,
-# and silently covers no VM at all.
 for f in /mnt/vzdump/*.zst; do echo -n "$(basename $f): "; zstd -t "$f" 2>/dev/null && echo OK || echo FAILED; done
-
-# 4. The metric reaches Prometheus
-curl -s "http://<lxc200>:9090/api/v1/query?query=guest_backup_last_run_timestamp_seconds"
-curl -s "http://<lxc200>:9090/api/v1/query?query=guest_backup_failed_guests"
-
-# 5. A restore actually works - see below
 ```
 
-### Recorded verification runs
+- The timer shows a `NEXT` time.
+- Every archive reports `OK`. The glob covers containers (`.tar.zst`) and VMs (`.vma.zst`).
+- In Prometheus, `guest_backup_last_run_timestamp_seconds` has advanced and
+  `guest_backup_failed_guests` is `0`.
+- Only a restore (steps 3 to 6) proves an archive is usable.
 
-An archive that has never been restored from is the same fiction as an untested backup. Restore one
-guest into a throwaway ID once a quarter and record the date here, exactly as
-[`pg-restore.md`](../database/pg-restore.md) does.
+Verified 2026-08-21: lxc260 restored into 999 in 10 s (1.4 GiB, pool 82.85 -> 85.14 % and back
+after teardown); Debian 12 and the PostgreSQL 15 cluster present; `postgresql.conf`, `pg_hba.conf`
+and `node_exporter.service` byte-identical to live; all archives passed `zstd -t`; lxc250's archive
+passed a full `tar -tf` walk and holds `hosts.yml`, `.vault_pass` and `id_ed25519`.
 
-| Date | Guest restored | Result | Notes |
-|---|---|---|---|
-| 2026-08-21 | lxc260 into ID 999 | Pass | Restore 10 s, 1.4 GiB, pool 82.85 -> 85.14 % and back on teardown. Never started: verified through `pct mount`. Debian 12 present, PostgreSQL 15 cluster with `global/pg_control`, 26,721 files, `postgresql.conf` / `pg_hba.conf` / `node_exporter.service` byte-identical to the live node. All seven archives passed `zstd -t` beforehand, and lxc250's passed a full `tar -tf` walk (154,159 entries, rc=0) holding `hosts.yml`, `.vault_pass` and `id_ed25519`. lxc260 was chosen over lxc250 because the thin pool is the only storage that accepts a container rootfs and the smaller archive keeps the excursion below the critical threshold. |
-
-## Restore
-
-Restoring to a new ID is the safe form and the one to use for a test. It leaves the running
-guest untouched, so a failed restore costs nothing.
-
-```
-# List what is available
-ls -la /mnt/vzdump/
-
-# local-lvm is the only option, and that constrains which guest to test.
-# `pvesm status --content rootdir` returns the thin pool alone: `local` does not
-# carry the rootdir content type and `appdata_aux-disk` is images-only, so a
-# restore there is refused with "storage does not support container directories".
-# The pool sits above 82 % with vg_free at zero, so pick the SMALLEST archive
-# rather than the most important one - restoring lxc260 (1.4 GiB) reaches 85.1 %,
-# restoring lxc250 (5.25 GiB) reaches 91 % and crosses the critical threshold.
-# The mechanism is generic; the guest is a sample, not the subject.
-pct restore 999 /mnt/vzdump/vzdump-lxc-260-<timestamp>.tar.zst \
-  --storage local-lvm --unprivileged 1
-
-# Do NOT start it. A restored guest is a byte-identical clone down to its
-# Tailscale node key and hostname, so booting it on the network makes two nodes
-# claim one identity - a live outage on the original. `pct mount` gives the
-# filesystem without running a single process inside the container, which is
-# enough to answer the question the test asks.
-pct mount 999
-R=/var/lib/lxc/999/rootfs
-grep PRETTY_NAME $R/etc/os-release
-ls $R/var/lib/postgresql/15/main/global/pg_control
-
-# Fidelity, not just presence: compare bytes against the live node. Config files
-# do not change between the backup and the test, so a mismatch is a real fault.
-for f in /etc/postgresql/15/main/postgresql.conf /etc/systemd/system/node_exporter.service; do
-  a=$(md5sum "$R$f" | cut -d' ' -f1)
-  b=$(pct exec 260 -- md5sum "$f" | cut -d' ' -f1)
-  [ "$a" = "$b" ] && echo "MATCH $f" || echo "DIFFER $f"
-done
-
-# Tear down. destroy releases the thin-pool space immediately; nothing waits on
-# fstrim because the volume itself is removed.
-pct unmount 999 && pct destroy 999
-```
-
-Booting the clone is a separate question with its own risk, and it is not what
-this test is for. If it is ever asked, break the link first
-(`pct set 999 --net0 name=eth0,bridge=vmbr0,link_down=1`) and reach it through
-`pct exec`, which needs no network.
-
-**Check thin-pool headroom before restoring.** `pve/data` was at 82.78 % on 2026-08-20 with
-`lvm_vg_free_bytes` at zero, so a restore consumes space that cannot be replaced by `lvextend`.
-A restored guest also holds blocks a container cannot `fstrim` itself; the host's `lxc-fstrim.timer`
-at 10:30 reclaims them, which is the same dependency the monthly PostgreSQL restore test relies on.
-
-Restoring over the original is the recovery case, not the test case:
-
-```
-pct stop 260
-pct restore 260 /mnt/vzdump/vzdump-lxc-260-<timestamp>.tar.zst --force --storage local-lvm
-pct start 260
-```
-
-`--force` destroys the existing guest first. There is no undo.
-
-## Failure
+## Failure modes
 
 | Symptom | Cause | Action |
 |---|---|---|
-| `400 Parameter verification failed. storage: missing property required by 'notes-template'` | `--notes-template` was passed alongside `--dumpdir` | Remove it. The option is declared `requires => 'storage'` in `PVE/VZDump/Common.pm`, so it fails verification before any guest is touched - every guest, deterministically. `protected` carries the same requirement |
-| `0% (... of NN TiB)`, target filling | A VM's passthrough disks lack `backup=0` | Precondition 4 above. `vzdump` backs up every disk attached to a VM; the guest config is what scopes the job |
-| `tar: ./<path>: Cannot open: Permission denied`, one container only | A directory in the rootfs is owned outside the container's UID map, usually because something wrote it from the host side | Unprivileged containers are archived through `lxc-usernsexec -m u:0:100000:65536`, so the backup reads what the container reads. Find the owner first: `ls -lan /proc/$(lxc-info -n <ctid> -p -H)/root/<path>`. A UID below 100000 means the path was created outside the namespace. Establish what put it there before touching the mapping - on lxc220 it was a deployment retired in February, and the fix was deletion ([KE-22](../../docs/platform/known-errors.md#ke-22)) |
-| `is not a mountpoint - refusing` | Backup disk did not mount | `findmnt /mnt/vzdump`; check the fstab entry resolves by-id, not by kernel letter |
-| `resolves to the root device` | The bind source is on `pve-root` | The target must be a different physical disk; a backup sharing the failure domain is not one |
-| `vzdump <id> exited 255`, others fine | One guest failed; the run continued by design | `journalctl -u guest-backup.service`; usually a snapshot that could not be taken because the storage is full |
-| Run fails, target has space | Thin pool has no room for the snapshot | `lvs`; the snapshot lives in `pve/data`, not on the backup disk |
-| `GuestBackupMetricsMissing` | Job never deployed, or collector stopped | The other backup rules read green in this state - check the unit exists at all |
-| Timer exists, never fires | Host asleep at the calendar slot | Expected; `Persistent=true` catches up at boot. Confirm with `systemctl list-timers` |
+| `400 Parameter verification failed. storage: missing property required by 'notes-template'` | `--notes-template` (or `protected`) used with `--dumpdir` | Remove the option; it requires `--storage` |
+| `0% (... of NN TiB)`, target filling | A VM passthrough disk lacks `backup=0` | Stop the run; Precondition 4 |
+| `tar: ./<path>: Cannot open: Permission denied`, one container | A path owned outside the container's UID map | `ls -lan /proc/$(lxc-info -n <ctid> -p -H)/root/<path>`; find what wrote it before changing anything ([KE-22](../../docs/platform/known-errors.md#ke-22)) |
+| `is not a mountpoint - refusing` | Backup disk not mounted | `findmnt /mnt/vzdump`; the fstab entry must use by-id |
+| `resolves to the root device` | Bind source on `pve-root` | Use a different physical disk |
+| `vzdump <id> exited 255`, others fine | One guest failed; the run continues | `journalctl -u guest-backup.service`; usually no room for the snapshot in `pve/data` |
+| `storage does not support container directories` | Restore target is not `local-lvm` | Use `--storage local-lvm` |
+| `GuestBackupMetricsMissing` | Job not deployed or collector stopped | Check the unit exists |
+| Timer did not fire at its slot | Host was off | `Persistent=true` runs it at the next boot |
 
 ## Rollback
 
-The role adds files and changes no existing state, so removal is complete:
-
-```
+Removing the job (archives stay):
+```bash
 systemctl disable --now guest-backup.timer
-rm /etc/systemd/system/guest-backup.{service,timer}
-rm /usr/local/sbin/guest-backup.sh
+rm /etc/systemd/system/guest-backup.{service,timer} /usr/local/sbin/guest-backup.sh
 rm /var/lib/node_exporter/textfile_collector/guest-backup.prom
 systemctl daemon-reload
 ```
+Remove the `backup` alert group in the same change, or `GuestBackupMetricsMissing` fires.
 
-Existing archives under `/mnt/vzdump/` are left alone - deleting the backups is not part of
-rolling back the job that wrote them. Remove the `backup` rule group from `alert.rules.yml` in the
-same pass, or `GuestBackupMetricsMissing` will correctly report that nothing is reporting.
+A test restore is undone by step 6. A recovery restore is undone by restoring the safety archive
+from step 8 the same way.
 
-## Known limitations
+## Background
 
-- **The alerts share a failure domain with what they guard.** Prometheus runs on lxc200, on the host
-  these backups protect. If that host is down, there is no scrape, and `Persistent=true` refreshes
-  the timestamp before Prometheus returns. The rules mean "not more than 10 days of uptime without a
-  backup". Same class as `PostgreSQLBackupStale` and as the host `node_exporter` whose own failure
-  is what stopped the host reporting. The general fix is the external heartbeat in
-  [`remediation-plan.md`](../../docs/platform/remediation-plan.md) Tier 4.
-- **A snapshot backup of a running database is crash-consistent, not transaction-consistent.** For
-  lxc260 and lxc210 the authoritative copies remain `pg-backup.sh` and `mariadb-backup.sh`; this job
-  restores the machine, those restore the data. Restore the guest, then replay the dump.
-- **One site.** Until the target is a disk that leaves the flat, this protects against disk and
-  guest loss, not against fire, theft or ransomware reaching the mount.
-
-## Related
-
-- [`lxc250-rebuild.md`](lxc250-rebuild.md) - the procedure this job is meant to replace
-- [`pg-restore.md`](../database/pg-restore.md) - the recorded-date discipline copied here
-- [`lvm-thin-pool-full.md`](lvm-thin-pool-full.md) - what a restore can trigger
-- [`known-errors.md#ke-14`](../../docs/platform/known-errors.md#ke-14) - the disk carrying every guest
+The backups share a failure domain with their alerts: Prometheus runs on lxc200 on the same host,
+so the stale alerts mean "no backup within 10 days of uptime". The target is on site; the off-site
+copy is not in place yet ([remediation plan](../../docs/platform/remediation-plan.md)). Never boot a
+restored clone on the network; if it has to run, set `link_down=1` on `net0` and use `pct exec`.
+Related: [lvm-thin-pool-full.md](lvm-thin-pool-full.md),
+[KE-14](../../docs/platform/known-errors.md#ke-14) (the boot SSD that holds every guest).

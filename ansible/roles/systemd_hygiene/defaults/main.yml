@@ -3,8 +3,8 @@
 #
 # Units that can never succeed on a given node, listed per host in host_vars.
 # They are masked at the source rather than filtered out of the Prometheus alert,
-# because a `SystemdUnitFailed` rule that carries a permanent exception list stops
-# being read. Every remaining failed unit on the fleet should mean something.
+# so `SystemdUnitFailed` needs no permanent exception list and every failed unit
+# means something.
 #
 # Each entry:
 #   name:   the unit, e.g. "openipmi.service"
@@ -15,46 +15,29 @@
 #           same path.
 systemd_hygiene_masked_units: []
 
-# Units whose condition is a property of the *platform*, not of one node - a
-# package every Debian LXC here installs, shipping a unit none of them can use.
-# Kept in a separate variable rather than repeated across host_vars, because
-# host_vars would have to restate it seven times and Ansible does not merge a
-# variable of the same name: a host that set the per-host list would silently
-# drop the fleet-wide entries.
-#
-# The two lists are concatenated in tasks/main.yml. Same entry format.
+# Units whose condition is a property of a group, not of one node. A separate
+# variable, because Ansible does not merge variables of the same name: a host
+# setting the per-host list would silently drop the group entries. Concatenated
+# with the per-host list in tasks/main.yml; same entry format.
 systemd_hygiene_group_units: []
 
-# Packages whose *presence* is the reason a unit above can never succeed. Removing
-# one retires the mask rather than maintaining it, and usually closes something
-# else at the same time: nfs-common on lxc210 brought both run-rpc_pipefs.mount and
-# an rpcbind listening on 0.0.0.0:111 and [::]:111 for a node with no NFS mount.
+# Packages whose presence is the reason a unit above can never succeed, for
+# example nfs-common on a node without NFS (run-rpc_pipefs.mount, rpcbind on :111;
+# KE-3). Removing the package retires the mask instead of maintaining it.
 #
 # Each entry:
 #   name:   the package
 #   reason: why it cannot be used on this node
 #
-# The role simulates the removal first and refuses to proceed if apt would take
-# anything beyond this list with it. That guard is the whole reason this is a list
-# of names rather than a loop over `apt state=absent`: a dependency nobody checked
-# is how a cleanup becomes an outage.
-#
-# When that guard says no, the unit list above is the fallback. Measured on the
-# hypervisor 2026-09-12, `apt-get -s remove --purge rpcbind nfs-common` would have
-# taken proxmox-ve, pve-manager, pve-container, qemu-server, pve-ha-manager and
-# two libpve-* packages with it - the same finding as lxc210 and the opposite
-# answer, which is why this list is read per node rather than copied across.
+# The role simulates the removal and refuses if apt would take anything beyond
+# this list. Where it would (on the hypervisor, proxmox-ve), the unit list above is
+# the fallback; see group_vars/proxmox.yml.
 systemd_hygiene_absent_packages: []
 
-# The same, for a package whose reason is a property of a group rather than of one
-# node. Concatenated with the per-host list in tasks/main.yml, for the reason
-# systemd_hygiene_group_units gives: a host that set its own list would otherwise
-# silently drop the group's entries.
+# The same for packages, per group; concatenated with the per-host list for the
+# reason systemd_hygiene_group_units gives.
 systemd_hygiene_group_absent_packages: []
 
-# Units that were masked by this role and no longer need to be, because the package
-# that shipped them is gone. Unmasked and their leftover symlink removed, so the
-# node does not keep a mask for a unit that no longer exists - a stale mask is
-# indistinguishable from a current one at review time, which is the failure this
-# repository keeps finding in its own documentation.
+# Units this role masked whose package is gone. Unmasked and the symlink removed,
+# because a stale mask looks exactly like a current one.
 systemd_hygiene_retired_units: []

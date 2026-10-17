@@ -1,10 +1,9 @@
 ---
 # PostgreSQL tenants provisioned by the postgresql-provisioning role.
 #
-# Currently empty: the role is built and proven (against a throwaway test tenant,
-# since torn down), but the live tenants (openwebui, paperless) are not yet
-# adopted - a deliberate, separate step, because postgresql_user re-asserts the
-# password and a mismatch would break a running service's login.
+# Empty: the role is tested, but the live tenants (openwebui, paperless) are
+# not adopted yet, because postgresql_user re-asserts the password and a mismatch
+# would break the running service's login.
 #
 # To onboard a tenant, add a (non-secret) entry here and its password to the
 # companion dict, then run playbooks/postgresql-provisioning.yml:
@@ -16,22 +15,17 @@
 #   postgres_tenant_passwords:
 #     <svc>_user: "{{ vault_<svc>_dbpass }}"
 #
-# Passwords are kept OUT of the tenants list on purpose: the list is the loop
-# variable, and Ansible prints the whole item on a task failure - co-locating a
-# secret would leak it. Passwords live in the separate dict, read only by the
-# (no_log) user-creation task.
+# Passwords stay out of the tenants list: it is the loop variable, and Ansible
+# prints the whole item on a task failure. Only the no_log user task reads them.
 postgres_tenants: []
 
-# The exporter's DATA_SOURCE_NAME is owned by the role rather than left as the
-# hand-written file it was from 2026-04-22. The value lives as
-# vault_postgres_exporter_dsn in the vaulted group_vars, never in plain text
-# here. Turning the flag on also moves the file from postgres_exporter:600 to
-# root:600: systemd reads an EnvironmentFile as root before dropping to User=,
-# so the service account never needed to read its own credential.
+# The role manages the exporter's DATA_SOURCE_NAME file from
+# vault_postgres_exporter_dsn, owned root:600: systemd reads an EnvironmentFile
+# as root before dropping to User=, so the service account never reads it.
 postgres_exporter_manage_env: true
 
-# Masked by the systemd_hygiene role until the packages that ship them were removed
-# fleet-wide (group_vars/guests.yml). The leftover mask symlinks go with them.
+# The packages that ship these units are removed fleet-wide (group_vars/guests.yml);
+# the leftover mask symlinks are removed with them.
 systemd_hygiene_retired_units:
   - name: nvmf-autoconnect.service
     reason: >-
@@ -40,10 +34,9 @@ systemd_hygiene_retired_units:
     reason: >-
       Shipped by openipmi, which no guest installs any more.
 
-# Ships this node's journal to the receiver on lxc200. EXERCISE, not a control
-# this platform needs - see docs/decisions/exercise-scope-before-terraform.md.
-# Two nodes opt in rather than ten: one sender demonstrates nothing about
-# correlation and ten would be the noise the assessment warned about.
+# Ships this node's journal to the receiver on lxc200. Exercise, not a needed
+# control (docs/decisions/exercise-scope-before-terraform.md). Two nodes opt in:
+# enough to correlate across senders without shipping every journal.
 journal_upload_enabled: true
 
 # === sshd bound to the Tailscale address only ===

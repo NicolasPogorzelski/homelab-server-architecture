@@ -6,11 +6,8 @@
     update_cache: true
     cache_valid_time: 3600
 
-# Owner and group are the ones systemd itself enforces: the packaged unit carries
-# `LogsDirectory=journal/remote` with `User=systemd-journal-remote`, and systemd
-# chowns that directory to the service's user and primary group at every start.
-# Anything else here is undone at the next boot and reported as drift by the
-# sweep after it.
+# Owner matches what systemd enforces: the packaged unit's LogsDirectory= chowns
+# the directory to its User= at every start, so anything else shows as drift.
 - name: Create the directory the received journals land in
   ansible.builtin.file:
     path: "{{ journal_remote_dir }}"
@@ -19,12 +16,10 @@
     group: systemd-journal-remote
     mode: "0755"
 
-# The ceiling. systemd-journal-remote reads no size limit on systemd 252, which
-# is what lxc200 runs: `MaxUse=` in journal-remote.conf arrived in v254, and a
-# journald@remote.conf configures a journald namespace, not this receiver - the
-# first version of this role wrote one and it capped nothing. So a timer vacuums
-# the directory instead. Vacuuming removes archived files only, so the real bound
-# is the target plus one active file per shipping node.
+# The cap is a vacuum timer: systemd 252 on lxc200 has no MaxUse= for
+# journal-remote (added in v254), and journald@remote.conf configures a journald
+# namespace, not the receiver. Vacuum removes archived files only, so the bound
+# is the target plus one active file per sender.
 - name: Deploy the vacuum service
   ansible.builtin.copy:
     dest: /etc/systemd/system/journal-remote-vacuum.service
@@ -84,9 +79,8 @@
     - Reload systemd
     - Restart journal-remote
 
-# The packaged socket listens on the wildcard, and the service cannot run
-# without it: it requires the socket unit and has no network of its own. So the
-# socket stays, and its address is pinned instead.
+# The service requires the socket unit (it has no network of its own), so the
+# socket stays and its address is pinned.
 - name: Bind the socket to the Tailscale address
   ansible.builtin.template:
     src: socket-override.conf.j2
@@ -98,9 +92,8 @@
     - Reload systemd
     - Restart journal-remote
 
-# Under --check the package above was not installed, so on a first run none of
-# these units exist and systemd_service fails the play. The role is in the weekly
-# drift sweep, which runs in check mode; each unit task asks systemd first.
+# Under --check (the weekly drift sweep) the package may not be installed, so
+# each unit task asks systemd first.
 - name: Ask systemd which of the role's units exist yet  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: >-
@@ -112,8 +105,8 @@
   failed_when: false
   check_mode: false
 
-# daemon_reload here rather than waiting for the handler: the socket must not
-# start, even for the seconds until the flush, without its pinned address.
+# daemon_reload here, not via the handler: the socket must never start without
+# its pinned address.
 - name: Enable and start the socket
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.socket
@@ -126,9 +119,8 @@
 - name: Flush handlers before reading the bind back
   ansible.builtin.meta: flush_handlers
 
-# Enabling the service would only enable the socket again (its [Install]
-# section is Also=), so it is started, not enabled. After a reboot the socket
-# starts it on the first connection.
+# Started, not enabled: its [Install] is Also= the socket, which starts it on the
+# first connection after a reboot.
 - name: Start the receiver
   ansible.builtin.systemd_service:
     name: systemd-journal-remote.service
@@ -142,9 +134,8 @@
     state: started
   when: "'journal-remote-vacuum.timer' in journal_remote_unit_files.stdout or not ansible_check_mode"
 
-# Read the socket table, not the unit state. A service that is active and a
-# service listening where it was told are different claims, and this platform has
-# three entries on the difference.
+# Reads the socket table, not unit state: active is not the same as listening on
+# the intended address.
 - name: Verify the receiver listens on the Tailscale address only
   ansible.builtin.shell:
     cmd: >-

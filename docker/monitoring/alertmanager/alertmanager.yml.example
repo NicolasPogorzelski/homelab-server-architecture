@@ -9,21 +9,10 @@ route:
   repeat_interval: 4h
 
   routes:
-    # The Watchdog alert fires permanently by design and must not reach the Discord
-    # channel, where a notification every four hours would train everyone to ignore
-    # the channel. It goes to an external heartbeat receiver instead, operated by
-    # somebody else, and its *absence* there is the signal: if the receiver stops
-    # seeing it, the alerting chain is down - which includes this host being off.
-    #
-    # continue: false (the default) stops evaluation here, so the alert never falls
-    # through to the parent receiver.
-    #
-    # repeat_interval has to be shorter than the receiver's own grace period, or the
-    # receiver raises an alarm about a chain that is working. One minute against a
-    # typical grace of several is deliberate headroom: this host powers down nightly
-    # by design, so the receiver's grace period must also be longer than the nightly
-    # off-window, or every morning starts with a false alarm. That window is the one
-    # number to get right when provisioning the receiver.
+    # Watchdog fires permanently and goes only to the external heartbeat receiver;
+    # its absence there means the alerting chain or the host is down. repeat_interval
+    # must be shorter than the receiver's grace period, and that grace period longer
+    # than the nightly power-down, or every morning starts with a false alarm.
     - receiver: heartbeat
       matchers:
         - alertname = "Watchdog"
@@ -36,9 +25,7 @@ receivers:
     discord_configs:
       - webhook_url: 'https://discord.com/api/webhooks/<id>/<token>'
 
-  # A plain GET or POST to a URL the provider hands out. webhook_configs sends
-  # Alertmanager's own JSON body, which every heartbeat service ignores - what these
-  # services read is that the request arrived at all.
+  # Heartbeat services only register that the request arrived; the body is ignored.
   - name: heartbeat
     webhook_configs:
       - url: 'https://<heartbeat-provider>/ping/<token>'
@@ -51,6 +38,5 @@ inhibit_rules:
       severity: warning
     equal: ['alertname', 'instance']
 
-  # Watchdog carries severity: none and matches no inhibition above, but say so
-  # rather than leave it to be rediscovered: an inhibition that silenced the
-  # heartbeat would look exactly like the outage it exists to report.
+  # Watchdog (severity: none) matches no inhibition. An inhibited heartbeat would
+  # look like the outage it reports.

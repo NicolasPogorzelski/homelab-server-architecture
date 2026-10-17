@@ -1,29 +1,20 @@
 #!/usr/bin/env bash
 # Weekly comparison of what this repository says against what the fleet runs.
 #
-# The repository can be internally consistent and still describe a machine that
-# does not exist. validate-repo.sh compares documents against files; this
-# compares files against nodes. Both are needed and neither substitutes for the
-# other: on 2026-09-08 every one of the 39 repository checks passed while
-# thirteen playbooks reported drift on the live fleet, the first of them a
-# deployed unit file still carrying an em dash the repository had replaced.
+# validate-repo.sh compares documents against files; this compares files against
+# nodes. Every playbook runs with --check; the ones that are not strictly
+# read-only are named in drift-sweep.conf with the reason.
 #
-# Every playbook runs with --check, which changes nothing. Two of them are not
-# strictly read-only and drift-sweep.conf names them and says why.
-#
-# What it cannot see: anything no role manages. That surface is the fleet
-# snapshot's job (fleet-snapshot.yml), and the two are meant to be read together.
+# Anything no role manages is invisible here; the fleet snapshot
+# (fleet-snapshot.yml) covers that surface.
 set -euo pipefail
 
 REPO="${FLEET_DRIFT_REPO:-/home/devops/git/homelab-server-architecture}"
 CONF="${FLEET_DRIFT_CONF:-${REPO}/ansible/drift-sweep.conf}"
-# Both outputs land in one directory the invoking user owns, and the unit moves
-# the metric into the collector afterwards with systemd's `+` privilege prefix.
-# The sweep itself must NOT run as root: git refuses to operate on a repository
-# owned by another user ("dubious ownership"), so preflight.yml fails on its
-# first task and every playbook in the sweep reports no recap. Measured
-# 2026-09-08 - the run came back with 25 errored playbooks and no drift at all,
-# which is what a total failure looks like when nobody checks the reason.
+# Both outputs land in a directory the invoking user owns; the unit moves the
+# metric into the collector with systemd's `+` prefix. The sweep must not run as
+# root: git refuses a repository owned by another user ("dubious ownership"), so
+# preflight.yml fails and every playbook reports no recap.
 REPORTDIR="${FLEET_DRIFT_REPORT_DIR:-/var/lib/fleet-drift}"
 OUTDIR="${FLEET_DRIFT_TEXTFILE_DIR:-${REPORTDIR}}"
 RULES_FILE="${REPO}/docker/monitoring/prometheus/rules/alert.rules.yml"
@@ -83,16 +74,8 @@ for pb in "${PLAYBOOKS[@]}"; do
         continue
     fi
 
-    # --check never applies. rc is not the signal for drift: measured
-    # 2026-09-08, every run returned 0 whether it found drift or not, so the
-    # recap is read instead.
-    #
-    # A non-zero rc is still worth naming, and until 2026-09-15 this line only
-    # raised the counter. The report then read `errored 1` with no way to tell
-    # which of thirty playbooks it had been, and answering that took a run of
-    # its own - the answer being that the sweep had started inside the host's
-    # boot window. A count without a name is a measurement somebody has to
-    # repeat.
+    # rc is not the drift signal (a check run returns 0 with or without drift),
+    # so the recap is read. A non-zero rc is still reported by playbook name.
     rc=0
     out="$(ansible-playbook "${pb_file}" --check 2>&1)" || rc=$?
     if [[ ${rc} -ne 0 ]]; then
@@ -147,16 +130,13 @@ done
 # ---------------------------------------------------------------------------
 # What Prometheus actually loaded, against what the repository holds
 # ---------------------------------------------------------------------------
-# The layer a --check run cannot reach. prometheus_config promotes the rules file
-# and reloads; if the reload failed, the file on disk is right and the rules in
-# memory are last week's - the shape of KE-16, where Apache served an expired
-# certificate that had already been renewed beside it.
+# A --check run cannot see a failed reload: the rules file on disk is right while
+# Prometheus still holds the old rules in memory (the KE-16 pattern).
 #
-# curl --resolve rather than a plain URL: MagicDNS does not resolve on the control
-# node. systemd-resolved answers first through nsswitch and does not know the
-# Tailscale resolver, and `[!UNAVAIL=return]` stops the lookup before
-# /etc/resolv.conf is ever read. The name is kept so SNI and certificate
-# verification still apply.
+# curl --resolve takes the address from `tailscale status`, so the check does not
+# depend on name resolution on the control node
+# (docs/decisions/magicdns-and-systemd-resolved.md); the name keeps SNI and
+# certificate verification.
 rules_ok=0
 rules_mismatch=0
 
@@ -215,9 +195,8 @@ fi
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
-# Same atomic-write discipline as the other collectors here: a temporary file in
-# the same directory, so the rename cannot cross a filesystem, and a suffix
-# node_exporter does not read while it is being written.
+# Atomic write: a temporary file in the same directory (rename cannot cross a
+# filesystem) under a name node_exporter does not read.
 TMP="$(mktemp "${OUTDIR}/.fleet-drift.prom.XXXXXX")"
 {
     echo "# HELP fleet_drift_last_run_timestamp_seconds Unix time of the last completed drift sweep."
@@ -248,11 +227,8 @@ TMP="$(mktemp "${OUTDIR}/.fleet-drift.prom.XXXXXX")"
     echo "# TYPE fleet_drift_rules_mismatch gauge"
     echo "fleet_drift_rules_mismatch ${rules_mismatch}"
 } > "${TMP}"
-# mktemp creates 0600 regardless of umask, and mv preserves it. node_exporter runs
-# under its own account and silently skips a file it cannot read, so the metrics
-# would never reach Prometheus and every rule above them would sit absent - which
-# reads exactly like no drift. Measured 2026-09-08: fleet_snapshot_* arrived,
-# fleet_drift_* did not, and the only difference was this mode.
+# mktemp creates 0600 and mv preserves it; node_exporter silently skips a file it
+# cannot read, and absent metrics would read like no drift.
 chmod 0644 "${TMP}"
 mv "${TMP}" "${OUTDIR}/fleet-drift.prom"
 

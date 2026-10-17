@@ -15,10 +15,16 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:9090"]
 
-  # Node Exporter - LXC200 monitoring (loopback, Docker container)
+  # Node Exporter - LXC200 monitoring (loopback, Docker container). Resources
+  # only: a container cannot read the host's systemd.
   - job_name: "node-lxc200-monitoring"
     static_configs:
       - targets: ["127.0.0.1:9100"]
+
+  # Node Exporter - LXC200 native unit with the systemd collector.
+  - job_name: "node-lxc200-monitoring-systemd"
+    static_configs:
+      - targets: ["LXC200_TAILSCALE_IP:LXC200_NODE_EXPORTER_PORT"]
 
   # Node Exporter - Proxmox host
   - job_name: "node-proxmox-host"
@@ -55,10 +61,10 @@ scrape_configs:
     static_configs:
       - targets: ["LXC230_TAILSCALE_IP:9100"]
 
-  # Node Exporter - LXC240 Vaultwarden
-  - job_name: "node-lxc240-vaultwarden"
+  # Node Exporter - LXC250 Ansible control node
+  - job_name: "node-lxc250-devops"
     static_configs:
-      - targets: ["LXC240_TAILSCALE_IP:9100"]
+      - targets: ["LXC250_TAILSCALE_IP:9100"]
 
   # Node Exporter - LXC260 PostgreSQL platform
   - job_name: "node-lxc260-postgres"
@@ -70,7 +76,7 @@ scrape_configs:
     static_configs:
       - targets: ["LXC260_TAILSCALE_IP:9187"]
 
-  # Blackbox: service-level HTTP probes (KE-8 remediation)
+  # Blackbox: service-level HTTP probes on vm100 (KE-8)
   - job_name: "blackbox-http"
     metrics_path: /probe
     params:
@@ -82,6 +88,10 @@ scrape_configs:
       - targets: ["http://VM100_TAILSCALE_IP:13378"]
         labels:
           service: audiobookshelf
+      # llama-server answers /health itself; the probe never loads a model.
+      - targets: ["http://VM100_TAILSCALE_IP:8080/health"]
+        labels:
+          service: llama-server
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -90,7 +100,7 @@ scrape_configs:
       - target_label: __address__
         replacement: 127.0.0.1:9115
 
-  # Blackbox: HTTPS services behind tailscale serve (MagicDNS)
+  # Blackbox: HTTPS services by MagicDNS name
   - job_name: "blackbox-https"
     metrics_path: /probe
     params:
@@ -108,9 +118,6 @@ scrape_configs:
       - targets: ["https://calibreweb.<tailnet-id>"]
         labels:
           service: calibreweb
-      - targets: ["https://vaultwarden.<tailnet-id>"]
-        labels:
-          service: vaultwarden
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

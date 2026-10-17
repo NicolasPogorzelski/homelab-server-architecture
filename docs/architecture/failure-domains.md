@@ -1,122 +1,98 @@
 # Failure Domains - What Dies With What
 
-The topology views answer how the platform is put together. This one answers the question an
-operator asks first: if this piece of hardware goes, what goes with it.
+If a piece of hardware fails, what fails with it. Containment is ownership: what a device carries is
+drawn inside it. Unlike the other views, the arrows here follow loss: "if the source fails, this is
+the consequence".
 
-**Reading this view.** Containment is ownership - what a device carries is drawn inside it. The
-arrows are the exception to the convention used everywhere else on this site: here they do not
-follow a payload, they follow loss. An arrow means "if the source fails, this is the consequence".
+None of the three domains is redundant. The platform has no high availability by design; recovery is
+procedural.
 
-Three domains, and none of them is redundant. This platform has no high availability by design;
-recovery is procedural. What follows is therefore a statement of exposure, not a complaint.
-
-## The three domains
+## The Three Domains
 
 ```mermaid
 flowchart TB
   accTitle: Failure domains of the platform
   accDescr: Boot SSD, aux-disk and vm102 as three failure domains, with what each carries and what its loss causes.
 
-  subgraph boot["boot SSD - scsi 9:0:0:0, LSI SAS2008 HBA - KE-14 open"]
+  subgraph boot["boot SSD - LSI SAS2008 HBA - KE-14 open"]
     ROOTS["pve-data thin pool<br/>every VM and LXC root disk"]
     PVEROOT["pve-root and /boot/efi"]
-    SECRETS["lxc250: vault password, real inventory,<br/>automation SSH key - escrowed off the platform"]
+    SECRETS["lxc250: vault password, real inventory,<br/>Ansible SSH key - escrowed off the platform"]
     NCDB["lxc210: Nextcloud MariaDB"]
   end
 
-  subgraph auxd["aux-disk - AHCI, /mnt/aux-disk - KE-13, unreadable sectors growing"]
-    DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230, lxc260"]
+  subgraph auxd["aux-disk - /mnt/aux-disk - KE-13, unreadable sectors growing"]
+    DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230"]
+    PGDATA["lxc260: PostgreSQL data directory"]
     VZDUMP["guest backups - weekly vzdump archives"]
-    MONDATA["lxc200 mp0: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
-    JELLY["vm100 scsi1 - jellyfin-data, 300 GB raw"]
+    MONDATA["lxc200: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
+    JELLY["vm100 scsi1 - jellyfin-data, qcow2"]
   end
 
-  subgraph storagevm["vm102 - the storage VM, one failure domain in itself"]
+  subgraph storagevm["vm102 - the storage VM"]
     ARCHIVE["archive pool: Paperless documents, Nextcloud files,<br/>database dumps, media library"]
     PARITY["SnapRAID parity - covers disk loss only"]
   end
 
-  boot --> L1["Total platform loss.<br/>No guest starts. Rebuild from the escrowed<br/>secrets and the repository."]
-  auxd --> L2["Five containers lose their Docker state,<br/>vm100 loses its second disk,<br/>and the monitoring history and every guest backup go with them.<br/>Rebuildable from compose files - the history is not."]
-  storagevm --> L3["All persistent service data unreachable.<br/>Parity does not survive VM loss,<br/>deletion, corruption or ransomware."]
+  boot --> L1["Total platform loss.<br/>No guest starts. Rebuild from the guest backups,<br/>the escrowed secrets and the repository."]
+  auxd --> L2["Docker state, the PostgreSQL data directory,<br/>vm100's data disk, the metric history<br/>and every guest backup are lost.<br/>Databases restore from the dumps on vm102."]
+  storagevm --> L3["All file data and dumps unreachable.<br/>Parity does not survive VM loss,<br/>deletion, corruption or ransomware."]
 
   classDef sick fill:#7a1f1f,stroke:#571414,color:#ffffff
   classDef warn fill:#8a5a00,stroke:#5f3e00,color:#ffffff
   classDef content fill:#0b3d6b,stroke:#062a4b,color:#ffffff
   class L1,L3 sick
   class L2 warn
-  class ROOTS,PVEROOT,SECRETS,NCDB,DROOTS,VZDUMP,MONDATA,JELLY,ARCHIVE,PARITY content
+  class ROOTS,PVEROOT,SECRETS,NCDB,DROOTS,PGDATA,VZDUMP,MONDATA,JELLY,ARCHIVE,PARITY content
 ```
 
-## What each domain means in practice
+## What Each Domain Means in Practice
 
-**Boot SSD.** It carries `/boot/efi`, `pve-root` and the whole `pve-data` thin pool, which is to say
-every root disk on the platform. It also throws intermittent `DID_SOFT_ERROR` bursts under I/O
-load - the boot window, and on 2026-10-08 four bursts during image pulls and package upgrades.
-These are transport-layer faults at the SAS2008 HBA, media and firmware causes excluded, leading
-hypothesis a sagging 12 V rail under peak draw
-([KE-14](../platform/known-errors.md#ke-14), unconfirmed and awaiting physical verification).
+**Boot SSD.** It carries `/boot/efi`, `pve-root` and the whole `pve-data` thin pool, so every root
+disk on the platform. It logs intermittent `DID_SOFT_ERROR` bursts under I/O load; media and
+firmware causes are excluded, and the leading hypothesis is the 12 V rail
+([KE-14](../platform/known-errors.md#ke-14)). The disk is replaced in the second half of October
+2026 ([boot SSD replacement](../platform/remediation-plan.md#boot-ssd-replacement)). Identify it by
+SCSI address or `by-id`, never by kernel letter; the letter has changed between boots.
 
-The asymmetry worth noticing is not the disk, it is what sits on it. Two datasets on this device are
-[classified C1](../platform/data-classification.md): lxc250's vault password with the real inventory
-and the automation SSH key, and Nextcloud's MariaDB. The database half has a nightly verified dump
-onto vm102 and a monthly restore test. The secrets half has been escrowed since 2026-08-20, in an
-external password manager and on paper off site, which closed item 1 of the
-[remediation plan](../platform/remediation-plan.md).
+Two [C1](../platform/data-classification.md) datasets sit on it: lxc250's Ansible secrets and
+Nextcloud's MariaDB. MariaDB has a nightly verified dump on vm102 and a monthly restore test. The
+secrets are escrowed since 2026-08-20 in an external password manager and on paper; the escrow has
+not been restored from ([escrow drill](../platform/remediation-plan.md#escrow-restore-drill)). The
+host's own configuration is archived daily to the aux-disk and to the boot disk.
 
-Identify this disk by `9:0:0:0` or by `by-id`, never by its kernel letter - it enumerated as `sdc`
-for a month of documentation and as `sda` on 2026-08-13.
+**aux-disk.** In service with a growing count of unreadable sectors
+([KE-13](../platform/known-errors.md#ke-13) holds the measurements). `smartctl -H` reports PASSED
+regardless, because `Current_Pending_Sector` cannot trip the self-assessment;
+`SmartAttributeDegrading` watches the raw counts instead.
 
-**aux-disk.** Back in service under protest with thousands of unreadable sectors, a count that has
-grown in two steps since September while `Reported_Uncorrect` has stayed at 21 since 2026-07-09
-([KE-13](../platform/known-errors.md#ke-13) carries the measurements). Those sectors still hold data that cannot be read, and
-`smartctl -H` reports PASSED regardless, because `Current_Pending_Sector` normalises to 051 against
-a threshold of 000 and can never trip the self-assessment.
+- Docker images and state: class C3, rebuildable from the compose files.
+- PostgreSQL data directory: recovered from the newest nightly dump on vm102.
+- Monitoring history: no backup.
+- vm100's `jellyfin-data`: qcow2 since 2026-10-10, so vm100 can be snapshotted; the snapshots live
+  on this disk and cover a bad change, not the disk's loss. The disk is excluded from the guest
+  backup.
+- `/mnt/vzdump`: the weekly guest backup shares this disk with the Docker state it would rebuild
+  ([backup and recovery](backup-flow.md)).
 
-Most of its contents are the least valuable on the platform - container images and Docker state,
-class C3, rebuildable from the compose files. Three things on it are not. The first is the monitoring
-history: lxc200 binds `/mnt/aux-disk/monitoring` to `/data`, so the Prometheus time series, the
-Grafana state and the Alertmanager state all live here. That is C3 by classification and has no
-backup at all, which is defensible right up to the moment somebody wants to know whether a metric
-was already drifting last month.
+Replacement: [aux-disk replacement](../platform/remediation-plan.md#aux-disk-replacement-and-disposal).
 
-The second is not about data at all. vm100's
-`scsi1` was a raw file on directory storage, which cannot be snapshotted, so vm100 had no rollback
-path - the reason a live CIFS unmount on that node in [KE-20](../platform/known-errors.md#ke-20)
-could only be ended with `qm stop`. Converted to qcow2 on 2026-10-10, the VM can be snapshotted; the
-snapshot shares this disk, so it covers a bad change and not the disk's loss.
-
-The third is the weekly guest backup: `/mnt/vzdump` is bound onto this disk, so the only restorable
-copy of the guest root disks shares a failure domain with the Docker state it would be needed to
-rebuild. See [backup and recovery](backup-flow.md).
-
-The `docker-compose-update` hold followed from this disk - the role pulls new images and writes
-gigabytes of fresh layers onto a failing drive - and was lifted on 2026-09-05 against sixty-two
-days of unchanged error counters and a measured patch debt of 139 fixable critical CVEs. The disk
-is no safer than it was; what changed is that its degradation is now measured rather than assumed,
-so the decision can be revisited on evidence.
-
-**vm102.** Parity is the protection everybody thinks of, and it is narrower than it looks. SnapRAID
-computes one equation over the present contents of the data disks. It reconstructs a disk that
-fails. It does not reconstruct a file deleted, truncated or encrypted before the next `snapraid
-sync`, because that sync writes the damage into the parity. Against site loss it is worth nothing at
-all, since the parity disk sits in the same machine.
-
-Everything on this pool that matters is therefore protected against exactly one failure mode. What
-protection each dataset actually has, and where it is missing, is drawn in
+**vm102.** SnapRAID computes parity over the present contents of the data disks. It reconstructs a
+failed disk. It does not reconstruct a file deleted, truncated or encrypted before the next
+`snapraid sync`, because that sync writes the damage into the parity. Against site loss it is worth
+nothing: the parity disk is in the same machine. Each dataset's protection is drawn in
 [backup and recovery](backup-flow.md).
 
-## What is not a failure domain
+## What Is Not a Failure Domain
 
-The Proxmox host itself is a single point of failure in the ordinary sense - one machine, no
-cluster - but it is not listed above, because its loss is a hardware-replacement problem rather than
-a data problem: the guests live on the disks, and the disks are the three domains above. The
-distinction matters when planning. A dead mainboard costs money and a weekend; a dead boot SSD
-rolls every guest back to its last weekly backup and Nextcloud's database to its last nightly dump.
+The Proxmox host is a single point of failure - one machine, no cluster - but its loss is a hardware
+problem rather than a data problem: the guests live on the disks above. A dead mainboard costs a
+replacement and a rebuild ([platform restore](../../runbooks/platform/platform-restore.md)); a dead
+boot SSD rolls every guest back to its last weekly backup and each database to its last nightly dump.
 
 ## Related
 
 - [Storage design](../platform/storage-design.md) - the layout these domains are cut from
 - [Data classification](../platform/data-classification.md) - what each dataset is worth
-- [Backup and recovery flow](backup-flow.md) - what protection exists per dataset
-- [Remediation plan](../platform/remediation-plan.md) - the ordering of the work these gaps imply
+- [Backup and recovery](backup-flow.md) - what protection exists per dataset
+- [Remediation plan](../platform/remediation-plan.md) - the ordering of the work

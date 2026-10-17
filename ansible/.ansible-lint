@@ -1,16 +1,13 @@
----
-# ansible-lint gate. The CI workflow pins ansible-lint==26.6.0 for reproducibility.
+# ansible-lint gate. CI pins the ansible-lint version (.github/workflows/ansible-lint.yml).
 #
-# Enforced at the strictest built-in profile (production) with a single documented
-# waiver:
+# Profile production, with one skip_list entry. Any other exception is an inline
+# `# noqa: <rule>` on the task it concerns, with the reason in a comment beside it,
+# so the rule stays armed everywhere else.
 #
 #   var-naming[no-role-prefix] - requires every role variable to carry the role
-#   name as a prefix (e.g. paperless_dbuser -> paperless_env_dbuser). For a private
-#   single-tenant homelab repo this anti-collision guarantee has negligible value:
-#   the roles are never shared to Galaxy, the variables are already semantically
-#   namespaced (paperless_*, pg_backup_*), and the mandated prefixes are verbose and
-#   redundant. This is a commonly-disabled rule; every other production-profile rule
-#   (fqcn, risky-file-permissions, no-changed-when, name, role-name, yaml, ...) stays on.
+#   name as prefix (paperless_dbuser -> paperless_env_dbuser). The roles are not
+#   published to Galaxy and their variables are already namespaced by purpose
+#   (paperless_*, pg_backup_*), so the prefix adds length, not collision safety.
 profile: production
 skip_list:
   - var-naming[no-role-prefix]

@@ -1,190 +1,123 @@
 # Data Classification and Recovery Objectives
 
-Written 2026-08-15. First classification of the data this platform holds.
-
-## Why this was missing, and what it blocked
-
-Until now every dataset on this platform was handled identically. A scanned passport in Paperless
-and a film in the media library received the same protection, the same retention and the same
-attention - which in practice meant the protection appropriate to the film.
-
-That is not only untidy. It blocked a decision that has been queued for months. The remediation
-plan's Tier 1 #3 reads "off-site copy of the critical subsets", and the reason it has not moved is
-that "critical subset" was never defined, so every attempt to start it turned into an
-open-ended question about what to copy and how much it would cost. Classification is not
-bureaucracy here; it is the missing input to a decision already on the list.
-
-The same applies to recovery objectives. The backup programme is unusually well built - dumps
-verified at write time, restores tested monthly, staleness alerted - and yet nobody could say
-whether it is *adequate*, because no one had stated how much data loss is tolerable. A backup
-cadence without a recovery point objective is a number with nothing to compare it to.
+What data this platform holds, how much its loss would cost, how it is protected today, and the
+recovery objectives the backups are measured against. The class of each dataset sets the scope of
+the [off-site backup](remediation-plan.md#off-site-backup).
 
 ## Classification scheme
 
-Three levels, on purpose. Schemes with five levels are abandoned within a year because the
-boundaries stop being obvious.
-
 | Level | Definition | Consequence of loss |
 |---|---|---|
-| **C1 - Critical** | Unrecoverable by any means, or contains personal data belonging to identifiable people | Permanent. Cannot be recreated by effort. |
-| **C2 - Important** | Recreatable, but at a cost measured in days of work | Expensive and disruptive, not permanent. |
-| **C3 - Replaceable** | Reacquirable, regenerable, or of purely historical interest | Inconvenient. |
+| **C1 - Critical** | Unrecoverable by any means, or contains personal data of identifiable people | Permanent; cannot be recreated by effort |
+| **C2 - Important** | Recreatable at a cost of days of work | Expensive and disruptive, not permanent |
+| **C3 - Replaceable** | Reacquirable, regenerable, or of historical interest only | Inconvenient |
 
-Disclosure and loss are deliberately collapsed into one axis. With a single operator and no
-external sharing, the datasets that would hurt most if disclosed are the same ones that would hurt
-most if lost, and a second axis would add ceremony without changing any decision.
+Disclosure and loss share one axis: with no external data sharing, the datasets that would hurt
+most if disclosed are the ones that would hurt most if lost.
 
 ## What this platform holds
 
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
-| Ansible vault password, real inventory, automation SSH key | lxc250 home directory, on the boot SSD | C1 | No | None. One copy. |
-| Vaultwarden vault - withdrawn 2026-09-01, share data destroyed 2026-10-10 | Cold archive only, 112 KB compressed | C1 while retained | Yes | Cold archive taken at shutdown, checksummed, held in two locations. The service that wrote it is gone ([decision](../decisions/vaultwarden-decommission.md)) |
-| Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | Parity only. |
-| Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | Parity only. |
-| Nextcloud MariaDB - 38.3 MB, 179 tables, all InnoDB | Inside lxc210, on the boot SSD | C1 | Yes | Nightly verified dump to the `DB-Backups` share since 2026-08-15, watched by `MariaDBBackupStale`. Same site as everything else. |
-| Documents opened through Collabora Online | Transient, in the CODE process's jails under `/tmp` inside lxc210 | C1 while open | Yes - it opens Nextcloud and Paperless files, which include identity documents | None, and none is wanted: the copy is transient and the durable original is the Nextcloud row above. Recorded because the *process* sees C1 content, and because it runs with seccomp and capability jailing disabled - see the [service document](../services/nextcloud.md) |
-| Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Nightly verified dump, ~8-day retention, monthly restore test. |
-| Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump. |
-| Platform configuration and documentation | This repository - GitHub plus two workstations | C2 | No | Git. Distributed by nature, and the only dataset here with a genuine off-site copy. |
-| Monitoring history | Prometheus on lxc200 | C3 | No | None. |
-| Media library | Archive pool on vm102 | C3 | No | SnapRAID parity. |
-| Container images and Docker data roots | aux-disk | C3 | No | None; rebuilt from the compose files. |
+| Ansible vault password, real inventory, Ansible SSH key | lxc250 home directory, on the boot SSD | C1 | No | Escrowed off site since 2026-08-20; never restored from ([drill](../../runbooks/platform/escrow-restore-drill.md)) |
+| Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | SnapRAID parity only |
+| Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | SnapRAID parity only |
+| Nextcloud MariaDB | Inside lxc210, on the boot SSD | C1 | Yes | Daily verified dump to the `DB-Backups` share on vm102, monthly restore test (`mariadb_backup`, `mariadb_restore_test`) |
+| Documents open in Collabora Online | Transient, in the CODE process's jails under `/tmp` in lxc210 | C1 while open | Yes | None needed; the durable original is the Nextcloud row. The process runs without seccomp and capability jailing ([service document](../services/nextcloud.md)) |
+| Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Daily verified dump, monthly restore test (`postgresql_backup`, `postgresql_restore_test`) |
+| Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump |
+| Guest root disks (search indexes, dashboards, application configuration) | `pve/data` thin pool on the boot SSD | C2 | Indirectly | Weekly `vzdump` of all nine guests to the aux-disk (`guest_backup`) |
+| Platform configuration and documentation | This repository on GitHub and two workstations | C2 | No | Git; the only dataset with a running off-site copy |
+| Monitoring history | Prometheus on lxc200 | C3 | No | None |
+| Media library | Archive pool on vm102 | C3 | No | SnapRAID parity |
+| Container images and Docker data roots | aux-disk | C3 | No | None; rebuilt from the compose files |
 
-## Two findings that came out of building this table
+Dumps are kept for seven days (`RETENTION_DAYS=7` in
+[`pg-backup.sh`](../../snippets/postgres/pg-backup.sh) and
+[`mariadb-backup.sh`](../../snippets/mariadb/mariadb-backup.sh)); `find -mtime +7` deletes a dump
+only once it is more than eight full days old.
 
-**Parity is not backup, and three of the five C1 datasets rely on nothing else.** SnapRAID protects
-against the loss of a *disk*. It does not protect against deletion, corruption, or encryption by
-ransomware, because those are legitimate writes as far as the array is concerned, and the next
-`snapraid sync` copies the damage into the parity. Between two syncs there is a recovery window;
-after a sync there is none. Vaultwarden, Paperless documents and Nextcloud files currently have
-that and only that.
+**Parity is not backup.** SnapRAID protects against the loss of a disk. Deletion, corruption and
+encryption by ransomware are legitimate writes to the array, and the next `snapraid sync` copies
+them into the parity. Paperless documents and Nextcloud files have that protection and no other.
 
-**The Nextcloud database had no backup at all** - closed 2026-08-15, and the finding is kept below
-rather than deleted, because the reason it existed outlives the fix. The remediation plan's Tier 1 #3 says "off-site
-copy of the critical subsets (Vaultwarden export, Nextcloud DB, Paperless documents)", which reads
-as though local copies exist and merely need to be duplicated elsewhere. For the Nextcloud MariaDB
-that is not the case: no dump job exists in any role, script or unit in this repository, and the
-2026-07-10 fleet crontab audit found no hand-written job either. The nightly `pg_dumpall` covers
-lxc260 only - MariaDB runs inside lxc210 and is not a PostgreSQL cluster.
-
-The consequence is worse than it first looks. Nextcloud's files sit on the archive pool while its
-database sits on the boot SSD, the disk with the unresolved [KE-14](known-errors.md#ke-14) I/O
-faults. Losing that SSD leaves every user file intact and unusable: without the database, the
-files are opaque blobs in Nextcloud's storage layout, with no owner, no share, and no name that
-Nextcloud will recognise. **The two halves of one dataset are on different disks with different
-protection, and the weaker half is the one that makes the other meaningful.**
-
-**Verified live the same day** (2026-08-15, via `pct exec` from the hypervisor): the root crontab is
-empty, `/etc/cron.d/` holds only `e2scrub_all`, `nextcloud` and `php`, `cron.daily/` is distribution
-stock, and of eleven timers none is a dump. A search across the whole `/mnt/smb` tree returned six
-files, all of them `pg_dumpall_*`. The schema is 38.3 MB across 179 tables, every one InnoDB.
-
-That last number is the part worth sitting with. **The gap does not exist because a backup would
-have been expensive.** It exists because `postgresql_backup` was built when lxc260 became "the
-platform database", and nobody checked whether that phrase covered every database on the platform.
-Nextcloud brought its own, from before that decision, and it fell outside a category that had been
-declared complete. Same shape as [KE-6](known-errors.md#ke-6): a control was closed for one node and
-the fleet was never swept.
+**Nextcloud is split across two disks.** Its files sit on the archive pool, its database on the
+boot SSD of [KE-14](known-errors.md#ke-14). Without the database the files are blobs in Nextcloud's
+storage layout with no owner, share or name, so the database's RPO must not exceed the files'.
 
 ## Recovery objectives
 
-Two definitions, because the terms are routinely swapped. RPO (Recovery Point Objective) is how
-much data may be lost, measured in time - it is a property of backup frequency. RTO (Recovery
-Time Objective) is how long restoration may take - a property of procedure and hardware
-availability.
+RPO (Recovery Point Objective) is how much data may be lost, measured in time; it is set by backup
+frequency. RTO (Recovery Time Objective) is how long restoration may take; it is set by procedure
+and hardware availability. "Of uptime" means the host's powered-on hours: the host is off every
+night, and a job missed while it is off runs at the next boot.
 
 | Dataset | RPO today | RPO target | RTO target | Note |
 |---|---|---|---|---|
-| Vault password and automation credentials | Unbounded - a single copy | Effectively zero | Immediate | The content changes approximately never; the objective is availability, not freshness. |
-| Vaultwarden vault | Not applicable since 2026-09-01 | - | - | Withdrawn. Authentication now rests on the external password manager and the paper escrow alone, which is what makes the annual retrieval drill in Tier 1 #1 the only evidence that it works. |
-| Paperless documents | No off-site copy | 24 h | 24 h | The May 2026 mirror covers what `vzdump` covers, which is the guests; the documents sit on the archive pool, outside that scope. On site it is a week, from the guest backup. Originals are also held on paper for a subset. |
-| Nextcloud files | No off-site copy | 24 h | 24 h | Same scope problem as Paperless. The database is inside lxc210 and therefore is in the off-site mirror while the files it describes are not, so a restore from that copy yields a complete file index over no files. On site it is a week, from the guest backup. |
-| Nextcloud MariaDB | 24 h of uptime on site, May 2026 off site | 24 h | 8 h | Must not exceed the files' RPO, or restored files reference rows that do not exist. Off site the mismatch is total: the database is in the mirror, the files are not. |
-| PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The distinction is measured, not theoretical: the staleness alert cannot see a period in which the host is off, because Prometheus is on that host. |
-| Platform configuration | Minutes | Keep | 1 h | Already met by git. |
-| Media library | Not applicable | - | Best effort | Reacquisition, not restoration. |
+| Vault password and automation credentials | Escrow; the content changes rarely | Effectively zero | Immediate | The objective is availability, not freshness; only the drill proves it |
+| Paperless documents | No backup | 24 h | 24 h | Parity only, on site |
+| Nextcloud files | No backup | 24 h | 24 h | Parity only, on site |
+| Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO |
+| PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The staleness alert cannot see a period in which the host is off, because Prometheus runs on it |
+| Guest root disks | One week | One week | 24 h | Restore per [`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md) |
+| Platform configuration | Minutes | Keep | 1 h | Met by git |
+| Media library | Not applicable | - | Best effort | Reacquisition, not restoration |
 
-**The platform-level RTO is deliberately not stated**, and stating one would be dishonest. This is a
-single host with no high availability by design; a hardware loss is bounded by procurement, and the
-current hardware order has a lead time measured in weeks. The per-service objectives above assume
-functioning hardware. The recovery-oriented architecture is the accepted trade: cheap and simple in
-exchange for an outage measured in days rather than minutes, which is the correct trade for a
-platform with a small, closed set of users.
+**No platform-level RTO is stated.** This is a single host without high availability; a hardware
+loss is bounded by procurement, with lead times measured in weeks. The per-dataset objectives
+assume working hardware. An outage of days in exchange for a simple, cheap platform is the
+accepted trade for a small, closed set of users.
 
 ## Data protection assessment
 
 The platform processes personal data: identity documents and correspondence in Paperless, files and
-contacts in Nextcloud, credentials in Vaultwarden, and the viewing activity of the people
-who use the media services.
+contacts in Nextcloud, and the viewing activity of the people who use the media services.
 
-**Article 2(2)(c) GDPR exempts processing "by a natural person in the course of a purely personal
-or household activity"**, and that is what this is. The assessment is recorded rather than assumed,
-because the exemption is narrower than it is usually taken to be and this platform sits close to
-two of its edges:
+Article 2(2)(c) GDPR exempts processing "by a natural person in the course of a purely personal or
+household activity". The platform sits close to two edges of that exemption:
 
-- **It ends the moment access is granted outside the household.** Sharing a Nextcloud folder with
-  someone outside it, or opening a service to anyone outside it, moves the processing out of the
-  exemption - and would do so silently, since nothing in the platform would behave differently.
-  Since 2026-09-26 the [ACL model](tailscale-acl.md) records one external user with access to
-  Jellyfin, Audiobookshelf and Nextcloud through machine sharing, access that existed before that
-  date as tailnet membership. By this document's own criterion the assessment for those three
-  services is due again and has not been redone.
-- **It never covers the security obligation in practice.** Even where the exemption applies, the
-  data belongs to identifiable people who did not choose this platform's controls. The other users
-  did not consent to a threat model; they simply use the services.
+- **It ends when access is granted outside the household.** The [ACL model](tailscale-acl.md)
+  records one external user with access to Jellyfin, Audiobookshelf and Nextcloud through machine
+  sharing. The assessment for those three services is due again and has not been redone
+  ([remediation plan](remediation-plan.md)).
+- **It never covers the security obligation in practice.** The data belongs to identifiable people
+  who did not choose this platform's controls.
 
-Treated here as a design constraint rather than a legal question: the C1 rows are handled as though
-Article 32 applied, which is also what their loss consequences demand independently.
+The C1 rows are therefore handled as though Article 32 applied, which their loss consequences
+demand independently.
 
 ## Retention and deletion
 
-Unresolved, and named here so it stops being invisible. There is no retention period for anything -
-not for documents, not for logs, not for backups beyond the 7-day dump rotation, and not for the
-monitoring history. There is likewise no deletion procedure for media leaving the flat, which
-becomes concrete at the next hardware replacement: the failing aux-disk holds C1 application data
-and cannot be assumed erasable by software, since thousands of its sectors are unreadable ([KE-13](known-errors.md#ke-13)).
+No retention period exists for documents, logs or monitoring history; the only rule is the dump
+retention above. No deletion procedure exists for media leaving the flat, and the next one is due:
+the aux-disk holds C1 application data and cannot be assumed erasable by software, since thousands
+of its sectors are unreadable ([KE-13](known-errors.md#ke-13)). Both are open items in the
+[remediation plan](remediation-plan.md).
 
-Both are tracked in the [remediation plan](remediation-plan.md) rather than solved here.
+## Off-site scope
 
-## What this changes downstream
+The off-site backup copies the C1 rows that live on this platform: Paperless documents, Nextcloud
+files and the two dump sets. C2 is either already off site through git or reconstructible from C1
+plus this repository. C3 is excluded; copying the media archive would dominate the cost and
+protect nothing that matters. The target is decided in
+[`offsite-backup-target.md`](../decisions/offsite-backup-target.md).
 
-1. **Tier 1 #3 now has a defined scope**: the five C1 rows, and nothing else. The C2 rows are
-   already off-site via git or reconstructible from the C1 rows plus this repository. The C3 rows
-   are explicitly excluded - copying a media archive off-site would dominate the cost of the whole
-   exercise and protect nothing that matters.
-2. **Two of those rows need a local backup before an off-site copy is even meaningful.** The
-   Nextcloud database had none - closed 2026-08-15 by the `mariadb_backup` role and
-   [its runbook](../../runbooks/database/mariadb-backup.md). Verified live on 2026-08-17: the share
-   is provisioned, `mp1` is bound, the timer has produced a dump on each of the three days since,
-   and the metric is scraped. Vaultwarden never got its consistent export and no longer needs one:
-   the service was decommissioned on 2026-09-01 rather than repaired. That closes the half of
-   Tier 1 #3 by removing its subject, which is not the same as having solved it.
-3. **The next measurement is size.** Choosing an off-site target requires knowing the volume of the
-   C1 set. One row is now measured - the Nextcloud database at 38.3 MB, which compresses to a
-   rounding error. The documents were measured on 2026-09-01 and turned out not to drive the choice
-   either: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets 340 MB
-   together, about 41 GB in total. At that size any of the candidate targets is affordable, so the
-   [off-site decision](../decisions/offsite-backup-target.md) turned on deletion resistance and on
-   what will actually be kept running.
+Verified 2026-09-01: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets
+340 MB together, about 41 GB in total.
+
+## Point-in-time copies off site
+
+No running job copies anything off site. Two point-in-time copies exist:
+
+| Copy | Location | Taken | What it covers |
+|---|---|---|---|
+| Auxiliary disk rescue | Encrypted storage on an admin workstation, in a different building from the server | 2026-06-25 | The failing aux-disk's contents at that date |
+| Mirror disk | A second residential site, air-gapped | May 2026 | The guest root filesystems, and the databases inside them; not the archive pool, so no Nextcloud file, Paperless document or dump set |
+
+Neither has been restored from, and neither can be given a cadence. They do not close the off-site
+item.
 
 ## Review
 
-Revisited with the weekly fleet audit, and whenever a new service is added - step 2 of the
-new-service procedure in `CLAUDE.md` should be read as including a row in the table above.
-Classification is stable; the protection and RPO columns are what change, and they change most
-often by something being switched off.
-
-## Off-site copies that exist today
-
-Recorded on 2026-09-01. Both were found in the 2026-08-20 audit and had been written down nowhere.
-
-| Copy | Location | Taken | What it is |
-|---|---|---|---|
-| Auxiliary disk rescue | Encrypted storage on the admin workstation, a different building from the server | 2026-06-25 | Point-in-time copy of the failing disk's contents. Its error log holds only `socket ignored` lines from container runtime sockets, so the copy itself is complete |
-| Disk at a second residential site | Genuinely off site and air-gapped | May 2026 | Point-in-time mirror covering the same scope as `vzdump`: the guest root filesystems, and therefore the databases inside them. It does not cover the archive pool, so no Nextcloud file, Paperless document or database dump is on it. Refreshed only during a visit in person, which is irregular, so its age between visits is unknown and it cannot be planned around |
-
-Neither is a running backup and neither has been restored from. They are the reason "no off-site copy
-of anything" was inaccurate; they are not a reason to consider the item closed. The disk is the
-stronger of the two and the one that cannot be given a cadence, which is most of the argument in the
-[off-site decision](../decisions/offsite-backup-target.md).
+Revisited with the weekly fleet audit. A new service adds its datasets to the table above in the
+same pull request as its service document. The protection and RPO columns are the ones that change.

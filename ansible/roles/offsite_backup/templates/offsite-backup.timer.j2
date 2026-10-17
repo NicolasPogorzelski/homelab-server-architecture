@@ -5,8 +5,8 @@ Description=Daily off-site backup
 [Timer]
 OnCalendar={{ offsite_backup_oncalendar }}
 Persistent={{ offsite_backup_persistent | ternary('true', 'false') }}
-# Two nodes write to the same server over one uplink. Without a spread they
-# start in the same second and each halves the other's throughput.
+# Two nodes write to the same server over one uplink; the spread keeps them from
+# starting in the same second.
 RandomizedDelaySec={{ offsite_backup_randomized_delay }}
 
 [Install]

@@ -1,145 +1,92 @@
-# Runbook: KE-14 power-path verification
+# Runbook: KE-14 power-path check
 
-## Problem
+- **Use when:** [KE-14](../../docs/platform/known-errors.md#ke-14) errors persist on the new boot
+  SSD after the [replacement](boot-ssd-replacement.md)
+  ([remediation plan](../../docs/platform/remediation-plan.md#power-path-and-ups)).
+- **Duration:** 1-2 hours with physical presence, then five boots of observation.
+- **Risk:** working in an open case with power applied (step 3); the host may not come back after
+  reseating.
+- **Last exercised:** never
 
-[KE-14](../../docs/platform/known-errors.md#ke-14) is a recurring burst of failed commands against
-the boot SSD, reported as `DID_SOFT_ERROR` or `DID_TIME_OUT`, in the boot window and under I/O load
-later in the day. The media has been excluded, so has the HBA firmware.
-The leading hypothesis is a sagging 12 V rail, and it has been the leading hypothesis for months
-because verifying it needs somebody in front of the machine rather than in front of a terminal.
-
-That disk carries every VM and LXC root disk. An `EIO` reaching the thin pool while a guest starts
-can corrupt a guest filesystem, so this is not a cosmetic log entry.
-
-This runbook is the check. It is written down so the verification becomes a step with a
-precondition rather than an intention that keeps being deferred - and so that a negative result is
-recorded as a result, which is the outcome most likely to be lost.
-
-**Never identify this disk by its kernel letter.** It was documented as `sdc` for a month and
-enumerated as `sda` on 2026-08-13. Use the SCSI address `9:0:0:0` or a `by-id` path.
+KE-14: bursts of failed read commands (`DID_SOFT_ERROR`, `DID_TIME_OUT`) against the boot SSD at
+SCSI address `9:0:0:0` behind the LSI SAS2008 HBA, at boot and under load. Media and HBA firmware
+are excluded. Candidates: 12 V rail sag and HBA heat. Identify the disk by `9:0:0:0` or `by-id`,
+never by kernel letter.
 
 ## Preconditions
 
-- Physical access to the machine, a multimeter, and a torch.
-- The host is powered down. The nightly RTC schedule already provides this window; do not force a
-  shutdown during the day for it.
-- Guests are down with it. Confirm before pulling power, because a `qm stop` is not what should
-  end this session: `pct list` and `qm list` both empty of running entries.
-- Wall power disconnected before anything inside the case is touched. The 12 V measurement is the
-  one step that happens with power applied, and it happens with the case open and hands clear of
-  the fans.
-- A second person in the flat, or at minimum somebody who knows the machine is open.
+- Physical access, a multimeter, a torch.
+- The host down in the nightly off-window; no forced shutdown during the day.
+- All guests stopped: `qm list` and `pct list` show nothing `running` before power is pulled.
+- Mains disconnected before anything in the case is touched; only step 3 runs with power applied,
+  hands clear of the fans.
+- Somebody else nearby knows the machine is open.
 
-## Procedure
+## Steps
 
-### 1. Record the state before touching anything
-
-```bash
-# On the host, before the shutdown window:
-journalctl -k --since "-7d" | grep -iE 'DID_(SOFT_ERROR|TIME_OUT)|I/O error|reset' | tail -40
-# Failed commands per boot and host byte; both codes are the same fault.
-for b in 0 -1 -2 -3 -4; do
-  echo "boot $b: $(journalctl -k -b $b | grep -E '9:0:0:0: .*FAILED Result' \
-    | grep -oE 'hostbyte=DID_[A-Z_]+' | sort | uniq -c | tr '\n' ' ')"
-done
-smartctl -a /dev/disk/by-id/<boot-ssd-by-id> | head -40
-uptime -s
-```
-
-Save the output. The point of the exercise is a before-and-after, and after is worthless alone.
-
-### 2. Cables and seating, power off
-
-- Reseat both ends of the SAS cable between the HBA and the backplane or drive.
-- Reseat the SATA power connector on the boot SSD, and follow that lead back to the PSU: note
-  whether it shares a rail with the other drives, and whether a splitter or adapter is in the path.
-  A splitter is a candidate cause in its own right.
-- Reseat the HBA in its slot. Note the slot.
-- Note dust load on the HBA heatsink and on the intake. Write down what you see, including
-  "clean" - an unrecorded observation is one that will be made again.
-
-### 3. Twelve volts, power on
-
-With the case open and the machine booted to the point where the disks spin:
-
-- Measure 12 V and 5 V at a free Molex or SATA power connector on the same rail as the boot SSD.
-- Record the idle reading, then a reading while the disks are under load. Generate load from
-  another terminal:
-
-  ```bash
-  # Read, never write. This disk is the one under suspicion.
-  dd if=/dev/disk/by-id/<boot-ssd-by-id> of=/dev/null bs=1M count=8192 iflag=direct
-  ```
-
-- ATX tolerance on the 12 V rail is plus or minus 5 percent, which is 11.40 V to 12.60 V. A reading
-  inside tolerance at idle that drops out of it under load is the finding this whole exercise is
-  looking for. A reading inside tolerance in both states is also a finding, and it moves the
-  hypothesis rather than confirming it.
-
-### 4. Record the PSU
-
-Make, model, wattage, and the manufacture date if the label carries one. This is the gap
-[`physical-controls.md`](../../docs/platform/physical-controls.md) records under A.7.11, and the
-measurement above is worth much less without it: a six-year-old unit reading 11.6 V under load
-means something different from a new one doing the same.
-
-### 5. HBA temperature
-
-```bash
-# After the host is back up and has been under load for a few minutes:
-smartctl -a /dev/disk/by-id/<boot-ssd-by-id> | grep -i temperature
-sensors 2>/dev/null | head -30
-```
-
-An LSI SAS2008 in a case with no directed airflow runs hot enough to throttle or fault, and it is
-the component the transport errors are attributed to. If `sensors` reports nothing useful, note
-that too - the absence of a reading is why this has never been ruled in or out.
+1. Record the state before the shutdown window.
+   ```bash
+   journalctl -k --since "-7d" | grep -iE 'DID_(SOFT_ERROR|TIME_OUT)|I/O error|reset' | tail -40
+   for b in 0 -1 -2 -3 -4; do
+     echo "boot $b: $(journalctl -k -b $b | grep -E '9:0:0:0: .*FAILED Result' \
+       | grep -oE 'hostbyte=DID_[A-Z_]+' | sort | uniq -c | tr '\n' ' ')"
+   done
+   smartctl -a /dev/disk/by-id/<boot-ssd-by-id> | head -40
+   uptime -s
+   ```
+   Check: output saved; it is the "before" of the comparison.
+2. Power off, mains out. Reseat both ends of the SAS cable, the SSD's SATA power connector and the
+   HBA in its slot. Follow the SSD's power lead to the PSU: shared rail, splitter or adapter in the
+   path (a splitter is a candidate cause). Note the HBA slot and the dust on the HBA heatsink and
+   intake, including "clean".
+   Check: every item noted in writing.
+3. Power on, case open, disks spinning. Measure 12 V and 5 V at a free connector on the SSD's rail,
+   idle and under read load from another terminal:
+   ```bash
+   # read only
+   dd if=/dev/disk/by-id/<boot-ssd-by-id> of=/dev/null bs=1M count=8192 iflag=direct
+   ```
+   Check: both readings recorded against the ATX tolerance of 11.40-12.60 V (12 V +/- 5 %).
+4. Record the PSU: make, model, wattage, manufacture date if labelled (the A.7.11 gap in
+   [`physical-controls.md`](../../docs/platform/physical-controls.md)).
+   Check: all four values noted, or "not labelled".
+5. After a few minutes under load, read temperatures.
+   ```bash
+   smartctl -a /dev/disk/by-id/<boot-ssd-by-id> | grep -i temperature
+   sensors 2>/dev/null | head -30
+   ```
+   Check: values recorded; if `sensors` reports no HBA reading, record that.
 
 ## Verification
 
-The check is complete when all four of these are written into
-[KE-14](../../docs/platform/known-errors.md#ke-14):
+Written into [KE-14](../../docs/platform/known-errors.md#ke-14):
 
-1. The 12 V reading at idle and under load, with the tolerance band stated.
-2. The PSU's make, model, wattage and age.
-3. What was reseated, and whether a splitter or adapter sits in the drive's power path.
-4. A boot-window journal read from the first boot after the work:
-
+1. 12 V at idle and under load, with the tolerance band.
+2. PSU make, model, wattage, age.
+3. What was reseated; whether a splitter or adapter is in the SSD's power path.
+4. Failed commands per boot, read after five boots (the fault skips boots):
    ```bash
    journalctl -k -b 0 | grep -E '9:0:0:0: .*FAILED Result' \
      | grep -oE 'hostbyte=DID_[A-Z_]+' | sort | uniq -c
    ```
 
-One clean boot proves nothing - the fault is intermittent and has skipped boots before. Read the
-same command after five boots before calling anything improved, and record the count.
+## Failure modes
 
-## Failure
-
-- **The reading is out of tolerance under load.** The hypothesis is confirmed and the remedy is a
-  PSU, which is a purchase and belongs in the hardware window with the aux-disk replacement. Until
-  then, nothing changes about the risk: record it and keep the guest-backup schedule.
-- **The reading is in tolerance in both states.** The power hypothesis is weakened, not dead - a
-  transient dip is not visible on a handheld meter. The next discriminating step is moving the
-  boot SSD off the HBA to an onboard SATA port, which is remediation plan Tier 2 item 7 and needs
-  no purchase: if the bursts stop it was the HBA path, if they persist it is neither.
-- **The host does not come back.** This is the case the preconditions exist for. The recovery path
-  is [`hard-shutdown-recovery.md`](hard-shutdown-recovery.md), and note that the hypervisor has no
-  out-of-band console: the GPU is passed through, so a monitor shows nothing until the passthrough
-  is removed from vm100's configuration.
+| Result | Meaning | Action |
+|---|---|---|
+| 12 V out of tolerance under load | Power hypothesis confirmed | PSU replacement in the next hardware window; record it in KE-14 |
+| 12 V in tolerance at idle and under load | Power weakened, not excluded (a handheld meter misses transients) | Move the SSD to an onboard SATA port: errors stop -> HBA path; persist -> neither |
+| Host does not come back | Reseating or slot problem | [hard-shutdown-recovery.md](hard-shutdown-recovery.md); the host has no console without [host-console-gpu-swap.md](host-console-gpu-swap.md) |
 
 ## Rollback
 
-Nothing in this procedure changes configuration, so there is no state to roll back. The two
-reversible physical acts are the reseating and the slot change; if the host behaves worse
-afterwards, put the HBA back in the slot it came from and reseat the cable you moved. That is the
-reason step 2 says to note the slot.
+No configuration changes. If the host behaves worse afterwards, put the HBA back in the noted slot
+and reseat the moved cable. If a component was swapped, put the original back before drawing a
+conclusion; two changes at once explain neither.
 
-If a component was swapped during the session, put the original back before concluding anything.
-Two changes at once produce a result that explains neither.
+## Background
 
-## Related
-
-- [KE-14 - the incident](../../docs/platform/known-errors.md#ke-14)
-- [KE-13 - the other failing disk, and why they are not the same fault](../../docs/platform/known-errors.md#ke-13)
-- [Physical and environmental controls](../../docs/platform/physical-controls.md)
-- [Hard shutdown recovery](hard-shutdown-recovery.md)
+The SSD carries every guest root disk, so an `EIO` reaching the thin pool during a guest start can
+corrupt a guest filesystem. The `sensors` board reading of `+12V 10.03 V` is unverified, which is
+why a meter reading is required. Related: [KE-13](../../docs/platform/known-errors.md#ke-13) (the
+other failing disk, a separate fault).

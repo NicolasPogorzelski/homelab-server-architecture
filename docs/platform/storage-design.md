@@ -17,9 +17,10 @@ The storage layer is implemented as a dedicated VM to enforce separation of conc
 ## Data Protection (Current State)
 
 - Single parity disk via SnapRAID
-- Automated daily sync (23:00) and weekly scrub (Monday, 20:00, 12% of the array) via `snapraid-maintenance.sh`
-- Prometheus alerts on sync staleness (>26h) and scrub staleness (>32d)
-- Regular status verification
+- Daily sync, weekly scrub and daily status run from systemd timers via `snapraid-maintenance.sh`
+  (schedules and scrub percentage in the `snapraid_maintenance` role defaults)
+- `SnapRAIDSyncStale` fires after 26 hours without a sync, `SnapRAIDScrubStale` after 10 days
+  without a scrub; coverage rules watch the oldest unscrubbed block ([monitoring.md](monitoring.md))
 
 ## Implementation Details
 
@@ -79,20 +80,8 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
 `disk06` arrived; instead it is replaced once the last two bays are in use, because only then is
 the bay worth more than the 3 TB in it.
 
-**Corrected 2026-08-17.** This list also carried an `aux-disk1` mounted at `/mnt/aux-disk1` on
-VM102, described as non-parity local app state. No such mount exists on this node and none did:
-that disk is attached to the Proxmox host and is the failing [KE-13](known-errors.md#ke-13) drive,
-documented in [`proxmox-host.md`](proxmox-host.md). The error was possible because two different
-physical disks share one placeholder name across this documentation. That is resolved as of the
-same date: the pool member described here is `aux-pool`, and the host's application-data disk keeps
-`aux-disk`. Both remain size-neutral, so Check 18 still holds.
-
-They are used for:
-- Performance-sensitive workloads
-- Local application state (e.g., OpenWebUI)
-- Non-critical or reproducible data
-
-If data stored on auxiliary disks is critical, it must be backed up separately.
+`aux-pool` is distinct from `aux-disk`, the application-data disk attached to the Proxmox host
+([KE-13](known-errors.md#ke-13), [proxmox-host.md](proxmox-host.md)); vm102 has no aux-disk mount.
 
 All data/parity disks are formatted as `ext4` and mounted persistently.
 
@@ -124,8 +113,8 @@ Data disks:
 - `data aux-pool /mnt/aux-pool`
 - `data disk06 /mnt/disk06`
 
-Excludes (current state, read from the live config 2026-08-17). The role owns this block through a
-marked `blockinfile`; the layout above it stays hand-written because it carries real device labels:
+Excludes are owned by the `snapraid_maintenance` role (`snapraid_excludes` in its defaults) through
+a marked `blockinfile`; the layout above it stays hand-written because it carries real device labels:
 
 - `exclude *.tmp`
 - `exclude *.bak`
@@ -151,7 +140,7 @@ Operational discipline (regular sync + scrub) is required to maintain protection
 A MergerFS mount provides a single unified namespace across all data disks:
 
 - Mountpoint: `/mnt/mergerfs`
-- This is the base path for service directories (e.g. `Nextcloud`, `Vaultwarden`, `Filme`, `Serien`, `Audiobooks`, `Books`).
+- This is the base path for service directories (e.g. `Nextcloud`, `Paperless`, `Filme`, `Serien`, `Audiobooks`, `Books`).
 
 MergerFS is used for:
 - stable service paths (services do not care on which disk a file resides)
@@ -167,9 +156,9 @@ Global settings (high-level):
 - Port 445 only (`smb ports = 445`)
 - Mandatory signing (`server signing = mandatory`)
 
-Service shares (read-write, per-service user):
-- `[Nextcloud]` -> `/mnt/mergerfs/Nextcloud` (valid user: `nextcloud`, RW)
-- `[Vaultwarden]` -> `/mnt/mergerfs/Vaultwarden` (valid user: `vaultwarden`, RW)
+Service shares (read-write, per-service user): `[Nextcloud]`, `[Paperless]`, `[Postgres-backups]`,
+`[DB-Backups]`, and the two Paperless ingest shares. The full list with paths is in
+[samba.md](samba.md).
 
 Owner mapping (current state for RW shares):
 - `force user = storage`
@@ -178,8 +167,9 @@ Owner mapping (current state for RW shares):
 - `directory mask = 0770`
 
 Media shares:
-- `[Filme]`, `[Serien]`, `[Audiobooks]`, `[Books]` -> RW for `storage`
-- Read-only consumers, one share per library since 2026-08-16:
+- `[Filme]`, `[Serien]`, `[Audiobooks]`, `[Books]` -> RW for `storage` (`create mask = 0640`,
+  `directory mask = 2750`)
+- Read-only consumers, one share per library:
   - `[media-jf-filme]` -> `/mnt/mergerfs/Filme`, `[media-jf-serien]` -> `/mnt/mergerfs/Serien`
     (valid user: `<svc-jellyfin>`, RO, not browseable)
   - `[media-abs-audiobooks]` -> `/mnt/mergerfs/Audiobooks`, `[media-abs-podcasts]` ->
@@ -188,25 +178,13 @@ Media shares:
 
 The filesystem side of this model - which group owns which directory, which modes are permitted,
 where setgid must be set - is stated and verified separately in
-[storage-permissions.md](storage-permissions.md). The share configuration alone does not determine
-it, and until 2026-08-16 the two had drifted apart unnoticed.
+[storage-permissions.md](storage-permissions.md); the share configuration alone does not determine
+it.
 
-This model enforces least-privilege on the write side:
-- RW only where needed (Nextcloud/Vaultwarden/service admin)
-- RO for consumers (Jellyfin/Audiobookshelf/Calibre-Web)
-
-On the read side it did not until 2026-08-16. `[media-jf]` and `[media-abs]` exported the whole
-pool rather than their libraries; what kept them out of the other directories was the mode on each
-directory, not the share definition. Calibre-Web was the counter-example that showed the
-difference: its share was already scoped to `Books`, so it stayed inside that path regardless of
-how permissive the filesystem got.
-
-That gap is closed. The four scoped shares above replaced the two pool-wide ones, the boundary now
-sits where it is evaluated first, and the superseded definitions were removed from `smb.conf` once
-VM100's old mounts had cleared - confirmed absent from `testparm -s` on 2026-08-17. This section
-described the pre-2026-08-16 model until that date, while [`samba.md`](samba.md) already described
-the new one: the same fact stated in two files, corrected in one.
-
+Least privilege on both sides:
+- Write: RW only for the service that owns the data, and for the admin workstation identity.
+- Read: each consumer share is scoped to one library, so the boundary holds before any filesystem
+  mode is evaluated.
 
 ### Adding a data disk
 

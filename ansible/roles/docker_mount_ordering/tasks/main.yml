@@ -6,10 +6,8 @@
   register: docker_mount_ordering_stat
   changed_when: false
 
-# A drop-in that names a unit which does not exist is not an error to systemd - the
-# dependency is simply never satisfied and the ordering silently does nothing. That
-# is the same shape as the guards this platform keeps finding broken, so it is
-# checked here rather than trusted.
+# systemd accepts a drop-in naming a missing unit and silently orders nothing,
+# so existence is checked here.
 - name: Fail if a listed unit is missing
   ansible.builtin.assert:
     that: item.stat.exists
@@ -39,7 +37,5 @@
   when: (docker_mount_ordering_units | length > 0) or (docker_mount_ordering_required_paths | length > 0)
   notify: Reload systemd
 
-# Deliberately no docker restart. The ordering exists for the boot sequence, and it
-# takes effect at the next boot on its own. Restarting the daemon to apply a change
-# that only matters at boot would stop every container on the node for nothing - on
-# vm100 that means Jellyfin and Audiobookshelf, on a node that cannot be rolled back.
+# No docker restart: the ordering only matters at boot and takes effect at the
+# next one. A restart would stop every container on the node for nothing.

@@ -3,21 +3,12 @@
 # tailscale-cert-refresh.sh - keep a node's Tailscale TLS certificate fresh AND
 # make the service that serves it pick the new one up.
 #
-# Why this exists (KE-16, 2026-07-10):
-#   Nodes that terminate TLS through `tailscale serve` never need this: serve asks
-#   tailscaled for the certificate on every connection, so renewal is transparent.
-#   LXC210 is different - Apache reads the certificate straight off disk from
-#   /var/lib/tailscale/certs/. tailscaled did renew the file (15 minutes before it
-#   expired), but Apache had loaded the April certificate at start-up and kept
-#   serving it from memory. Nextcloud went unreachable over HTTPS with a perfectly
-#   valid certificate sitting on disk next to the process.
+# Nodes behind `tailscale serve` do not need this. Apache on lxc210 reads the
+# certificate from /var/lib/tailscale/certs/ at start-up and keeps serving it
+# from memory after tailscaled renews the file, so a reload is required (KE-16).
 #
-#   So the missing piece was never renewal. It was the reload afterwards.
-#
-# `tailscale cert --min-validity` makes the fetch idempotent: it renews only when
-# the remaining lifetime is below the threshold, and is a no-op otherwise. The
-# checksum comparison decides whether a reload is warranted, so a daily run costs
-# nothing on 29 days out of 30.
+# `tailscale cert --min-validity` renews only below the threshold; the checksum
+# comparison decides whether a reload is warranted.
 #
 set -euo pipefail
 
@@ -28,13 +19,9 @@ RELOAD_UNITS="${RELOAD_UNITS:-apache2}"  # space-separated
 # The node's own MagicDNS name, without the trailing dot. Derived rather than
 # configured: a hard-coded FQDN silently breaks if the node is renamed.
 #
-# Polled rather than read once. The timer sets Persistent=true and the host is
-# powered down overnight, so the missed 04:30 run always fires inside the boot
-# window. There tailscaled's process is already running -- which is all that
-# After=tailscaled.service guarantees -- but it has not finished joining the
-# tailnet, so Self.DNSName is still empty and a single read failed the unit on
-# every single boot. Ordering is not readiness; poll for the value you need.
-# Same lesson as KE-9 (postgresql) and KE-12 (pveproxy).
+# Polled rather than read once: the Persistent=true timer catches up inside the
+# boot window, when tailscaled runs but has not joined the tailnet and
+# Self.DNSName is still empty. See KE-18.
 FQDN=""
 fqdn_deadline=90   # seconds; joining the tailnet is normally well under 30
 fqdn_waited=0

@@ -1,69 +1,37 @@
 ---
 # === snapraid_maintenance (VM102) ===
 #
-# Replaces the hand-deployed /etc/cron.d/snapraid. Cron is the wrong scheduler on
-# this platform: homelab_schedule powers the host down overnight, and vm102's boot
-# window ended at 22:14 on 2026-07-05 - the 23:00 sync simply never ran and was
-# never retried. A monthly scrub missed the same way costs a whole month. Both
-# timers therefore carry Persistent=true, which fires an overdue run at next boot.
-#
-# Second reason: a failed timer unit raises SystemdUnitFailed. A failed cron job
-# raised nothing.
+# systemd timers instead of the former /etc/cron.d/snapraid: homelab_schedule
+# powers the host down overnight, and Persistent=true fires a missed run at the
+# next boot. A failed timer unit also raises SystemdUnitFailed; a cron job does not.
 
 snapraid_script_src: "{{ playbook_dir }}/../../snippets/storage/snapraid-maintenance.sh"
 snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 
-# Nightly sync. The scrub was monthly until 2026-09-12 - the schedule the cron
-# file used, carried over without anyone costing it.
-#
-# The arithmetic that changed it, from two metrics that were already being
-# written. The 2026-09-01 scrub started at 20:00:03 and its success timestamp
-# reads 21:10:36, so 8% of this array takes 70 minutes; a full pass is 12.5 runs,
-# and monthly that is one complete verification every 12.5 months. Measured the
-# same day: the oldest block had gone 149 days unverified and 66% of the array
-# had never been scrubbed at all, while `SnapRAIDScrubCoverageAging` trips at 200
-# days - roughly 2026-11-01 at one day per day.
-#
-# Weekly at 12% covers the unscrubbed two thirds in about five and a half weeks,
-# which turns that curve before the rule fires rather than after. One run then
-# costs about 105 minutes against a window that closes at 23:30 when the host
-# powers down, so it fits twice over. The nightly sync is untouched and starts
-# at 23:00, an hour and a quarter after a 105-minute scrub has finished.
-#
-# The lever if this proves too much disk for the value: put the percentage back
-# to 8 and keep the weekly cadence, which still gives a full pass in 2.9 months
-# instead of 12.5.
+# Nightly sync; weekly scrub of 12% of the array, a full verification pass about
+# every two months, well inside SnapRAIDScrubCoverageAging. 8% takes about 70
+# minutes, so a 12% run (about 105 minutes) ends before the 23:00 sync.
+# Lower the percentage, not the cadence, if the disk load proves too high.
 snapraid_sync_oncalendar: "*-*-* 23:00:00"
 snapraid_scrub_oncalendar: "Mon *-*-* 20:00:00"
 snapraid_scrub_percent: 12
 
 # Coverage metrics, read from `snapraid status` and written to the textfile
-# collector. Midday, because it must not share a window with either job above:
-# the point of this timer is to answer "how much of the array is verified" on a
-# day when the sync did not run.
-#
-# `snapraid status` parses the content files and reports; it does not read the
-# array, so this is a cheap call rather than a third maintenance operation.
+# collector, at a time apart from both jobs, so coverage is reported even on a day
+# the sync did not run. `snapraid status` parses the content files and does not
+# read the array.
 snapraid_status_oncalendar: "*-*-* 12:00:00"
 
 snapraid_legacy_cron_file: /etc/cron.d/snapraid
 
 # === Exclude rules ===
 #
-# Managed here since 2026-08-15 (KE-19). SnapRAID computes parity over the bytes
-# it reads, so a file that changes underneath a running sync cannot be protected:
-# it fails that file, finishes the rest, and exits non-zero. The script then never
-# writes its success metric, and SnapRAIDSyncStale fires for an array that is
-# current apart from a log file nobody wants protected.
+# A file that changes during a sync fails that file and the sync exits non-zero,
+# so SnapRAIDSyncStale fires for an otherwise current array (KE-19). Exclude what
+# changes, not what shares a suffix: `*.log` would also drop static archive files.
 #
-# The rule is exclude what changes, not what shares a suffix. A first attempt used
-# `*.log` and silently dropped four static CD-rip logs out of the audiobook
-# archive - files that never change and were never the problem.
-#
-# What is deliberately NOT managed here is the disk, parity and content layout
-# above these lines in /etc/snapraid.conf. It carries the real device labels,
-# which the repository's sanitization rules keep out of version control
-# (validate-repo.sh Check 18), and it changes only when hardware does.
+# The disk, parity and content layout in /etc/snapraid.conf is not managed here:
+# it carries real device labels, which stay out of the repository.
 snapraid_conf: /etc/snapraid.conf
 
 snapraid_excludes:
@@ -76,18 +44,15 @@ snapraid_excludes:
   # Nextcloud's own application log, written while the array is being read.
   - "/Nextcloud/nextcloud.log"
   - "/Nextcloud/nextcloud.log.*"
-  # SQLite side files. Ephemeral by definition, and parity over a -shm captured at
-  # a different moment than its main database is an inconsistent set, so a
-  # reconstruction from it can be corrupt. The main database files stay IN the
-  # array: parity over them is imperfect, and still better than none.
+  # SQLite side files: ephemeral, and inconsistent with the main database captured
+  # at another moment. The main database files stay in the array.
   - "*.sqlite3-shm"
   - "*.sqlite3-wal"
   - "*.db-shm"
   - "*.db-wal"
-  # Database dumps while they are written. pg-backup.sh and its MariaDB sibling
-  # write *.partial and rename it once verified, and after a power-down their
-  # catch-up runs at the same boot as the sync's own, so the file the sync
-  # scanned is gone before it is read. The finished dump is protected as usual.
+  # Database dumps while they are written: the dump scripts write *.partial and
+  # rename it once verified, possibly during a catch-up sync. The finished dump is
+  # protected as usual.
   - "*.partial"
   # App cache, refreshed on a cycle and regenerable.
   - "/Nextcloud/appdata_*/richdocuments/remoteData/"

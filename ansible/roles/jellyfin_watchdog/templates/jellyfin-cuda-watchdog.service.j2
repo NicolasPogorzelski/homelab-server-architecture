@@ -7,7 +7,7 @@ Wants=docker.service
 
 [Service]
 Type=oneshot
-# Root, because the docker socket is root-owned on vm100 (no `docker` group member
-# exists for a service account here).
+# Root: the docker socket is root-owned on vm100 and no service account is in
+# the `docker` group.
 User=root
 ExecStart={{ jellyfin_watchdog_script_dest }}

@@ -1,12 +1,8 @@
 ---
 # Packages removed on every guest by the systemd_hygiene role, which concatenates
-# this list with the per-host systemd_hygiene_absent_packages.
-#
-# The tools came in as Recommends of prometheus-node-exporter-collectors when
-# apt_metrics installed it on 2026-09-25, the libraries as their dependencies;
-# apt_metrics now installs without Recommends. lxc260 has carried the same set
-# since April. vm100 never received them (Ubuntu's collectors package recommends
-# none of them), so the list is a no-op there.
+# this list with the per-host systemd_hygiene_absent_packages. They arrived as
+# Recommends of prometheus-node-exporter-collectors (apt_metrics now installs it
+# without Recommends) and their dependencies. A no-op where they are absent.
 systemd_hygiene_group_absent_packages:
   - name: openipmi
     reason: >-

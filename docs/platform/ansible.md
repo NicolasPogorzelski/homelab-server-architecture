@@ -1,292 +1,244 @@
 # Ansible Platform
 
-This document describes the Ansible setup used to manage the homelab platform.
+Every node of the platform - the Proxmox host and its nine guests - is managed by Ansible from
+the control node lxc250. This document is the catalogue of playbooks and roles; node membership
+lives in `ansible/inventory/hosts.yml.example`, schedules in each role's `defaults/main.yml`.
 
 ## Control Node
 
-**LXC250** (`/home/devops/git/homelab-server-architecture/ansible/`)
-
-All playbooks and roles are run from LXC250 over SSH via Tailscale. No direct LAN access is used.
+lxc250 ([node document](../nodes/lxc250.md)) holds the checkout under
+`/home/devops/git/homelab-server-architecture/ansible/`, the vault password and the real
+inventory. Playbooks reach every node over SSH on the tailnet; nothing is run over the LAN.
 
 ### The control node's checkout tracks `main`, and only `main`
 
-Playbooks are executed from the working tree, not from a commit. A control node parked on a
-feature branch, or left mid-merge, silently runs whatever happens to be on disk. That is how a
-role can be fixed in the repo and still not take effect on the fleet.
+Playbooks run from the working tree, not from a commit, so a checkout parked on a feature branch
+or left mid-merge runs whatever is on disk.
 
-Rules:
-
-- The checkout stays on `main` and is `git pull --ff-only`-ed before a run. `--ff-only` refuses to
-  invent a merge commit on a node that should only ever consume history.
-- Feature work happens on a workstation, not here.
-- Before any run that changes live state, confirm the tree is clean and conflict-free:
-
-  ```bash
-  git -C ~/git/homelab-server-architecture status --short --branch
-  grep -rlE "^(<<<<<<<|=======|>>>>>>>)" ~/git/homelab-server-architecture/ansible/
-  ```
-
-  The second command must print nothing. `validate-repo.sh` Check 15 catches conflict markers that
-  reach a commit; nothing catches markers sitting in an uncommitted working tree.
-
-On 2026-07-09 the control node was found on a documentation feature branch with
-`.git/MERGE_HEAD` present and conflict markers in three documentation files - a `git merge origin/main`
-abandoned partway. The `ansible/` subtree happened to be conflict-free and current, so runs from it
-were correct, but that was luck rather than design. Resolved by aborting the merge (the branch's five
-commits were already pushed to `origin`, so nothing was lost) and checking out `main`.
+- The checkout stays on `main` and is updated with `git pull --ff-only`. Feature work happens on a
+  workstation.
+- `ansible/playbooks/preflight.yml` is imported as the first play of every playbook that changes
+  live state. It fetches, then refuses the run unless the tree is a clean `main` equal to
+  `origin/main` with no merge conflict marker under `ansible/`. An override takes a reason string
+  and prints it into the run output.
+- Read-only playbooks (`fleet-health-check.yml`, `fleet-snapshot.yml`) do not import it, so
+  diagnosis stays available during an incident.
 
 ## Inventory
 
-- **File:** `ansible/inventory/hosts.yml` (gitignored - contains real Tailscale IPs)
-- **Example:** `ansible/inventory/hosts.yml.example` (sanitized, committed)
-- **9 managed nodes:** VM100, VM102, LXC200, LXC210, LXC211, LXC220, LXC230, LXC250, LXC260. LXC240
-  left the inventory on 2026-09-01 when the service was withdrawn
-- **LXC250 included since 2026-08-20.** It had been left out on the reasoning that a control node
-  does not manage itself, and the cost of that reasoning was measured rather than argued: no
-  `node_exporter` scrape, no `NodeDown`, no disk alert on a root filesystem at 73 %, no patching of
-  any kind, and no `SystemdUnitFailed` - on the node that holds the only copy of the vault password,
-  the real inventory and the Ansible SSH key. `hosts: all` excluded it and said nothing.
-
-Groups:
+- **File:** `hosts.yml` beside the example (gitignored, holds the real addresses).
+- **Example:** `ansible/inventory/hosts.yml.example` (sanitized, committed; owner of node and group
+  membership).
+- **Managed nodes:** 10 - the Proxmox host (since 2026-08-21) and nine guests. lxc250 is in the
+  inventory since 2026-08-20.
 
 | Group | Members |
 |---|---|
-| `lxcs` | LXC200, LXC210, LXC211, LXC220, LXC230, LXC250, LXC260 |
-| `vms` | VM100, VM102 |
-| `guests` | `lxcs` + `vms` - every node that is not the hypervisor. **The target of every sweeping playbook** |
-| `docker` | LXC200, LXC211, LXC220, LXC230, VM100 |
-| `database` | LXC260 |
-| `proxmox` | The Proxmox host |
-| `all` | `guests` + `proxmox`. Read-only playbooks may use it; state-changing ones must not |
-
-LXC240 left `lxcs` and `docker` on 2026-09-01, together with the `security` group it was the only
-member of. See the [decommissioning decision](../decisions/vaultwarden-decommission.md).
+| `lxcs` | lxc200, lxc210, lxc211, lxc220, lxc230, lxc250, lxc260 |
+| `vms` | vm100, vm102 |
+| `guests` | `lxcs` + `vms`: every node except the hypervisor; the target of every sweeping playbook |
+| `docker` | lxc200, lxc211, lxc220, lxc230, vm100 (nodes running Compose stacks) |
+| `database` | lxc260 |
+| `proxmox` | the Proxmox host; connects as `root` |
+| `tailscale_cert_ondisk` | lxc210 (reads its Tailscale certificate from disk, see KE-16) |
+| `offsite_sources` | vm102, lxc250 |
+| `all` | `guests` + `proxmox`; used only by read-only or explicitly host-safe playbooks |
 
 ### Why sweeps target `guests` and not `all`
 
-Because the failure has already happened in both directions. `all` excluded lxc250 for months and
-reported nothing, since absence is silent. Since the hypervisor entered the inventory on
-2026-08-21 the same mechanism runs the other way: a playbook written with `hosts: all` now also
-reaches the machine that runs all ten guests, and nothing reports that either.
-
-Three state-changing playbooks were converted on 2026-08-20 - `ssh-hardening.yml`,
-`node-exporter.yml` and `systemd-hygiene.yml`. The first two gained an explicit second play for
-`proxmox`, so the hypervisor is reached by being named. `fleet-health-check.yml` keeps `all`
-deliberately: it reads and does not write, and the host belongs in a health report.
-
-Which hosts are reached today is not the point - `ssh_hardening` was made safe for the hypervisor
-on 2026-08-19 and reaches it either way. The next role will not have been checked, and a group
-definition holds without anyone remembering to apply it.
-
-The `docker` group holds the nodes running Docker Compose stacks (excludes LXC210 Nextcloud - native Apache/PHP, LXC260 PostgreSQL - native systemd, and VM102 storage). It is the target of `docker-compose-update.yml`.
+`all` once excluded lxc250 silently because it belonged to no group. Since the hypervisor joined
+the inventory, a play written with `hosts: all` would also reach the machine that runs every
+guest. State-changing sweeps therefore target `guests`, and reach the hypervisor through a second,
+named `proxmox` play where the role has been checked for it (`ssh-hardening.yml`,
+`node-exporter.yml`, `systemd-hygiene.yml`, `tailscale-boot-gate.yml`, `lan-guard.yml`).
 
 ## Remote User
 
-A dedicated `ansible` user exists on every managed node:
-
-- SSH key from LXC250 (`~/.ssh/id_ed25519.pub`) in `~/.ssh/authorized_keys`
-- NOPASSWD sudo via `/etc/sudoers.d/ansible`
-- Bootstrapped via `ansible/playbooks/bootstrap-ansible-user.yml` (one-time, run as root)
+- Guests: a dedicated `ansible` user with the control node's key and NOPASSWD sudo via
+  `/etc/sudoers.d/ansible`, created once by `bootstrap-ansible-user.yml` connecting as root.
+- lxc250 is bootstrapped by `snippets/scripts/bootstrap-ansible-user-lxc250.sh` through `pct exec`,
+  because it refuses root SSH logins and the bootstrap play would need the account it creates.
+- The Proxmox host has no `ansible` user; the `proxmox` group connects as root with key
+  authentication only (`PermitRootLogin prohibit-password`).
 
 ## Ansible Vault
 
-Secrets are encrypted with Ansible Vault (AES-256).
-
-- **Vault password file:** `~/.vault_pass` on LXC250 (chmod 600, gitignored)
-- **Auto-loaded:** `vault_password_file = ~/.vault_pass` in `ansible.cfg`
-- **Encrypted values:** `ansible/inventory/group_vars/all/vault.yml`
-- **Format:** inline `!vault |` strings (per-variable encryption, not whole-file)
-
-Current vault variables:
+Secrets are inline `!vault |` strings in `ansible/inventory/group_vars/all/vault.yml`, encrypted
+with the password in `~/.vault_pass` on lxc250 (mode 600, gitignored, loaded by `ansible.cfg`).
 
 | Variable | Used by |
 |---|---|
-| `vault_paperless_dbhost` | `paperless_env` role |
-| `vault_paperless_dbpass` | `paperless_env` role |
-| `vault_paperless_secret_key` | `paperless_env` role |
+| `vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key` | `paperless_env` |
+| `vault_postgres_exporter_dsn` | `postgres_exporter` |
+| `vault_jellyfin_api_key` | `jellyfin_watchdog`, `jellyfin_user_prefs` |
+| `vault_offsite_backup_repository`, `vault_offsite_backup_password` | `offsite_backup` (not yet defined; the role is not deployed) |
 
-**Re-encryption process** (inline vault format cannot use `ansible-vault rekey`):
-
-1. Read plaintext: `ansible <host> -m debug -a "var=vault_xxx"`
-2. Update `~/.vault_pass` with new password
-3. Re-encrypt: `ansible-vault encrypt_string '<plaintext>'`
-4. Replace value in `vault.yml`
-
-See: [CLAUDE.md - Vault password changed](../../CLAUDE.md)
+Inline vault strings cannot be rekeyed with `ansible-vault rekey`. To change the password: read
+each value (`ansible <host> -m debug -a "var=vault_xxx"`), replace `~/.vault_pass`, re-encrypt
+each value with `ansible-vault encrypt_string`, and replace it in `vault.yml`.
 
 ## Configuration
 
-`ansible/ansible.cfg`:
+`ansible/ansible.cfg` sets `inventory = ./inventory/hosts.yml`, `remote_user = ansible`,
+`roles_path = ./roles`, `vault_password_file = ~/.vault_pass` and `host_key_checking = False`.
 
-- `inventory = inventory/hosts.yml`
-- `remote_user = ansible`
-- `host_key_checking = False`
-- `vault_password_file = ~/.vault_pass`
-- `roles_path = roles`
+**Known gap:** `host_key_checking = False` means the control node accepts any SSH host key, so a
+host impersonating a node on the tailnet would be handed the run and every secret it deploys. It is
+tracked in the [remediation plan](remediation-plan.md).
+
+## Conventions
+
+- **Scheduling:** every scheduled job is a systemd timer with `Persistent=true`, because the host
+  powers down nightly and cron loses every slot it sleeps through; a failed run surfaces through
+  `SystemdUnitFailed`. The single exception is the shutdown itself (`homelab_schedule`, cron in
+  `/etc/cron.d`).
+- **Dry run:** every playbook is run with `--check --diff` before it changes live state. Read-only
+  probes carry `check_mode: false` so their registered values exist under `--check`; enabling a
+  freshly templated unit carries `when: not ansible_check_mode`.
+- **Rolling:** the eight multi-host playbooks that restart services (`apt-upgrade`, `breakglass`,
+  `chrony`, `docker-compose-update`, `node-exporter`, `pg-backup`, `pg-restore-test`,
+  `ssh-hardening`) use `serial: 1` and `max_fail_percentage: 0`.
+- **Empty defaults:** roles driven by a per-host list default to an empty list and are a no-op on
+  nodes that declare nothing, so a group target stays safe.
+- **Drift:** `fleet-drift` runs the playbooks listed in `ansible/drift-sweep.conf` with `--check`
+  weekly and counts changes against the baseline in that file.
 
 ## Playbooks
 
-| Playbook | Target | Purpose |
+| Playbook | Targets | What it does |
 |---|---|---|
-| `preflight.yml` | `all`, checks delegated to `localhost` | Refuses the run when the control node's tree is not a clean `main` in sync with `origin`, or when a merge conflict marker survives under `ansible/`. Imported as the first entry of every playbook that changes live state. It fetches before comparing: `git status` answers against the remote-tracking ref as of the last fetch, so an unfetched node reports itself current. `fleet-health-check.yml` does not import it, which keeps diagnosis available during an incident. The override takes a reason string and prints it into the run output. It targets `all` and runs each check once on the control node, because `--limit` applies to every play in a run and dropped a gate aimed at `localhost` without a word |
-| `apt-upgrade.yml` | `lxcs`, `vms` | Rolling apt upgrade, `serial: 1`, `dpkg --verify` post-task |
-| `bootstrap-ansible-user.yml` | `all` | One-time: create `ansible` user, deploy SSH key, configure sudoers |
-| `node-exporter.yml` | `guests:!lxc200`, plus a named `proxmox` play | Deploy `node_exporter` binary + systemd unit. lxc200 is excluded because its exporter is a container that cannot see the host's systemd units. The `proxmox` play adopts a unit that already exists and whose content the role's defaults match, textfile path included |
-| `prometheus-config.yml` | `lxc200` | Deploy Prometheus config via Jinja2 template |
-| `paperless-env.yml` | `lxc211` | Deploy Paperless `.env` with Vault-managed secrets |
-| `ssh-hardening.yml` | `guests`, plus a named `proxmox` play | Set `PasswordAuthentication` and `PermitRootLogin` via `lineinfile`, reload sshd. The host play runs last, because a failure there reloads sshd on the one node with no other way in, and it must report `changed=0` |
-| `chrony.yml` | `vms` | Install `chrony`, ensure started + enabled (time sync on VMs) |
-| `breakglass.yml` | `vms` | Deploy break-glass admin SSH key(s) to each VM's native user (`gpu`/`storage`) |
-| `docker-compose-update.yml` | `docker` | `docker compose pull` + `up` per stack via `docker_compose_v2` (`pull: always`), `serial: 1` |
-| `postgresql-provisioning.yml` | `database` | Declarative tenant onboarding: DB + user + grants + `pg_hba` `hostssl` line + reload, looping over `postgres_tenants` |
-| `pg-backup.yml` | `database` | Deploy pg-backup infrastructure to LXC260: `pg-backup.sh` script, textfile collector directory, `pg-backup.service` + `pg-backup.timer` (03:00, `Persistent=true`); removes the legacy cron entry |
-| `mariadb-backup.yml` | `lxc210` | Deploy mariadb-backup infrastructure to LXC210: `mariadb-backup.sh` script, textfile collector directory, `mariadb-backup.service` + `mariadb-backup.timer` (03:30, `Persistent=true`, `RandomizedDelaySec=300`). Asserts `/mnt/backups` is a CIFS mount and refuses to deploy otherwise. Targets the host by name, not the `services` group - lxc211 is in that group and runs no database of its own |
-| `mariadb-bind.yml` | `lxc210` | Masks `mariadb.socket` so `mariadbd` binds its configured loopback address instead of a descriptor systemd holds on `[::]:3306`, restarts MariaDB on the run that removes the socket, then reads the bind back from `ss` |
-| `listener-metrics.yml` | `all` | Deploys the `listener_metrics` collector to every node, the hypervisor included: a timer every 15 minutes exports each listening socket that is neither on loopback nor on the Tailscale overlay and not allowed in the node's `listener_metrics_allowed` |
-| `calibre-import.yml` | `lxc220` | Deploy Calibre auto-import service via `calibre_importer` role (systemd oneshot + 2-min timer) |
-| `fleet-health-check.yml` | `all` | Query all nodes for uptime, RAM, mounts and Docker state, then write a plain-text report into `~/fleet-health/` on the control node, keeping seven days. The report play holds no `become`: until 2026-09-16 it did, over a local connection, and failed on every run because the interactive account has no passwordless sudo - ten green nodes and one red play. Nothing in the report needs root |
-| `fleet-snapshot.yml` | `all`, then `lxc250` | Record what no role owns - listening sockets, enabled and masked unit files, locally-defined units under `/etc/systemd/system`, root crontabs, mounts, running images - normalised and sorted, then diff it against the previous run into `/var/lib/fleet-snapshot/diff.txt` and export `fleet_snapshot_*` metrics. Read-only, so it imports no preflight gate; a host that does not answer is written as `[unreachable]` and counted, never dropped |
-| `fleet-snapshot-schedule.yml` | `lxc250` | Install the weekly timer for the playbook above |
-| `fleet-drift.yml` | `lxc250` | Install the weekly drift sweep: every playbook in `ansible/drift-sweep.conf` run with `--check`, counted against the baseline in the same file, plus the alert names Prometheus has loaded compared with the rules file here |
-| `timezone.yml` | `all` | Give every node the same timezone and take the setting out of ambient state |
-| `nsswitch.yml` | `guests` | Set the `hosts:` resolution order where a node declares one; a no-op everywhere else |
-| `onboarding.yml` | new nodes | Three-play node onboarding: bootstrap as root -> ssh_hardening -> node_exporter |
-| `postgresql-boot-order.yml` | `database` | Deploy Tailscale boot-ordering fix to LXC260 via `postgresql_boot_order` role |
-| `homelab-schedule.yml` | `proxmox` | Deploy power-schedule scripts + cron file to Proxmox host via `homelab_schedule` role |
-| `postgres-exporter.yml` | `database` | Own `postgres_exporter.service` so it binds the Tailscale IP instead of `*:9187` |
-| `systemd-hygiene.yml` | `guests` | Mask or remove per-host units that sit permanently in `failed`, so `SystemdUnitFailed` stays actionable. The hypervisor is deliberately absent: the role is a no-op with no entries, so including it would change nothing today and would silently start masking units there the day a fleet-wide entry is added |
-| `tailscale-cert.yml` | `tailscale_cert_ondisk` | Renew the on-disk Tailscale cert and reload the consuming service only when the cert actually changed (KE-16) |
-| `unattended-upgrades.yml` | `guests` | Install security updates unattended on every guest; kernels (and NVIDIA on vm100) held back |
-| `snapraid-maintenance.yml` | `vm102` | Deploy `snapraid-maintenance.sh` + sync/scrub timers; remove `/etc/cron.d/snapraid` |
-| `paperless-inbox-scan.yml` | `lxc210` | Deploy `scan-paperless-inbox.sh` + hourly timer; remove the legacy root crontab entry |
-| `jellyfin-watchdog.yml` | `vm100` | Deploy `jellyfin-cuda-watchdog.sh` + monotonic one-minute timer and its API-key header file; remove the legacy root crontab entry |
-| `docker-mount-ordering.yml` | `docker` | Order `docker.service` after the automount units its containers bind, so a container cannot start onto a directory autofs has not yet claimed |
-| `netconsole.yml` | `vm100` | Stream the kernel log over UDP to a receiver on the Proxmox host, and raise `console_loglevel` so hung-task messages are not filtered out (KE-20) |
-| `pg-restore-test.yml` | `database` | Deploy the monthly restore validation: dump integrity, restore into a throwaway cluster on port 5433, non-empty key tables, teardown |
-| `guest-backup.yml` | `proxmox` | Deploy the weekly `vzdump` of eight guests to `/mnt/vzdump`: script, `guest-backup.service` + `.timer` (`Sat 11:00`, `Persistent=true`), textfile metrics. Asserts the target is a mountpoint on a device other than root and holds room for two runs. Excludes vm100 |
-| `tailscale-boot-gate.yml` | `guests` | Put `wait-for-tailscale-ip.sh` in front of units that bind the node's Tailscale address, as `ExecStartPre=`. A no-op on hosts that declare no `tailscale_boot_gate_units`, so the group target stays honest and a new node needs a host var rather than a playbook edit. The hypervisor is absent: its `pveproxy` gate is hand-deployed and gets folded in with the other host units during the adoption |
-| `storage-permissions.yml` | `vm102` | Verify the storage permission matrix and export the result as metrics (`StoragePermissionDrift`, `StoragePermissionCheckStale`) |
-
-Convention: `serial: 1` on all multi-host playbooks to avoid simultaneous restarts.
-
-The two tables above were four playbooks and five roles behind the repository until 2026-08-17.
-They are also not the only catalogue - [`ansible-progress.md`](ansible-progress.md) keeps a second
-one. Two lists of the same thing drift by construction, so treat this table as the reference and
-that file as the session narrative it is named for.
+| `preflight.yml` | `all`, checks run once on the control node | Refuses the run unless the checkout is a clean `main` in sync with `origin`. |
+| `apt-upgrade.yml` | `lxcs`, then `vms` | Rolling apt upgrade with a `dpkg --verify` integrity check afterwards. |
+| `apt-metrics.yml` | `all` | Applies `apt_metrics`. |
+| `auditd.yml` | `proxmox` | Applies `auditd` (exercise). |
+| `bootstrap-ansible-user.yml` | `lxcs:!lxc250`, `vm100`, `vm102` | One-time creation of the `ansible` user, key and sudoers rule, connecting as root. |
+| `breakglass.yml` | `vms` | Applies `breakglass`. |
+| `calibre-import.yml` | `lxc220` | Applies `calibre_importer`. |
+| `chrony.yml` | `vms` | Applies `chrony`. |
+| `docker-boot-retry.yml` | `docker` | Applies `docker_boot_retry` (opt-in per host). |
+| `docker-compose-update.yml` | `docker` | Applies `docker_compose_update`. |
+| `docker-mount-ordering.yml` | `docker` | Applies `docker_mount_ordering`. |
+| `fleet-drift.yml` | `lxc250` | Applies `fleet_drift`. |
+| `fleet-health-check.yml` | `all`, then `docker`, then `localhost` | Read-only report of uptime, RAM, mounts and Docker state into `~/fleet-health/`, kept seven days. |
+| `fleet-snapshot.yml` | `all`, then `lxc250` | Read-only record of sockets, unit files, crontabs, mounts and images per node, diffed against the previous run and exported as `fleet_snapshot_*` metrics. |
+| `fleet-snapshot-schedule.yml` | `lxc250` | Applies `fleet_snapshot`. |
+| `guest-backup.yml` | `proxmox` | Applies `guest_backup`. |
+| `homelab-schedule.yml` | `proxmox` | Applies `homelab_schedule`. |
+| `jellyfin-user-prefs.yml` | `vm100` | Applies `jellyfin_user_prefs`. |
+| `jellyfin-watchdog.yml` | `vm100` | Applies `jellyfin_watchdog`. |
+| `journal-central.yml` | `lxc200`, then `guests` | Applies `journal_remote` on the receiver, then `journal_upload` on nodes that opt in (exercise). |
+| `journald.yml` | `all` | Applies `journald`. |
+| `kernel-panic-policy.yml` | `proxmox` | Applies `kernel_panic_policy`. |
+| `lan-guard.yml` | `guests`, then `proxmox` | Applies `lan_guard`. |
+| `listener-metrics.yml` | `all` | Applies `listener_metrics`. |
+| `mariadb-backup.yml` | `lxc210` | Applies `mariadb_backup`. |
+| `mariadb-bind.yml` | `lxc210` | Applies `mariadb_bind`. |
+| `mariadb-restore-test.yml` | `lxc210` | Applies `mariadb_restore_test`. |
+| `netconsole.yml` | `vm100` | Applies `netconsole` (sending side; the receiver is in `proxmox_host_units`). |
+| `netplan-no-ra.yml` | `vm100` | Applies `netplan_no_ra`. |
+| `nft-guard.yml` | `guests` | Applies `nft_guard` (no-op unless a node declares ports). |
+| `node-exporter.yml` | `guests`, then `proxmox` | Applies `node_exporter`. |
+| `nsswitch.yml` | `guests` | Applies `nsswitch` (no-op unless a node declares a resolution order). |
+| `offsite-backup.yml` | `offsite_sources` | Applies `offsite_backup`; not yet run, the target is not provisioned. |
+| `onboarding.yml` | `lxc-test` (edit for the new node) | Template for a new node: bootstrap as root, then `ssh_hardening`, then `node_exporter`. |
+| `paperless-env.yml` | `lxc211` | Applies `paperless_env`. |
+| `paperless-inbox-scan.yml` | `lxc210` | Applies `paperless_inbox_scan`. |
+| `pg-backup.yml` | `database` | Applies `postgresql_backup`. |
+| `pg-restore-test.yml` | `database` | Applies `postgresql_restore_test`. |
+| `postgres-exporter.yml` | `database` | Applies `postgres_exporter`. |
+| `postgresql-boot-order.yml` | `lxc260` | Applies `postgresql_boot_order`. |
+| `postgresql-provisioning.yml` | `database` | Applies `postgresql_provisioning`. |
+| `prometheus-config.yml` | `lxc200` | Applies `prometheus_config`. |
+| `proxmox-host-units.yml` | `proxmox` | Applies `proxmox_host_units`. |
+| `smart-metrics.yml` | `proxmox` | Applies `smart_metrics`. |
+| `snapraid-maintenance.yml` | `vm102` | Applies `snapraid_maintenance`. |
+| `ssh-hardening.yml` | `guests`, then `proxmox` | Applies `ssh_hardening`; the host play runs last and must report `changed=0`. |
+| `storage-permissions.yml` | `vm102` | Applies `storage_permissions`. |
+| `systemd-hygiene.yml` | `guests`, then `proxmox` | Applies `systemd_hygiene`; the host has its own play so a fleet-wide entry cannot reach it by accident. |
+| `tailscale-boot-gate.yml` | `guests`, then `proxmox` | Applies `tailscale_boot_gate`. |
+| `tailscale-cert.yml` | `tailscale_cert_ondisk` | Applies `tailscale_cert`. |
+| `timezone.yml` | `all` | Applies `timezone`. |
+| `unattended-upgrades.yml` | `guests` | Applies `unattended_upgrades`. |
 
 ## Roles
 
-| Role | Target | What it does |
+| Role | Targets | What it does |
 |---|---|---|
-| `node_exporter` | all nodes except LXC200 | Downloads binary (guarded by a `--version` probe, so a converged node skips the download entirely), creates systemd unit via Jinja2 template, handler restarts on unit change. Enables the textfile collector fleet-wide (`node_exporter_textfile_dir`, default-on - it used to default to `""`, which silently dropped vm102's SnapRAID metrics on first rollout) and the systemd collector (`node_systemd_unit_state`, feeding `SystemdUnitFailed`). `.mount` units are deliberately *not* excluded, unlike node_exporter's stock exclude list - mount faults are the failure class the collector was added for. Backslashes in the exclude regex are doubled in the template because systemd applies escape processing to `ExecStart=` arguments. Since 2026-08-20 the unit also carries `ExecStartPre=wait-for-tailscale-ip.sh 90` (`node_exporter_tailscale_gate`, default on) and the role deploys that script: measured against a real boot, every one of the nine guests had been failing once with `EADDRNOTAVAIL` and recovering 15 s later on the restart, invisible because `SystemdUnitFailed` carries `for: 15m`. The gate is in the unit rather than in a drop-in because this role generates the unit; the hypervisor's older hand-written drop-in is removed by the role, since it would append a second, redundant `ExecStartPre` |
-| `prometheus_config` | LXC200 | Renders `prometheus.yml` from Jinja2 template, handler restarts Prometheus container (`docker compose restart`) to avoid bind-mount inode staleness on atomic writes |
-| `paperless_env` | LXC211 | Renders `.env` from Jinja2 template with Vault vars, handler runs `docker compose up -d`. The Serve URL is not a variable: `tailscale status --json` is read on the node and `Self.DNSName` stripped of its trailing dot supplies both `PAPERLESS_URL` and `PAPERLESS_CSRF_TRUSTED_ORIGINS`. Those two were literals holding the repository's `<tailnet-id>` placeholder from 2026-06-09 to 2026-09-05, and an `assert` now refuses any derived value that is not a `.ts.net` host rather than writing an `.env` that rejects every browser login |
-| `ssh_hardening` | all 10 nodes | Picks the restart verb per node: `restarted` where `ssh.socket` is active, `reloaded` where it is not, because sshd re-execs on SIGHUP and cannot rebind a port systemd holds ([KE-24](known-errors.md#ke-24)). The fallback is `restarted`, the verb that works on both kinds of node; `KillMode=process` keeps established sessions alive either way. Sets `PasswordAuthentication` and `PermitRootLogin` in a `00-hardening.conf` drop-in and in `sshd_config`; handler reloads sshd. Both directives are variables since 2026-08-19, defaulting to `no`, because the hypervisor cannot take the strict value - see the `proxmox` group vars. An `assert` refuses a value sshd would reject, since this role reloads the daemon it just reconfigured. `ssh_hardening_listen_address` (empty by default, so nothing changes) pins the bind, and the role refuses to write it unless the same node declares `ssh.service` in `tailscale_boot_gate_units` with `tailscale_boot_gate_clear_restart_prevent: true` - the two are safe together and dangerous alone, because sshd exits 255 on a failed bind and Debian's unit names 255 in `RestartPreventExitStatus`. Where the bind is pinned it also turns `ssh.socket` off and runs `ssh.service`, since under socket activation sshd binds nothing and `ListenAddress` is inert, then fails unless `ss` shows the pinned address alone on 22. The drop-in is a template rather than inline content since 2026-09-11, rendering byte-identically where the address is unset. See [the binding decision](../decisions/sshd-listen-address.md) Where `PermitRootLogin` is `no`, deletes `/root/.ssh/authorized_keys`: the guests held the control node's key there from the bootstrap play, inert while root logins are refused and live the day they are not. |
-| `chrony` | VMs (vm100, vm102) | Installs `chrony` (`state: present`), ensures service started + enabled; no template/handler (Debian default config) |
-| `breakglass` | VMs (vm100, vm102) | Enforces the admin break-glass pubkeys (`breakglass_pubkeys`, group var) on each host's native user (`breakglass_user`, host var). One `authorized_key` call with `exclusive: true` and the keys joined by a newline - *not* a `loop`, which with `exclusive: true` would leave only the last key, and *not* an inline `join("\n")`, which yields a literal `\n` and would have written both keys onto one line. Safe empty default (a `when:` guard, so an empty list cannot wipe access). Also removes `breakglass_retired_sudoers_files` - the April `ansible-apt` rule that made the account root without a password - after asserting the account's password status is `P`, and fails if `sudo -l` still shows a `NOPASSWD` rule for it |
-| `calibre_importer` | LXC220 | Installs `calibre`, deploys `calibre-import.sh` + a systemd oneshot service & 2-min timer that auto-imports ebooks dropped into `/books-rw/_import` |
-| `tailscale_boot_gate` | Any node declaring `tailscale_boot_gate_units` (LXC250 and the Proxmox host) | Deploys `wait-for-tailscale-ip.sh` and a per-unit systemd drop-in with `After=`/`Wants=tailscaled.service` plus `ExecStartPre=<script> 90`, and removes the hand-written `override.conf` it supersedes - drop-ins are read in filename-sort order, so leaving `override.conf` beside `10-wait-tailscale.conf` would let the hand-written file win every conflicting directive. Keeps `Restart=on-failure` with `RestartSec=15s` as a backstop, spaced that far because systemd's `StartLimitBurst=5` inside `StartLimitIntervalSec=10s` gives up in half a second at the stock 100 ms delay. `tailscale_boot_gate_clear_restart_prevent` emits an empty `RestartPreventExitStatus=`, needed for sshd (Debian's unit names 255, which is what sshd exits with on a failed bind) and off by default everywhere else. The handler only reloads systemd - restarting the gated unit from a play that arrived over that unit is how a connection gets lost. The hypervisor joined on 2026-09-11: its `pveproxy` gate had been hand-deployed since 2026-06-25, hardcoding the Tailscale address the shared script reads from `tailscale ip -4` and explaining itself in a language this repository does not use, so the host carried one readiness gate in two spellings. `tailscale_boot_gate_obsolete_dropins` names the old file, since `10-wait-tailscale.conf` sorts first and leaving `wait-tailscale.conf` beside it would let the hand-written file win every shared directive |
-| `postgresql_boot_order` | LXC260 | systemd drop-in (`After=`/`Wants=tailscaled.service`) + `wait-for-tailscale-ip.sh` as `ExecStartPre` so PostgreSQL binds its Tailscale IP on boot (KE-9 fix); handler runs `daemon-reload` |
-| `docker_compose_update` | `docker` group (LXC200/211/220/230, VM100) | Loops over per-host `compose_projects` (list var in `host_vars/`). Copies each `docker/<src>/docker-compose.yml` from the repository onto the node, then runs `community.docker.docker_compose_v2` with `pull: always`, which recreates a stack whose config hash changed. Since 2026-09-05 a gate runs before the copy: six of the seven compose files interpolate `${VAR}`, Compose resolves those from the `.env` beside the file, and this role deploys no `.env` - so it reads the variable names out of the file about to be written and refuses the node when the `.env` there does not define them. An unset variable is not an error to Compose, it becomes an empty string, which on lxc220 would have turned a loopback port binding into one on every interface and left the config volume with no source. `${VAR:-fallback}` is deliberately not required. Safe empty default (`compose_projects: []`) keeps the role a no-op on hosts without stacks |
-| `postgresql_provisioning` | LXC260 (`database`) | Declarative DB tenant onboarding via `community.postgresql` modules (`postgresql_db`/`_user`/`_privs`/`_pg_hba`), looping over `postgres_tenants`. Connects via peer auth (`become_user: postgres`); installs `acl` so the unprivileged-become temp-file handoff works; passwords come from Vault via a separate `postgres_tenant_passwords` dict kept out of the loop item (so a task failure can't leak them), read only by the `no_log` user task. `pg_hba` change notifies a `reload` handler. Safe empty default (`postgres_tenants: []`) |
-| `postgresql_backup` | LXC260 (`database`) | Deploys `pg-backup.sh` from `snippets/postgres/` (`copy` module) and schedules it with `pg-backup.service` (`Type=oneshot`, `User=postgres`) + `pg-backup.timer` (`OnCalendar=*-*-* 03:00:00`, `Persistent=true`). Removes the legacy `postgres`-user cron job it replaced: cron had silently skipped every run for 26 days because `homelab_schedule` powers the host down before 03:00. The script now refuses to run unless `findmnt -no FSTYPE /mnt/backups` reports `cifs` - testing that the directory merely *exists* was the original defect |
-| `homelab_schedule` | Proxmox host (`proxmox`) | Renders `homelab-setwake.sh` and `homelab-shutdown.sh` into `/usr/local/sbin/` and one cron line into `/etc/cron.d/homelab-schedule`. The start times per weekday and the date each plan applies from are role variables (`homelab_schedule_plans`); the shutdown waits for guarded units on the host and, via the QEMU guest agent, on vm102. See [proxmox-host.md](proxmox-host.md#host-cron-jobs). Note: Proxmox host uses `ansible_user: root` - no `ansible` user bootstrapped there. |
-| `postgres_exporter` | LXC260 (`database`) | Owns `postgres_exporter.service` so `ExecStart` carries `--web.listen-address={{ ansible_host }}:9187` instead of binding `*:9187`. Orders `After=`/`Wants=tailscaled.service` (the KE-9/KE-12 bind race). `assert`s that the hand-installed binary and `/etc/postgres_exporter.env` exist rather than deploying a unit that cannot start; the env file holds `DATA_SOURCE_NAME` and stays unmanaged until there is a Vault step for it |
-| `systemd_hygiene` | `all` | Units that sit permanently in `failed` and drown out real faults now that `SystemdUnitFailed` alerts on unit state. Two sources, concatenated by a `set_fact` at the top of the role: `systemd_hygiene_masked_units` per host (lxc260 `nvmf-autoconnect`/`openipmi`, vm100's legacy mount units; lxc210's list is empty since 2026-09-11) and `systemd_hygiene_group_units` per group (`group_vars/lxcs.yml`: the `postfix-resolvconf` pair). The split is not cosmetic - a condition that belongs to the platform would otherwise be restated in seven host_vars files, and Ansible does not merge two variables of the same name, so a host defining the per-host list would silently drop the fleet-wide entries. Each entry names a `reason` and an `action`: `mask` for package-owned units, `remove` for hand-written ones - `systemctl mask` refuses to overwrite an existing unit file. Finishes with `reset-failed`. Since 2026-09-11 it also removes the *cause* where the cause is an installed package: `systemd_hygiene_absent_packages` per host, simulated with `apt-get -s` first and refused if apt would take anything beyond the named list with it, and `systemd_hygiene_retired_units` to unmask and delete the leftover symlink afterwards. lxc210's `run-rpc_pipefs.mount` was the first case - masked since the container was built, while the `nfs-common` that shipped it also pulled in an `rpcbind` listening on every interface. A mask left behind after its cause is gone reads at review time exactly like one that is still doing something |
-| `tailscale_cert` | `tailscale_cert_ondisk` (lxc210) | Runs `tailscale cert --min-validity 720h` from a timer (`04:30`, `Persistent=true`) and reloads the consuming service only when the cert's `sha256sum` changed. `tailscale serve` renews per-connection; a service that reads the cert from disk does not, and Apache caches it in memory - lxc210 served an expired certificate that had already been renewed on disk (KE-16) |
-| `unattended_upgrades` | all guests | Installs `unattended-upgrades` and a drop-in `52-homelab-unattended.conf` that turns the daily run on and allows the security archive alone: `Allowed-Origins` on Ubuntu (vm100), `Origins-Pattern` on Debian, loaded from `vars/<distribution>.yml`. Kernels are held back everywhere, the NVIDIA stack on vm100 as well. The `#clear` directives are load-bearing: APT appends to a list option when it is redeclared, so without them the regular archive stays enabled. Validated with `apt-config -c %s dump` before install, and the merged result is read back with `apt-config dump` and asserted |
-| `snapraid_maintenance` | VM102 | Deploys `snapraid-maintenance.sh` and schedules it via the template unit `snapraid-maintenance@.service` (`ExecStart=... %i`, so one unit file serves three instances) driven by `snapraid-sync.timer` (daily 23:00), `snapraid-scrub.timer` (monthly, 1st at 20:00) and, since 2026-09-11, `snapraid-status.timer` (daily 12:00), all `Persistent=true`. Deletes `/etc/cron.d/snapraid`, whose 23:00 sync was skipped without a trace on every night the host powered down first. The status timer is separate from the sync on purpose: the sync writes the same coverage metrics when it succeeds, which is exactly the case where nobody needs them - a reading taken only by the job it describes cannot report that job failing. Also owns the KE-19 exclude rules through a marked block |
-| `paperless_inbox_scan` | LXC210 | Deploys `scan-paperless-inbox.sh` + `paperless-inbox-scan.timer` (`OnCalendar=hourly`, `Persistent=true`) and removes the hand-written root crontab entry |
-| `jellyfin_watchdog` | VM100 | Deploys `jellyfin-cuda-watchdog.sh` + a monotonic timer (`OnBootSec=5min`, `OnUnitActiveSec=1min`, `AccuracySec=5s`), and the Jellyfin URL and API key the script reads sessions with - the key as a root-only `curl` header file, written with `no_log` and without diff. The script holds a restart while only direct streams play. No `Persistent=` - it applies only to `OnCalendar=` timers, and a poll missed while the host was off has nothing to catch up on. Removes the hand-written `*/30 * * * *` root crontab entry |
-| `jellyfin_user_prefs` | VM100 | Asserts `SubtitleMode` on every Jellyfin user through the API (`jellyfin_user_prefs_subtitle_mode`, default `None`), so a profile created later inherits it. Reads under `--check` and reports drifted users by name; writes back the full configuration object with the one field changed, because the endpoint replaces it whole. Needs `vault_jellyfin_api_key`, a dashboard API key rather than a user token |
-| `docker_mount_ordering` | `docker` group | Drop-in ordering `docker.service` `After=`/`Wants=` the `.automount` units named in `docker_mount_ordering_units` (host var). Names the `.automount` units and never the `.mount` units: an automount is up in milliseconds whether or not the SMB server answers, whereas ordering after the mount ties the node's Docker daemon to a remote host being up - KE-15 rebuilt by hand. `Wants=`, not `Requires=`, for the same reason. Deliberately does not restart Docker: the ordering only matters at boot, and bouncing it would stop Jellyfin to apply a change that takes effect on its own |
-| `docker_boot_retry` | `docker` group (opt-in: `docker_boot_retry_enabled`) | Deploys `docker-boot-retry.sh` and `docker-boot-retry.service`, which runs once per boot after `docker.service` and starts containers that are exited with a non-empty `State.Error` and an `always`/`unless-stopped` policy: six passes, 30 s apart, then the unit fails. Docker's restart policy never covers these, because it applies only after a successful start. `Type=exec` so the sleeps do not hold `multi-user.target`. Complements `docker_mount_ordering` instead of tightening it: ordering Docker after the `.mount` units would rebuild KE-15 |
-| `mariadb_backup` | LXC210 | Deploys `mariadb-backup.sh` + `mariadb-backup.timer` (`03:30`, `Persistent=true`, `RandomizedDelaySec=300`) for Nextcloud's own database, which the `pg_dumpall` on lxc260 never touched. `assert`s that `/mnt/backups` is a CIFS mount and refuses to deploy otherwise - the same write-time defence as `postgresql_backup`, whose original defect was testing that the directory merely existed |
-| `mariadb_bind` | LXC210 | Masks `mariadb.socket`, which Debian's `mariadb-server` enables the first time an upgrade carries it, so that `bind-address = 127.0.0.1` decides the listener again. Restarts `mariadb.service` only when the socket was active, because a server the socket launched keeps the inherited wildcard descriptor. Fails the run unless `ss` shows `127.0.0.1:3306` alone - the server variable `@@bind_address` read `127.0.0.1` throughout the four days it was wrong |
-| `listener_metrics` | all nodes | The platform binding rule as a metric. `listener-metrics.sh` reads `ss -Hlntup`, passes loopback and the Tailscale address ranges for IPv4 and IPv6, and writes one `node_listener_outside_binding_rule` series per remaining socket whose protocol and port, or protocol and process, the allow file does not name. The allow file joins two common entries - `tailscaled` on any UDP port, for WireGuard and the portmapper's ephemeral probe sockets, and the DHCP client on 68 - with the node's `listener_metrics_allowed`, where every exception carries the decision behind it. Asserts the textfile directory exists rather than creating one no exporter reads. Alerts: `ListenerOutsideBindingRule`, `ListenerMetricsStale`, `ListenerMetricsMissing` |
-| `mariadb_restore_test` | LXC210 | Monthly proof that the nightly MariaDB dump can be read back, on the 15th at 09:00 local. Restores into a throwaway database beside the live one rather than into a second instance: `mariadb-dump` writes databases where `pg_dumpall` writes a cluster, so the analogue of a throwaway cluster is a throwaway schema. Checks the gzip and the single completion marker first, because a valid archive of a half-finished dump imports into empty tables and returns 0. Asserts `oc_storages`, `oc_mounts` and `oc_filecache` come back non-empty - without those three Nextcloud serves nothing. The whole safety argument rests on one assertion: the throwaway name must not already exist, since the cleanup trap drops whatever it names |
-| `netconsole` | VM100 | Loads the `netconsole` module from a unit ordered `After=network-online.target` rather than from `/etc/modules-load.d/`, which runs before the interface has an address and would fail silently; a failed unit raises `SystemdUnitFailed` instead. Targets the host's LAN address, because netpoll writes frames from inside the kernel and a Tailscale address lives on a TUN device whose daemon is frozen exactly when the channel matters. Pins the receiver MAC - omitting it makes the kernel broadcast the guest's log to the whole segment |
-| `postgresql_restore_test` | LXC260 (`database`) | Monthly (`*-*-01 09:00`, `Persistent=true`) full-cluster restore into a throwaway cluster on port 5433, asserting dump integrity, restore success and non-empty key tables, then tearing it down. Nothing live is touched. The 09:00 slot is load-bearing: the restored cluster holds thin-pool blocks a container cannot `fstrim` itself, so it depends on the host's `lxc-fstrim.timer` at 10:30 reclaiming them the same morning. `PostgreSQLRestoreTestStale` alerts at 40 days |
-| `fleet_snapshot` | LXC250 | Schedules `fleet-snapshot.yml` weekly (`Sat 10:10 Europe/Berlin`, `Persistent=true`, `RandomizedDelaySec=300`) - ahead of `lxc-fstrim.timer` at 10:30 and `guest-backup` at 11:00, so the week is recorded before the jobs that rewrite it. Asserts the playbook exists before installing a timer that would otherwise fail every Sunday. The unit runs as `devops` from the working tree, which is the caveat: a control node parked on a feature branch would take its baseline with that branch's command set, and `preflight.yml` cannot guard a playbook that must stay runnable during an incident |
-| `fleet_drift` | LXC250 | Schedules `fleet-drift.sh` weekly (`Sat 10:20 Europe/Berlin`, `Persistent=true`), ten minutes after the snapshot. The zone is named because lxc250 keeps UTC while the jobs this is ordered against run on a host keeping Europe/Berlin; a bare hour here fired at 11:00 local, the minute vzdump starts. Runs as `devops` and not as root, because git refuses a repository owned by another user and a root run fails at `preflight.yml` with every playbook reported unmeasured. The metric is moved into the root-owned collector directory by `ExecStartPost=+`, systemd's privilege prefix, rather than by widening that directory's permissions |
-| `timezone` | all | Sets `Europe/Berlin` fleet-wide and reads the node back to confirm it took, because a container whose `/etc/localtime` is bound from the host cannot set its own. Nine of eleven nodes kept `Etc/UTC` while vm102 and the hypervisor kept `Europe/Berlin`, so every `OnCalendar` hour in this repository meant two different wall-clock times. On lxc210 it also pins MariaDB's `default_time_zone`, which shipped as `SYSTEM` and would otherwise have followed the operating system at the next server start - two zones in one `datetime` column, distinguishable by nothing. PostgreSQL and PHP need no equivalent: both carry their own setting and never read `/etc/timezone` |
-| `guest_backup` | Proxmox host (`proxmox`) | Weekly full `vzdump --mode snapshot` of lxc250, 240, 260, 210, 211, 200, 220, 230 and vm102, ordered by value so a run aborted halfway still leaves the irreplaceable guests done. Retention through `--prune-backups` in time classes, not a file count - the `-mtime +7` lesson from `postgresql_backup`. Target is the generic `/mnt/vzdump`, which the host binds to whichever disk currently holds the role, so a disk change is an fstab edit rather than a code change. Two asserts before anything is written: the path is a mountpoint, and its backing device is not root - a bind of a local directory satisfies the first and would put ten gigabytes a week into the thin pool on the boot SSD, which is the KE-7 class. vm100 joined on 2026-10-12 with its root disk only: its data disk carries `backup=0`, and a size guard skips any VM that would include a disk over 128 GB without it. The role also deploys `host-config-backup.sh` with a daily timer - the host's own configuration, to the backup target and the boot disk, watched by `HostConfigBackupStale` - and `platform-restore.sh`, which rebuilds the platform from both onto a fresh install ([runbook](../../runbooks/platform/platform-restore.md)) |
-| `smart_metrics` | Proxmox host (`proxmox`) | Deploys Debian's `prometheus-node-exporter-collectors` and points its `smartmon.sh` timer at this host's textfile directory through a drop-in, replacing the hand-written collector that had run since 2025-12 and exported two metrics, neither of which could express degradation. Retires that script and its units, and clears the temporary files its `mktemp` leaked once per failed run. The order is load-bearing: the new collector must have produced a readable file before the old one is removed, asserted rather than assumed, so a failed adoption leaves the host with the weaker collector instead of none |
-| `apt_metrics` | all nodes | Exports pending package upgrades as a textfile metric, using Debian's `apt.sh` from `prometheus-node-exporter-collectors` rather than a fourth hand-written collector. A drop-in points it at the textfile directory this fleet's node_exporter actually reads, because the package writes into Debian's own node_exporter path by default and would otherwise run, succeed and be read by nobody. Unmasks the apt timer explicitly: `smart_metrics` had masked it on the hypervisor on the grounds that Ansible owned the apt job, and the measurement of 2026-09-16 found that nothing did - 228 packages pending there, 55 of them security, invisible to every rule on the platform. The hardware collectors the same package ships are masked on guests and left to `smart_metrics` on the host, since two roles asserting opposite things about one unit is how a fleet flaps between runs |
-| `auditd` | Proxmox host (`proxmox`) | **Exercise, not a control this platform needs** ([decision](../decisions/exercise-scope-before-terraform.md)). Syscall auditing with a short starter rule set - who changed the accounts, who escalated - read back from the kernel with `auditctl -l` rather than from the file, since a rule the kernel rejected leaves both the file and the daemon intact. Refuses to run inside a container, which is the first thing it teaches: the kernel audit subsystem is global and not namespaced, so an unprivileged LXC can neither own it nor read it, and auditing a container is done from its node through the runtime. Log volume is capped at four files of 8 MB because /var/log is on the boot SSD, and every `*_action` is `SYSLOG` rather than the `HALT` many hardening guides copy - a logging daemon able to power off a hypervisor carrying eleven guests is a larger risk than the one it was installed for. No alert reads anything it produces |
-| `journal_remote` | LXC200 | **Exercise** ([decision](../decisions/exercise-scope-before-terraform.md)). Receives journals from the nodes that opt in, using systemd's own remoting rather than Loki or an ELK stack: journald already holds structured records with verified boot ids, which a line-based collector would discard and a parser would guess back. The packaged service runs with `PrivateNetwork=yes` and requires its socket unit, so it cannot bind anything itself: the socket keeps listening, pinned by a drop-in to the Tailscale address with `FreeBind=yes`, and hands the service its connection as fd 3. Received journals are held to 2 GB because this container's root filesystem is thin-pool space on the boot SSD, by an hourly `journalctl --vacuum-size` timer: the receiver itself reads no size limit before systemd 254, and lxc200 runs 252 |
-| `journal_upload` | guests that opt in (lxc211, lxc260) | **Exercise** ([decision](../decisions/exercise-scope-before-terraform.md)). Ships the local journal to the receiver, opt-in per node so switching it on is a deliberate act rather than a side effect of a group run. Verified by the cursor file rather than the unit state: the cursor appears only once the far end has accepted a record, which is the first honest evidence the chain works. Plain HTTP because WireGuard already encrypts and authenticates the path - in a workplace without an overlay that line reads the other way, which is the comparison the exercise is for |
-| `offsite_backup` | `offsite_sources` (vm102, lxc250) | `restic` to a `rest-server` running append-only at a second site, daily at 04:15 with `Persistent=true`, after both database dumps have written. Each node uses its own repository and its own account, so a compromise of vm102 cannot read lxc250's credentials. The client cannot prune - that is the control the target was chosen for, and retention runs on the server. Refuses to deploy against a source path that does not exist, because `restic backup` skips a missing path and still exits 0, which is how a backup keeps succeeding while covering less |
-| `netplan_no_ra` | VM100 | Writes `/etc/netplan/60-no-ipv6-ra.yaml` with `accept-ra: false` for each interface in `netplan_no_ra_interfaces`, beside the `50-cloud-init.yaml` that cloud-init rewrites at boot; `netplan apply` only when the file changes. Fails the run while a listed interface still holds a global IPv6 address, since a router advertisement learned before the change keeps its lifetime |
-| `nsswitch` | Any node declaring `nsswitch_hosts` (lxc250 today) | Owns the `hosts:` line of `/etc/nsswitch.conf` and then reads a name back through `getent`, because a template that was applied and a name that resolves are two different claims. lxc250 alone ran `systemd-resolved` with `resolve [!UNAVAIL=return]` ahead of `dns`, which ends a lookup on resolved's "not found" and stops glibc ever reading the `/etc/resolv.conf` tailscaled had written correctly - MagicDNS answered nothing on the control node while the other six containers resolved it. Measured across all seven before the fix, so "only this node" is a result rather than an assumption |
-| `journald` | all | Pins `Storage=persistent`, `SystemMaxUse=512M` and `SystemKeepFree=1G` through a drop-in, and reads the running daemon back with `journalctl --header` rather than trusting its own template. Measured 2026-09-09, all ten nodes had `Storage=` unset, which means `auto`, which means persistent only while `/var/log/journal` happens to exist - so persistence was a property of a directory rather than of configuration, and would have degraded to memory silently. The entry that recorded this named two nodes; the fleet was swept because a closed configuration error is checked on the others, which is the KE-6 lesson |
-| `kernel_panic_policy` | Proxmox host (`proxmox`) | `kernel.panic_on_oops=1` and `kernel.panic=10` through a sysctl drop-in, then reads both values back out of the running kernel and fails if a later file in `/etc/sysctl.d/` overrides them. Linux continues after an oops by default, killing only the offending thread and keeping everything it held - which is right on a machine somebody can reach and wrong on this one, where the GPU is passed through and there is no serial console. [KE-21](known-errors.md#ke-21) left it alive and unreachable for two hours. Ten seconds rather than zero so the netconsole receiver can take the frames that explain the reboot. Hypervisor only: containers share this kernel and cannot set it, and neither vm100 freeze produced an oops for it to catch |
-| `lan_guard` | `guests`, then `proxmox` in its own play | An nftables table on every node's LAN interface (the interface with the default route) that drops each new inbound connection unless it is a reply, ICMP, DHCP, Tailscale's UDP 41641 or an entry in `lan_guard_allow`. The first rule accepts everything not arriving on that interface, so the tailnet, loopback and Docker bridges are never filtered and no service waits for Tailscale. Guests filter at `prerouting` priority -150, ahead of Docker's DNAT; the hypervisor at `input`, so bridged guest traffic is never seen. Two node-specific paths: SMB from the hypervisor and vm100 to vm102, and on the hypervisor break-glass SSH from the two admin workstations plus vm100's netconsole. Source addresses come from the gitignored inventory and are asserted to be IPv4 before anything is written. Loaded by its own unit after `nftables.service`, whose stock ruleset flushes everything; reads the loaded table back |
-| `nft_guard` | Any node declaring `nft_guard_local_only_ports` (lxc210 today) | An nftables table dropping ports whose service binds the wildcard address and offers no way to bind anywhere else. Collabora on lxc210 is the case: a Nextcloud app extracts an AppImage and runs it, so there is no listen-address setting to change, and Nextcloud reaches it over loopback through `proxy.php`. Accepts `lo` first, drops the port everywhere else. Probes whether the node can create a table at all before writing anything - a filter that cannot load leaves the port open while the role reports success - and reads the loaded ruleset back rather than trusting the file. Never loaded through `nftables.service`, whose stock config opens with `flush ruleset` and would take Tailscale's own chains with it |
-| `proxmox_host_units` | Proxmox host (`proxmox`) | Adopts four units the hypervisor had been running as hand-typed files: `lxc-fstrim` (containers cannot trim themselves - `ConditionVirtualization=!container` and a refused ioctl, both silent), `lvm-thin-metrics` (a thin pool is a block-layer object `node_filesystem_*` cannot see), `smb-mounts-check` (the boot guard [KE-15](known-errors.md#ke-15) went a month without), and the `netconsole` receiver, whose sending half has been a role since 2026-08-17. The receiver's LAN bind is resolved on the node instead of shipped as a placeholder with an install note telling the reader to substitute it. Verifies by reading the thin-pool metric file and the receiver's running `ExecStart`, because `systemctl is-active` reporting `active` is what made a wrong `node_exporter` on lxc250 read as coverage |
-| `storage_permissions` | VM102 | Verifies the filesystem side of the share model - group ownership, permitted modes, setgid - on a timer, and exports violations as metrics. Creates every share directory on every MergerFS branch in advance, so the pool never recreates one without its setgid bit. Exists because share masks apply only at the moment Samba creates an object, so what is on disk and what the share config implies had drifted apart unnoticed from the pool's creation until 2026-08-16 |
-
-**Two conventions that these roles share, both learned the hard way on 2026-07-10:**
-
-1. *Scheduling is a systemd timer with `Persistent=true`, never a cron entry.* The Proxmox host
-   powers down overnight, so cron silently loses every slot it sleeps through and never retries.
-   Timers also surface a failed run through `SystemdUnitFailed`; a failing cron job is invisible.
-   The single exception is `homelab_schedule` on the host, which *is* the shutdown trigger.
-2. *A role that cannot be dry-run cannot be reviewed.* Read-only probes carry `check_mode: false`
-   so their `register`ed value exists under `--check`; `systemctl enable` on a freshly templated
-   unit carries `when: not ansible_check_mode`, because in check mode the unit file was never
-   really written and systemd would fail with "Could not find the requested service".
+| `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory, with `TMPDIR` pointed there too. |
+| `auditd` | Proxmox host | Exercise ([decision](../decisions/exercise-scope-before-terraform.md)): syscall auditing with a starter rule set, read back with `auditctl -l`, `SYSLOG` actions and a capped log; no alert reads it. |
+| `breakglass` | vm100, vm102 | Enforces the admin break-glass keys exclusively on each VM's native user and removes retired passwordless sudo rules. |
+| `calibre_importer` | lxc220 | Installs Calibre and a timer that imports ebooks dropped into `/books-rw/_import`. |
+| `chrony` | vm100, vm102 | Installs and enables `chrony` with the Debian default configuration. |
+| `docker_boot_retry` | `docker` hosts with `docker_boot_retry_enabled` | Once per boot, restarts containers whose start failed with a `State.Error`, which Docker's restart policy never retries. |
+| `docker_compose_update` | `docker` | Copies each host's compose files from `docker/` and runs `docker_compose_v2` with `pull: always`; refuses a node whose `.env` lacks a variable the file interpolates. |
+| `docker_mount_ordering` | `docker` | Orders `docker.service` after the `.automount` units its containers bind (never the `.mount` units, see KE-15). |
+| `fleet_drift` | lxc250 | Weekly timer running the drift sweep as `devops` and exporting the result as a metric. |
+| `fleet_snapshot` | lxc250 | Weekly timer running `fleet-snapshot.yml`, ordered before the Saturday host jobs. |
+| `guest_backup` | Proxmox host | Weekly `vzdump` of the nine guests to `/mnt/vzdump` (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
+| `homelab_schedule` | Proxmox host | Renders the RTC wake and shutdown scripts and the one cron line in `/etc/cron.d/homelab-schedule`; wake plans are role variables. |
+| `jellyfin_user_prefs` | vm100 | Asserts `SubtitleMode` on every Jellyfin user through the API and reports drifted users under `--check`. |
+| `jellyfin_watchdog` | vm100 | Deploys the CUDA watchdog script, its one-minute monotonic timer and a root-only API-key header file. |
+| `journal_remote` | lxc200 | Exercise: socket-activated `systemd-journal-remote` bound to the Tailscale address, received journals capped by an hourly vacuum timer. |
+| `journal_upload` | guests that opt in (lxc211, lxc260) | Exercise: ships the local journal to lxc200, verified by the upload cursor file. |
+| `journald` | all nodes | Pins `Storage=persistent` and size limits by drop-in and reads them back with `journalctl --header`. |
+| `kernel_panic_policy` | Proxmox host | Sets `kernel.panic_on_oops=1` and `kernel.panic=10` and reads them back from the running kernel ([KE-21](known-errors.md#ke-21)). |
+| `lan_guard` | `guests`, then `proxmox` | nftables table on the LAN interface dropping new inbound connections except replies, ICMP, DHCP, Tailscale UDP and per-node exceptions (SMB to vm102 from vm100 and the host; break-glass SSH and netconsole to the host). |
+| `listener_metrics` | all nodes | Exports every listening socket outside loopback and the tailnet that the node's allow list does not name. |
+| `mariadb_backup` | lxc210 | Daily MariaDB dump to `/mnt/backups` on a timer; refuses to deploy unless that path is a CIFS mount. |
+| `mariadb_bind` | lxc210 | Masks `mariadb.socket` so MariaDB binds loopback, and verifies the listener with `ss`. |
+| `mariadb_restore_test` | lxc210 | Monthly restore of the latest dump into a throwaway database, asserting the key Nextcloud tables are non-empty. |
+| `netconsole` | vm100 | Loads `netconsole` after `network-online.target`, streaming the kernel log to the host's LAN address ([KE-20](known-errors.md#ke-20)). |
+| `netplan_no_ra` | vm100 | Disables IPv6 router advertisements per interface and fails while a global IPv6 address remains. |
+| `nft_guard` | nodes declaring `nft_guard_local_only_ports` (lxc210) | nftables table restricting wildcard-bound ports to loopback (Collabora). |
+| `node_exporter` | all nodes | Installs `node_exporter` with the textfile and systemd collectors, bound to the Tailscale address behind the boot gate; on lxc200 a second, native instance on 9101 ([decision](../decisions/lxc200-systemd-visibility.md)). |
+| `nsswitch` | nodes declaring `nsswitch_hosts` (lxc250) | Owns the `hosts:` line of `/etc/nsswitch.conf` and verifies resolution with `getent` ([decision](../decisions/magicdns-and-systemd-resolved.md)). |
+| `offsite_backup` | `offsite_sources` | `restic` to an append-only `rest-server` at a second site; built, not deployed ([decision](../decisions/offsite-backup-target.md)). |
+| `paperless_env` | lxc211 | Renders the Paperless `.env` from vaulted values and derives the Serve URL from `tailscale status`. |
+| `paperless_inbox_scan` | lxc210 | Hourly timer rescanning the Nextcloud Paperless inbox. |
+| `postgres_exporter` | lxc260 | Owns `postgres_exporter.service` bound to the Tailscale address and ordered after `tailscaled`. |
+| `postgresql_backup` | lxc260 | Daily `pg_dumpall` on a timer with write-time verification; refuses to run unless `/mnt/backups` is CIFS. |
+| `postgresql_boot_order` | lxc260 | Drop-in gating PostgreSQL on the Tailscale address ([KE-9](known-errors.md#ke-9)). |
+| `postgresql_provisioning` | lxc260 | Declarative tenant onboarding (database, user, grants, `pg_hba` line) from `postgres_tenants`. |
+| `postgresql_restore_test` | lxc260 | Monthly full-cluster restore into a throwaway cluster on port 5433, then teardown. |
+| `prometheus_config` | lxc200 | Renders `prometheus.yml` and restarts the Prometheus container on change. |
+| `proxmox_host_units` | Proxmox host | Owns `lxc-fstrim`, `lvm-thin-metrics`, `smb-mounts-check` and the netconsole receiver. |
+| `smart_metrics` | Proxmox host | Deploys Debian's `smartmon.sh` collector into the host's textfile directory. |
+| `snapraid_maintenance` | vm102 | Sync, scrub and status timers driving `snapraid-maintenance.sh`, plus the SnapRAID exclude block ([KE-19](known-errors.md#ke-19)). |
+| `ssh_hardening` | all nodes | Renders the `00-hardening.conf` sshd drop-in from a template (and sets the same directives in `sshd_config`), optionally pins `ListenAddress`, and verifies the bind ([decision](../decisions/sshd-listen-address.md)). |
+| `storage_permissions` | vm102 | Pre-creates share directories on every branch and exports permission-matrix violations as metrics. |
+| `systemd_hygiene` | `guests`, then `proxmox` | Masks or removes units that can never succeed on their node, optionally purges the package that ships them, then `reset-failed`. |
+| `tailscale_boot_gate` | nodes declaring `tailscale_boot_gate_units` | Drop-in putting `wait-for-tailscale-ip.sh` in front of units that bind the Tailscale address. |
+| `tailscale_cert` | `tailscale_cert_ondisk` | Renews the on-disk Tailscale certificate on a timer and reloads the consumer only when it changed ([KE-16](known-errors.md#ke-16)). |
+| `timezone` | all nodes | Sets `Europe/Berlin` and reads it back; on lxc210 also pins MariaDB's `default_time_zone`. |
+| `unattended_upgrades` | all guests | Installs `unattended-upgrades`, turns the daily run on and allows the security archive alone, per distribution from `vars/` (`Allowed-Origins` on Ubuntu, `Origins-Pattern` on Debian); kernels are held back, the NVIDIA stack on vm100 too. Reads the merged config back with `apt-config` and asserts it. |
 
 ## SSH Hardening
 
-All 10 managed nodes are hardened via the `ssh_hardening` role:
-
-| Directive | Value | Reason |
+| Directive | Guests | Proxmox host |
 |---|---|---|
-| `PasswordAuthentication` | `no` | Eliminates brute-force attack vector; SSH keys are already deployed fleet-wide |
-| `PermitRootLogin` | `no` | Root SSH access is unnecessary - `ansible` user has NOPASSWD sudo |
+| `PasswordAuthentication` | `no` | `no` |
+| `PermitRootLogin` | `no` | `prohibit-password` (root is the only administrative account; set in `group_vars/proxmox.yml`) |
+| `ListenAddress` | pinned to the Tailscale address | unpinned ([decision](../decisions/sshd-listen-address.md)) |
 
-**The Proxmox host and lxc250 carry the same values by hand, applied 2026-08-17, maintained by
-nothing.** That is the difference this document keeps making between a control and an intention, and
-it is why [`security-controls.md`](security-controls.md) rates A.8.5 *Partial* rather than *Enforced*
-while the values are correct on all eleven nodes.
-
-The host cannot take `PermitRootLogin no`: root is its only administrative account and it has no
-usable out-of-band console. Since 2026-08-19 the role expresses that as an override in
-`group_vars/proxmox.yml` - `prohibit-password`, key authentication for root without a password path -
-so adopting the host changes who maintains the setting, not the setting. A run against a correctly
-configured host must therefore report `changed=0`; a change means the live config drifted, and that
-is the finding rather than a side effect.
-
-**Implementation:** `ansible.builtin.lineinfile` sets each directive directly in `/etc/ssh/sshd_config`. The handler reloads sshd (`state: reloaded`) without dropping active sessions.
-
-**Pre-existing finding:** `vm102` had `PermitRootLogin yes` explicitly set (not default). Remediated by this role (2026-05-28).
-
-## Dry-Run Convention
-
-From roadmap item 7 (SSH hardening) onwards, all playbooks are tested with `--check --diff` before production runs:
-
-```bash
-ansible-playbook playbooks/<name>.yml --check --diff
-```
+The role picks `restarted` where `ssh.socket` is active and `reloaded` elsewhere
+([KE-24](known-errors.md#ke-24)). Where `PermitRootLogin` is `no` it deletes
+`/root/.ssh/authorized_keys`. A run against a converged host reports `changed=0`.
 
 ## Rolling Playbooks and a Stopped Run
 
-Eight playbooks roll one host at a time (`serial: 1`) and set `max_fail_percentage: 0`, so the
-first failed host ends the run and the hosts after it are not touched. Measured on 2026-10-10 with
-a play that failed on its first of three hosts: the other two never started. `serial: 1` already
-behaves that way; the explicit limit keeps it if the batch is ever widened.
+With `serial: 1` and `max_fail_percentage: 0` the first failed host ends the run and later hosts
+are not touched.
 
-A stopped run leaves the fleet split: the hosts before the failure carry the change, the failed
-host may carry part of it, the rest carry none. Do not start the same run again to see what
-happens. Read the recap for the failed host and task, fix the cause, dry-run the failed host with
-`--check --diff --limit <host>`, apply it there, and then rerun the playbook without `--limit`:
-the hosts already done report `ok`, which is the proof that they match. A change that must not
-stay half-rolled - a key rotation, a sudo rule - is reverted on the earlier hosts by the previous
-commit's version of the same playbook rather than by hand.
+Verified 2026-10-10: a play failing on the first of three hosts never started the other two.
+
+A stopped run leaves the fleet split. Do not restart the same run blindly: read the recap for the
+failed host and task, fix the cause, dry-run with `--check --diff --limit <host>`, apply there,
+then rerun without `--limit` - the hosts already done report `ok`. A change that must not stay
+half-rolled (a key rotation, a sudo rule) is reverted on the earlier hosts with the previous
+commit's version of the playbook, not by hand.
 
 ## Related Documents
 
-- [LXC250 - DevOps Workstation](../nodes/lxc250.md)
-- [LXC200 - Monitoring](../nodes/lxc200.md)
-- [LXC211 - Paperless-ngx](../nodes/lxc211.md)
+- [lxc250 - control node](../nodes/lxc250.md)
+- [Proxmox host](proxmox-host.md)
+- [Remediation plan](remediation-plan.md)

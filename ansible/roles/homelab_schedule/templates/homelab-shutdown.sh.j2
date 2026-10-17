@@ -4,11 +4,9 @@
 # Powers the host off for the night: waits for work that must not be cut off,
 # arms the next start, then shuts down.
 #
-# Two refusals keep the host up rather than off. Work still running when the wait
-# runs out would be killed by the guests' shutdown; the SnapRAID scrub on vm102
-# ended that way once, with result 'signal'. And a host powered off without an
-# alarm stays off until somebody presses the button. Either way the host tries
-# again the next night, and running for a night costs only power.
+# Two refusals keep the host up rather than off: guarded work still running when
+# the wait runs out (the guests' shutdown would kill it), and a failed alarm (the
+# host would stay off until switched on). Either way it retries the next night.
 set -uo pipefail
 
 DEADLINE=$(( $(date +%s) + {{ homelab_schedule_guard_timeout_minutes }} * 60 ))

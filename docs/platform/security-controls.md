@@ -1,214 +1,144 @@
 # Security Controls - ISO/IEC 27001 Annex A Mapping
 
-Mapped 2026-08-15 against ISO/IEC 27001:2022 Annex A, as elaborated in ISO/IEC 27002:2022.
+A self-assessment of this platform against ISO/IEC 27001:2022 Annex A, as elaborated in
+ISO/IEC 27002:2022. **This is a mapping, not a compliance claim.** Certification covers clauses 4-10,
+the management system (scope, risk assessment, Statement of Applicability, internal audit,
+management review), and a platform run by one person has neither an independent auditor nor a
+management review. What the mapping does is separate controls that a machine enforces from
+practices that depend on someone remembering them.
 
-## What this document claims, and what it does not
+Open work behind every Partial and Gap row is ranked in the [remediation plan](remediation-plan.md).
+The controls built as exercises ([decision](../decisions/exercise-scope-before-terraform.md)) -
+syscall auditing, central log aggregation, high availability, SBOM with signature verification -
+appear at most as Practised, with the exercise named in the row.
 
-**It does not claim compliance, and it never will.** The certifiable part of ISO/IEC 27001 is
-clauses 4-10 - the management system: a defined scope, a documented risk assessment with an
-accountable owner, a Statement of Applicability, an internal audit programme, and a management
-review. Annex A is only the control catalogue those clauses draw from. A platform run by one person
-in a flat has no management to review anything and no independent auditor, so "ISO 27001 compliant"
-would be a false statement, and a mapping that pretended otherwise would be worth nothing.
-
-What this document does claim is narrower and more useful: **it separates the controls that are
-enforced from the practices that merely happen to be followed.** That distinction was the reason
-for the exercise. A practice that depends on somebody remembering it is not a control - it is an
-intention, and intentions do not survive illness, a rebuild, or a busy month. Half of what looked
-solid before this mapping turned out to be intention.
-
-The mapping also produced a second result worth stating plainly: this platform already implemented a
-significant part of Annex A before anyone opened the standard, under different names.
-[`known-errors.md`](known-errors.md) is a corrective-action log, [`remediation-plan.md`](remediation-plan.md)
-is a risk treatment plan, [`changelog.md`](changelog.md) holds change records with verification
-evidence, and the [runbooks](../../runbooks/README.md) are documented operating procedures. The gap
-was vocabulary, not substance - except where it was substance, and those cases are listed at the
-end.
-
-**A third distinction arrives with the block agreed on 2026-09-16.** Four controls will be built
-here that the assessment proposing them argued against at this scale: syscall auditing with a file
-integrity check, central log aggregation, high availability, and an SBOM with signature
-verification. They are exercises, taken on to be understood rather than because the risk on this
-platform calls for them, and the reasoning and the exit are in
-[the decision](../decisions/exercise-scope-before-terraform.md). None of them will be listed below
-as `Enforced`. Check 32 requires an Enforced row to name its evidence, and the evidence these can
-offer is that a unit is running - which says nothing about whether the output is read or whether
-the control is proportionate. Where they appear at all it is as `Practised`, with the exercise
-named in the same row, for the reason this document gives about an unjustified `N/A`.
-
-## How to read the status column
+## Status
 
 | Status | Meaning |
 |---|---|
-| **Enforced** | A machine refuses the wrong outcome. Skipping it requires deliberately disabling something, and that act leaves a trace. |
-| **Practised** | Done consistently and documented, but nothing prevents an exception. Depends on somebody remembering. |
-| **Partial** | Implemented for part of the estate, or implemented but with a known blind spot. |
-| **Gap** | Not implemented. Listed with its consequence, not excused. |
-| **N/A** | Not applicable, with the reason. An unjustified "not applicable" is how control catalogues become decoration. |
+| **Enforced** | A machine refuses or reports the wrong outcome. Skipping it requires disabling something, which leaves a trace. Every Enforced row cites its evidence. |
+| **Practised** | Done consistently and documented, but nothing prevents an exception. |
+| **Partial** | Implemented for part of the estate, or with a known blind spot. |
+| **Gap** | Not implemented. Listed with its consequence. |
+| **N/A** | Not applicable, with the reason. |
 
 ## Organizational controls (A.5)
 
-| Control | Status | Evidence and notes |
-|---|---|---|
-| A.5.1 Policies for information security | Partial | Rules exist and are binding - the Tailscale binding rule, "every scheduled job is a timer with `Persistent=true`", the sanitization rules - but they are distributed across `CLAUDE.md` and the platform docs rather than stated as policy. This file is the closest thing to a consolidated statement. |
-| A.5.2 Roles and responsibilities | N/A | One operator holds every role. Recorded rather than hidden: the bus factor is 1, and the compensating measure is documentation depth sufficient for a stranger to take over. |
-| A.5.3 Segregation of duties | N/A | Structurally impossible with one person. Partial compensation: the pull-request flow forces the author to re-read their own change in a diff view before it can reach `main`. |
-| A.5.7 Threat intelligence | Partial | No structured intelligence source. Advisory-driven Dependabot security updates and the weekly [image scan](../../.github/workflows/image-scan.yml) now provide the narrow, relevant slice. |
-| A.5.9 Inventory of assets | Practised | One document per node under [`docs/nodes/`](../nodes/), plus the Ansible inventory. Known defect: lxc250 appears in no inventory group, so an asset that holds the deployment credentials sits outside the system that manages the estate - see [lxc250 § Open Items](../nodes/lxc250.md). |
-| A.5.12 Classification of information | Partial | Introduced 2026-08-15 in [`data-classification.md`](data-classification.md). Until then everything from tax documents to media files was handled identically. |
-| A.5.13 Labelling of information | N/A | Deliberate. Labelling pays off where many people handle data they did not create. Here it would be ceremony; the classification table carries the same information at the cost of one lookup. |
-| A.5.14 Information transfer | Enforced | All inter-node traffic runs over the Tailscale overlay (WireGuard). SMB is reachable on the LAN only from vm100 and the hypervisor, enforced by the `smb_guard` nftables table on vm102 - see [`samba.md`](samba.md). |
-| A.5.15 Access control | Enforced | Tier model with explicit ACL rules per tag, [`tailscale-acl.md`](tailscale-acl.md). Caveat worth naming: that document *mirrors* the policy; the authoritative copy lives in the Tailscale admin console, so the two can drift. |
-| A.5.16 Identity management | Practised | Per-node service accounts, a dedicated `ansible` user distinct from the interactive admin account. |
-| A.5.17 Authentication information | Partial | Ansible Vault for secrets in the repository. The vault password itself exists in exactly one copy on a disk with unresolved I/O faults - the single largest irreversible-loss risk on the platform, tracked as Tier 1 #1 in the [remediation plan](remediation-plan.md). |
-| A.5.18 Access rights | Enforced | The `breakglass` role manages `authorized_keys` with `exclusive: true`, making the inventory the sole source of truth. Revocation, not just granting - the change that removed two stale keys nobody had noticed. |
-| A.5.19-A.5.22 Supplier relationships | N/A | No suppliers, no contracts, no outsourced processing. |
-| A.5.21 ICT supply chain | Partial | GitHub Actions pinned to commit SHAs rather than mutable tags (2026-08-15). Container images are pinned *in the repository* and not on the fleet: measured 2026-08-17, every running container uses `:latest` or `:main`, because the pinned compose files were never deployed under the `docker-compose-update` hold. What holds the versions still is the hold, not the pin. Not covered either: image provenance and signature verification. |
-| A.5.23 Security for cloud services | N/A | No cloud services in the platform path. Revisit when the Terraform track introduces AWS. |
-| A.5.24 Incident management planning | Practised | [Runbooks](../../runbooks/README.md) per failure class, plus the known-error register. |
-| A.5.25 Assessment and decision on events | Practised | Every known error carries a root-cause section and a decision - fix, accept, or defer with a stated reason. |
-| A.5.26 Response to incidents | Practised | Procedures exist for the failure classes that have actually occurred. Untested for classes that have not. |
-| A.5.27 Learning from incidents | Practised | Distinctive here: entries record the *class*, not only the fix. "Ordering is not readiness" (KE-18) and "when closing a configuration error, sweep the other nodes" (KE-6) are generalizations that later prevented separate incidents. Post-mortems in [`incidents/`](incidents/). |
-| A.5.28 Collection of evidence | Practised | The changelog records measured values - timer timestamps, row counts, metric deltas - rather than assertions that something worked. |
-| A.5.29 Security during disruption | Partial | Recovery procedures exist. No exercise has ever simulated the loss of the whole host. |
-| A.5.30 ICT readiness for continuity | Partial | A full-cluster PostgreSQL restore into a throwaway instance runs monthly and is alerted on when stale ([`pg-restore.md`](../../runbooks/database/pg-restore.md)). This is above the industry norm. What is missing: recovery objectives to measure it against, now stated in [`data-classification.md`](data-classification.md), and any tested recovery path for anything other than the database. |
-| A.5.31 Legal and regulatory requirements | Partial | Licence terms stated ([`LICENSE`](../../LICENSE), 2026-08-15). Data protection assessed in [`data-classification.md`](data-classification.md). |
-| A.5.33 Protection of records | Enforced | Change records live in git. Since 2026-08-15 commits are signed with an SSH key, so authorship is cryptographically verifiable rather than a free-text field, and `main` cannot be force-pushed or deleted. |
-| A.5.34 Privacy and PII | Partial | Assessed 2026-08-15 for the first time; see [`data-classification.md`](data-classification.md). Previously not considered at all, despite the platform holding identity documents and serving further users. |
-| A.5.35 Independent review | Gap | Structurally unavailable. Partial compensation: the weekly fleet audit is a self-review against the documentation, and it has repeatedly found live faults - which is evidence that it is a real check and not a formality. |
-| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh), 33 checks, run by a pre-commit hook locally and by CI on every push and pull request. |
-| A.5.37 Documented operating procedures | Enforced | Every runbook must contain `Precondition`, `Verification` and `Failure`; Check 5 fails the build otherwise. A procedure without a verification step is rejected mechanically. |
+| Control | Status | Evidence | Residual risk |
+|---|---|---|---|
+| A.5.1 Policies for information security | Partial | Binding rules are stated in [`CONVENTIONS.md`](../CONVENTIONS.md), the binding rules in [`tailscale-acl.md`](tailscale-acl.md) and this file. | The rules are spread over several documents rather than one policy. |
+| A.5.2 Roles and responsibilities | N/A | One person holds every role. | Bus factor 1; documentation and runbooks are the only compensation. |
+| A.5.3 Segregation of duties | N/A | Impossible with one person; the pull-request flow forces a re-read of every change as a diff. | No second reviewer sees any change. |
+| A.5.7 Threat intelligence | Partial | Dependabot security updates ([`dependabot.yml`](../../.github/dependabot.yml)) and the weekly [image scan](../../.github/workflows/image-scan.yml). | Nothing covers threats beyond published package advisories. |
+| A.5.9 Inventory of assets | Practised | All ten nodes in [`hosts.yml.example`](../../ansible/inventory/hosts.yml.example), one document per node under [`docs/nodes/`](../nodes/); client devices by tag in [`tailscale-acl.md`](tailscale-acl.md). | Client devices are listed by role only, without a per-device record. |
+| A.5.12 Classification of information | Partial | Three classes and recovery objectives in [`data-classification.md`](data-classification.md). | The classes drive the off-site scope but no other technical control. |
+| A.5.13 Labelling of information | N/A | No data is handled by people who did not create it; the classification table carries the same information. | None at this scale. |
+| A.5.14 Information transfer | Partial | Remote access and service-to-service traffic run over Tailscale (WireGuard). SMB from vm100 and the hypervisor to vm102 runs over the LAN, admitted only from those two sources by `smb_guard` ([`samba.md`](samba.md)) and `lan_guard`. Netconsole from vm100 to the hypervisor also uses the LAN. | LAN SMB traffic is not encrypted by the overlay; removed by the storage network item in the [remediation plan](remediation-plan.md#storage-network). |
+| A.5.15 Access control | Enforced | Per-tag and per-host grants, deny by default, with policy tests that make Tailscale reject an edit breaking an assertion: [`tailscale-acl.md`](tailscale-acl.md). | The admin console is the source of truth and the repository copy is applied by hand, so the two can drift. |
+| A.5.16 Identity management | Practised | A dedicated `ansible` user on every guest, separate from the per-node admin account; per-service accounts. | No central identity; the identity track is Proposed ([decision](../decisions/identity-before-terraform.md)). |
+| A.5.17 Authentication information | Partial | Secrets in Ansible Vault (`ansible/inventory/group_vars/all/vault.yml`); vault password, real inventory and Ansible SSH key escrowed off site since 2026-08-20. | The escrow has never been restored from ([`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md)). |
+| A.5.18 Access rights | Partial | `breakglass` enforces the VM admin accounts' keys with `exclusive: true` and removes passwordless sudo and root-equivalent groups (`ansible/roles/breakglass/`); `ssh_hardening` deletes root's `authorized_keys` wherever root login is refused. | No role manages the hypervisor root account's four keys. |
+| A.5.19, A.5.20, A.5.22 Supplier relationships | N/A | No suppliers, contracts or outsourced processing. | None. |
+| A.5.21 ICT supply chain | Partial | Every GitHub Action is pinned to a commit SHA and updated by Dependabot. Every compose file pins its images. A monthly SBOM and signature check runs as an exercise ([`sbom.yml`](../../.github/workflows/sbom.yml)), report only. | Most images are unsigned community builds, and nothing refuses an unsigned image. |
+| A.5.23 Security for cloud services | N/A | No cloud service in the platform path. | Revisit when the off-site VPS or the Terraform track goes live. |
+| A.5.24 Incident management planning | Practised | [Runbooks](../../runbooks/README.md) per failure class and the [known-error register](known-errors.md). | Most runbooks have never been exercised. |
+| A.5.25 Assessment and decision on events | Practised | Every known error records cause and decision: fix, accept or defer with a reason. | Assessment depends on someone reading the alert. |
+| A.5.26 Response to incidents | Practised | Procedures exist for the failure classes that have occurred. | Classes that have not occurred have no tested procedure. |
+| A.5.27 Learning from incidents | Practised | Known errors record the failure class as well as the fix; post-mortems in [`incidents/`](incidents/). | Lessons apply only where someone sweeps the fleet for the same class. |
+| A.5.28 Collection of evidence | Practised | Known errors and runbooks record commands and their measured output, dated. | Evidence is protected only by git history. |
+| A.5.29 Security during disruption | Partial | [`platform-restore.md`](../../runbooks/platform/platform-restore.md) rebuilds host and guests from backups; `plan` and `test-restore` run against live backups. | Loss of the whole host has not been exercised; the boot SSD replacement is the first full rebuild. |
+| A.5.30 ICT readiness for continuity | Partial | Monthly restore tests for PostgreSQL and MariaDB with staleness alerts ([`pg-restore.md`](../../runbooks/database/pg-restore.md), [`mariadb-restore.md`](../../runbooks/database/mariadb-restore.md)); guest restore exercised 2026-08-21; objectives in [`data-classification.md`](data-classification.md). | No off-site copy exists. |
+| A.5.31 Legal and regulatory requirements | Partial | [`LICENSE`](../../LICENSE); data protection in [`data-classification.md`](data-classification.md). | The data protection assessment is due again for shared services. |
+| A.5.33 Protection of records | Enforced | Records live in git; `main` cannot be force-pushed or deleted, and commits are SSH-signed (`git log --show-signature`). | The owner can disable the ruleset, which GitHub records. |
+| A.5.34 Privacy and PII | Partial | Assessed in [`data-classification.md`](data-classification.md#data-protection-assessment). | One external user has access to three services that the assessment has not been redone for. |
+| A.5.35 Independent review | Gap | Structurally unavailable; the weekly drift sweep and fleet snapshot are self-review. | No outside party checks anything. |
+| A.5.36 Compliance with policies | Enforced | [`validate-repo.sh`](../../scripts/validate-repo.sh) runs in CI ([`validate-repo.yml`](../../.github/workflows/validate-repo.yml)) on every push to and pull request against `main`, and is required for merge. | It checks structure and patterns, not whether a statement is true. |
+| A.5.37 Documented operating procedures | Enforced | The repository validator fails a runbook without its contract sections (Preconditions, Verification, Failure modes, Rollback); contract in [`runbooks/README.md`](../../runbooks/README.md). | A section can be present and still be wrong. |
 
 ## People controls (A.6)
 
-| Control | Status | Evidence and notes |
-|---|---|---|
-| A.6.1-A.6.6 Screening, terms, disciplinary, responsibilities after termination | N/A | No employment relationship exists. |
-| A.6.3 Awareness and training | N/A | There is a single user. The learning-mode discipline in `CLAUDE.md` - explain every flag, root cause before fix - is the functional analogue. |
-| A.6.7 Remote working | Partial | All administration happens remotely over Tailscale with key-only SSH. Password authentication is off on all ten nodes, re-measured 2026-09-04 - it was off on nine until 2026-08-17, when measuring found the Proxmox host and lxc250 accepting passwords and both were closed by hand the same day. Still *Partial* rather than *Enforced*: every node is now reached by the role, but on seven of them the setting sits only in `sshd_config`, where a later `sshd_config.d` entry would override it. See A.8.5. |
-| A.6.8 Reporting information security events | Practised | Reporting channel published in [`SECURITY.md`](../../.github/SECURITY.md), 2026-08-15, with an explicit instruction not to report a disclosure through a public issue. |
+| Control | Status | Evidence | Residual risk |
+|---|---|---|---|
+| A.6.1, A.6.2, A.6.4-A.6.6 Screening, terms, disciplinary, after termination | N/A | No employment relationship exists. | None. |
+| A.6.3 Awareness and training | N/A | No staff. | None. |
+| A.6.7 Remote working | Enforced | Administration runs over Tailscale with key-only SSH; `ssh_hardening` writes `00-hardening.conf` on all ten nodes (`ansible/roles/ssh_hardening/`), and `lan_guard` limits the hypervisor's LAN SSH to the two admin workstations. | The hypervisor's LAN break-glass path bypasses Tailscale by design. |
+| A.6.8 Reporting information security events | Practised | Reporting channel in [`SECURITY.md`](../../.github/SECURITY.md). | No response time is guaranteed. |
 
 ## Physical and environmental controls (A.7)
 
-The weakest family, and the one most easily overlooked by someone who thinks about infrastructure
-primarily as software.
+What holds each control, and the two decisions behind it (no encryption at rest, `pve-firewall`
+off), are in [`physical-controls.md`](physical-controls.md).
 
-| Control | Status | Evidence and notes |
-|---|---|---|
-| A.7.1-A.7.4 Perimeters, entry, securing offices, monitoring | Gap | Undocumented. The platform occupies a private flat; who has physical access, and what that implies for full-disk encryption and console access, has never been written down. |
-| A.7.10 Storage media | Gap | No media handling procedure. The pending secrets escrow (Tier 1 #1) is the first item that forces one to exist. |
-| A.7.11 Supporting utilities | Gap, and live | The leading hypothesis for [KE-14](known-errors.md#ke-14) - recurring I/O errors on the disk carrying every guest root filesystem - is a sagging 12 V rail. Power quality is an unverified suspicion in an open incident, and no uninterruptible supply is documented. |
-| A.7.13 Equipment maintenance | Partial | SnapRAID scrub and sync run on timers with runbooks. SMART data is collected but, as measured, does not export the attributes that would have caught the failing disk - see [`operations.md`](operations.md). |
-| A.7.14 Secure disposal or re-use | Gap, and imminent | The aux-disk is scheduled for replacement and carries application data including personal documents. Nothing currently specifies that it must be erased before it leaves the flat, and its unreadable sectors, thousands and growing, mean a software overwrite cannot be assumed to have covered every block. Added to the [remediation plan](remediation-plan.md). |
+| Control | Status | Evidence | Residual risk |
+|---|---|---|---|
+| A.7.1 Physical security perimeter | Partial | The flat's door. | No second boundary between the door and the machine. |
+| A.7.2 Physical entry | Partial | Occupants only. | No entry record. |
+| A.7.3 Securing offices and rooms | Gap | The server shares a room with ordinary living space. | Anyone in the flat can reach the machine. |
+| A.7.4 Physical security monitoring | Gap | No camera, door contact or tamper seal. | Physical tampering would go unnoticed. |
+| A.7.5 Physical and environmental threats | Partial | Smoke detection in the flat. | No water detection or fire suppression near the machine. |
+| A.7.8 Equipment siting and protection | Partial | Off the floor, clear airflow. | Not in a locked enclosure. |
+| A.7.10 Storage media | Partial | Disks are not encrypted at rest, by decision. | Anyone holding the disks can read the C1 data. |
+| A.7.11 Supporting utilities | Gap | A consumer UPS, never load-tested; the power path is the leading [KE-14](known-errors.md#ke-14) hypothesis. | A mains event or a sagging rail can take down every guest at once. |
+| A.7.12 Cabling security | Partial | Internal cabling reseated during the KE-13 diagnosis. | Cabling is undocumented. |
+| A.7.13 Equipment maintenance | Partial | `smart_metrics` on the hypervisor exports every SMART attribute of every disk it sees; `SmartAttributeDegrading` fires on any counter rising within 25 hours; SnapRAID scrub runs weekly (`snapraid_maintenance`). | Physical maintenance is reactive. |
+| A.7.14 Secure disposal or re-use | Gap | No disposal procedure; the KE-13 disk is due for replacement and holds C1 data on sectors an overwrite cannot reach. | Data leaves the flat with a disposed disk unless the method is decided first. |
 
 ## Technological controls (A.8)
 
-| Control | Status | Evidence and notes |
-|---|---|---|
-| A.8.1 User endpoint devices | Partial | The admin workstation runs an immutable, image-based OS. Endpoint hardening is otherwise undocumented. |
-| A.8.2 Privileged access rights | Partial | The automation account is separate from the interactive one and break-glass keys are declared in the inventory. `PermitRootLogin no` holds on all nine guests, measured 2026-09-04, and on lxc250 since 2026-08-17. The Proxmox host is deliberately `prohibit-password` rather than `no`: root is the only administrative account there - `media` (uid 1000) has neither sudo nor `authorized_keys` - so `no` would end SSH administration of the hypervisor. It had been `permitrootlogin yes` with password authentication enabled until the same day, which was the sharpest single finding this mapping produced. Residual: eight keys sit in the host's root `authorized_keys`, unmanaged, where the VMs have the `breakglass` role enforcing the set with `exclusive: true`. |
-| A.8.3 Information access restriction | Enforced | Tier tags decide which node may reach which port, and Tailscale ACLs are deny-by-default, so an unlisted path does not exist. Rules and the resulting access matrix in [`tailscale-acl.md`](tailscale-acl.md); the tag each node carries is stated in its node document and checked by `validate-repo.sh` Check 29. |
-| A.8.4 Access to source code | Enforced | Since 2026-08-15: `main` requires a pull request, blocks force-pushes and deletion, and requires both CI checks to pass. No bypass actors are configured, including for the owner. |
-| A.8.5 Secure authentication | Partial | Re-measured 2026-09-04 with `sshd -T` as root on every inventory node, which is the only reading that resolves the `Include` order. `passwordauthentication no` and `kbdinteractiveauthentication no` hold on all ten; `permitrootlogin no` on nine, `without-password` on the Proxmox host by the exception in A.8.2. The effective state is therefore correct everywhere and the mechanism behind it is not uniform. The `ssh_hardening` role writes two things: a `00-hardening.conf` drop-in, which wins over anything the distribution later places in `sshd_config.d`, and lines in `sshd_config`, which lose against it. Until 2026-09-04 the drop-in existed on three nodes only, because `6faf809` (2026-07-08) added the task under a subject naming vm100 while the role targets `guests`, and the role had not run fleet-wide since. It is now on all ten, and `sshd -T` after the run is identical to the reading before it, which was the pass condition. The run also exposed [KE-24](known-errors.md#ke-24): on the six socket-activated containers the handler's reload made sshd re-exec and fail to rebind a port systemd already held, leaving the service dead while the socket carried on answering. The role now selects `restarted` there and `reloaded` elsewhere. The Proxmox host is the one node still carrying a hand-written copy of the drop-in, held for a window of its own. Two earlier claims in this row were wrong and are struck: that the host and lxc250 carry a hand-written file no role maintains (both have been role-managed since 2026-08-20 and 2026-08-21), and the count of eleven nodes (ten since lxc240 was withdrawn). This row read *Enforced* until 2026-08-17 while both nodes accepted passwords - the wrong status is the finding, because a false assurance suppresses discovery more effectively than a stated gap does, and this correction is the same lesson applied to the correction itself. |
-| A.8.6 Capacity management | Enforced | Thin-pool metrics with warning, critical and metadata thresholds, plus an absolute-bytes alert for the archive pool - percentage being the wrong measure for a multi-terabyte array. See [`monitoring.md`](monitoring.md). |
-| A.8.7 Protection against malware | N/A | Deliberate. On a Linux fleet with no interactive users and no public ingress, a scanner would add attack surface and a false sense of coverage. The real measures are pinned images, least privilege and network isolation. |
-| A.8.8 Management of technical vulnerabilities | Partial | `apt_metrics` and `AptSecurityUpdatesPending` measure the patch level on all ten nodes. Every guest installs security updates unattended (`unattended_upgrades`), with kernels and, on vm100, the NVIDIA stack held back for a supervised run; the hypervisor is patched by hand with `apt-upgrade.yml`. Container images are pinned and updated in supervised runs, and the weekly Trivy scan measures what they still carry. |
-| A.8.9 Configuration management | Partial | Everything guest-side is Ansible-managed. The hypervisor and the control node are not, so a rebuild of either loses hand-deployed units - the single most-cited prerequisite in the remediation plan. |
-| A.8.10 Information deletion | Gap | No retention or deletion policy for anything. Relevant to A.7.14 and to the documents in Paperless. |
-| A.8.11 Data masking | N/A | No shared or exported datasets. |
-| A.8.12 Data leakage prevention | Enforced | Nine of the twenty-four repository checks exist solely to stop identifying information reaching a public repository, backed by GitHub secret scanning with push protection. Honest limit, stated in [`SECURITY.md`](../../.github/SECURITY.md): pattern matching against the working tree, blind to history and to secrets that do not look like secrets. |
-| A.8.13 Information backup | Partial | Dumps are verified at write time against three failure modes before the file is given its real name, and a monthly restore test proves they are usable. Since 2026-10-12 the hypervisor's own configuration is archived daily and `platform-restore.sh` turns the archive set into a rebuilt platform; `plan` and `test-restore` run against the live backups without a second machine, and the boot SSD replacement is the first full rebuild. The gap is categorical, not incremental: every copy is on the same site. Tier 1 #3. |
-| A.8.14 Redundancy | N/A | Deliberate architectural choice: single host, no high availability, recovery-oriented design. SnapRAID parity protects media against disk loss; it is not redundancy of processing and is not treated as such. |
-| A.8.15 Logging | Partial | journald is persistent on both VMs with months of boots retained. Weaknesses: `Storage=` is unset, so persistence is a property of a directory that happens to exist rather than of the configuration; no retention limit is pinned; there is no central aggregation and no tamper protection. |
-| A.8.16 Monitoring activities | Enforced | Node, service and unit-level alerting, including alerts for the *absence* of expected signals - `SnapRAIDSyncStale`, `LvmThinMetricsStale`, `PostgreSQLRestoreTestStale`. Scrape targets and the full rule inventory in [`monitoring.md`](monitoring.md). Known structural blind spot: the monitoring stack runs on the host it monitors, so a total outage produces silence rather than an alert - the reason an external heartbeat sits on the backlog. |
-| A.8.17 Clock synchronization | Enforced | `chrony` role. Without it, correlating logs across ten nodes during an incident is guesswork. |
-| A.8.18 Use of privileged utility programs | Partial | Maintenance scripts are deployed by roles into `/usr/local/sbin` with root ownership. No formal restriction beyond file permissions. |
-| A.8.19 Software on operational systems | Partial | Package installation is role-driven; container images are pinned. Ad-hoc installation is possible and has happened - the hand-deployed exporters are the evidence. |
-| A.8.20 Networks security | Enforced | No public ingress and no port forwarding; the LAN is treated as untrusted and carries only the two media ports. Model in [`networking.md`](networking.md), reachability in [the exposure model](../architecture/exposure-diagram.md), which also names where services still bind wildcard addresses. |
-| A.8.21 Security of network services | Partial | The principle holds where it was applied: every exporter, every database and every Serve backend binds loopback or the overlay address, which is the hard part and it is done. The exceptions are the services nobody installed on purpose. A fleet-wide `ss -tlnH` sweep on 2026-08-17 found sshd on the wildcard on ten of eleven nodes (lxc250 is the only one pinning `ListenAddress`), `rpcbind` on the host and lxc210, Alertmanager's cluster port, and an undocumented Collabora listener - against the "two remain open" this row previously claimed. Every node carries a routable IPv6 address, so a wildcard bind is world-reachable unless the router blocks it. Measured 2026-10-12 with `ss -Hltn` on all eleven nodes, and again after that day's applies: sshd binds the overlay address on every node but the hypervisor, vm102 the last to follow; `rpcbind` is gone (2026-09-11) and Alertmanager's cluster port with it; Apache and `coolwsd` on lxc210 remain. MariaDB on lxc210 listened on `[::]:3306` from 2026-10-08 because a package upgrade enabled its socket unit; the `mariadb_bind` role closed it the same day. Since 2026-10-01 `lan_guard` drops new inbound LAN connections on every node, so the remaining wildcards are reachable over the overlay, where the ACLs decide, and not from the LAN. Since 2026-10-12 the rule is measured rather than swept: `listener_metrics` exports every listener outside it on all ten nodes, each allowed exception names its decision in the inventory, and `ListenerOutsideBindingRule` fires on the rest. |
-| A.8.22 Segregation of networks | Enforced | Tier model with per-tag rules and deny by default: tier1 reaches storage on 445 and the database on 5432 and nothing else, tier2 only storage. Drawn as the policy itself in [view 1 of the architecture diagram](../architecture/diagram.md#view-1---access-policy), source in [`tailscale-acl.md`](tailscale-acl.md). |
-| A.8.23 Web filtering | N/A | No user browsing takes place on the platform. |
-| A.8.24 Use of cryptography | Practised | WireGuard for all transport, Ansible Vault at rest for repository secrets, ACME certificates for the one service that terminates TLS itself. No key management procedure beyond that - see A.5.17. |
-| A.8.25 Secure development lifecycle | Partial | Conventional commits, pull requests, linting, a repository validator. No threat modelling step. |
-| A.8.26 Application security requirements | N/A | No applications are developed here. |
-| A.8.27 Secure architecture and engineering principles | Practised | Architecture decisions are written down with the alternatives and the trade-off, in [`docs/decisions/`](../decisions/design-decisions.md). Rejected options are recorded with their reasons, which is what makes them reviewable later. |
-| A.8.28 Secure coding | Partial | `ansible-lint` at a pinned version, locally and in CI. Documented limit: lint cannot see broken handler wiring, because handler names resolve at notify time. |
-| A.8.29 Security testing in development and acceptance | Gap | `--check --diff` against production is the only pre-deployment test. Molecule is deferred; there is no acceptance environment. |
-| A.8.30 Outsourced development | N/A | None. |
-| A.8.31 Separation of development, test and production | Gap | The control node deploys from a working tree, not from a commit, and there is no test estate. A node on a feature branch would silently run code matching no commit - this has occurred. |
-| A.8.32 Change management | Enforced | Since 2026-08-15. Previously practised only: the pull-request discipline was real but unenforced, and `main` accepted direct pushes. |
-| A.8.33 Test information | Practised | The monthly restore test uses real dump data, restores it into a throwaway cluster on a separate port with manual start configuration, and removes it afterwards - verified to leave no remnants and never to touch the live cluster. |
-| A.8.34 Protection during audit testing | Practised | The same design principle: verification must not be able to damage what it verifies. |
+| Control | Status | Evidence | Residual risk |
+|---|---|---|---|
+| A.8.1 User endpoint devices | Partial | The admin workstations run an immutable, image-based OS. | Endpoint hardening is otherwise undocumented. |
+| A.8.2 Privileged access rights | Partial | Automation uses the `ansible` user; `PermitRootLogin no` on all nine guests and `prohibit-password` on the hypervisor, where root is the only admin account (`ansible/inventory/group_vars/proxmox.yml`); `breakglass` refuses passwordless sudo on the VMs. | Automated work on the admin workstation uses the break-glass key ([remediation plan](remediation-plan.md)). |
+| A.8.3 Information access restriction | Enforced | Deny-by-default ACL with per-host grants in [`tailscale-acl.md`](tailscale-acl.md); each node document states its tag, checked by the repository validator. | A service on a wildcard bind is reachable by every source the ACL admits to that node. |
+| A.8.4 Access to source code | Enforced | `main` requires a pull request with passing checks ([`.github/workflows/`](../../.github/workflows/)), blocks force-pushes and deletion, and has no bypass actors. | The owner can disable the ruleset, which GitHub records. |
+| A.8.5 Secure authentication | Enforced | `ssh_hardening` writes `PasswordAuthentication no` in `00-hardening.conf` on all ten nodes, which wins over later drop-ins; the weekly drift sweep fires `FleetDriftUnexpected` on divergence. Verified 2026-09-04 with `sshd -T` on every node. | Divergence between two sweeps goes unnoticed for up to a week. |
+| A.8.6 Capacity management | Enforced | `DiskSpaceCritical`, the `LvmThinPool*` rules and `ArchivePoolLowSpace` in [`alert.rules.yml`](../../docker/monitoring/prometheus/rules/alert.rules.yml). | Alerts report a level, not a trend; expansion is planned by hand. |
+| A.8.7 Protection against malware | N/A | No interactive users and no public ingress on a Linux fleet; pinned images, least privilege and network isolation are the measures. | A compromised image would not be detected by a scanner on the node. |
+| A.8.8 Management of technical vulnerabilities | Partial | `apt_metrics` and `AptSecurityUpdatesPending` on all ten nodes; security-only unattended upgrades on every guest, kernels and the NVIDIA stack held back (`unattended_upgrades`); weekly Trivy image scan. | The hypervisor, held-back kernels and Docker-repository packages are patched by hand with `apt-upgrade.yml`. |
+| A.8.9 Configuration management | Enforced | All ten nodes, hypervisor and control node included, are in the inventory; the weekly drift sweep (`ansible/drift-sweep.conf`) fires `FleetDriftUnexpected`, and `fleet_snapshot` diffs what no role owns. | State outside every role (guest and storage configuration in `/etc/pve`, the Tailscale policy) is diffed weekly, not alerted on. |
+| A.8.10 Information deletion | Gap | No retention or deletion policy. | Data is kept indefinitely or lost by accident, never removed by rule. |
+| A.8.11 Data masking | N/A | No shared or exported datasets. | None. |
+| A.8.12 Data leakage prevention | Enforced | Sanitization checks in [`validate-repo.sh`](../../scripts/validate-repo.sh), gitleaks over the full history ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml)), GitHub secret scanning with push protection ([`SECURITY.md`](../../.github/SECURITY.md)). | Pattern matching misses a secret that does not look like one. |
+| A.8.13 Information backup | Partial | Verified daily dumps (`postgresql_backup`, `mariadb_backup`), monthly restore tests, weekly guest backup and daily host configuration backup (`guest_backup`). | Every copy is on site, and the guest backups sit on the failing aux-disk. |
+| A.8.14 Redundancy | N/A | Single host by design; SnapRAID parity protects media against disk loss, not processing. High availability was read, not armed ([`ha-mechanics.md`](ha-mechanics.md)). | A host failure is an outage until hardware is replaced. |
+| A.8.15 Logging | Partial | `journald` sets `Storage=persistent` and a size cap on all ten nodes (`ansible/roles/journald/`). Exercises: central journal collection on lxc200 from lxc211 and lxc260, `auditd` on the hypervisor. | No tamper protection, and the central store shares the host's failure domain. |
+| A.8.16 Monitoring activities | Enforced | Node, service and unit alerts including absence alerts (`SnapRAIDSyncStale`, `PostgreSQLRestoreTestStale`, `ListenerOutsideBindingRule`) in [`monitoring.md`](monitoring.md). | Monitoring runs on the host it watches; a total outage is silent until the external heartbeat is live. |
+| A.8.17 Clock synchronization | Partial | `chrony` role on vm100 and vm102 (`ansible/roles/chrony/`); containers use the hypervisor's kernel clock. | The hypervisor's time daemon is not role-managed, and no alert watches clock offset. |
+| A.8.18 Use of privileged utility programs | Partial | Maintenance scripts are deployed by roles to `/usr/local/sbin`, owned by root. | No restriction beyond file permissions. |
+| A.8.19 Software on operational systems | Partial | Packages are installed by roles and images are pinned; `fleet_snapshot` shows unmanaged changes in a weekly diff. | Ad-hoc installation remains possible and is seen only in the diff. |
+| A.8.20 Networks security | Enforced | No public ingress or port forwarding (router checked 2026-09-26); `lan_guard` drops new inbound LAN connections on every node except named exceptions (`ansible/roles/lan_guard/`); model in [`networking.md`](networking.md). | A manual restart of `nftables.service` flushes the `lan_guard` table until the next boot. |
+| A.8.21 Security of network services | Partial | Services bind loopback or the Tailscale address; sshd is pinned on all nine guests. `listener_metrics` reports every listener outside that rule and `ListenerOutsideBindingRule` fires on any not recorded as an exception in the inventory. Recorded exceptions: Samba on vm102, Apache and `coolwsd` on lxc210 (`coolwsd` behind `nft_guard`), sshd and netconsole on the hypervisor ([decision](../decisions/sshd-listen-address.md)). | Apache on lxc210 still binds the wildcard address. |
+| A.8.22 Segregation of networks | Enforced | Tailnet segregation by tag and host grant, deny by default ([`tailscale-acl.md`](tailscale-acl.md)): only the hypervisor and Nextcloud reach `tag:storage:445`, only Paperless and the AI stack reach `tag:database:5432`, and no grant has vm100 or vm102 as its source. | All nodes share one LAN segment; separation there rests on per-node `lan_guard`, not on a VLAN. |
+| A.8.23 Web filtering | N/A | No browsing takes place on the platform. | None. |
+| A.8.24 Use of cryptography | Practised | WireGuard for tailnet transport, Ansible Vault for repository secrets, Tailscale-issued certificates for HTTPS. | No key management procedure; SMB on the LAN is not covered by the overlay. |
+| A.8.25 Secure development lifecycle | Partial | Conventional commits, pull requests, linting and the repository validator. | No threat modelling step. |
+| A.8.26 Application security requirements | N/A | No applications are developed here. | None. |
+| A.8.27 Secure architecture and engineering principles | Practised | Decisions with options and trade-offs in [`docs/decisions/`](../decisions/design-decisions.md). | Decisions are reviewed by their author only. |
+| A.8.28 Secure coding | Partial | `ansible-lint` at a pinned version in CI ([`ansible-lint.yml`](../../.github/workflows/ansible-lint.yml)); `promtool` tests for alert rules in `docker/monitoring/prometheus/rules/tests/`. | Lint cannot see broken handler wiring, because handler names resolve at notify time. |
+| A.8.29 Security testing in development and acceptance | Gap | `--check --diff` against production is the only pre-deployment test; Molecule is deferred. | Every change is tested by being applied. |
+| A.8.30 Outsourced development | N/A | None. | None. |
+| A.8.31 Separation of development, test and production | Partial | `preflight.yml` refuses any run from a control-node tree that is not a clean `main` in sync with `origin` (`ansible/playbooks/preflight.yml`). | There is no test estate. |
+| A.8.32 Change management | Enforced | Changes reach `main` only by pull request with required checks ([`validate-repo.yml`](../../.github/workflows/validate-repo.yml)); the weekly drift sweep reports live changes that no commit explains. | A change made by hand on a node is found only by the next sweep. |
+| A.8.33 Test information | Practised | Restore tests use real dumps in a throwaway instance on a separate port and remove it afterwards. | Test data is production data. |
+| A.8.34 Protection during audit testing | Practised | Verification runs read-only or against throwaway copies, never against the live cluster. | Nothing enforces that a new check follows the same rule. |
 
 ## The gaps that matter, in order
 
-Ordered by consequence, not by effort. Each is tracked in the [remediation plan](remediation-plan.md);
-this list exists so the ISO reading of them is on record.
+Ordered by consequence. Each maps to an item in the [remediation plan](remediation-plan.md).
 
-1. **Two nodes are hardened by hand and by nothing else** (A.8.5, A.8.2, A.6.7). The 2026-08-17
-   audit found the Proxmox host accepting root logins with a password and lxc250 accepting
-   passwords; both were closed the same day and counter-tested. What remains is the reason they were
-   open: the hypervisor and the control node are the only nodes outside Ansible, and they are also
-   the two most privileged. The configuration-management gap had been recorded for months - but as a
-   rebuild risk, not as missing hardening, which is why it never read as urgent. The settings are
-   correct now and no machine keeps them that way. The durable fix is the host adoption below.
-2. **No off-site copy of anything** (A.8.13). Every other backup property is now good, which makes
-   this the one that decides the outcome of a fire, a theft or ransomware reaching the SMB mounts.
-3. **One copy of the vault password** (A.5.17), on a disk with unresolved I/O faults. Loss is
-   unrecoverable by construction - no restore path exists, because the restore path is encrypted
-   with the thing that was lost.
-4. **Physical and environmental controls are undocumented** (A.7). One of them is an open incident:
-   the leading hypothesis for KE-14 is power quality.
-5. **Secure disposal is unspecified while a disk replacement is scheduled** (A.7.14). This one has a
-   deadline set by hardware delivery, not by choice.
-6. **No separation of development and production** (A.8.31), and **no security testing before
-   deployment** (A.8.29). Together these mean every change is tested by being applied.
-7. **The observer shares a failure domain with the observed** (A.8.16). Measured, not theorised: a
-   62-hour outage produced no alert because the alerting stack was inside the outage.
-8. **Logging has no defined retention and no tamper protection** (A.8.15). Records that can be
-   silently rewritten are weak evidence.
-9. **Two nodes have no failed-unit alerting** and two nodes are outside configuration management
-   (A.8.9). The overlap between those sets is lxc250, which holds the deployment credentials.
+1. **No off-site copy** (A.8.13, A.5.30). A fire, a theft or ransomware reaching the SMB mounts
+   decides the outcome.
+2. **The escrow is unproven** (A.5.17). The vault password has no other copy, and the escrow has
+   never been restored from.
+3. **Secure disposal is undecided while a disk replacement is due** (A.7.14).
+4. **Power quality is unverified** (A.7.11) and is the leading hypothesis for an open fault.
+5. **The observer shares a failure domain with the observed** (A.8.16) until the external
+   heartbeat is live.
+6. **No separation of test and production** (A.8.29, A.8.31). Every change is tested by being
+   applied.
+7. **Logs have no tamper protection** (A.8.15).
 
-## What the mapping itself changed
+## Review
 
-Done on 2026-08-15, in the same pass that produced this document:
-
-- Branch ruleset on `main`: pull request required, force-push and deletion blocked, both CI checks
-  required, no bypass actors. Turned A.8.4 and A.8.32 from practice into enforcement.
-- SSH commit signing enabled, so the authorship of every change record is verifiable (A.5.33).
-- [`SECURITY.md`](../../.github/SECURITY.md) with a reporting channel and a stated response order
-  that puts rotation before removal (A.6.8).
-- [`LICENSE`](../../LICENSE) - terms of use stated rather than absent (A.5.31).
-- GitHub Actions pinned to commit SHAs; advisory-driven security updates enabled (A.5.21, A.8.8).
-- Weekly Trivy scan of every pinned image, publishing to the Security tab, so the standing update
-  hold is a monitored acceptance rather than an unexamined one (A.8.8).
-- [`data-classification.md`](data-classification.md): the first classification of the data on this
-  platform, with recovery objectives and a data-protection assessment (A.5.12, A.5.30, A.5.34).
-
-## Review cadence
-
-Reviewed with the weekly fleet audit, and rewritten whenever a control moves between states. The
-status column is the part that rots: a control that was enforced stops being enforced the moment
-someone adds a bypass, and nothing announces that. When a remediation item closes, the matching row
-changes here in the same commit - the same rule the remediation plan already carries.
-
-**One measurement belongs to this review and is not about a control.** Documentation drifts towards
-uniformity the same way configuration drifts towards divergence, and neither is visible in a single
-sample. Two numbers, taken with the audit:
-
-```bash
-grep '^| 20' docs/platform/changelog.md | awk '{print length($0)}' > /tmp/cl
-head -10 /tmp/cl | awk '{s+=$1} END {print "newest 10:", s/NR}'
-tail -10 /tmp/cl | awk '{s+=$1} END {print "oldest 10:", s/NR}'
-
-awk '/^## KE-/ {if(n) print len; n=$0; len=0; next} n {len++} END {print len}' \
-    docs/platform/known-errors.md | sort -n | awk '{a[NR]=$1} END {print "KE median:", a[int(NR/2)+1], "max:", a[NR]}'
-```
-
-On 2026-09-04 the changelog read 1888 against 173, an eleven-fold spread that nobody decided and
-nobody noticed, because each row was defensible on its own. Check 37 now holds the changelog side;
-the known-error side has no check and is read by eye against the median.
-
-An entry that has been "Practised" for a year without becoming "Enforced" should be read as a
-prediction that it will eventually be skipped.
+Reviewed with the weekly fleet audit. A row changes in the same pull request as the work that
+changes its status, and a remediation item that closes updates its row here.

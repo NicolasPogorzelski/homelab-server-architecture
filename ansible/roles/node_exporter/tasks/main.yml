@@ -1,13 +1,7 @@
 ---
-# The unit runs as an unprivileged account, and until 2026-09-15 no role created
-# it. It existed on nine nodes because somebody had made it there by hand before
-# the role was written, and the tenth - lxc200, excluded from this playbook until
-# that day - had none. The unit installed, enabled, and then exited 217/USER on
-# every start. A role that is meant to survive a node rebuild cannot inherit an
-# account from the machine it is rebuilding.
-#
-# No uid is pinned: the nine existing accounts sit on 996 and 999 depending on
-# what was free when each was made, and pinning one would renumber them.
+# The role creates the account itself, so a rebuilt node does not start the unit
+# into 217/USER. No uid is pinned: existing accounts sit on 996 or 999, and
+# pinning one would renumber them.
 - name: Create the group the exporter runs as
   ansible.builtin.group:
     name: "{{ node_exporter_user }}"
@@ -24,11 +18,9 @@
     create_home: false
     state: present
 
-# The install steps are gated on the binary's own reported version. Without the
-# guard the role re-downloads the tarball on every run (the cleanup task removes
-# it again each time), and `--check` fails outright: get_url does not fetch in
-# check mode, so the following unarchive cannot find the archive. A role that
-# cannot be dry-run cannot be verified before it touches a node.
+# The install steps are gated on the installed version. Without the guard every
+# run re-downloads the tarball, and --check fails because get_url does not fetch in
+# check mode and unarchive then finds no archive.
 - name: Read the installed node_exporter version
   ansible.builtin.command:
     cmd: /usr/local/bin/node_exporter --version
@@ -40,11 +32,11 @@
 - name: Install the node_exporter binary
   vars:
     # node_exporter has printed --version to stderr in some releases and to
-    # stdout in others; match against both rather than betting on one.
+    # stdout in others; match against both.
     node_exporter_version_output: >-
       {{ (node_exporter_installed.stdout | default('')) + (node_exporter_installed.stderr | default('')) }}
-    # The upstream release artefact name, reused by the download, the unarchive,
-    # the copy and the cleanup. Spelling it out five times invited them to drift.
+    # The upstream release artefact name, shared by download, unarchive, copy and
+    # cleanup.
     node_exporter_dist: node_exporter-{{ node_exporter_version }}.linux-amd64
   when: node_exporter_version not in node_exporter_version_output
   block:
@@ -61,8 +53,8 @@
         dest: /tmp/
         remote_src: true
 
-    # Without this handler a version bump wrote the new binary to disk and left
-    # the old process running until the next reboot.
+    # The handler restarts the exporter, so a version bump does not leave the old
+    # process running until the next reboot.
     - name: Copy file with owner and permissions
       ansible.builtin.copy:
         src: /tmp/{{ node_exporter_dist }}/node_exporter
@@ -90,10 +82,8 @@
     mode: "0755"
   when: node_exporter_tailscale_gate
 
-# No owner/group on purpose: on lxc260 this directory belongs to `postgres`, which
-# is the user pg-backup.sh writes its .prom file as. Asserting owner: root here
-# would silently break that backup's metric - the same class of failure this
-# default-on collector is meant to prevent.
+# No owner/group on purpose: on lxc260 this directory belongs to `postgres`, the
+# user pg-backup.sh writes its .prom file as; owner root would break that metric.
 - name: Ensure the textfile collector directory exists
   ansible.builtin.file:
     path: "{{ node_exporter_textfile_dir }}"

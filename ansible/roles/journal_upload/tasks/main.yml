@@ -1,7 +1,6 @@
 ---
-# Nothing happens on a node that has not asked for it. The role is run against a
-# group so the configuration lives in one place, and each node opts in by setting
-# the flag, which is the same shape nsswitch uses.
+# Every task is gated on journal_upload_enabled: the role runs against a group,
+# and each node opts in.
 - name: Refuse an empty target
   ansible.builtin.assert:
     that: journal_upload_target_host | length > 0
@@ -33,9 +32,8 @@
   ansible.builtin.meta: flush_handlers
   when: journal_upload_enabled
 
-# Under --check the package was not installed, so on a first run the unit does
-# not exist and systemd_service fails the play - which the weekly sweep, running
-# in check mode, would report every Sunday until the role is applied.
+# Under --check (the weekly drift sweep) the package may not be installed and
+# systemd_service would fail on the missing unit.
 - name: Ask systemd whether the uploader exists yet  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl list-unit-files --no-legend --plain systemd-journal-upload.service
@@ -54,9 +52,8 @@
     - journal_upload_enabled
     - journal_upload_unit_file.stdout | length > 0 or not ansible_check_mode
 
-# An uploader that is active and an uploader that has actually shipped a record
-# are different claims. The cursor file only appears once something was accepted
-# by the far end, so its existence is the first honest evidence the chain works.
+# The cursor file appears only once the receiver accepted a record, so it proves
+# the chain works; an active unit does not.
 - name: Verify the uploader has a cursor, meaning something was accepted
   ansible.builtin.stat:
     path: "{{ journal_upload_state_file }}"

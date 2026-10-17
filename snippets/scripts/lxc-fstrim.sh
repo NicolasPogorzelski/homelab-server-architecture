@@ -1,27 +1,16 @@
 #!/usr/bin/env bash
 # Return blocks freed inside LXC containers to the LVM thin pool on the Proxmox host.
 #
-# Why this cannot run inside the containers: the stock fstrim.timer carries
-# ConditionVirtualization=!container, so systemd skips it there, and an unprivileged
-# container is refused the ioctl anyway ("FITRIM ioctl failed: Operation not permitted").
-# Both guards report healthy -- `systemctl is-enabled` says "enabled" and Result=success is
-# the default of a unit that never ran -- so nothing ever failed and nothing ever ran.
-# Trimming containers is the host's job, structurally, not a misconfiguration.
+# Trimming containers is the host's job: the stock fstrim.timer carries
+# ConditionVirtualization=!container, and an unprivileged container is refused the FITRIM
+# ioctl anyway, while both report healthy.
 #
-# Why this matters here: pve/data is a thin pool. It hands out 64 KiB chunks on first write
-# and never takes them back on delete, because a filesystem's notion of "free" does not
-# reach the block layer on its own. Measured 2026-08-10: 92.55% allocated against 23 GiB
-# actually in use, with VFree=0 on the VG -- so lvextend is not available as an escape.
-# That is the KE-7 failure class (thin-pool overflow corrupting packages mid-apt).
+# pve/data is a thin pool: it allocates chunks on first write and frees them only on
+# discard, so without trimming it fills while the filesystems look half empty (KE-7).
+# Discard passdown to the boot SSD is unsupported behind the SAS HBA; the pool still frees
+# its own chunks, which is what matters here.
 #
-# Discard passdown to the physical disk is disabled by the kernel on this host
-# ("device-mapper: thin: Data device (dm-3) discard unsupported"), because the boot SSD sits
-# behind an LSI SAS2008 that does not translate UNMAP to TRIM for SATA drives. That only
-# costs the SSD-side benefit; the pool still frees its own chunks, which is what we need.
-#
-# Predecessor: this replaces a hardcoded CTID array that omitted lxc250 -- the fullest
-# container in the fleet, and the same node that is absent from the Ansible inventory. The
-# list is now derived from the running fleet so a new container is covered on creation.
+# The container list comes from `pct list`, so a new container is covered on creation.
 set -uo pipefail
 
 POOL="pve/data"
@@ -58,8 +47,8 @@ after="$(pool_percent)"
 printf "%s after trim:  %s%% allocated (was %s%%)\n" \
   "${POOL}" "${after:-unknown}" "${before:-unknown}"
 
-# Until a thin-pool metric reaches Prometheus, this log is the only record of how fast the
-# pool refills. `journalctl -u lxc-fstrim` gives the growth rate between runs.
+# The before/after lines in `journalctl -u lxc-fstrim` show how much each run reclaims;
+# the fill level itself is exported by lvm-thin-metrics.sh.
 
 if (( ${#failed[@]} > 0 )); then
   printf "fstrim FAILED for %d container(s): %s\n" "${#failed[@]}" "${failed[*]}" >&2

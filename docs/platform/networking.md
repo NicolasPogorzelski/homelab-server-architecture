@@ -17,11 +17,9 @@ Remote access is exclusively provided through an identity-based overlay network 
 - Explicit ACL rules between nodes
 - Tiered segmentation model
 
-ACL enforcement is implemented via Tailscale ACL policy (JSON) using
-node tags and identity-based allow rules (policy-as-code).
-
-The active ACL policy is managed in Tailscale as JSON (source of truth).
-This repository documents the intended model and tagging structure.
+ACL enforcement uses a Tailscale policy (JSON) built from node tags and identity-based grants.
+The Tailscale admin console is the source of truth; the repository mirrors the policy and changes
+are applied to the console by hand, not synced by CI.
 
 See: [docs/platform/tailscale-acl.md](./tailscale-acl.md)
 
@@ -39,11 +37,11 @@ Access between tiers is explicitly controlled via ACL policies.
 ## LAN Access
 
 No service is reachable from the LAN since 2026-10-01. Media streaming was the last exception, and
-it ended when Jellyfin and Audiobookshelf moved off the LAN
-([vm100](../nodes/vm100.md#no-media-ports-on-the-lan)). The `lan_guard` nftables table on every
+it ended when Jellyfin and Audiobookshelf moved to the tailnet
+([decision](../decisions/media-over-the-tailnet.md), [vm100](../nodes/vm100.md#no-media-ports-on-the-lan)). The `lan_guard` nftables table on every
 node's LAN interface drops new inbound connections; the named exceptions are SMB to vm102 from
 vm100 and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The tailnet is never
-filtered by it. See [ansible.md](ansible.md) for the role.
+filtered by it. See the `lan_guard` role in [ansible.md](ansible.md#roles).
 
 ## Design Goal
 

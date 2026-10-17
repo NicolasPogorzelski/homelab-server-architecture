@@ -1,130 +1,62 @@
 ---
-# === group_vars for the Proxmox host ===
+# === SSH ===
 #
-# One override, and it is a deliberate deviation from the fleet-wide default
-# rather than an oversight.
-#
-# `PermitRootLogin no` is correct on every other node, because each has an
-# `ansible` user with key-only access and an admin account for break-glass. The
-# hypervisor has neither: root is its only administrative account, `media` has no
-# sudo and no keys, and the inventory connects as root for exactly that reason.
-#
-# It also has no usable out-of-band console. The single GPU is passed through to
-# vm100 with `x-vga=1`, there is no serial console and no BMC, and `getty@tty1`
-# writes to a framebuffer the guest owns. If an SSH change locks this node out,
-# the recovery path is physical access with a monitor moved to onboard graphics
-# that are not available while the passthrough is configured.
-#
-# So the setting is `prohibit-password`: key authentication for root stays,
-# password authentication does not. That is the value applied by hand on
-# 2026-08-17 after an audit found `PermitRootLogin yes` with
-# `PasswordAuthentication yes` on this node; adopting the host into Ansible turns
-# that hand-set value into a maintained one, which is the whole point of the
-# adoption. A run must therefore produce `changed=0` on a correctly configured
-# host - if it reports a change, the live config drifted and that is the finding.
+# Root is the hypervisor's only administrative account (no ansible user, no
+# sudo-capable admin) and there is no usable out-of-band console: the only GPU
+# is passed through to vm100 with `x-vga=1`, and there is no serial console or
+# BMC. Root keeps key login, password login is off. A correctly configured host
+# reports changed=0.
 ssh_hardening_permit_root_login: prohibit-password
 
 # === Boot gates ===
 #
-# pveproxy is configured in /etc/default/pveproxy to bind this host's Tailscale
-# address only, which is right and which means it cannot start before that address
-# exists. It does not degrade to a partial bind the way PostgreSQL did in KE-9: it
-# exits non-zero, systemd gives up after five rapid starts, and the web interface
-# stays dead until somebody restarts it by hand (KE-12).
-#
-# A drop-in has held that race shut since 2026-06-25 and is cold-boot verified. It
-# was written before the tailscale_boot_gate role existed, so until 2026-09-11 this
-# host carried the same gate in a second spelling - one that hardcoded the address
-# the shared script reads from `tailscale ip -4`, and that explained itself in a
-# language this repository does not use. Adopting it changes the spelling, not the
-# behaviour; the role removes the superseded file rather than leaving it to win on
-# filename order.
+# pveproxy binds only this host's Tailscale address (/etc/default/pveproxy), so
+# it cannot start before that address exists; it exits instead of binding
+# partially and stays down after systemd's start limit (KE-12).
 tailscale_boot_gate_units:
   - pveproxy.service
 
-# The hand-written file was called wait-tailscale.conf. The role writes
-# 10-wait-tailscale.conf, which sorts first, so leaving the old name in place would
-# let it override every directive the two share.
+# Drop-ins that predate the role. The role writes 10-wait-tailscale.conf and
+# removes these, so they cannot override its directives.
 tailscale_boot_gate_obsolete_dropins:
   - override.conf
   - wait-tailscale.conf
 
 # === systemd hygiene ===
 #
-# The NFS client stack runs on a node that mounts no NFS. `pvesm` lists no nfs
-# storage, yet rpcbind holds 0.0.0.0:111 and [::]:111, reachable from the LAN -
-# the same finding recorded for lxc210 on 2026-08-17 and closed there on
-# 2026-09-11 by removing the packages - KE-3 in docs/platform/known-errors.md.
-#
-# That answer does not transfer, and the measurement is why rather than a guess:
-# `apt-get -s remove --purge rpcbind nfs-common` on this host reports it would
-# also remove proxmox-ve, pve-manager, pve-container, qemu-server,
-# pve-ha-manager, libpve-storage-perl and libpve-guest-common-perl. Proxmox
-# relates its own metapackages to nfs-common, so the cleanup that was correct on
-# a container would take the hypervisor's management stack with it here.
-#
-# Masking the two units keeps the packages, and the role stops them in the same
-# step - masking alone decides what starts at the next boot and leaves a running
-# daemon listening, which is exactly what happened here on 2026-09-15. It costs nothing
-# that is running: rpc-statd.service is the only active-system unit that Requires
-# rpcbind.socket, it is `static` and `inactive`, and it starts on demand for an
-# NFS mount that does not exist. sockets.target only Wants the socket, and a
-# wanted unit that is masked is skipped rather than failed - so this does not
-# manufacture the failed unit the role exists to prevent.
-#
-# Reversible in one line if NFS storage is ever added here: drop these entries
-# and re-run. That is the whole reason it is a mask and not a removal.
+# rpcbind listens on port 111 although the host mounts no NFS (KE-3). Removing
+# rpcbind and nfs-common, the fix on lxc210, would also remove proxmox-ve and
+# pve-manager here, so the units are masked and stopped instead. Nothing running
+# depends on them: rpc-statd starts only for an NFS mount, and sockets.target
+# merely Wants the socket. To add NFS storage later, drop these entries.
 systemd_hygiene_masked_units:
   - name: rpcbind.socket
     reason: "no NFS storage on this node; the socket is what holds port 111 open, so masking the service alone leaves it listening"
     action: mask
   - name: rpcbind.service
-    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it (measured 2026-09-12)"
+    reason: "no NFS storage on this node; removing the package would take proxmox-ve with it"
     action: mask
 
 # === Journal retention ===
 #
-# The fleet default of 512M is right for the guests and wrong here, and the
-# difference is where the journal is written rather than how much of it there is.
-#
-# Every guest root is a thin volume in `pve/data`, measured 80.41 % on
-# 2026-09-15. A journal there is allocated pool blocks, and a container cannot
-# `fstrim` itself - the blocks come back the next morning through the host's
-# `lxc-fstrim.timer` or not at all. On lxc200 the journal is 470 MB of the 1.7 GB
-# that container has ever written. Capping it protects the pool whose overflow
-# corrupted packages in KE-7.
-#
-# `pve-root` is a thick LV outside that pool: 37.5 GB, 30 % used, 25 GB free. The
-# journal is 501 MB of it, so the cap here protects nothing that is scarce and
-# costs the one thing this node is asked for - evidence.
-#
-# 2G at the measured rate of 5.7 MB/day (501 MB since 2026-06-19, read
-# 2026-09-15) holds about a year. The year is the point: KE-14 fires
-# intermittently inside the boot window, the power-path check is a planned step,
-# and deciding whether it worked needs a window before it and a window after.
-# Under 512M the before-window was three months and lost a day every day.
-#
-# What it does not buy, so that nobody reads more into it later: KE-20 and KE-21
-# left nothing in the journal at all, which is why the netconsole receiver
-# exists. Retention only helps where something was written.
+# Larger than the 512M fleet default. Guest journals sit in the thin pool, where
+# capping them protects against the overflow behind KE-7; the host journal sits
+# on the thick `pve-root` LV with ample free space. About a year of host journal
+# keeps a before-and-after window for the intermittent KE-14 boot errors.
+# KE-20 and KE-21 left nothing in the journal; netconsole covers those.
 journald_system_max_use: 2G
 
-# smart_metrics owns the collector timers on this node and enables smartmon among
-# them, so apt_metrics must not assert a masking list of its own here. Two roles
-# with opposite opinions about one unit is how a fleet starts flapping between
-# runs. The apt timer itself is enabled by apt_metrics on every node including
-# this one.
+# smart_metrics owns the collector timers here and enables smartmon, so
+# apt_metrics must not mask any of them on this node.
 apt_metrics_masked_timers: []
 
 # The hypervisor filters at `input`, so the chain sees only traffic addressed to
 # the host and never frames bridged to a guest.
 lan_guard_hook: input
 
-# Two paths stay open on the LAN, both because they must work without Tailscale.
-# sshd from the two admin workstations is the break-glass: the host has no local
-# console while vm100 holds the only GPU, so a broken tailscaled would otherwise
-# leave nothing but a GPU swap. netconsole carries vm100's kernel messages from
-# netpoll, which runs before and beneath any userspace network daemon.
+# Two LAN paths stay open because they must work without Tailscale: break-glass
+# SSH from the admin workstations (no local console while vm100 holds the GPU),
+# and netconsole from vm100, which netpoll sends below any userspace daemon.
 lan_guard_allow:
   - proto: tcp
     port: 22
@@ -136,9 +68,9 @@ lan_guard_allow:
       - "{{ vm100_lan_ip }}"
     reason: netconsole from vm100, kernel messages sent by netpoll without Tailscale
 
-# Exceptions to the binding rule that listener_metrics reports. Each names its
-# decision. sshd here is step 4 of the sshd decision, "last or never": the node
-# has no console once Linux runs.
+# Exceptions to the binding rule that listener_metrics reports, each with its
+# decision. The hypervisor's sshd stays unpinned on purpose
+# (docs/decisions/sshd-listen-address.md).
 listener_metrics_allowed:
   - { proto: tcp, port: 22, reason: "hypervisor sshd, step 4 of docs/decisions/sshd-listen-address.md" }
   - { proto: udp, port: 6666, reason: "netconsole receiver; netpoll cannot use Tailscale - docs/platform/proxmox-host.md" }

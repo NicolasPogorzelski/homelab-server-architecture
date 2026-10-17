@@ -1,21 +1,9 @@
 ---
-# Runs against every node, but the role is a no-op on hosts that declare no
-# units - so the target list stays honest and a new node needs a host var, not a
-# playbook edit.
+# Runs against every node; the role is a no-op where no units are declared, so
+# a new node needs a host var, not a playbook edit.
 #
-# Two plays rather than one because of how the hypervisor is reached: the
-# inventory connects to it as root and there is no ansible user to escalate from,
-# so `become: true` there would call sudo for no reason.
-#
-# The hypervisor joined on 2026-09-11. Its pveproxy gate had been hand-deployed
-# since 2026-06-25 and predates this role, which left the host carrying two
-# spellings of one readiness gate - the hand-written one hardcoding a Tailscale
-# address that `tailscale ip -4` supplies, and carrying a comment in the wrong
-# language. The role's drop-in sorts before the old file name, so the old file is
-# removed rather than left beside it.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Two plays because the hypervisor is reached as root with no ansible user, so
+# `become: true` there would call sudo for nothing.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

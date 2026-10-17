@@ -1,10 +1,9 @@
 // {{ ansible_managed }}
 //
 // Read after 20auto-upgrades and 50unattended-upgrades (lexical order in
-// /etc/apt/apt.conf.d/), so the values here win. The `#clear` directives are
-// load-bearing: APT appends to a list option when it is declared again, so
-// without them this file would add the security origins to the stock list
-// rather than replace it, and the regular archive would stay enabled.
+// /etc/apt/apt.conf.d/), so the values here win. `#clear` is required: APT
+// appends to a list option declared again, so without it the regular archive
+// would stay enabled.
 
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";

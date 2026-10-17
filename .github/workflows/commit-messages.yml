@@ -1,31 +1,23 @@
 name: Commit messages
 
-# The gate that does not live on one workstation.
-#
-# scripts/commit-msg-lint.sh is wired in as a git hook, and a git hook is
-# per-machine state that no commit can guarantee - the same gap CLAUDE.md already
-# records for .claude/settings.local.json. Measured on 2026-09-12, the admin
-# notebook had no .git/hooks/commit-msg at all, so the local half of this gate had
-# never run, and nine commits carrying an AI attribution trailer reached the
-# public main branch.
-#
-# This workflow reads every commit in the pull request plus the pull request's own
-# title and body, which is where the same trailer also landed. It cannot be
-# skipped by forgetting to install something on a new machine.
+# Checks every commit in the pull request for the Conventional Commits format and
+# refuses attribution trailers; the title and body are checked for trailers only.
+# Runs in CI because the local commit-msg hook is per-clone configuration.
 
 on:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        # Pinned to a commit SHA, not a tag: `v4` is a moving reference the upstream owner can
-        # repoint at any commit, so a compromised or mistaken retag would execute unreviewed code
-        # in this workflow. The trailing comment carries the human-readable version, and Dependabot
-        # updates both together.
+        # Pinned to a commit SHA because tags can be repointed; the trailing comment names
+        # the version, and Dependabot updates both together.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The default shallow clone cannot walk base..head.
@@ -46,9 +38,8 @@ jobs:
           done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
           exit "$failed"
 
-      # Title and body arrive through the environment rather than through `${{ }}`
-      # inside the script body. Interpolating them directly would splice text an
-      # author controls into the shell this job runs.
+      # Title and body pass through the environment: interpolating `${{ }}` into the
+      # script would splice author-controlled text into the shell.
       - name: Lint the pull request title and body
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

@@ -1,16 +1,10 @@
 {{ ansible_managed | comment }}
 #
-# Loads the netconsole module with a target, rather than listing it in
-# /etc/modules-load.d/. The distinction is the point:
-#
-#   modules-load.d loads modules from systemd-modules-load.service, which runs
-#   long before the interface has an address. netconsole would then fail to
-#   configure its local endpoint, and that failure would be a line in the journal
-#   nobody reads - a silent loss of exactly the observability this unit exists to
-#   provide. Ordering after network-online.target makes readiness a precondition,
-#   and a failure here is a failed unit, which raises SystemdUnitFailed.
-#
-# See KE-18 for the general shape: ordering is not readiness.
+# Loads the netconsole module with a target from a unit instead of
+# /etc/modules-load.d/: systemd-modules-load runs before the interface has an
+# address, and netconsole would fail with only a journal line. Here it runs after
+# network-online.target, and a failure is a failed unit (SystemdUnitFailed).
+# See KE-18.
 
 [Unit]
 Description=Kernel log streaming to the Proxmox host (netconsole)

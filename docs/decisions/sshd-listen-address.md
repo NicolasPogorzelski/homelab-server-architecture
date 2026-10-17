@@ -1,180 +1,76 @@
-# sshd Binding: One Decision for Ten Nodes, Not an Exception for One
+# sshd Binds the Tailscale Address on Every Guest
 
 ## Status
+Implemented 2026-10-13: pinned on all 9 guests; the hypervisor is deliberately unpinned. Decided
+2026-09-11. Supersedes / superseded by: -.
 
-**Amended 2026-10-13: lxc250 joins the role, and the hypervisor is decided - never.** lxc250 now
-pins through `ssh_hardening` like the other eight; its hand-written line is gone, and a
-`pct reboot` brought sshd up on the Tailscale address alone with `NRestarts=0`. The hypervisor
-keeps its wildcard bind, and that closes the rollout rather than leaving it open. Its LAN path
-from the two admin workstations is the only way in when Tailscale does not come up, since the
-passed-through GPU leaves the host without a console, and `lan_guard` already admits exactly
-those two senders on 22. A pin on the Tailscale address would remove that path. A pin on the
-Tailscale and LAN addresses together would keep it and cut only loopback, the Tailscale IPv6
-address and link-local - the host has no global IPv6 address, measured the same day. Revisit if
-the host gains an out-of-band console: IPMI, a KVM over IP, or a display output of its own.
-
-**Amended 2026-10-12, in the evening: vm102 is done.** Pinned from its `host_vars` and applied by
-reload, the first run of the corrected role on a node that was never socket-activated: the
-handler ran before the read-back and the assert passed on the first attempt. `ss` shows the
-Tailscale address alone on 22, `NRestarts=0`; the boot gate meets its first cold start at the next
-power-on. What remains is the hypervisor, which step 4 below leaves open.
-
-**Amended 2026-10-12, later the same day: vm100 is done.** Pinned from its `host_vars` behind a
-snapshot, then rebooted: the Tailscale address alone on 22 and `NRestarts=0`. The run exposed an
-ordering fault in `ssh_hardening` that the containers could not show. On a node that was never
-socket-activated nothing restarts sshd inside the role, so the new `ListenAddress` reached the
-daemon only through the reload handler, which runs at the end of the play - after the assert that
-reads the bind back. The assert failed against the old process, the failed play skipped the
-handler, and the reboot is what applied the pin. The role now flushes its handlers before the
-read-back, which vm102 and the hypervisor need. Next is vm102.
-
-**Amended 2026-10-12: the open choice below was made, and the containers are done.** On
-2026-10-10 turning socket activation off was chosen over pinning the socket: one service
-model on every node, the boot gate already proven on lxc250 unchanged, and
-`systemctl enable --now ssh.socket` through `pct exec` as the way back. `ssh_hardening` now stops
-and disables `ssh.socket` wherever `ssh_hardening_listen_address` is set and fails the run unless
-`ss` shows the Tailscale address alone on 22. All six socket-activated containers took it that day,
-one at a time and each through `pct reboot`; with lxc250, seven of seven containers now bind the
-overlay address only, measured again on 2026-10-12. Two things in the rollout order below have
-changed since it was written. vm100 can be snapshotted since 2026-10-10, so step 3 has a way back
-other than the console. And since 2026-10-01 `lan_guard` drops new inbound LAN connections on every
-node, port 22 included everywhere but the hypervisor, where the two admin workstations are
-admitted; on vm100 and vm102 the pin is therefore the second layer, not the only one. Next is
-vm100, then vm102, then the hypervisor or nothing, for the reason step 4 gives.
-
-**Amended 2026-09-17, and the amendment inverts the rollout order.** `ListenAddress` only
-binds anything on a node where sshd owns its listening socket. Measured across the fleet that
-day: `ssh.socket` is enabled on lxc200, lxc210, lxc211, lxc220, lxc230 and lxc260, and disabled
-on vm100, vm102, lxc250 and the hypervisor. Under socket activation systemd holds the socket and
-hands sshd a connected file descriptor, so the directive is inert - applied to lxc220 it landed
-in `sshd_config.d`, changed nothing, and left the node serving `*:22` with a configuration file
-saying otherwise.
-
-That explains why lxc250 could be pinned in August and why this document's "containers first"
-ordering is backwards: the containers are exactly where the mechanism does not work. Four nodes
-can be pinned as written. Six need a different change, and which one is an open decision:
-
-- **Pin the socket.** A drop-in on `ssh.socket` clearing `ListenStream=` and setting it to the
-  node's Tailscale address. The readiness gate has to move with it, because a socket unit binding
-  an address that does not exist yet fails at boot exactly as sshd would.
-- **Turn socket activation off** on the pinned nodes and let `ssh.service` bind as it does on
-  lxc250, keeping the existing gate unchanged.
-
-The second is simpler and matches the node already pinned; the first leaves Debian's default
-service model intact. Neither is chosen here, and no node is changed until one is.
-
-What stands regardless: lxc220 carries the boot gate as of 2026-09-17, and the gate is the half
-that makes either answer survivable.
-
-Decided 2026-09-11. The mechanism is built and defaulted off; the rollout is a supervised window
-per node, not a sweep.
+Verified 2026-10-12 (lxc250: 2026-10-13): on every guest `ss` shows the Tailscale address alone on
+port 22 and `NRestarts=0`; the containers and vm100 after a reboot, vm102 after a reload (its first
+cold boot with the pin is still to come).
 
 ## Context
-
 The platform binding rule says a service binds its Tailscale address, or loopback behind
-`tailscale serve`, and never a LAN interface. `CLAUDE.md` and `vm100.md` both recorded sshd on
-vm100 as the exception to that rule.
+`tailscale serve`, and never a LAN interface. The 2026-08-17 sweep found sshd on `*:22` on every
+node except lxc250. The nodes are dual-stack with a routable IPv6 address on the LAN interface, so
+`*:22` is not limited to the local segment. Password authentication is off everywhere
+(`ssh_hardening`), so the exposure is a key-only daemon on an address the rule says it must not use.
 
-The 2026-08-17 sweep measured it and the sentence was the wrong way round. sshd binds `*:22` on
-lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, on vm100, on vm102 and on the Proxmox host. Only
-lxc250 pins `ListenAddress`. Ten of eleven nodes violate the rule; one follows it.
+Two mechanisms make the pin harder than one `ListenAddress` line:
 
-That changes what kind of decision this is. A single node deviating is a node-level fix. A rule
-that the fleet does not follow is either a rule nobody decided to enforce or a rule that is wrong,
-and writing "vm100 is the exception" in two documents for months is what kept anyone from asking
-which.
-
-The acute risk is closed and has been since 2026-07-09: password authentication is off everywhere,
-and `ssh_hardening` keeps it off. What remains is a correctness and honesty problem - a documented
-rule that the estate does not implement - plus real exposure that is easy to understate. These are
-dual-stack hosts with a routable IPv6 address on the LAN interface, so `*:22` is not only the local
-segment.
-
-## What makes this harder than it looks
-
-Pinning `ListenAddress` to a Tailscale address couples sshd's start to `tailscaled` having
-connected. That is the [KE-18](../platform/known-errors.md#ke-18) class, and this fleet has
-already produced five separate instances of it. sshd's version of it is the worst-behaved:
-
-- sshd exits 255 when it cannot bind.
-- Debian's `ssh.service` sets `RestartPreventExitStatus=255`, so the packaged unit will not restart
-  it on exactly that failure.
-- A node whose sshd does not come back is reachable only by `pct exec` from the hypervisor, or by
-  console on the two VMs, or not at all on the hypervisor itself.
-
-lxc250 survives this because its hand-written drop-in cleared that exit-status list, which is a
-detail that was nearly lost when the drop-in was adopted into a role. The `tailscale_boot_gate`
-role carries it as `tailscale_boot_gate_clear_restart_prevent`, off by default, and this is the
-case it exists for.
+- **Boot readiness.** Binding the Tailscale address couples sshd's start to `tailscaled` having
+  connected ([KE-18](../platform/known-errors.md#ke-18)). sshd exits 255 when it cannot bind, and
+  Debian's `ssh.service` sets `RestartPreventExitStatus=255`, so the packaged unit never retries.
+- **Socket activation.** Measured 2026-09-17: `ssh.socket` was enabled on lxc200, lxc210, lxc211,
+  lxc220, lxc230 and lxc260. There systemd holds `*:22` and hands sshd a connected descriptor, so
+  `ListenAddress` is inert; applied to lxc220 it changed the file and not the bind
+  ([KE-24](../platform/known-errors.md#ke-24)).
 
 ## Options
-
-**Leave it.** Zero risk, and the rule stays false. Rejected: the estate documents a control it does
-not implement, and the next audit finds the same thing again.
-
-**Bind loopback and reach sshd through `tailscale serve`.** Serve proxies TCP, so it is possible,
-but it puts the administrative path through a userspace daemon that is also the thing most likely
-to be broken when the administrative path is needed. Rejected on that alone.
-
-**Delete the rule for sshd and say so.** Honest, cheap, and it accepts an SSH daemon on a routable
-IPv6 address. Rejected, but it is the option that makes the next one worth the risk rather than
-merely tidy.
-
-**Pin `ListenAddress` to the Tailscale address, behind the boot gate, one node at a time.**
-Chosen.
+- **Leave the wildcard bind.** Lost: the platform would document a control it does not implement.
+- **Bind loopback and reach sshd through `tailscale serve`.** Lost: puts the administrative path
+  through the daemon most likely to be broken when that path is needed.
+- **Drop the rule for sshd.** Lost: accepts an SSH daemon on a routable IPv6 address.
+- **Pin `ssh.socket` to the Tailscale address.** Lost: keeps Debian's service model, but moves the
+  readiness gate to a socket unit and gives two service models across the fleet.
+- **Turn socket activation off and pin `ListenAddress`, behind the boot gate, one node at a time.**
+  Chosen.
 
 ## Decision
+`ssh_hardening_listen_address` is set per node in `host_vars` on all 9 guests. Where it is set,
+`ssh_hardening`:
 
-`ssh_hardening` gains `ssh_hardening_listen_address`, unset by default. Where it is set, the role
-writes a single `ListenAddress` and refuses to proceed unless the node also declares `ssh.service`
-in `tailscale_boot_gate_units` with `tailscale_boot_gate_clear_restart_prevent: true`. The refusal
-is the point: the two settings are only safe together, and a role that let one be configured
-without the other would produce precisely the failure this fleet has recorded five times.
+1. refuses to run unless the node declares `ssh.service` in `tailscale_boot_gate_units` with
+   `tailscale_boot_gate_clear_restart_prevent: true` - the two settings are only safe together;
+2. stops and disables `ssh.socket` and restarts `ssh.service`, so sshd owns its socket;
+3. flushes handlers, so the reload carrying the new `ListenAddress` runs before the check;
+4. fails the run unless `ss` shows the Tailscale address alone on 22.
 
-Rollout order, and it is deliberately the reverse of the order anyone would guess:
+The variable is empty by default and never derived from `ansible_host`, so a merge cannot pin a node
+unsupervised. Each node was changed in a window with a second terminal open: the containers first
+(`pct exec` recovers them), then vm100 behind a snapshot, then vm102.
 
-1. **The seven LXCs**, because `pct exec` from the hypervisor recovers any of them without SSH.
-2. **vm102**, which has a Proxmox console.
-3. **vm100**, which has a console but no snapshot to roll back to, and is therefore worth doing
-   late and alone.
-4. **The Proxmox host, last or never.** It has no out-of-band console: the GPU is passed through
-   with `x-vga=1` and `getty@tty1` writes to a framebuffer a guest owns. Locking sshd out there
-   means physical access with the passthrough removed from vm100's configuration first. Whether
-   that node is worth the risk at all is a separate decision, and the honest answer today is that
-   it is not: it is the one node where the recovery cost exceeds the exposure it would close.
-
-Each step is one node, in a session with a second terminal already connected to that node, and the
-existing session is not closed until a new one has been opened.
-
-## What this does not cover
-
-Apache on lxc210 binds `*:80` and `*:443` and is not part of this. Its plausible fix is moving
-Nextcloud behind `tailscale serve`, which would also retire
-[KE-16](../platform/known-errors.md#ke-16) - the on-disk certificate that gets renewed while Apache
-keeps serving the old one from memory. That is a project with its own rollback question, not a
-`ListenAddress` line, and folding it in here would make a reviewable change unreviewable.
-
-The wider point that came out of the same audit belongs here rather than there: nothing enforces
-the untrusted-LAN declaration at the host boundary on any node. The Tailscale ACL governs the
-overlay, `pve-firewall` is off, and the only host-level filter on the fleet is the nftables table
-on vm102. Every wildcard bind is reachable because no filter says otherwise. Pinning
-`ListenAddress` closes one of them properly; the others are closed by the `nft_guard` role where
-the service cannot bind correctly itself. See
-[`physical-controls.md`](../platform/physical-controls.md) for the posture statement.
+The Proxmox host stays on the wildcard bind. It has no out-of-band console (the GPU is passed
+through to vm100 with `x-vga=1`), so its LAN path from the two admin workstations is the only way in
+when Tailscale does not come up; `lan_guard` admits exactly those two senders on 22. A pin on the
+Tailscale address would remove that path. A pin on the Tailscale and LAN addresses together would
+cut only loopback, the Tailscale IPv6 address and link-local, because the host has no global IPv6
+address (measured 2026-10-13). Revisit if the host gains an out-of-band console (IPMI, KVM over IP,
+or a display output of its own).
 
 ## Consequences
-
-- A node whose Tailscale identity is revoked or whose `tailscaled` will not start is reachable only
-  by `pct exec` or console. That is the trade being made, and it is the same trade lxc250 has lived
-  with since it was built - documented in `CLAUDE.md` as "SSH unreachable for 30 to 60 seconds
-  after boot, intentional hardening, not a bug".
-- `fleet_snapshot` already records listening sockets per node, so the rollout is measurable from
-  the weekly snapshot rather than from a claim in this document.
-- `CLAUDE.md` and `vm100.md` both need their "vm100 is the exception" wording corrected, because it
-  is the sentence that hid this for months.
+- A guest whose `tailscaled` does not start or whose identity is revoked is reachable only by
+  `pct exec` (containers) or the Proxmox console (VMs). sshd is unreachable for up to the boot gate's
+  timeout after a boot; that is intended.
+- On every guest `lan_guard` already drops new inbound LAN connections on 22, so the pin is the
+  second layer, not the only one.
+- Re-enabling socket activation is `systemctl enable --now ssh.socket` through `pct exec` or the
+  console, after removing the variable from `host_vars`.
+- `fleet_snapshot` records listening sockets per node, so a regression shows in the weekly snapshot.
+- Apache on lxc210 binds `*:80` and `*:443` and is outside this decision. Moving Nextcloud behind
+  `tailscale serve` would also retire [KE-16](../platform/known-errors.md#ke-16), and is its own
+  change with its own rollback.
 
 ## Verification
-
 Per node, after the change and after a reboot:
 
 ```bash
@@ -183,14 +79,12 @@ systemctl show ssh.service -p NRestarts       # expect 0 across the boot
 journalctl -u ssh.service -b 0 | grep -i bind
 ```
 
-`NRestarts=0` alone proves nothing on a node that has not rebooted. Read it together with
-`systemctl show ssh.service -p ActiveEnterTimestamp` against `uptime -s`, which is the proof
-[KE-18](../platform/known-errors.md#ke-18) settled on after the same mistake.
+`NRestarts=0` proves nothing on a node that has not rebooted. Read it together with
+`systemctl show ssh.service -p ActiveEnterTimestamp` against `uptime -s`
+([KE-18](../platform/known-errors.md#ke-18)).
 
 ## Related Documents
-
 - [KE-18 - ordering is not readiness](../platform/known-errors.md#ke-18)
 - [KE-24 - sshd's reload is a re-exec](../platform/known-errors.md#ke-24)
 - [Loopback + Tailscale Serve](loopback-tailscale-serve.md)
 - [Tailscale ACL](../platform/tailscale-acl.md)
-- [Remediation plan](../platform/remediation-plan.md)

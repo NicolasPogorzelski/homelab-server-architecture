@@ -1,261 +1,83 @@
-# Paperless-ngx (CT211) - Service Documentation
+# Paperless-ngx
 
-## Purpose
+Document management with OCR, classification and full-text search, on lxc211. Paperless-ngx runs
+v3; the pinned images are in `docker/paperless/docker-compose.yml`. Node details:
+[lxc211](../nodes/lxc211.md).
 
-Paperless-ngx is a self-hosted document management system with automatic OCR,
-classification, tagging, and full-text search.
+## Deployment
 
-- Access is Tailscale-only (no LAN, no public ingress)
-- PostgreSQL platform service (lxc260) as database backend
-- Redis as task queue, cache, and locking backend
-- Gotenberg + Apache Tika for document conversion and content extraction
-- Hard rule: no database files on CIFS/SMB
+- Compose stack in `/opt/paperless`, synced from the repository by `docker_compose_update`
+- `.env` rendered by the `paperless_env` role from vaulted secrets (mode 600, never committed)
+- Containers on a Docker bridge network, addressed by container name:
 
----
-
-## Runtime Characteristics
-
-- Unprivileged Debian LXC (CT211)
-- Docker Compose at `/opt/paperless/`
-- `.env` at `/opt/paperless/.env` (chmod 600, gitignored)
-- Compose file: symlinked from `/opt/homelab-server-architecture/docker/paperless/docker-compose.yml`
-
----
+| Container | Role |
+|---|---|
+| `paperless` | web UI, API, Celery workers |
+| `paperless-redis` | task queue, cache, locking |
+| `paperless-gotenberg` | Office to PDF conversion |
+| `paperless-tika` | text and metadata extraction |
 
 ## Storage
 
-| Data type | Location | Mount |
-|---|---|---|
-| DB (PostgreSQL) | lxc260 (local block FS) | Tailnet TCP |
-| Documents (originals, archive) | MergerFS/SMB | `mp0: /mnt/smb/paperless -> /data/paperless` |
-| Thumbnails | MergerFS/SMB | `/data/paperless/thumbnails` |
-| Consumption inbox | MergerFS/SMB | `/data/paperless/consumption` |
-| Export | MergerFS/SMB | `/data/paperless/export` |
-| App data | Docker volume | `paperless-data` |
-| Logs | aux-disk | `mp1: /var/lib/paperless/logs` |
-| Docker engine (containerd, volumes) | aux-disk | `mp1: /var/lib/paperless/containerd` + `docker-data` |
-
-### Proxmox Host Paths
-
-- SMB mount (autofs): `/mnt/smb/paperless`
-- Local block storage: `/mnt/aux-disk/paperless`
-
----
-
-## Container Stack
-
-| Container | Image | Role |
-|---|---|---|
-| paperless | `ghcr.io/paperless-ngx/paperless-ngx:latest` | Web UI + API + Celery workers |
-| paperless-redis | `redis:7-alpine` | Task queue, cache, locking |
-| paperless-gotenberg | `gotenberg/gotenberg:8` | Document conversion (Office -> PDF) |
-| paperless-tika | `apache/tika:latest` | Content extraction (metadata, text) |
-
-All containers run in Docker bridge network. Inter-container communication
-uses Docker DNS (container names).
-
----
-
-## Database Dependency
-
-Paperless-ngx uses the centralized PostgreSQL platform service (lxc260).
-
-- Database: `paperless_db`
-- User: `paperless_user`
-- Connection: Tailscale IP of lxc260, port 5432 (TLS required)
-- pg_hba: `hostssl` entry scoped to CT211 Tailscale IP `/32`
-
-See: [PostgreSQL Platform Service](./postgresql-platform.md)
-
----
-
-## Dependencies (reboot-safe)
-
-Paperless-ngx is only healthy if all dependencies are satisfied:
-
-1. **SMB path mounted** on Proxmox host
-   - Runbook: [SMB autofs trigger](../../runbooks/storage/smb-autofs-trigger.md)
-2. **aux-disk path exists** for local runtime state (`mp1`)
-3. **PostgreSQL reachable** on Tailnet (lxc260)
-   - See: [PostgreSQL platform service](./postgresql-platform.md)
-
----
-
-## Access Model (Zero Trust)
-
-- No public ingress (no router port-forwarding, no public reverse proxy)
-- No LAN exposure - Tailscale-only
-- Service binds to loopback (`127.0.0.1:8000`)
-- Exposed via Tailscale Serve (`https=443 -> 8000`)
-- URL: `https://paperless.<tailnet-id>.ts.net`
-- Network policy enforced via Tailscale ACL (node tags + ACL JSON)
-- See: [Tailscale ACL model](../platform/tailscale-acl.md)
-
-### Environment Configuration (Security-Relevant)
-
-| Variable | Purpose |
+| Data | Location |
 |---|---|
-| `PAPERLESS_URL` | Base URL for the application. Required for correct link generation, API responses, and CSRF validation. Set to the Tailscale Serve hostname. |
-| `PAPERLESS_CSRF_TRUSTED_ORIGINS` | Django CSRF origin allowlist. Must include the Tailscale Serve URL. Without this, POST requests from browsers and mobile clients are rejected (HTTP 403). |
+| Database | `paperless_db` on lxc260, TLS over the tailnet ([PostgreSQL platform](./postgresql-platform.md)) |
+| Originals, archive, thumbnails, consumption, export | `/data/paperless` on the vm102 `[Paperless]` share (`mp0`) |
+| Application data | Docker volume `paperless-data` |
+| Logs, Docker engine state | `/var/lib/paperless` on the aux-disk (`mp1`) |
 
-Both values must match the Tailscale Serve URL (`https://paperless.<tailnet-id>.ts.net`).
+No database files on CIFS.
 
-### Client Access
+## Access Model
 
-- Browser: via Tailscale Serve URL (HTTPS)
-- Mobile: Paperless Mobile (Android) - connects to the same Tailscale Serve URL
-- Both require the device to be authenticated on the Tailnet
+- Paperless binds `127.0.0.1:8000` and is published through `tailscale serve` on 443:
+  `https://paperless.<tailnet-id>.ts.net` ([decision](../decisions/loopback-tailscale-serve.md)).
+- No LAN or public path; `lan_guard` drops new inbound LAN connections on lxc211.
+- `PAPERLESS_URL` and `PAPERLESS_CSRF_TRUSTED_ORIGINS` are both set to that URL; without the second,
+  browser and mobile POST requests fail with 403.
+- Clients: browsers and the Paperless Mobile app, both through the tailnet. Grants are in
+  [tailscale-acl.md](../platform/tailscale-acl.md).
 
----
+## Nextcloud Ingestion
+
+1. A user uploads into the Nextcloud External Storage folder "Paperless Inbox".
+2. Nextcloud writes over the tailnet to `[Paperless-ingest-user1]` or `[Paperless-ingest-user2]` on
+   vm102, user `paperless-ingest`, which land in `consumption/user1/` or `consumption/user2/`.
+3. The consumer polls every 30 s (`PAPERLESS_CONSUMER_POLLING_INTERVAL=30`) and scans
+   subdirectories (`PAPERLESS_CONSUMER_RECURSIVE=true`). inotify does not see writes on CIFS.
+4. A workflow per user matches the path (`*user1*`, `*user2*`) and assigns the owner.
+5. Paperless deletes the consumed file, and removes a subdirectory it has emptied.
+
+On lxc210, `paperless-inbox-scan.timer` (role `paperless_inbox_scan`) runs `occ files:scan` hourly
+so the Nextcloud file cache drops consumed files.
+
+Missing consumption subdirectories and stale External Storage mounts are repaired with the
+[ingestion runbook](../../runbooks/integration/nextcloud-paperless.md). Share setup:
+[Nextcloud](./nextcloud.md#external-storage-paperless-integration), [Samba](../platform/samba.md).
+
+## Version 3 Settings
+
+Two v3 renames fail silently here, and `paperless_env` renders both:
+
+- `PAPERLESS_CONSUMER_POLLING` became `PAPERLESS_CONSUMER_POLLING_INTERVAL`. Without it the
+  consumer falls back to inotify and never sees the CIFS inbox.
+- `PAPERLESS_DBSSLMODE` became `PAPERLESS_DB_OPTIONS=sslmode=require`.
+
+Upstream defaults kept: duplicates are accepted and flagged; an archive version is produced only for
+documents without a text layer (`PAPERLESS_ARCHIVE_FILE_GENERATION=auto`); the search index is
+Tantivy. A future image change applies `paperless_env` first, because its handler recreates the
+container.
 
 ## Failure Impact
 
-If LXC211 becomes unavailable:
-
-- No document ingestion, search, or management
-- Document files on SMB storage remain intact
-- PostgreSQL data (metadata, tags, classifications) remains intact in lxc260
-- Recovery: recreate LXC, redeploy Docker stack, remount storage, verify DB connectivity
-
-If PostgreSQL (lxc260) becomes unavailable:
-
-- Paperless cannot start or process documents
-- Document files on SMB remain intact
-- Recovery: restore lxc260 first, then restart Paperless containers
-
----
-
-## Nextcloud Integration (Document Ingestion)
-
-Documents are ingested via Nextcloud External Storage into per-user consumption subdirectories.
-
-### Flow
-
-1. User uploads document in Nextcloud (External Storage folder)
-2. Nextcloud writes file to SMB share (`Paperless-ingest-user1` or `Paperless-ingest-user2`)
-3. File lands in `/data/paperless/consumption/user1/` or `/data/paperless/consumption/user2/`
-4. Paperless consumer polls directory every 30 seconds (`PAPERLESS_CONSUMER_POLLING_INTERVAL=30`)
-5. Workflow matches subdirectory path and assigns document owner
-6. Document is OCR-processed, classified, and stored
-
-### Consumer Settings
-
-- `PAPERLESS_CONSUMER_RECURSIVE=true` - required for subdirectory scanning
-- `PAPERLESS_CONSUMER_POLLING_INTERVAL=30` - inotify does not work on CIFS/SMB mounts
-
-### Workflows
-
-| Workflow | Path Filter | Assigned Owner |
-|---|---|---|
-| user1 Ingest | `*user1*` | user1 |
-| user2 Ingest | `*user2*` | user2 |
-
-Wildcard filters are required for Paperless v2.20 path matching.
-
-### SMB Shares (VM102)
-
-- `Paperless-ingest-user1` -> `/mnt/mergerfs/Paperless/consumption/user1`
-- `Paperless-ingest-user2` -> `/mnt/mergerfs/Paperless/consumption/user2`
-- Dedicated SMB user: `paperless-ingest` (write access, scoped to consumption subdirectories)
-
-### Nextcloud External Storage (LXC210)
-
-- App: `files_external`
-- Mount ID 4: user1 -> `Paperless-ingest-user1` share
-- Mount ID 5: user2 -> `Paperless-ingest-user2` share
-- Auth: global SMB credentials (not per-session)
-
-### Post-Import Behavior
-
-Paperless deletes consumed files after successful import.
-If all files in a subdirectory are consumed, Paperless also removes the empty subdirectory.
-
-This means `consumption/user1/` and `consumption/user2/` may not exist after a full import cycle.
-
-Recovery (on VM102 or via Proxmox host):
-
-    mkdir -p /mnt/mergerfs/Paperless/consumption/{user1,user2}
-    chmod 770 /mnt/mergerfs/Paperless/consumption/user1
-    chmod 770 /mnt/mergerfs/Paperless/consumption/user2
-
-Ownership must match the `paperless-ingest` SMB user context (`force user`/`force group` in smb.conf).
-
-### Nextcloud Cache Synchronization (Cronjob on LXC210)
-
-After Paperless consumes files, the Nextcloud file cache still shows the deleted documents.
-A scheduled `files:scan` resolves this.
-
-- Script: `/usr/local/sbin/scan-paperless-inbox.sh` (root, chmod 750)
-- Schedule: `0 * * * *` (hourly, root crontab)
-- Log: `/var/log/nextcloud-paperless-scan.log`
-
-The script iterates all Nextcloud users via `occ user:list --output=json`,
-attempts `occ files:scan <user> --path="/<user>/files/Paperless Inbox"` per user,
-and silently skips users without a "Paperless Inbox" folder (`>/dev/null 2>&1 || true`).
-
-This approach scales automatically when new Nextcloud users receive a Paperless Inbox mount.
-
-See: [Nextcloud Service Documentation](./nextcloud.md)
-
-### Troubleshooting: Stale Nextcloud External Storage
-
-If a Nextcloud External Storage mount shows as unavailable (red icon) after Paperless
-deletes the underlying consumption subdirectory:
-
-1. Recreate the subdirectory on VM102 (see "Post-Import Behavior" above)
-2. Re-verify the mount:
-
-        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:verify <mount-id>" www-data
-
-3. If still stale, remove and re-add the user assignment:
-
-        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --remove-user <user> <mount-id>" www-data
-        pct exec 210 -- su -s /bin/bash -c "php /var/www/nextcloud/occ files_external:applicable --add-user <user> <mount-id>" www-data
-
-4. Confirm with `files_external:verify <mount-id>` -> status: ok
-
-## Operational Notes
-
-### Resource Requirements for Bulk Imports
-
-Default CT211 resources (2 cores, 2048 MB RAM, 512 MB swap) are sufficient for
-normal single-document ingestion via Nextcloud or direct upload.
-
-Bulk imports (thousands of documents) can exhaust available resources and crash the container.
-Temporary resource scaling via Proxmox may be required.
-
-See: [LXC211 Troubleshooting](../nodes/lxc211.md#troubleshooting) for details and recommended values.
-
-### Version 3
-
-The upstream [v3 migration guide](https://github.com/paperless-ngx/paperless-ngx/blob/main/docs/migration-v3.md)
-renames or removes settings, and two of the removals fail silently here:
-
-- `PAPERLESS_CONSUMER_POLLING` became `PAPERLESS_CONSUMER_POLLING_INTERVAL`. Without the new name
-  the consumer falls back to inotify, which sees nothing on the CIFS consumption directory, so
-  documents would wait in the inbox with no error anywhere.
-- `PAPERLESS_DBSSLMODE` is replaced by `PAPERLESS_DB_OPTIONS=sslmode=require`. The old name still
-  works with a deprecation warning, and will not in a later release.
-
-Both are rendered by the `paperless_env` role. Apply that role before the image changes: its
-handler recreates the container, and recreating it during v3's first start would interrupt the
-database migrations. v3 can only be reached from 2.20.15.
-
-Defaults that changed and are left at upstream's value:
-
-- Duplicates are accepted and flagged in the UI instead of rejected. Rejecting them again needs
-  `PAPERLESS_CONSUMER_DELETE_DUPLICATES=true`, which also deletes the duplicate file from the inbox.
-- An archive version is produced only for documents without a text layer
-  (`PAPERLESS_ARCHIVE_FILE_GENERATION=auto`). Scans from the inbox have none, so they are archived
-  as before; born-digital PDFs are no longer duplicated.
-- The full-text index moved from Whoosh to Tantivy and is rebuilt on the first start. Searches
-  return incomplete results until that finishes.
-
----
+- No ingestion, search or document access. Uploads wait in the consumption share.
+- Documents on vm102 and metadata on lxc260 are unaffected.
+- With lxc260 down, Paperless does not start; restore lxc260 first.
+- Bulk imports of thousands of documents can exhaust lxc211's memory; raise its cores and RAM for
+  the import.
 
 ## Related Documents
 
-- [Node Documentation: LXC211](../nodes/lxc211.md)
-- [PostgreSQL Platform](./postgresql-platform.md)
-- [Tailscale ACL](../platform/tailscale-acl.md)
-- [Loopback + Tailscale Serve](../decisions/loopback-tailscale-serve.md)
+- [lxc211](../nodes/lxc211.md)
+- [PostgreSQL platform](./postgresql-platform.md)
+- [Nextcloud](./nextcloud.md)

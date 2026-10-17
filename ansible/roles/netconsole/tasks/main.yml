@@ -9,12 +9,9 @@
       in the gitignored inventory - a control node restored from the repository alone
       will not have it.
 
-# The destination MAC may be omitted, in which case the kernel broadcasts every
-# frame (kernel.org: "the default target ethernet setting uses the broadcast
-# ethernet address"). On this LAN that would hand the guest's kernel log to every
-# device on the segment, including the two untrusted televisions. So it is resolved
-# and pinned instead. A ping first, because an empty neighbour table has nothing to
-# read - the kernel documentation suggests the same sequence.
+# Without a destination MAC the kernel broadcasts every frame to the whole LAN
+# segment, so the MAC is resolved and pinned. The ping fills the neighbour table
+# first, as the kernel netconsole documentation suggests.
 - name: Prime the neighbour entry for the receiver
   ansible.builtin.command:
     cmd: ping -c 1 -W 1 {{ netconsole_target_ip }}
@@ -63,10 +60,9 @@
     mode: "0644"
   notify: Apply sysctl
 
-# Known check-mode limitation, the same one the chrony role carries: --check does
-# not write the unit file, so this task fails with "Could not find the requested
-# service netconsole.service". That is the dry run reporting an install->service
-# dependency it cannot simulate, not a defect. Read the diff above it instead.
+# On a first run in --check mode the unit file is not written, so this task fails
+# with "Could not find the requested service netconsole.service". Expected; the
+# template diff above shows what would be deployed.
 - name: Enable and start netconsole
   ansible.builtin.systemd_service:
     name: netconsole.service

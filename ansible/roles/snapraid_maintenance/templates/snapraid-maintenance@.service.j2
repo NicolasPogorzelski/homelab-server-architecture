@@ -1,8 +1,7 @@
 # {{ ansible_managed }}
 #
 # Template unit: %i is the instance name, so snapraid-maintenance@sync.service runs
-# the script with `sync` and snapraid-maintenance@scrub.service with `scrub`. One
-# unit file instead of two near-identical ones.
+# the script with `sync`, @scrub with `scrub`, @status with `status`.
 [Unit]
 Description=SnapRAID %i
 # The array lives on the MergerFS member disks; nothing to do before they mount.
@@ -14,6 +13,6 @@ User=root
 # Read by the script's scrub mode only; harmless for sync and status.
 Environment=SNAPRAID_SCRUB_PERCENT={{ snapraid_scrub_percent }}
 ExecStart={{ snapraid_script_dest }} %i
-# A sync over ~multi-terabyte can run for hours. systemd's default is no timeout for
-# oneshot units, but be explicit rather than relying on it.
+# A multi-terabyte sync can run for hours. systemd's oneshot default is already no
+# timeout; stated explicitly.
 TimeoutStartSec=infinity

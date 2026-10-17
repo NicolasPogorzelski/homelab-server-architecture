@@ -1,11 +1,9 @@
 # {{ ansible_managed }}
 [Unit]
 Description=LAN ingress guard (nftables table {{ lan_guard_table }})
-# After nftables.service, whose stock ruleset starts with `flush ruleset` and would
-# delete this table if it loaded later. Before network.target, so nothing listens
-# on the LAN before the filter is in place. No dependency on tailscaled: the table
-# never touches tailscale0, and a guard that waited for Tailscale would leave the
-# LAN open for exactly as long as Tailscale is broken.
+# After nftables.service (its `flush ruleset` would delete this table); before
+# network.target, so nothing listens on the LAN unfiltered. No dependency on
+# tailscaled, which would leave the LAN open while Tailscale is broken.
 DefaultDependencies=no
 After=local-fs.target nftables.service
 Before=network-pre.target network.target

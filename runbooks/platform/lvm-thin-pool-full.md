@@ -1,271 +1,154 @@
-# Runbook: LVM thin-pool full (Proxmox)
+# Runbook: LVM thin pool full (Proxmox host)
 
-## Problem
+- **Use when:** `LvmThinPoolWarning`, `LvmThinPoolCritical` or `LvmThinPoolMetadataCritical`
+  fires, a VM shows `status: io-error`, or guests report I/O errors or corrupt binaries.
+- **Duration:** 15 minutes to free space; 30-60 minutes more if packages were corrupted.
+- **Risk:** at 100 % VMs suspend and LXC writes fail; an apt run in progress leaves partly written
+  binaries. Deleting service files to free space is not recoverable.
+- **Last exercised:** 2026-04-25, pass (incident: pool at 100 %, vm102 in io-error, corrupt
+  `tailscaled` and `bash` on lxc230 and lxc260; recovered to 82.7 %).
 
-The `local-lvm` thin-pool on the Proxmox host reaches 100% utilization. QEMU VMs enter
-`io-error` state and suspend. LXC containers continue running but all writes fail silently -
-including apt downloads, which results in corrupt package archives and binary corruption
-if an upgrade was in progress at the moment of overflow.
-
-Observed failure modes (2026-04-25 incident):
-
-- VM102: I/O errors on writes
-- LXC230, LXC260: corrupt packages (`tailscaled`, `bash`) - binaries partially overwritten
-  during an in-progress apt upgrade when the pool hit 100%
+The `pve/data` thin pool on the boot SSD holds every guest root disk. It allocates chunks on first
+write and gets them back only through discard, so a guest's `df` can show free space while the pool
+is full. The VG has no free extents, so `lvextend` is not available without shrinking `root`/`swap`
+or adding a PV. Background and the corruption pattern: [KE-7](../../docs/platform/known-errors.md#ke-7).
 
 ## Preconditions
 
-- SSH or console access to the Proxmox host
-- All affected VMs/LXCs are identified (`qm status <id>`, `pct status <id>`)
+- Root shell on the Proxmox host (SSH over Tailscale or the console).
+- Know which guests are affected:
+  ```bash
+  lvs -o lv_name,lv_size,data_percent,metadata_percent pve
+  qm list; pct list
+  journalctl -n 100 --no-pager | grep -i -E 'i/o error|input/output'
+  ```
 
----
+## Steps
 
-## Diagnosis
+1. Stop the writers. If the pool is above the `LvmThinPoolCritical` threshold and rising, stop any
+   running `apt-upgrade.yml`, `guest-backup.service` or image pull before repairing anything.
+   Check: `lvs pve/data` read twice a minute apart does not rise.
 
-**Check pool utilization:**
+2. Trim every running container from the host. Host-side `fstrim` does not reach LXC filesystems;
+   `pct fstrim` does.
+   ```bash
+   for ctid in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
+     echo "ct$ctid: $(pct fstrim "$ctid" 2>&1)"
+   done
+   ```
+   The deployed `lxc-fstrim.service` does the same: `systemctl start lxc-fstrim.service`.
+   Check: `lvs pve/data` shows a lower `Data%`.
 
-```bash
-lvs -o lv_name,lv_size,data_percent,pool_lv
-```
+3. Trim the VMs from inside.
+   ```bash
+   ansible vms -b -m command -a 'fstrim -v /'
+   ```
+   Check: each host reports bytes trimmed; `lvs pve/data` falls further.
 
-If `data_percent` shows `100.00`, the pool is full. At >= 95% warrants immediate action.
+4. Clear apt caches on every running container (re-downloadable, nothing lost).
+   ```bash
+   for ctid in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
+     pct exec "$ctid" -- apt-get clean && echo "cleaned $ctid"
+   done
+   ```
+   Then repeat step 2. Check: `Data%` below the `LvmThinPoolWarning` threshold, or at least 15 %
+   free.
 
-**Check for VMs in io-error state:**
+5. If still too full, find the growth before deleting anything.
+   ```bash
+   pct exec <ctid> -- du -xsh /var/log /var/lib/docker /var/cache 2>/dev/null
+   pct exec <ctid> -- docker system df
+   ```
+   Images are re-pullable from the pinned compose files, so `docker image prune -a` is reversible by
+   `docker compose pull`. Do not delete files a service owns. Repeat step 2 afterwards.
+   Check: `Data%` falls.
 
-```bash
-qm status <vmid>
-```
+6. Resume frozen VMs.
+   ```bash
+   qm resume <vmid>
+   ```
+   Check: `qm status <vmid>` prints `status: running`.
 
-Expected output when frozen: `status: io-error`
+7. Find corrupted packages on guests that were writing during the overflow.
+   ```bash
+   pct exec <ctid> -- dpkg --audit
+   pct exec <ctid> -- bash -c "dpkg --verify | grep -v '^$'"
+   pct exec <ctid> -- file /usr/sbin/tailscaled /bin/bash
+   ```
+   Check: empty output, and `file` reports `ELF` for both. If bash itself is broken, use
+   `pct exec <ctid> -- /bin/sh`.
 
-**Identify which LXCs are affected** (I/O errors in journal):
+8. Repair dpkg state and reinstall corrupted packages.
+   ```bash
+   pct exec <ctid> -- dpkg --configure -a
+   pct exec <ctid> -- apt --fix-broken install -y
+   pct exec <ctid> -- apt-get install --reinstall <package>
+   ```
+   Check: step 7 is clean; after reinstalling `tailscale`, `systemctl is-active tailscaled` is
+   `active` and `tailscale status` shows the node online.
 
-```bash
-journalctl -n 50 --no-pager | grep -i "i/o error\|input/output"
-```
-
-**Check LXC disk space (may appear fine despite pool overflow):**
-
-```bash
-ansible lxcs -m command -a "df -h /"
-```
-
-Note: `df` inside a container reports virtual disk usage, not thin-pool utilization.
-A container can show free space while the underlying pool is full.
-
-**Check for corrupt packages on a node:**
-
-```bash
-pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"
-# Or inside LXC via pct exec, or inside VM via SSH:
-dpkg --audit
-apt-get check
-```
-
-Non-empty output indicates corrupt binaries.
-
-**Check for corrupt binaries:**
-
-```bash
-file /usr/sbin/tailscaled   # should be ELF, not "data"
-file /bin/bash              # should be ELF, not "data"
-```
-
----
-
-## Recovery
-
-### Step 1 - Free space in the pool
-
-**On all reachable LXCs** (apt cache - largest reclaim target after interrupted upgrade):
-
-```bash
-for ctid in 200 210 211 220 230 240 250 260; do
-  pct exec ${ctid} -- apt-get clean 2>/dev/null && echo "cleaned ${ctid}" || echo "skipped ${ctid}"
-done
-```
-
-**fstrim via nsenter from Proxmox host** (fstrim is blocked inside LXCs):
-
-```bash
-for ctid in 200 210 211 220 230 240 250 260; do
-  PID=$(lxc-info -n "$ctid" 2>/dev/null | awk '/^PID:/{print $2}')
-  [ -z "$PID" ] && echo "lxc${ctid}: not running, skipping" && continue
-  echo "lxc${ctid} (PID ${PID})..."
-  nsenter -t "$PID" --mount -- fstrim -v /
-done
-```
-
-Alternatively, `fstrim -av` from the Proxmox host reaches thin-pool level directly -
-use nsenter only if the host fstrim does not reclaim space on LXC filesystems.
-
-**fstrim on VMs** (run from inside each VM via SSH, requires sudo):
-
-```bash
-ssh gpu@<tailscale-ip-gpu-vm> 'sudo fstrim -v /'
-ssh storage@<tailscale-ip-storage> 'sudo fstrim -v /'
-```
-
-**Verify pool freed:**
-
-```bash
-lvs -o lv_name,data_percent | grep data
-```
-
-Aim for at least 15% free before proceeding.
-
-### Step 2 - Resume frozen VMs
-
-```bash
-qm resume <vmid>
-qm status <vmid>   # should return: status: running
-```
-
-### Step 3 - Repair corrupt dpkg state on affected LXCs/VMs
-
-```bash
-# Check for pending triggers / interrupted installs
-pct exec <ctid> -- dpkg --audit
-
-# Configure pending packages
-pct exec <ctid> -- dpkg --configure -a
-
-# Fix broken dependencies
-pct exec <ctid> -- apt --fix-broken install -y
-```
-
-### Step 4 - Reinstall corrupt binaries
-
-If `file <binary>` returns `data` instead of `ELF 64-bit executable`:
-
-```bash
-pct exec <ctid> -- apt-get install --reinstall <package>
-```
-
-Common victims when upgrade is interrupted mid-write:
-- `tailscale` / `tailscaled` (large binary, ~40 MB; service will be dead after reinstall - verify with `systemctl status tailscaled`)
-- `bash`, `coreutils` (reinstall immediately - shell may be broken; use `pct exec <ctid> -- /bin/sh` if bash itself is corrupt)
-- `login`, `libpam-modules` (upgraded together)
-
-### Step 5 - Re-run the upgrade
-
-After pool space is restored and dpkg state is clean:
-
-```bash
-ansible-playbook ansible/playbooks/apt-upgrade.yml
-```
-
----
+9. Rerun the interrupted upgrade from lxc250.
+   ```bash
+   ansible-playbook playbooks/apt-upgrade.yml
+   ```
+   Check: no failed hosts; the playbook's `dpkg --verify` post-task reports nothing.
 
 ## Verification
 
 ```bash
-# All nodes reachable
+lvs -o lv_name,data_percent,metadata_percent pve
+journalctl -n 100 --no-pager | grep -ci 'i/o error'      # 0
 ansible all -m ping
-
-# Pool utilization back below 90%
-lvs -o lv_name,data_percent,lv_size,pool_lv
-
-# No I/O errors in recent journal
-journalctl -n 50 --no-pager | grep -i "i/o error" | wc -l   # expect 0
-
-# No broken packages on any node
-ansible lxcs -m command -a "dpkg --audit"
-
-# Affected LXCs have no corrupt packages
-pct exec <ctid> -- dpkg --verify 2>&1 | grep -v "^$"   # expect empty
+ansible lxcs -b -m command -a 'dpkg --audit'             # empty on every host
 ```
 
----
+In Prometheus, the `lvm` group alerts have resolved and `lvm_thin_pool_data_percent` matches `lvs`.
 
-## Failure Modes
+## Failure modes
 
-| Symptom | Likely Cause | Action |
+| Symptom | Cause | Action |
 |---|---|---|
-| `qm status <id>` returns `io-error` | VM frozen due to pool overflow | Free pool space, then `qm resume <id>` |
-| `No space left on device` during apt | Thin-pool full, writes failing | Run apt clean + fstrim before retrying |
-| `apt clean` fails inside LXC | Container filesystem still read-only (pool still full) | Run `fstrim -av` on host first, recheck lvs; retry clean |
-| SSH connects but `echo test` returns `Exec format error` | Binary corrupted mid-write | `apt-get install --reinstall <package>` |
-| `dpkg-deb: error: not a Debian format archive` | .deb downloaded partially | `apt-get clean` on the node, re-run upgrade |
-| `dpkg --verify` shows many corruptions | Binary overwrites mid-upgrade | Reinstall each affected package; if bash is corrupt, use `pct exec <ctid> -- /bin/sh` first |
-| tailscaled `Needs login` after reinstall | Auth state lost during reinstall | Re-authenticate via browser login URL in `systemctl status tailscaled` |
-| tailscaled `disabled` after reinstall | Unit was not enabled before | `systemctl enable tailscaled` |
-| fstrim returns `Operation not permitted` inside LXC | FITRIM ioctl blocked in LXC | Run fstrim via `nsenter` from Proxmox host (see Step 1) |
-| `fstrim` reclaims nothing | LXC filesystems have no freed blocks to return | Delete unused Docker images: `pct exec <ctid> -- docker image prune -af` |
-| Pool still at 100% after clean + fstrim | Large log files or Docker volumes consuming space | Check `pct exec <ctid> -- du -sh /var/log /var/lib/docker` |
-| Ansible `Failed to create temporary directory` on LXC | Disk full, can't write to `~/.ansible/tmp` | Run fstrim + apt clean via `pct exec` first |
-| Pool fills again within days | Systematic growth (Docker layers, logs) | Review `docker system df` per host; implement log rotation or image cleanup cron |
-
----
-
-## Prevention
-
-- **Periodic fstrim:** Automated since 2026-08-10 - `lxc-fstrim.timer` on the Proxmox host runs
-  `snippets/scripts/lxc-fstrim.sh` daily at 10:30 with `Persistent=true`. It derives the container
-  list from `pct list` rather than a hardcoded array, so a new container is covered on creation;
-  the previous array omitted lxc250, which was the fullest container in the fleet. A manual run
-  after a large `apt-upgrade` is still reasonable, but nothing depends on remembering it. Note the
-  units are hand-deployed, so they would be lost on a rebuild (same debt as the host's
-  `node_exporter`). The host became an Ansible-reachable node on 2026-08-21; these units have not
-  been folded into a role yet.
-- **Serial upgrades:** `apt-upgrade.yml` uses `serial: 1` to prevent simultaneous downloads from spiking pool utilization. The `dpkg --verify` post-task catches binary corruption before it propagates across nodes.
-- **apt clean after upgrade:** `apt-upgrade.yml` runs `apt clean` on each node after upgrading.
-- **Monitor pool utilization:** Implemented 2026-08-10. The approach previously named here could
-  not work - a thin pool is a block-layer object with no filesystem and no mount point, so
-  `node_filesystem_*` cannot observe it and the metric that rule would have needed does not exist.
-  Instead `lvm-thin-metrics.sh` runs on the Proxmox host every 60 s as a node_exporter textfile
-  collector and emits `lvm_thin_pool_data_percent`, `lvm_thin_pool_metadata_percent`,
-  `lvm_thin_pool_size_bytes`, `lvm_vg_free_bytes` and `lvm_thin_metrics_scrape_success`. Rules:
-  `LvmThinPoolWarning` (>85%, 1 h), `LvmThinPoolCritical` (>90%, 15 min),
-  `LvmThinPoolMetadataCritical` (>80%, 15 min) and `LvmThinMetricsStale` (file older than 15 min,
-  so a stopped timer cannot leave the other three evaluating a frozen value).
-  `lvm_vg_free_bytes` is exported deliberately: it is 0 on this host, which means `lvextend` - the
-  first reflex when a pool fills - is not available without shrinking `root`/`swap` or adding a PV.
+| `qm status` shows `io-error` | VM suspended on a full pool | Free space (steps 2-5), then `qm resume` |
+| `apt-get clean` fails in a container | Writes still failing | Step 2 first, then retry |
+| `fstrim` inside a container: `Operation not permitted` | FITRIM is refused in unprivileged LXCs | Use `pct fstrim <ctid>` on the host |
+| `pct fstrim` reclaims little | Few freed blocks in that container | Step 5 |
+| `Exec format error` or `file` says `data` | Binary overwritten mid-write | `apt-get install --reinstall <package>` |
+| `dpkg-deb: error: not a Debian format archive` | Truncated `.deb` in the cache | `apt-get clean`, rerun the upgrade |
+| `tailscaled` `Needs login` after reinstall | Auth state lost | Re-authenticate with the URL from `tailscale up` |
+| Ansible `Failed to create temporary directory` | Guest disk full | Steps 2 and 4 through `pct exec` first |
+| `LvmThinMetricsStale` | `lvm-thin-metrics.timer` stopped | `systemctl status lvm-thin-metrics.timer`; read `lvs` directly |
+| Pool refills within days | Steady growth (images, logs) | `journalctl -u lxc-fstrim` gives the growth between runs; see [docker-data-root-migration.md](docker-data-root-migration.md) |
 
 ## Rollback
 
-Mixed, and the split is the point:
+- Trimming and `apt-get clean` discard only blocks and files that are already free or
+  re-downloadable; there is nothing to roll back.
+- Pruned images come back with `docker compose pull` from the pinned compose file.
+- A resumed VM can be suspended again with `qm suspend <vmid>`.
+- A package reinstall can be reverted by installing the previous version:
+  `apt-get install <package>=<version>`.
+- Files deleted from a guest are not recoverable except from that guest's vzdump
+  ([guest-backup-restore.md](guest-backup-restore.md)).
 
-- **Freeing space is not reversible.** `fstrim` discards blocks the filesystem has already released,
-  so nothing recoverable is lost -- but nothing comes back either.
-- **Deleting files to free space is irreversible and has no safety net here.** Nothing on the thin
-  pool is backed up as a filesystem. Prefer `pct fstrim` and removing container images over deleting
-  anything a service owns.
-- **Resuming a frozen VM (step 2) is reversible** -- it can be suspended again.
-- **The dpkg repair steps are the ones with a real rollback**, because they reinstall from the
-  archive. If a reinstall makes matters worse, the previous package version is still installable by
-  version number.
+## Background
 
-**Abort criterion:** if the pool is above the critical threshold and still rising while you work,
-stop repairing and stop the writers first. Repairing dpkg inside a guest whose filesystem is still
-being starved produces a second corruption on top of the first.
+Prevention is deployed by the
+[`proxmox_host_units`](../../ansible/roles/proxmox_host_units/) role
+(`ansible/playbooks/proxmox-host-units.yml`):
 
----
+- `lxc-fstrim.timer` runs `snippets/scripts/lxc-fstrim.sh` daily with `Persistent=true`. It derives
+  the container list from `pct list`, so a new container is covered on creation.
+- `lvm-thin-metrics.timer` runs `snippets/scripts/lvm-thin-metrics.sh` as a node_exporter textfile
+  collector, because a thin pool has no filesystem and `node_filesystem_*` cannot see it. It
+  exports `lvm_thin_pool_data_percent`, `lvm_thin_pool_metadata_percent` and `lvm_vg_free_bytes`;
+  thresholds are in `docker/monitoring/prometheus/rules/alert.rules.yml` (group `lvm`).
 
-## Notes
+`apt-upgrade.yml` runs `serial: 1`, cleans the apt cache after each node and verifies binaries with
+`dpkg --verify`, so one overflow cannot corrupt the whole fleet at once.
 
-- `df -h /` inside a container reports filesystem usage, not thin-pool utilization. Always check the pool directly via `lvs` on the Proxmox host.
-- `fstrim` must be run from the Proxmox host for LXCs (`pct fstrim <ctid>`, which enters the
-  container's mount namespace and skips bind and read-only mountpoints). Running it inside an LXC
-  fails two ways independently: the stock `fstrim.timer` carries `ConditionVirtualization=!container`
-  so systemd never starts it, and the ioctl itself is refused with `FITRIM ioctl failed: Operation
-  not permitted`. Both failures are silent - `systemctl is-enabled` reports `enabled` and
-  `Result=success` is the default of a unit that never ran, so no alert can see this.
-- **Proving a unit actually ran:** for `Type=oneshot` without `RemainAfterExit=yes`, systemd
-  releases the unit's runtime state once it completes, so `ExecMainStartTimestamp`,
-  `InactiveExitTimestamp` and `ActiveEnterTimestamp` are all empty whether it ran or not. They
-  are not evidence in either direction. `journalctl -u <unit>` is - `-- No entries --` means never
-  ran. For timer-driven units, `systemctl list-timers` also keeps a persistent `LAST` column.
-- For VMs, `fstrim` runs normally via SSH since they have full kernel access.
-- See: [Storage Design](../../docs/platform/storage-design.md)
-- See: [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh),
-  [lxc-fstrim.service](../../snippets/systemd/lxc-fstrim.service),
-  [lxc-fstrim.timer](../../snippets/systemd/lxc-fstrim.timer)
-- See: [Proxmox host - Host Systemd Timers](../../docs/platform/proxmox-host.md#host-systemd-timers)
-
----
-
-## Related
-
-- [Hard Shutdown Recovery](./hard-shutdown-recovery.md) - thin pool overflow can cause the high I/O that precedes a forced shutdown
-- [Known Errors](../../docs/platform/known-errors.md) - KE-7 documents the binary corruption pattern
+Containers cannot trim themselves: the stock `fstrim.timer` carries
+`ConditionVirtualization=!container` and the ioctl is refused, and both report healthy. For a
+`Type=oneshot` unit, `journalctl -u <unit>` (or the `LAST` column of `systemctl list-timers`) is the
+proof that it ran; the unit's timestamps are empty either way. Discard passdown to the SSD itself is
+disabled because the HBA does not translate UNMAP; the pool still frees its own chunks.
+See [storage-design.md](../../docs/platform/storage-design.md).

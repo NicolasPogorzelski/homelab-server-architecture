@@ -44,9 +44,9 @@ The decision prioritizes operational predictability over theoretical performance
 - Nextcloud -> /mnt/mergerfs/Nextcloud
 - Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
 - Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
-- DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210, added
-  2026-08-15; a share of its own rather than a directory inside the Nextcloud export, so whatever
-  reaches the user data does not also reach its backup)
+- DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210; a share of
+  its own rather than a directory inside the Nextcloud export, so whatever reaches the user data
+  does not also reach its backup)
 
 Ownership enforcement:
 
@@ -57,13 +57,10 @@ Ownership enforcement:
 
 This ensures consistent file ownership regardless of client context.
 
-**These masks describe the write path through Samba, and nothing else.** They apply at the moment
-Samba creates an object and never afterwards, so a directory created over SSH bypasses them and a
-file predating a mask keeps its old mode indefinitely. What the objects on the disks are actually
-supposed to look like is a separate statement, kept in
-[storage-permissions.md](storage-permissions.md) and verified by a daily check. That document
-exists because the gap between these two things stayed open from the pool's creation on 2025-12-26
-until 2026-08-16 without producing a symptom.
+These masks describe the write path through Samba only. They apply when Samba creates an object,
+so a directory created over SSH bypasses them and an older file keeps its mode. The intended state
+of the objects on disk is kept in [storage-permissions.md](storage-permissions.md) and verified by
+the `storage_permissions` timer.
 
 ### Ingest Shares (Cross-Service Write Path)
 
@@ -94,16 +91,14 @@ Four shares expose the media library paths read-write to the admin workstation:
 - Audiobooks -> /mnt/mergerfs/Audiobooks
 - Books -> /mnt/mergerfs/Books
 
-These shares have no `create mask` / `directory mask` set (inherits filesystem defaults)
-because no other service identity writes to these paths alongside the workstation user.
+These shares set `create mask = 0640` and `directory mask = 2750`: other gets nothing, and new
+directories keep the setgid bit ([storage-permissions.md](storage-permissions.md)).
 
 On the admin workstation these four are mounted via `/etc/fstab` using a credentials file at
-`/etc/samba/credentials-storage`. Measured 2026-08-17: `vers=3.1.1`, `_netdev`, `soft` and
-`x-systemd.automount` - not the `nofail` this paragraph claimed. The distinction is the KE-15 one
-and worth keeping straight: `nofail` lets a failed boot-time mount pass silently and never retries,
-whereas `x-systemd.automount` defers the mount to first access and therefore survives VM102 being
-unavailable at boot. The workstation also mounts one share that is outside the scope of this
-document, which is why a count stated here would not match what `findmnt` shows.
+`/etc/samba/credentials-storage`, with `vers=3.1.1`, `_netdev`, `soft` and `x-systemd.automount`
+(verified 2026-08-17). `x-systemd.automount` defers the mount to first access and survives vm102
+being unavailable at boot, where `nofail` would let a failed boot-time mount pass silently and
+never retry ([KE-15](known-errors.md#ke-15)).
 
 ---
 
@@ -115,12 +110,8 @@ Media services receive read-only access:
 - Audiobookshelf: `media-abs-audiobooks` -> /mnt/mergerfs/Audiobooks, `media-abs-podcasts` -> /mnt/mergerfs/Podcasts (RO)
 - Calibre-Web (`books-svc`) -> /mnt/mergerfs/Books (RO)
 
-Until 2026-08-16 the two media consumers held a single share each, pointing at the whole pool.
-The directory modes kept them inside their own libraries, but the share itself did not. The
-scoped shares above are evaluated before any filesystem permission and therefore hold even if a
-directory mode is ever loosened. The superseded `[media-jf]` and `[media-abs]` definitions have
-since been removed - confirmed by `testparm -s` on 2026-08-17, which no longer lists them, as the
-old mounts on VM100 had cleared with the nightly power-off.
+Each consumer share is scoped to one library. Share scoping is evaluated before any filesystem
+permission, so it holds even if a directory mode is loosened.
 
 These shares are:
 
@@ -140,7 +131,9 @@ This reduces risk of accidental modification or deletion.
   `systemd_hygiene` role, so nothing answers on UDP 137/138
 - User-based authentication
 - No anonymous access
-- No implicit subnet-wide trust beyond defined ACL model
+- No subnet-wide trust: `hosts allow` admits loopback, the tailnet range, vm100 and the Proxmox
+  host, and denies everything else; on the LAN, `lan_guard` and `smb_guard` drop SMB from any other
+  source before Samba sees it
 
 SMB is not used for internet-facing services.
 
@@ -151,29 +144,26 @@ LAN interfaces"). `bind interfaces only = no` makes `smbd` accept on every inter
 the LAN interface and its globally routable IPv6 address; access control rests entirely on
 `hosts allow` / `hosts deny`, which Samba applies *after* accepting the TCP connection.
 
-An earlier version of this section claimed "No public exposure". That was an unverified assertion
-and has been removed: port 445 is bound on a world-routable IPv6 address, and what prevents
-reachability today is the router's default block on inbound IPv6 plus the absence of any IPv6
-entry in `hosts allow` - not the service's binding.
-
 The deviation persists for a reason that is not configuration laziness: **Samba cannot bind an
 IPv4 address on `tailscale0` at all.** The interface is a point-to-point TUN device without the
 `BROADCAST` flag, and Samba's IPv4 interface selection skips such interfaces. Tried and verified
 2026-07-14 with `<ip>/32`, with the bare IP, and with the interface name - none binds the Tailscale
-IPv4 address, and an explicit `interfaces` list therefore *removes* the Tailscale SMB path instead
-of securing it. (The IPv6 ULA does bind as `/128`, because IPv6 has no broadcast concept.) The
-`# Robust: listen on all available interfaces (avoid bind failures)` comment in the live `smb.conf`
-is the fossil of an earlier attempt that hit the same wall.
+IPv4 address, and an explicit `interfaces` list therefore removes the Tailscale SMB path instead
+of securing it. (The IPv6 ULA does bind as `/128`, because IPv6 has no broadcast concept.)
 
-Throughput is not the reason either - measured 2026-07-14, Tailscale costs ~8 % on this link
-(741 vs 809 Mbit/s), because same-subnet peers negotiate a direct WireGuard path over the LAN
-rather than via a relay.
+Verified 2026-07-14: Tailscale costs about 8 % throughput on this link (741 vs 809 Mbit/s), because
+same-subnet peers use a direct WireGuard path.
 
-The boundary therefore lives in the kernel instead of the application. Since 2026-07-14 the
-nftables table `inet smb_guard` on VM102 (loaded by `smb-guard.service`) drops inbound TCP/445 over
-IPv6 on the LAN interface - closing the world-routable socket - and over IPv4 accepts only VM100
-and the Proxmox host, the two nodes that actually mount. Tailscale traffic arrives on `tailscale0`
-and is not evaluated. `hosts allow` remains underneath as redundancy.
+The boundary therefore lives in the kernel. Two nftables tables on vm102 filter the LAN interface
+before Samba accepts a connection:
+
+- `inet smb_guard` (loaded by `smb-guard.service`) drops inbound TCP/445 over IPv6 and accepts
+  IPv4 only from vm100 and the Proxmox host, the two nodes that mount.
+- `lan_guard` (role, on every node) drops every new inbound LAN connection except its named
+  exceptions, which on vm102 are the same SMB sources.
+
+Tailscale traffic arrives on `tailscale0` and is not evaluated by either. `hosts allow` remains
+underneath as a third layer.
 
 Reasoning, measurements and the reboot verification: [SMB bind and LAN
 access](../decisions/smb-bind-and-lan-access.md). Sources:

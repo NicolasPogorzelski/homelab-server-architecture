@@ -2,11 +2,8 @@
 [Unit]
 Description=Record the fleet's unmanaged surface and diff it against last week
 Documentation=file://{{ fleet_snapshot_repo }}/docs/platform/monitoring.md
-# The playbook reaches every node over Tailscale, so a run started before the
-# interface has an address collects a fleet of unreachable hosts and writes that
-# as the new baseline. Ordering is not readiness (KE-18), but this unit is
-# started by a calendar timer long after boot, so ordering is the whole of what
-# it needs.
+# Every node is reached over Tailscale. Ordering is not readiness (KE-18), but a
+# calendar timer starts this long after boot, so ordering suffices.
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -18,8 +15,7 @@ Environment=PATH={{ fleet_snapshot_path }}
 # ansible.cfg already points at ./inventory/hosts.yml and ~/.vault_pass; both
 # exist only for this user on this node.
 ExecStart={{ fleet_snapshot_playbook_bin }} {{ fleet_snapshot_playbook }}
-# A snapshot that hangs on one unreachable node must not hold the timer open
-# until the next week's run.
+# A run hanging on one unreachable node must not hold the timer open.
 TimeoutStartSec=1800
 
 [Install]

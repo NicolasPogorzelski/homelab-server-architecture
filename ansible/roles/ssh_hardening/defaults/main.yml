@@ -1,28 +1,17 @@
 ---
 # === ssh_hardening ===
 #
-# Both values are sshd directives, passed through as written. They are variables
-# rather than literals because one node cannot take the strict value: the Proxmox
-# host's only administrative account is root, and that host has no usable
-# out-of-band console - the single GPU is passed through to vm100 with `x-vga=1`,
-# there is no serial console and no BMC, and `getty@tty1` writes to a framebuffer
-# the guest owns. `PermitRootLogin no` there does not harden the hypervisor, it
-# ends administration of it.
-#
-# The override lives in `group_vars/proxmox.yml` with its reasoning. Everywhere
-# else the strict default applies, and a node that needs an exception has to state
-# it in inventory rather than have it applied silently.
+# Both values are sshd directives, passed through as written. Variables because
+# the Proxmox host cannot take the strict value: root is its only administrative
+# account and it has no usable out-of-band console. The override and its reasoning
+# live in `group_vars/proxmox.yml`; every other node gets the strict default.
 ssh_hardening_password_authentication: "no"
 ssh_hardening_permit_root_login: "no"
 
 # === ListenAddress ===
 #
-# Empty by default, which leaves sshd on the wildcard address and changes nothing.
-# Set it to a node's Tailscale address to pin the bind, and read
-# docs/decisions/sshd-listen-address.md before doing so on any node.
-#
-# Not a boolean, and not derived from ansible_host automatically. Deriving it would
-# make the change arrive on ten nodes the first time somebody runs the playbook
-# after a merge, and the whole decision is that this is a supervised, one-node-at-
-# a-time rollout with a second terminal already open.
+# Empty by default, which leaves sshd on the wildcard address. Set per node to its
+# Tailscale address to pin the bind (all guests; the hypervisor stays unpinned).
+# Not derived from ansible_host, so a pin is always an explicit per-node change.
+# See docs/decisions/sshd-listen-address.md.
 ssh_hardening_listen_address: ""

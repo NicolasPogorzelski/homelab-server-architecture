@@ -25,11 +25,11 @@ lan_guard_allow:
     reason: SMB mounts from the hypervisor and vm100 over the LAN, until the storage network replaces them
 
 # === sshd bound to the Tailscale address only ===
-# docs/decisions/sshd-listen-address.md, step 2. vm102 was never socket-activated,
-# so ListenAddress binds as written. sshd exits 255 on a bind to an address
-# tailscaled has not assigned yet, and the packaged unit refuses to restart on 255
-# unless that list is cleared. The way back is the Proxmox console, as `storage`;
-# this VM cannot be snapshotted, its pool disks are passed through.
+# docs/decisions/sshd-listen-address.md. Not socket-activated, so ListenAddress
+# binds as written. sshd exits 255 on a bind to an unassigned address and the
+# packaged unit does not restart on 255 unless that list is cleared. The way back
+# is the Proxmox console, as `storage`; this VM cannot be snapshotted because its
+# pool disks are passed through.
 tailscale_boot_gate_units:
   - ssh.service
 tailscale_boot_gate_clear_restart_prevent: true

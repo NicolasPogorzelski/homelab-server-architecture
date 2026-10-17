@@ -8,9 +8,8 @@ listener_metrics_script_dest: /usr/local/sbin/listener-metrics.sh
 listener_metrics_allow_file: /etc/listener-metrics.allow
 listener_metrics_textfile_dir: /var/lib/node_exporter/textfile_collector
 
-# Fifteen minutes against a rule with `for: 30m`: a listener has to be seen on
-# three runs before anyone is told, which lets a package upgrade restart a
-# service without paging and still reports the one that comes back wrong.
+# Several runs fall inside the alert rule's `for:` window, so a service restarted
+# by a package upgrade does not page, while one that comes back wrong does.
 listener_metrics_interval: 15min
 
 # Exceptions every node shares, and neither can be bound to the overlay.
@@ -23,7 +22,6 @@ listener_metrics_allowed_common:
   - { proto: udp, port: "*", process: tailscaled, reason: "tailscaled WireGuard transport and portmapper probes" }
   - { proto: udp, port: 68, reason: "DHCP client" }
 
-# Per-node exceptions, each one a documented decision. Set in host_vars or
-# group_vars with the decision named in its reason. An entry without a decision
-# behind it is how a violation becomes permanent.
+# Per-node exceptions, set in host_vars or group_vars. Each reason names the
+# decision behind the exception.
 listener_metrics_allowed: []

@@ -4,9 +4,8 @@ Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/
 # Load before the network is configured, so port 445 is never briefly unguarded at boot.
 After=network-pre.target
 Wants=network-pre.target
-# Deliberately NOT nftables.service: its stock /etc/nftables.conf starts with `flush ruleset`
-# and its ExecStop flushes the whole ruleset -- either would wipe Tailscale's own ts-input /
-# ts-forward chains. Own table, own unit.
+# Not nftables.service: its stock config and ExecStop flush the whole ruleset, including
+# Tailscale's ts-input / ts-forward chains. Own table, own unit.
 
 [Service]
 Type=oneshot

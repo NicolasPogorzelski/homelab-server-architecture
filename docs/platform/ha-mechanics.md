@@ -1,12 +1,10 @@
 # How Proxmox HA Works, and Why It Stays Off Here
 
-**Nothing was changed to write this document.** It is one of the four controls
-taken on to be understood rather than because this platform needs them
-([decision](../decisions/exercise-scope-before-terraform.md)), and it is the one
-whose exercise had to stop at reading. Arming high availability on a single node
-means arming a mechanism whose job is to reset that node, with nothing standing
-by to take the guests. Every command below is a read, and every output is this
-host on 2026-09-17.
+HA is one of the four controls exercised to be understood
+([decision](../decisions/exercise-scope-before-terraform.md)), and the only one
+whose exercise stops at reading: arming high availability on a single node arms
+a mechanism that resets that node, with no other node to take the guests. Every
+command below is read-only, and every output is from this host on 2026-09-17.
 
 ## The parts, and which of them are already running
 
@@ -23,17 +21,15 @@ rc=2
 
 **pmxcfs**, the cluster filesystem mounted at `/etc/pve`, distributes
 configuration and holds the HA state machine's files. On a node with no corosync
-it runs in local mode and is trivially quorate with itself, which produces the
-first thing worth noticing:
+it runs in local mode and is quorate with itself:
 
 ```
 # ha-manager status
 quorum OK
 ```
 
-That line says nothing about a cluster. It says one node agrees with itself.
-Read without the `pvecm` output above it, it is exactly the kind of green that
-this repository keeps finding underneath a fault.
+That line says nothing about a cluster. It says one node agrees with itself, and
+it reads as healthy only without the `pvecm` output above it.
 
 **The CRM**, one cluster resource manager, decides what should run where.
 **The LRM**, one local resource manager per node, does it. Both run here and are
@@ -46,7 +42,7 @@ active active active
 
 **watchdog-mux** multiplexes the hardware watchdog so several HA components can
 depend on one device. It is `WantedBy=pve-ha-lrm.service pve-ha-crm.service`,
-which is why it is running on a machine with no HA resources at all.
+so it runs on a machine with no HA resources.
 
 ## The device that is already armed
 
@@ -62,8 +58,8 @@ active
 A ten-second timer is running against this hypervisor right now, held open and
 fed by `watchdog-mux`. The kernel loads `softdog` at `nowayout=0`, so if that
 process dies its descriptor closes and the timer stops with it - the watchdog is
-lost, not the host. The same reading with `nowayout=1` would be the opposite, and
-that single parameter is the difference between a safety device and a hazard.
+lost, not the host. With `nowayout=1` the timer would keep running after
+`watchdog-mux` died, and reset the host ten seconds later.
 
 ## What is missing, and it is the only thing missing
 
@@ -76,9 +72,8 @@ that single parameter is the difference between a safety device and a hazard.
 there are no HA resources to manage, so it never enters `active` work, never
 registers a client with `watchdog-mux`, and nothing ever stops the feeding.
 
-That is the whole of why this platform is safe with the stack running. Not
-because the pieces are absent - all but one are present and started - but because
-no resource exists to put the last piece in motion.
+The stack therefore runs without risk here: all pieces but corosync are present
+and started, and no resource exists to start the feeding chain below.
 
 ## The chain, if a resource did exist
 
@@ -93,28 +88,27 @@ no resource exists to put the last piece in motion.
 
 Step 6 is fencing, and it is the correct behaviour: a node that cannot prove it
 is healthy must not keep running guests another node may be about to start. In a
-cluster that is a safety property. On one node it is a machine that reboots
-itself and comes back to exactly the same situation.
+cluster that protects shared data; on one node the reset only reboots the host
+into the same situation.
 
 ## Why it stays off here, in one sentence per reason
 
 - **There is nobody to fail over to.** Fencing frees a workload for another node
   to claim. With one node the workload goes down either way, and the reset adds
-  the boot time of eleven guests to an outage that did not need it.
+  the boot time of nine guests to an outage that did not need it.
 - **A transient becomes an outage.** Anything that stalls the LRM - a pmxcfs
   hiccup, storage that stops answering, the kernel oops this platform already has
   on file as [KE-21](known-errors.md#ke-21) - stops the feeding, and the machine
-  resets rather than degrades.
+  resets instead of running degraded.
 - **A reboot loop is reachable.** A fault that reproduces after boot cycles the
   host indefinitely, and the exit is the power button, which is the outcome the
   watchdog was supposed to prevent.
 - **The platform is documented as recovery-oriented and explicitly not highly
   available.** Turning on half a clustering feature to obtain a reboot timer
-  inverts the design rather than extending it.
+  contradicts that design.
 
-This is the same conclusion the panic-and-watchdog decision reached on
-2026-09-11; what is new here is that the mechanism is written down rather than
-referred to.
+The decision itself is recorded in
+[Hypervisor Panic Policy and softdog](../decisions/hypervisor-panic-and-watchdog.md).
 
 ## What it looks like where it belongs
 
@@ -130,11 +124,9 @@ referred to.
 ## What this setup cannot exercise at all
 
 Split brain. It needs two halves that can each believe they are the survivor, and
-that requires a second node and a network that can partition between them. Every
-interesting HA failure - fence races, a node resurrected with stale state, a
-quorum device that votes for the wrong side - lives on the far side of that line.
-Reading about them is not the same as having seen one, and this platform cannot
-produce one.
+that requires a second node and a network that can partition between them. Fence
+races, a node resurrected with stale state and a quorum device voting for the
+wrong side all need that second node.
 
 ## Where to look again
 
@@ -142,5 +134,5 @@ produce one.
   [Hypervisor Panic Policy and softdog](../decisions/hypervisor-panic-and-watchdog.md)
 - The incident that raised the question:
   [KE-21](known-errors.md#ke-21)
-- Why this document exists at all:
+- The scope decision for exercised controls:
   [Controls Built to Be Learned](../decisions/exercise-scope-before-terraform.md)

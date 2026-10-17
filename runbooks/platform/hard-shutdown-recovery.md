@@ -1,211 +1,145 @@
-# Runbook: Hard Shutdown Recovery (Proxmox)
+# Runbook: Hard shutdown recovery (Proxmox host)
 
-## Problem
+- **Use when:** the host went down uncleanly (power loss, forced power-off, watchdog) and after the
+  reboot guests are stopped, fail to start, or are unreachable.
+- **Duration:** 10-20 minutes.
+- **Risk:** a container started before its SMB share is mounted writes into the empty mountpoint
+  on the boot SSD ([KE-7](../../docs/platform/known-errors.md#ke-7) class); more guest starts on a
+  boot SSD that logs I/O errors add load to a failing device
+  ([KE-14](../../docs/platform/known-errors.md#ke-14)).
+- **Last exercised:** never
 
-The Proxmox host was shut down uncleanly - power loss, forced power-off, or hardware
-watchdog. After reboot, one or more LXC containers fail to start automatically. SSH to
-managed nodes may be temporarily unavailable.
-
-Observed failure modes:
-
-- **LXC260 (postgres):** pre-start hook exits with code 19 (`ENODEV`) - the SMB bind
-  mount at `/mnt/smb/postgres-backups` is not ready when Proxmox tries to start the container
-- **LXC250 (devops):** SSH unreachable for ~30-60 s after boot - sshd binds only to the
-  Tailscale IP; it is unreachable until Tailscale connects
+Guests autostart by `startup: order=N,up=M` ([boot ordering](../../docs/platform/proxmox-host.md#boot-ordering)):
+vm102 first, because the host's `/mnt/smb/*` CIFS automounts and the bind mounts of lxc210, lxc220
+and lxc260 depend on its shares. After an unclean shutdown that order can break: lxc260's pre-start
+hook exits 19 (`ENODEV`) when `/mnt/smb/postgres-backups` is not ready.
 
 ## Preconditions
 
-- Proxmox host has finished booting (power LED stable, network link up)
-- Access via one of the methods in the table below
+- The host has finished booting (link up on the NIC).
+- A root shell on the host, by the first path that works:
 
----
-
-## Access Hierarchy
-
-Use the first available method:
-
-| Priority | Method | Address | Available when |
-|---|---|---|---|
-| 1 | Proxmox WebUI (Tailscale) | `https://<tailscale-ip-proxmox-host>:8006` | Tailscale on host is connected |
-| 2 | SSH to Proxmox host (LAN) | `ssh root@<proxmox-lan-ip>` | From the admin notebook or the admin desktop only; `lan_guard` drops every other LAN source |
-| 3 | LXC console | WebUI -> container -> Console tab, or `pct enter <ctid>` from the host | Proxmox WebUI or host shell accessible |
-| 4 | Physical console via a spare GPU | [host-console-gpu-swap.md](host-console-gpu-swap.md) | Paths 1 and 2 have failed |
-
-The WebUI does not listen on the LAN (`pveproxy` binds the Tailscale address), so there is no LAN
-path to it.
-
-**Finding `<proxmox-lan-ip>`:** Open the Fritz!Box at `http://<router-lan-ip>` ->
-Heimnetz -> Netzwerk. The host appears as `server` or `pve`. Alternatively:
-`arp -n` from any device on the same LAN.
-
----
-
-## Diagnosis
-
-**List container states** (on Proxmox host via SSH or WebUI shell):
-
-```bash
-pct list
-```
-
-Stopped containers show `stopped` in the Status column.
-
-**Check why a container failed to start:**
-
-```bash
-journalctl -u pve-container@<ctid>.service --no-pager -n 30
-```
-
-Common exit codes:
-
-| Code | Meaning | Context |
+| Priority | Path | Available when |
 |---|---|---|
-| 19 (`ENODEV`) | Bind-mount path not found | Storage not ready; LXC260 mp1 |
-| 1 | Generic failure | Check full journal for details |
+| 1 | WebUI `https://<tailscale-ip-proxmox-host>:8006` or `ssh server` over the tailnet | `tailscaled` on the host is up; `pveproxy` binds the Tailscale address only |
+| 2 | `ssh root@<lan-ip-proxmox>` | From one of the two admin workstations; `lan_guard` drops every other LAN source |
+| 3 | Physical console through a spare GPU | Paths 1 and 2 failed: [host-console-gpu-swap.md](host-console-gpu-swap.md) |
 
----
+`<lan-ip-proxmox>` is in the real inventory on lxc250 and in the router's DHCP table (host
+`server`).
 
-## Recovery
+## Steps
 
-### Step 1 - Verify storage mounts are ready
-
-LXC260 depends on `mp1`: `/mnt/smb/postgres-backups` bound from VM102/storage.
-Start LXC260 only after confirming the path exists on the Proxmox host:
-
-```bash
-ls /mnt/smb/postgres-backups
-```
-
-If the path is missing or empty, VM102/storage is still booting. Wait 30-60 s and retry.
-
-### Step 2 - Start stopped containers
-
-Start in dependency order - storage-dependent containers last:
-
-```bash
-pct start 200   # monitoring
-pct start 210   # nextcloud
-pct start 211   # paperless
-pct start 220   # calibreweb
-pct start 230   # openwebui
-pct start 240   # vaultwarden
-pct start 250   # devops
-pct start 260   # postgres - start last, depends on SMB from VM102
-```
-
-Skip containers that are already running (`pct start` on a running container returns an error
-but causes no harm).
-
-### Step 3 - Restore SSH access to LXC250
-
-LXC250's sshd is configured with `ListenAddress <tailscale-ip-devops>`. After boot,
-SSH is unreachable until Tailscale connects. Check Tailscale status inside the container:
-
-```bash
-pct exec 250 -- tailscale status
-```
-
-Expected: a line showing `devops` with a `100.x.x.x` address. If Tailscale is still
-connecting, wait and retry. If it is stuck:
-
-```bash
-pct exec 250 -- systemctl restart tailscaled
-```
-
-Once Tailscale is connected, SSH via the Tailscale IP works normally.
-
----
+1. Read the state and the boot SSD before starting anything.
+   ```bash
+   qm list; pct list
+   journalctl -k -b | grep -cE '9:0:0:0.*(DID_SOFT_ERROR|DID_TIME_OUT)'
+   ```
+   Check: a count above zero that keeps rising means stop here (see Rollback).
+2. Start vm102 if it is not running.
+   ```bash
+   qm start 102
+   ```
+   Check: `qm status 102` prints `status: running`.
+3. Wait for its shares on the host.
+   ```bash
+   for s in postgres-backups nextcloud db-backups books books-rw; do
+     ls /mnt/smb/$s >/dev/null; echo "$s: $(findmnt -no FSTYPE /mnt/smb/$s | tr '\n' ' ')"
+   done
+   systemctl restart smb-mounts-check.service
+   ```
+   Check: every line contains `cifs` (`autofs` alone means not mounted yet; wait 30-60 s and
+   repeat); `smb-mounts-check.service` exits 0.
+4. Start the stopped containers in startup order. SMB-dependent containers come only after step 3
+   passed.
+   ```bash
+   pct start 260   # PostgreSQL; mp1 on /mnt/smb/postgres-backups
+   pct start 200
+   pct start 210   # Nextcloud; mp0, mp1 on SMB
+   pct start 211
+   pct start 220   # Calibre-Web; mp0, mp2 on SMB
+   pct start 230
+   pct start 250
+   ```
+   Skip containers already running. Check: `pct list` shows every container `running`; for a
+   failure, `journalctl -u pve-container@<ctid>.service -n 30 --no-pager`.
+5. Start vm100 last.
+   ```bash
+   qm start 100
+   ```
+   Check: `qm status 100` prints `status: running`.
+6. Wait for SSH. sshd on every guest binds the Tailscale address only, behind
+   `tailscale_boot_gate` ([sshd decision](../../docs/decisions/sshd-listen-address.md)); it is
+   unreachable until `tailscaled` has its address.
+   ```bash
+   pct exec 250 -- tailscale status --self --peers=false
+   ```
+   Check: the node shows its Tailscale address. If stuck,
+   `pct exec <ctid> -- systemctl restart tailscaled`.
 
 ## Verification
 
+From lxc250, in `ansible/`:
 ```bash
-# All containers in running state
-pct list
-
-# All Ansible-managed nodes reachable via Tailscale
-cd ~/git/homelab-server-architecture/ansible
 ansible all -m ping
-
-# PostgreSQL accepting connections
-pct exec 260 -- systemctl status postgresql --no-pager
+ansible all -b -m command -a 'systemctl --failed --no-legend'
+```
+On the host:
+```bash
+pct exec 260 -- systemctl is-active postgresql
+pct exec 260 -- findmnt -no FSTYPE /mnt/backups
 ```
 
----
+- Every node answers `pong` and lists no failed unit.
+- PostgreSQL is `active`; `/mnt/backups` in lxc260 is `cifs`.
+- No alert other than `Watchdog`.
 
-## Failure Modes
+## Failure modes
 
-| Symptom | Likely Cause | Action |
+| Symptom | Cause | Action |
 |---|---|---|
-| `pct start 260` fails, exit 19 | SMB mount not ready (VM102 still booting) | Wait, then `ls /mnt/smb/postgres-backups`; retry `pct start 260` |
-| SSH to LXC250 - connection refused immediately | sshd bound to Tailscale IP, Tailscale not yet up | Wait 60 s; check `pct exec 250 -- tailscale status`; restart tailscaled if stuck |
-| Container starts but services in failed state | Systemd units left in failed state after unclean shutdown | `pct exec <ctid> -- systemctl --failed`; restart affected units |
-| Proxmox WebUI unreachable via Tailscale | Tailscale on Proxmox host not connected | Use LAN IP for WebUI; `ssh root@<proxmox-lan-ip>` -> `systemctl restart tailscaled` |
-| Container filesystem errors on boot | fsck required after unclean unmount | Container will auto-fsck; check `journalctl -u pve-container@<ctid>` for outcome; manual `fsck` rarely needed |
-| `ansible all -m ping` shows some UNREACHABLE | Tailscale on affected node not yet connected | Wait 30-60 s; retry ping; or check `pct exec <ctid> -- tailscale status` |
-| Host boots, no network at all, after a mainboard or network card swap | The Proxmox installer pinned the bridge port by MAC address (`/usr/local/lib/systemd/network/50-pmx-nic0.link`); the new card does not match, keeps a name like `enp3s0`, and `vmbr0`'s `bridge-ports nic0` points at nothing | See *After a board or network card swap* below |
+| `pct start 260` exits 19 | SMB share not mounted yet | Step 3, then retry |
+| SSH to a guest refused right after boot | `tailscaled` not up yet | Wait 60 s; step 6 |
+| Container runs, services failed | Units left failed by the unclean shutdown | `pct exec <ctid> -- systemctl --failed`; restart them |
+| WebUI unreachable over the tailnet | `tailscaled` on the host not up | Path 2, then `systemctl restart tailscaled` (`pveproxy` waits for it, [KE-12](../../docs/platform/known-errors.md#ke-12)) |
+| `ansible all -m ping` partly `UNREACHABLE` | Tailscale on those nodes not up | Wait 30-60 s; `pct exec <ctid> -- tailscale status` |
+| Container fsck messages on start | Unclean unmount | `journalctl -u pve-container@<ctid>` for the outcome |
+| No network at all after a board or NIC swap | `nic0` is pinned by MAC (`/usr/local/lib/systemd/network/50-pmx-nic0.link`); the new card keeps its own name and `vmbr0`'s `bridge-ports nic0` is empty | Procedure below |
 
-### After a board or network card swap
+### No network after a board or NIC swap
 
-Not yet performed on this host; the commands are the vendor's, the order is reasoned.
+Not yet performed; the commands are the vendor's. `vfio-pci` claims the only GPU for vm100, so the
+screen goes dark after GRUB.
 
-The host has no console once Linux runs: `vfio-pci` claims the only GPU at module load for vm100,
-so after GRUB the screen stays dark. Without network, that leaves GRUB.
-
-1. In the GRUB menu press `e` on the default entry, append `modprobe.blacklist=vfio_pci` to the
-   `linux` line and boot with `Ctrl-x`. The host keeps the GPU, a login prompt appears, and vm100
-   fails to start, which is expected for this boot.
-2. Log in as root. `ip -br link` shows the new card under its predictable name.
-3. Move the old pin away and pin the new card to the old name, which `/etc/network/interfaces`
-   and `vmbr0` already use:
-
+1. In GRUB press `e`, append `modprobe.blacklist=vfio_pci` to the `linux` line, boot with
+   `Ctrl-x`. The host keeps the GPU; vm100 fails to start this boot.
+2. Log in as root; `ip -br link` shows the new card's name.
+3. Pin it to the old name:
    ```bash
    mv /usr/local/lib/systemd/network/50-pmx-nic0.link /root/
    pve-network-interface-pinning generate --interface <new-name> --target-name nic0
    reboot
    ```
-
-4. The normal boot brings `nic0`, `vmbr0` and vm100 back. A new board also has no `proxmox` UEFI
-   entry; it boots through the fallback `\EFI\BOOT\BOOTX64.EFI`, which exists. Recreate the entry
-   once the host is up if the firmware's own boot order needs it (`efibootmgr -v` shows both).
-
----
-
-## Prevention
-
-- **Always use a controlled shutdown:** Proxmox WebUI -> node -> Reboot, or `shutdown -r now`
-  via SSH. Forced power-off should only be used if the host is completely unresponsive.
-- **If the host becomes unresponsive during high I/O:** Open Proxmox WebUI first (Tailscale).
-  The WebUI remains accessible even when SSH is saturated. Use WebUI -> node -> Shell to
-  investigate before resorting to a hard shutdown.
-- **LXC260 startup delay:** Currently `order=2, up=20s`. If SMB mount failures recur after
-  clean reboots, increase the `up` delay in the LXC config via Proxmox WebUI -> LXC260 ->
-  Options -> Start/Shutdown Order.
+4. A new board has no `proxmox` UEFI entry and boots through `\EFI\BOOT\BOOTX64.EFI`; recreate the
+   entry with `efibootmgr` if the firmware needs it.
 
 ## Rollback
 
-You are already in the failure state, so there is nothing to return to. What this procedure needs
-instead are abort criteria -- the points at which continuing makes things worse:
+There is no prior state to return to; these are the abort criteria:
 
-- **Storage mounts are not ready (step 1 fails).** Do not start containers anyway. A container whose
-  bind mount was empty at start keeps pointing at the empty directory, and the service inside writes
-  into the container rootfs on the boot SSD. That is the KE-7 class, and it turns an outage into a
-  disk-fill.
-- **A container fails to start twice for the same reason.** Stop and diagnose. Repeating `pct start`
-  against a failing pre-start hook produces no new information.
-- **The boot SSD is reporting I/O errors in `dmesg`.** Stop starting guests. Each additional guest is
-  more writing onto a device that is currently failing reads -- see KE-14.
+- Step 3 does not pass: do not start SMB-dependent containers. A container started on an empty
+  mountpoint keeps the empty directory and writes onto the boot SSD.
+- A container fails twice for the same reason: stop and diagnose; repeating `pct start` adds
+  nothing.
+- The boot SSD logs I/O errors that keep rising: stop starting guests
+  ([boot SSD replacement](../../docs/platform/remediation-plan.md#boot-ssd-replacement)).
 
-Individual steps are reversible in the ordinary sense: a container started too early can be stopped
-with `pct stop`, and once the mounts are healthy it has to be restarted anyway.
+A container started too early is undone with `pct stop <ctid>` and started again after step 3.
 
----
+## Background
 
-## Notes
-
-- LXC250 `ListenAddress` is intentional hardening (SSH binds to Tailscale only, no LAN
-  exposure). The ~60 s post-boot window where SSH is unreachable is a known tradeoff.
-  See: [Known Technical Debt](../../CLAUDE.md#known-technical-debt--gotchas)
-- LXC260 `mp1` (`/mnt/smb/postgres-backups`) is populated by VM102/storage. Hard shutdowns
-  can break this boot dependency. See: [Known Technical Debt](../../CLAUDE.md#known-technical-debt--gotchas)
-- See also: [LVM Thin Pool Full](./lvm-thin-pool-full.md) - if the high I/O was caused by
-  pool overflow (check `lvs -o lv_name,data_percent` on the Proxmox host)
+Shut down with WebUI -> node -> Shutdown or `shutdown -h now`; a forced power-off only when the
+host does not respond. If the host is unresponsive under heavy I/O, check the thin pool first:
+`lvs pve/data` ([lvm-thin-pool-full.md](lvm-thin-pool-full.md)). If SMB-related start failures
+recur after clean boots, raise vm102's `up` delay (WebUI -> vm102 -> Options -> Start/Shutdown
+order).

@@ -1,6 +1,6 @@
 services:
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.2.1  # pinned; released 2026-09-20. v3 needs the env changes in the paperless_env role
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.2.1  # v3 needs the environment set by the paperless_env role
     container_name: paperless
     restart: unless-stopped
     depends_on:
@@ -23,14 +23,14 @@ services:
       - paperless-data:/usr/src/paperless/data
 
   redis:
-    image: redis:7.4.11-alpine  # pinned; released 2026-09-21
+    image: redis:7.4.11-alpine
     container_name: paperless-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:8.37.0  # pinned; released 2026-09-11, the minor Paperless v3 ships with
+    image: gotenberg/gotenberg:8.37.0  # the minor release Paperless v3 ships with
     container_name: paperless-gotenberg
     restart: unless-stopped
     command:

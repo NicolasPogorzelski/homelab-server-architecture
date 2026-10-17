@@ -4,53 +4,37 @@
 guest_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/guest-backup.sh"
 guest_backup_script_dest: /usr/local/sbin/guest-backup.sh
 
-# Mirrors BACKUP_DIR in the script. A generic mountpoint, never the physical
-# disk: the host binds whichever disk currently holds this role onto the path, so
-# moving from the interim target to the replacement hardware is an fstab change
-# and nothing else. It also keeps the real disk label out of a public repository.
-#
-# The role asserts this is a mountpoint on a device other than root, and refuses
-# to deploy otherwise - see tasks/main.yml.
+# Mirrors BACKUP_DIR in the script. A generic mountpoint, not the physical disk:
+# changing the backup disk is an fstab change only. The role refuses to deploy
+# unless this is a mountpoint on a device other than root (tasks/main.yml).
 guest_backup_dir: /mnt/vzdump
 
 guest_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
 
-# Weekly, not nightly, and the reason is arithmetic rather than taste. A full run
-# is roughly 10 GB; nightly runs would exhaust any target this platform currently
-# has within weeks. The state that genuinely changes every day - the two
-# databases - already has its own nightly dump, alerted on separately. What this
-# job protects is the machine around that state, and machines change slowly.
-#
-# Saturday, because the host starts by itself at 09:50 on Saturdays in every
-# plan of homelab_schedule and not at all on Sundays.
+# Weekly: a full run is roughly 10 GB, and the daily-changing state (both
+# databases) has its own daily dump. Saturday, because homelab_schedule wakes
+# the host every Saturday morning and not on Sundays.
 guest_backup_oncalendar: "Sat *-*-* 11:00:00"
 
-# The host is asleep for two thirds of the day, so a weekly calendar slot is
-# missed outright whenever the machine happens to be down on a Saturday morning.
-# Persistent=true records the last run and fires the overdue one at the next
-# boot. This is the same defect that silently stopped the PostgreSQL dumps for
-# two months while they were still a cron job, and the rule it produced: any
-# scheduled job on this fleet is a timer with Persistent=true.
+# The host powers down nightly; Persistent=true fires a missed run at the next
+# boot. Every scheduled job on this fleet is a timer with Persistent=true.
 guest_backup_persistent: true
 
-# vzdump reads and writes at disk speed for several minutes per guest. Nice and
-# ionice keep that off the critical path of whatever the host is doing, at the
-# cost of a longer run - a trade that only makes sense because nothing waits on
-# this job finishing.
+# vzdump runs at disk speed for minutes per guest; nice and ionice keep it out of
+# the way of interactive work. Nothing waits on this job finishing.
 guest_backup_nice: 10
 guest_backup_ionice: 7
 
 # === Host configuration backup and the restore script ===
-# host-config-backup.sh archives what no guest archive carries - fstab, CIFS
-# credentials, vfio and kernel arguments, storage definitions, the Tailscale
-# identity - to the backup target and to the boot disk. platform-restore.sh is
-# deployed beside it so that every archive also carries the tool that reads it.
-# See runbooks/platform/platform-restore.md.
+# host-config-backup.sh archives what no guest archive carries (fstab, CIFS
+# credentials, vfio and kernel arguments, storage definitions, Tailscale
+# identity) to the backup target and the boot disk. platform-restore.sh is
+# deployed beside it. See runbooks/platform/platform-restore.md.
 guest_backup_host_config_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/host-config-backup.sh"
 guest_backup_host_config_backup_script_dest: /usr/local/sbin/host-config-backup.sh
 guest_backup_platform_restore_script_src: "{{ playbook_dir }}/../../snippets/scripts/platform-restore.sh"
 guest_backup_platform_restore_script_dest: /usr/local/sbin/platform-restore.sh
 
-# Daily: the archive is about 13 MB and three seconds of work, and a guest
-# configuration changed on a Tuesday should not wait for Saturday.
+# Daily: the archive is small and quick, and a configuration change should not
+# wait for the weekly guest backup.
 guest_backup_host_config_backup_oncalendar: "*-*-* 10:15:00"

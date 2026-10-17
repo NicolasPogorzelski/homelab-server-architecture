@@ -3,10 +3,9 @@
 # Deploy to /usr/local/sbin/docker-boot-retry.sh; run once per boot by
 # docker-boot-retry.service (ansible/roles/docker_boot_retry).
 #
-# Docker applies a restart policy only to a container that has started
-# successfully once. A container whose start fails - on vm100, a bind mount onto
-# an automount whose CIFS mount was refused - stays exited until someone runs
-# `docker start`. This script is that someone, at boot and nowhere else.
+# Docker applies a restart policy only to a container that has started once, so
+# a container whose start failed at boot (on vm100: a bind onto a refused CIFS
+# automount) stays exited. See KE-27.
 #
 # A container is retried when it is not running, carries a restart policy that
 # asks for it to run (always, unless-stopped), and has a non-empty State.Error.

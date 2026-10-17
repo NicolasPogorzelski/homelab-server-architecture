@@ -7,20 +7,13 @@
 # `offsite-backup.timer`. Configuration arrives through the environment file the
 # role writes; nothing here is edited on the node.
 #
-# WHY THE CLIENT NEVER PRUNES. The REST server runs with --append-only, which
-# means this credential can create snapshots and read them and cannot remove
-# anything. That is the whole point of the target: a credential stolen from this
-# side cannot destroy the copy it was stolen to reach. `restic forget` and
-# `restic prune` therefore FAIL here by design, and retention is applied on the
-# server, by a different account, out of reach of this node. A future reader
-# looking for the missing retention step should read that sentence twice before
-# adding one.
+# No pruning here, by design: the REST server runs --append-only, so a credential
+# stolen from this node cannot destroy the copy. `restic forget` and `prune` fail
+# here; retention runs on the server under another account
+# (docs/decisions/offsite-backup-target.md).
 #
-# WHY VERIFICATION IS SPLIT. `restic check` reads the repository's structure and
-# is cheap; `--read-data-subset` re-downloads a fraction of the actual data and
-# is not. The structural check runs every time, the data check on the day named
-# by OFFSITE_VERIFY_WEEKDAY. Checking nothing is how a backup becomes a belief -
-# the lesson pg-backup.sh already carries in its own header.
+# `restic check` (structure, cheap) runs every time; `--read-data-subset`
+# (re-downloads data) only on OFFSITE_VERIFY_WEEKDAY.
 set -euo pipefail
 
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set}"
@@ -39,10 +32,8 @@ SUCCESS=0
 SNAPSHOTS=0
 VERIFIED=0
 
-# Metrics are written whatever happens, including on the paths that exit early.
-# A backup script that fails without leaving a metric behind is indistinguishable
-# from one that was never scheduled, and the alert that would notice reads the
-# metric rather than the journal.
+# Metrics are written on every exit path, so a failed run is distinguishable
+# from one that never ran.
 publish() {
   local dur=$(( $(date +%s) - START ))
   local tmp
@@ -66,9 +57,7 @@ publish() {
     echo "# TYPE offsite_backup_last_verify_timestamp_seconds gauge"
     echo "offsite_backup_last_verify_timestamp_seconds ${VERIFIED}"
   } > "${tmp}"
-  # node_exporter runs under its own account and skips a file it cannot read
-  # without logging anything, so the metric would simply be absent - which reads
-  # exactly like a fleet with no backups configured.
+  # mktemp creates 0600; node_exporter silently skips a file it cannot read.
   chmod 0644 "${tmp}"
   mv -f "${tmp}" "${METRIC_FILE}"
 }
@@ -83,9 +72,8 @@ if [ -f "${METRIC_FILE}" ]; then
   [ -z "${VERIFIED}" ] && VERIFIED=0
 fi
 
-# Every path must exist. A missing source is silently skipped by `restic backup`,
-# which produces a smaller snapshot and a successful exit - the failure mode where
-# a backup keeps succeeding while covering less and less.
+# Every path must exist: `restic backup` silently skips a missing source and
+# still exits 0 with a smaller snapshot.
 for p in ${BACKUP_PATHS}; do
   if [ ! -e "${p}" ]; then
     echo "ERROR: source path does not exist: ${p}" >&2
@@ -93,9 +81,8 @@ for p in ${BACKUP_PATHS}; do
   fi
 done
 
-# The repository must answer before anything else is attempted, so an unreachable
-# target fails in one second with a clear message rather than after an hour of
-# reading local data.
+# Probe the repository first, so an unreachable target fails fast with a clear
+# message instead of after reading all local data.
 if ! restic cat config >/dev/null 2>&1; then
   echo "ERROR: repository ${RESTIC_REPOSITORY} is unreachable or the password is wrong" >&2
   exit 1
@@ -107,9 +94,7 @@ BACKUP_ARGS=(backup --tag "${TAG}" --host "${TAG}")
 # shellcheck disable=SC2086
 restic "${BACKUP_ARGS[@]}" ${BACKUP_PATHS}
 
-# Structural check on every run: does the repository still describe itself
-# consistently. This is what catches a truncated upload before the next restore
-# does.
+# Structural check on every run catches a truncated upload before a restore does.
 restic check --no-lock
 
 if [ "$(date +%u)" = "${VERIFY_WEEKDAY}" ]; then

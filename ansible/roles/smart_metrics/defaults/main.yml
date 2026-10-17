@@ -1,25 +1,18 @@
 ---
-# The collector is Debian's, not this repository's, and that is the substance of
-# the change rather than an implementation detail. The hand-written script this
-# role replaces exported two metrics, one of which read PASSED for a disk with
-# 7680 unreadable sectors; writing a better one here would have been a third
-# spelling of a problem upstream had already solved. Measured on this host,
-# `smartmon.sh` produces 885 lines against the old script's 18.
+# The collector is Debian's packaged smartmon.sh, not a script of this repository.
+# It exports the per-attribute SMART data that an overall PASSED verdict hides.
 smart_metrics_package: prometheus-node-exporter-collectors
 
 # `sponge` reads the whole stream before it writes anything, so node_exporter
-# never scrapes a half-written file. The packaged unit's ExecStart depends on it
-# and declares that nowhere; it lives in moreutils.
+# never scrapes a half-written file. The packaged unit uses it without declaring
+# the dependency; it lives in moreutils.
 smart_metrics_sponge_package: moreutils
 
 smart_metrics_collector: /usr/share/prometheus-node-exporter-collectors/smartmon.sh
 
-# The directory every other textfile collector on this host already writes into.
-# The package defaults to /var/lib/prometheus/node-exporter, which belongs to
-# Debian's node_exporter package; this host runs a hand-installed binary that
-# reads the path below. Without the override the collector would run, succeed,
-# and be read by nobody - the shape lxc250's argument-free exporter had for four
-# months.
+# The directory the node_exporter role reads. The package defaults to Debian's
+# /var/lib/prometheus/node-exporter, which nothing here scrapes; without the
+# override the collector would succeed and be read by nobody.
 smart_metrics_textfile_dir: /var/lib/node_exporter/textfile_collector
 smart_metrics_output: smartmon.prom
 
@@ -27,24 +20,15 @@ smart_metrics_unit: prometheus-node-exporter-smartmon.service
 smart_metrics_timer: prometheus-node-exporter-smartmon.timer
 
 # The package ships five collector timers. Three measure hardware this host does
-# not have - IPMI, Mellanox, NVMe. Masked rather than left disabled, for the
-# reason `systemd_hygiene` gives: a disabled unit is one `systemctl enable` away
-# from running and carries no record of why it should not be.
-#
-# The apt timer was in this list until 2026-09-17, masked on the grounds that it
-# duplicated a job Ansible already owned. Measured 2026-09-16, no job owned it:
-# nothing on this platform exported a package count, and this host was 228
-# packages behind with 55 of them security. It is owned by `apt_metrics` now, so
-# masking it here would be two roles asserting opposite things about one unit.
+# not have - IPMI, Mellanox, NVMe - and are masked rather than disabled (see
+# systemd_hygiene). The apt timer is not listed because apt_metrics owns it.
 smart_metrics_masked_timers:
   - prometheus-node-exporter-ipmitool-sensor.timer
   - prometheus-node-exporter-mellanox-hca-temp.timer
   - prometheus-node-exporter-nvme.timer
 
-# What this role retires. Hand-deployed in 2025-12, never in version control,
-# comments in German, and a `mktemp` with no cleanup trap - the orphaned
-# smart.prom.* files in the textfile directory are that leak, one per failed run
-# since the first.
+# The retired hand-deployed smarttext collector. Its `mktemp` had no cleanup trap
+# and left one smart.prom.* file per failed run.
 smart_metrics_legacy_script: /usr/local/sbin/node-exporter-smarttext.sh
 smart_metrics_legacy_units:
   - node-exporter-smarttext.timer
@@ -52,7 +36,6 @@ smart_metrics_legacy_units:
 smart_metrics_legacy_output: smart.prom
 
 # Anything matching *.prom.* older than this is a leak rather than a live write.
-# The longest collector run measured on this host is under thirty seconds; an
-# hour leaves three orders of magnitude of headroom and still clears files the
-# same day they are made.
+# A collector run takes under thirty seconds, so an hour is ample headroom and
+# still clears leaks the same day.
 smart_metrics_orphan_age: 3600

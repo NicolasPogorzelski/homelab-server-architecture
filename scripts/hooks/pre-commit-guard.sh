@@ -1,53 +1,19 @@
 #!/usr/bin/env bash
 #
-# Claude Code PreToolUse hook. Reads the tool call on stdin and blocks it when it
-# would commit while the repository is not in a committable state.
+# Claude Code PreToolUse hook (registered in .claude/settings.json). Refuses a Bash call that
+# commits to this repository while it is on main, or while validate-repo.sh reports findings.
 #
-# Two things it refuses:
-#   1. a commit made directly on main - work belongs on a branch and reaches main
-#      through a pull request, which is also what the GitHub ruleset enforces
-#   2. a commit while validate-repo.sh reports findings
+# It matches `git ... commit` anywhere in the command, so compound commands are covered; any
+# command that mentions both words is treated as a commit, and a false refusal costs a retry.
+# The target repository is resolved from `git -C`, a leading `cd`, or the session directory;
+# the guard steps aside only for a worktree that is provably a different repository.
+# Both roots come from `git rev-parse`, because `pwd` keeps symlinks (/home -> /var/home on
+# rpm-ostree) and would never match.
 #
-# Written 2026-08-17, after discovering that CLAUDE.md had documented this gate
-# for weeks while no hook was configured. The validation had been running only
-# because somebody remembered to run it. A guard that exists on paper is the
-# failure mode this repository keeps finding in its own monitoring, and it turned
-# out to apply to the tooling as well.
-#
-# Two deliberate differences from the earlier reference version in
-# snippets/claude/hooks-reference.json:
-#
-#   - It matches `git ... commit` anywhere in the command string rather than
-#     relying on an `if: Bash(git commit *)` filter. Such a filter does see the
-#     subcommands of `git add -A && git commit -F -` - the hooks reference says
-#     so and it was measured - but it runs the hook on every command that holds
-#     `$VAR`, `$()` or backticks, whatever the pattern. The decision therefore
-#     has to live in the script either way, and here it lives only there.
-#   - It answers with permissionDecision "deny" rather than continue:false. Deny
-#     blocks the single tool call and leaves the session running, so the findings
-#     can be fixed and the commit retried; continue:false ends the turn.
-#
-# Known cost of matching that broadly, and it is accepted rather than fixed: any
-# command that merely mentions both words is treated as a commit. A branch whose
-# name contains "commit" cannot be created from main without the guard refusing,
-# and so can this script not be invoked by its own absolute path from a session,
-# because that path holds "git/" and "pre-commit-guard" in one segment. Testing
-# it means assembling both words from parts. Narrowing the pattern to avoid that
-# would reintroduce the compound-command hole it was widened to close, and a
-# false refusal costs one rename.
-#
-# Exit code is always 0. A hook that fails noisily on its own bugs would block
-# every commit, so the only way it speaks is the JSON on stdout.
+# Exit code is always 0; a refusal is the JSON permission decision on stdout.
 
 set -uo pipefail
 
-# Resolved by git rather than by `pwd`, so that it comes from the same resolver
-# as the target_root it is compared against below. `pwd` returns the logical
-# path, symlinks intact; `rev-parse --show-toplevel` returns the physical one.
-# On an rpm-ostree workstation /home is a symlink to /var/home, and a hook
-# configured under /home/... therefore computed a REPO_ROOT that never equalled
-# any toplevel git could return - every commit was judged to be in a different
-# repository and let through. Measured 2026-09-17.
 REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
 
 deny() {
@@ -56,41 +22,15 @@ deny() {
     exit 0
 }
 
-# The payload is read once and reused: stdin cannot be consumed twice, and the
-# repository check below needs a second field out of it.
+# stdin can be read once; the payload is needed twice.
 payload="$(cat)"
 command_line="$(printf '%s' "${payload}" | jq -r '.tool_input.command // ""' 2>/dev/null)"
 
-# Not a commit: say nothing, let the call through.
 printf '%s' "${command_line}" | grep -qE '\bgit\b[^|;&]*\bcommit\b' || exit 0
 
-# A guard that does not know where it lives cannot compare anything. Refusing
-# is the readable form of what an empty root would do anyway further down.
 [ -n "${REPO_ROOT}" ] || deny "pre-commit-guard.sh cannot resolve its own repository root; refusing rather than guessing."
 
-# Which repository does this command actually touch?
-#
-# Until 2026-09-12 the guard never asked. It resolved REPO_ROOT from its own
-# location and judged that repository's branch, whatever the command was working
-# on. Both directions were wrong and both were observed on one day: a commit to
-# the sister repository was let through in the morning because this one sat on a
-# feature branch, and refused in the afternoon because this one sat on main.
-# Neither verdict had anything to do with the commit being made.
-#
-# The under-blocking direction is the one that matters. A guard that can be
-# switched off by the state of an unrelated checkout is not a guard, and the
-# second half of this hook is worse in that case than merely absent: it runs this
-# repository's validator against a commit in a repository that has its own.
-#
-# Three sources, most specific first: an explicit `git -C <dir>`, which retargets
-# without changing directory; a leading `cd <dir>` in a compound command, which is
-# how commits to another repository are normally written here; and otherwise the
-# session's own working directory out of the hook payload.
-#
-# Deliberately fails safe. The guard steps aside only when it can resolve a
-# directory to a git worktree that is demonstrably a different repository.
-# Anything it cannot resolve is treated as this one, because over-blocking costs a
-# retry and under-blocking costs the thing this hook exists to prevent.
+# Most specific source first: explicit `git -C <dir>`, a leading `cd <dir>`, the session cwd.
 target_dir=""
 explicit_c="$(printf '%s' "${command_line}" \
     | grep -oE '\bgit[[:space:]]+-C[[:space:]]+[^[:space:];&|]+' | head -1 | awk '{print $3}')"
@@ -106,9 +46,8 @@ done
 
 if [ -n "${target_dir}" ] && [ -d "${target_dir}" ]; then
     target_root="$(git -C "${target_dir}" rev-parse --show-toplevel 2>/dev/null || true)"
+    # A different repository has its own branch rules and its own validator.
     if [ -n "${target_root}" ] && [ "${target_root}" != "${REPO_ROOT}" ]; then
-        # A different repository, with its own branch conventions and its own
-        # validator. Neither of the checks below can speak for it.
         exit 0
     fi
 fi

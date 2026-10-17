@@ -2,8 +2,8 @@
 # A file of its own beside 50-cloud-init.yaml, which cloud-init rewrites at every
 # boot. netplan merges the files in order, so this one only adds accept-ra.
 #
-# No ansible_managed header: the rendered file is byte-identical to the one placed
-# by hand on 2026-10-01, so adopting it reports no change and applies nothing.
+# No ansible_managed header: the rendered file stays byte-identical to the
+# hand-placed original, so adopting it reports no change and applies nothing.
 - name: Ignore IPv6 router advertisements on the listed interfaces
   ansible.builtin.template:
     src: 60-no-ipv6-ra.yaml.j2
@@ -26,7 +26,7 @@
 
 # An address learned before the change keeps its lifetime, so a first run on a
 # node that still holds one fails here until the address expires or the node
-# reboots. That is the honest answer: the exposure is still there.
+# reboots, because the exposure is still there.
 - name: Refuse to finish while a listed interface still holds a global IPv6 address
   ansible.builtin.assert:
     that: netplan_no_ra_global.results | map(attribute='stdout') | select | list | length == 0

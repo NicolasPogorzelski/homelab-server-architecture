@@ -1,32 +1,27 @@
 ---
 # === jellyfin_watchdog (VM100) ===
 #
-# Replaces the hand-deployed `*/30 * * * *` root crontab entry. The watchdog polls
-# `nvidia-smi` inside the Jellyfin container and, when CUDA access has gone stale
-# (KE-10, root cause unconfirmed), restarts it - unless only direct streams are
-# playing, which do not use the GPU; then it holds and looks again next minute.
+# Polls `nvidia-smi` inside the Jellyfin container and restarts it when CUDA
+# access has gone stale (KE-10), unless only direct streams (no GPU) are playing;
+# then it holds and polls again. Replaces a legacy root crontab entry.
 #
-# The timer is MONOTONIC, not calendar-based: what matters is "every minute of
-# uptime", not a wall-clock slot. `Persistent=` is therefore deliberately absent -
-# it only applies to OnCalendar timers and systemd ignores it here. Catching up a
-# missed poll after a power-off is meaningless: the container is not running either.
+# Monotonic timer, so no Persistent= (it applies only to OnCalendar timers, and a
+# missed poll while the host was off needs no catch-up).
 
 jellyfin_watchdog_script_src: "{{ playbook_dir }}/../../snippets/scripts/jellyfin-cuda-watchdog.sh"
 jellyfin_watchdog_script_dest: /usr/local/sbin/jellyfin-cuda-watchdog.sh
 
-# First poll 5 minutes after boot: Docker and the NVIDIA runtime need to settle,
-# and a restart issued into a half-started container is worse than a late one.
+# First poll 5 minutes after boot, once Docker and the NVIDIA runtime settled.
 jellyfin_watchdog_onbootsec: 5min
-# One minute, so a held restart follows the end of the last direct stream within a
-# minute. A poll is one `docker exec nvidia-smi`, plus one API call when CUDA is gone.
+# A held restart follows the end of the last direct stream within a minute. A
+# poll is one `docker exec nvidia-smi`, plus one API call when CUDA is gone.
 jellyfin_watchdog_oninterval: 1min
 # systemd coalesces timers within AccuracySec, one minute by default, which would
 # double the effective interval.
 jellyfin_watchdog_accuracysec: 5s
 
-# Read by the script to ask Jellyfin which sessions play and how. The key is the
-# one jellyfin_user_prefs uses; it lands in a root-only header file, never on a
-# command line.
+# Used to ask Jellyfin which sessions play and how. Same key as
+# jellyfin_user_prefs; kept in a root-only header file, never on a command line.
 jellyfin_watchdog_config_dir: /etc/jellyfin-cuda-watchdog
 jellyfin_watchdog_url: "http://{{ ansible_host }}:8096"
 jellyfin_watchdog_api_key: "{{ vault_jellyfin_api_key }}"

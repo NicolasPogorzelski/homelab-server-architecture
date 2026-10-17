@@ -1,9 +1,6 @@
 ---
-# Every guest: security updates only, kernels held back. The hypervisor is not
-# included; a Proxmox update applied unattended can take the whole platform down.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Every guest: security updates only, kernels held back. The hypervisor is
+# patched by hand; an unattended Proxmox update can take the platform down.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

@@ -31,7 +31,7 @@ flowchart LR
     CalibreWeb[Calibre-Web]
     Monitoring[Monitoring<br/>Grafana + Prometheus]
     OpenWebUI[OpenWebUI]
-    DevOps[DevOps Workstation]
+    DevOps[Ansible control node<br/>SSH only]
   end
 
   %% LAN exposure: none since 2026-10-01 (lan_guard on every node)
@@ -55,22 +55,24 @@ flowchart LR
 
 ## What the diagram does not show
 
-The picture above is the intended model, and it is accurate at the network boundary. It is not a
-claim about how the individual services bind.
+The diagram is accurate at the network boundary. It is not a statement about how each service binds.
 
-Measured 2026-10-08 with `ss -ltn` on every node, these still listen on wildcard addresses: sshd on
-three of ten nodes since the containers were pinned on 2026-10-10 (vm100, vm102, the hypervisor), Apache on lxc210 (`*:80`, `*:443`),
-`coolwsd` on lxc210 (`*:9983`), and Samba on vm102 (`0.0.0.0:445`, for a reason the service cannot
-avoid). What stops a LAN device from reaching them is the `lan_guard` nftables table on each node's
-LAN interface, in place since 2026-10-01: it drops new inbound connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100 and
-the hypervisor, and break-glass SSH and netconsole to the hypervisor. The
-router's missing forwarding rules still keep the internet out. Neither of the two is the binding
-itself.
+The binding rule ([networking](../platform/networking.md)) is: bind the Tailscale address, or bind
+loopback and publish through `tailscale serve`. These listeners do not follow it:
 
-The platform's own binding rule - bind the Tailscale address, or bind loopback and publish through
-`tailscale serve` - holds for every service that was installed deliberately, and not for the ones the
-distribution brought along. That gap is tracked in the
-[remediation plan](../platform/remediation-plan.md) and the binding rule in
-[networking](../platform/networking.md). It is recorded here because this is the page a reader
-arrives at when they want to know what is exposed, and a diagram alone would answer that question
-too generously.
+| Node | Listener | Why | Recorded in |
+|---|---|---|---|
+| Proxmox host | sshd `*:22` | the only path in without Tailscale, unpinned by decision | [sshd decision](../decisions/sshd-listen-address.md) |
+| Proxmox host | netconsole receiver, UDP 6666 | netpoll cannot use a Tailscale address | [Proxmox host](../platform/proxmox-host.md) |
+| lxc210 | Apache `*:80`, `*:443` | deferred | [remediation plan](../platform/remediation-plan.md#open-items) |
+| lxc210 | Collabora `*:9983` | no listen-address setting; `nft_guard` allows loopback only | [Nextcloud](../services/nextcloud.md) |
+| vm102 | Samba `0.0.0.0:445` | Samba cannot bind `tailscale0`; `smb_guard` filters it | [SMB bind decision](../decisions/smb-bind-and-lan-access.md) |
+
+sshd binds the Tailscale address on all nine guests; vm100 and vm102 were the last, pinned on
+2026-10-12. `listener_metrics` exports every listener outside the rule that the inventory does not
+allow on record, and `ListenerOutsideBindingRule` fires on it.
+
+What keeps the LAN out is the `lan_guard` nftables table on every node, in place since 2026-10-01.
+It drops new inbound LAN connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100
+and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The router's missing
+forwarding rules keep the internet out.

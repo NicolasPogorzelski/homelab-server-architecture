@@ -12,10 +12,8 @@
     mode: "0644"
   when: nsswitch_hosts | length > 0
 
-# A precondition that refuses rather than breaks. If anything on the node still
-# points at resolved's stub listener, stopping the daemon takes name resolution
-# with it, and this role would be the cause. Checked against the file glibc
-# actually reads, not against what the role believes it wrote.
+# Refuse rather than break: if resolv.conf (the file glibc reads) still points at
+# resolved's stub, stopping the daemon would take name resolution with it.
 - name: Refuse to disable resolved while resolv.conf still points at its stub
   ansible.builtin.command:
     cmd: grep -c '127\.0\.0\.53' /etc/resolv.conf
@@ -35,9 +33,8 @@
     success_msg: "Nothing points at the resolved stub; the daemon carries no lookups."
   when: nsswitch_disable_resolved
 
-# Stopped and disabled rather than masked. Masking is for units that can never
-# succeed on a node, which is systemd_hygiene's job; this one could succeed and
-# simply has nothing to do here.
+# Stopped and disabled rather than masked: masking is for units that can never
+# succeed on a node (systemd_hygiene); this one could, it has nothing to do here.
 - name: Stop and disable systemd-resolved
   ansible.builtin.systemd_service:
     name: systemd-resolved
@@ -45,9 +42,8 @@
     enabled: false
   when: nsswitch_disable_resolved
 
-# The point of the change, read back from the kernel rather than from the unit
-# state. A stopped unit and a closed socket are different claims, and it is the
-# second one this task exists for.
+# Read back from the kernel rather than the unit state: the goal is a closed
+# socket, not a stopped unit.
 - name: Verify no LLMNR or mDNS listener survives
   ansible.builtin.shell:
     cmd: set -o pipefail && ss -tulnH | grep -c ':5355' || true
@@ -60,10 +56,9 @@
     - nsswitch_disable_resolved
     - not ansible_check_mode
 
-# The node's own MagicDNS name, which is the shortest lookup that exercises the
-# Tailscale resolver rather than /etc/hosts. Read from tailscaled rather than
-# assembled from the inventory: the tailnet name belongs to the tailnet, and this
-# repository keeps it out of version control.
+# The node's own MagicDNS name exercises the Tailscale resolver rather than
+# /etc/hosts. Read from tailscaled, because the tailnet name is kept out of the
+# repository.
 - name: Read this node's MagicDNS name
   ansible.builtin.command:
     cmd: tailscale status --json
@@ -74,10 +69,8 @@
     - nsswitch_hosts | length > 0
     - nsswitch_verify
 
-# getent rather than dig or host: it is glibc's own resolution path, which is the
-# thing this role changes. A dig against the resolver would answer even while
-# nsswitch kept every program on the node from asking it - which is precisely the
-# fault that went unnoticed here.
+# getent rather than dig: it uses glibc's resolution path, which this role changes.
+# dig queries the resolver directly and succeeds even when nsswitch never asks it.
 - name: Verify that a MagicDNS name resolves through nsswitch
   ansible.builtin.command:
     cmd: getent ahostsv4 {{ (nsswitch_ts_status.stdout | from_json).Self.DNSName | regex_replace('\.$', '') }}

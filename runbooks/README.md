@@ -1,60 +1,50 @@
 # Runbooks
 
-Operational procedures for deterministic recovery and reproducible operations.
-
-**Runbook contract (applies to every runbook):**
-- Preconditions (what must be true before starting)
-- Commands (copy/paste safe, deterministic order)
-- Verification (how to confirm success)
-- Failure modes (common errors + what to check next)
-- Rollback / abort (required, and enforced by `validate-repo.sh` Check 5)
-
-"Not applicable" is a legitimate rollback section - a procedure that only reads has nothing to
-undo - but it has to be written down together with its reason. Omitting the section makes "there is
-nothing to reverse" indistinguishable from "nobody considered it", and those two are very different
-things to discover at 02:00 with a service down.
-
-Where a step is genuinely irreversible, the section states that plainly and names the **abort
-criteria** instead: the conditions under which the step must not be taken at all. `snapraid sync` is
-the clearest case in this repository - it has no rollback whatsoever, which is precisely why its
-pre-checks are the control.
-
-Related operational model:
-- See: [Platform Operations](../docs/platform/operations.md)
-
----
+Operational procedures for recovery and maintenance. Every runbook follows the template in
+[docs/CONVENTIONS.md](../docs/CONVENTIONS.md#runbook): a header with Use when, Duration, Risk and
+Last exercised, then Preconditions, Steps with a check each, Verification, Failure modes and
+Rollback. Where a step has no rollback, the runbook names its abort criteria instead. Related:
+[Platform Operations](../docs/platform/operations.md).
 
 ## Platform
-- Platform restore onto a fresh Proxmox host: [platform/platform-restore.md](platform/platform-restore.md)
-- Boot SSD replacement: [platform/boot-ssd-replacement.md](platform/boot-ssd-replacement.md)
-- KE-14 power-path verification: [platform/ke14-power-path-check.md](platform/ke14-power-path-check.md)
-- Annual escrow restore drill: [platform/escrow-restore-drill.md](platform/escrow-restore-drill.md)
-- Hard shutdown recovery: [platform/hard-shutdown-recovery.md](platform/hard-shutdown-recovery.md)
-- Host console through a GPU swap: [platform/host-console-gpu-swap.md](platform/host-console-gpu-swap.md)
-- LVM thin-pool full: [platform/lvm-thin-pool-full.md](platform/lvm-thin-pool-full.md)
-- Docker data root migration to aux-disk: [platform/docker-data-root-migration.md](platform/docker-data-root-migration.md)
-- Guest backup and restore: [platform/guest-backup-restore.md](platform/guest-backup-restore.md)
-- LXC250 rebuild: [platform/lxc250-rebuild.md](platform/lxc250-rebuild.md)
-- pveproxy down after boot (Tailscale-IP bind race): [platform/pveproxy-tailscale-boot-race.md](platform/pveproxy-tailscale-boot-race.md)
-- Off-site VPS provisioning: [platform/offsite-vps-provision.md](platform/offsite-vps-provision.md)
+
+| Runbook | Use when | Last exercised |
+|---|---|---|
+| [platform-restore](platform/platform-restore.md) | The Proxmox host has to be rebuilt on a fresh install | never |
+| [boot-ssd-replacement](platform/boot-ssd-replacement.md) | The boot SSD is replaced (KE-14) | never |
+| [ke14-power-path-check](platform/ke14-power-path-check.md) | KE-14 errors persist and the 12 V power path is to be measured | never |
+| [escrow-restore-drill](platform/escrow-restore-drill.md) | The yearly restore of the escrowed vault password, inventory and SSH key is due | never |
+| [hard-shutdown-recovery](platform/hard-shutdown-recovery.md) | Guests fail to start after an unclean host shutdown | never |
+| [host-console-gpu-swap](platform/host-console-gpu-swap.md) | A local console on the host is needed while the GPU is passed through to vm100 | never |
+| [lvm-thin-pool-full](platform/lvm-thin-pool-full.md) | An `LvmThinPool*` alert fires or guests report I/O errors | 2026-04-25, pass (incident) |
+| [docker-data-root-migration](platform/docker-data-root-migration.md) | An LXC keeps its Docker data root on the thin pool | 2026-04-30, pass |
+| [guest-backup-restore](platform/guest-backup-restore.md) | A guest has to be restored, or a `GuestBackup*` alert fires | 2026-08-21, pass |
+| [lxc250-rebuild](platform/lxc250-rebuild.md) | The Ansible control node has to be recreated | never |
+| [pveproxy-tailscale-boot-race](platform/pveproxy-tailscale-boot-race.md) | The web UI on `:8006` is down after boot while SSH works (KE-12) | 2026-06-25, pass |
+| [offsite-vps-provision](platform/offsite-vps-provision.md) | The off-site backup VPS is built | never |
 
 ## Storage
-- SMB automount trigger: [storage/smb-autofs-trigger.md](storage/smb-autofs-trigger.md)
-- SnapRAID sync: [storage/snapraid-sync.md](storage/snapraid-sync.md)
-- SnapRAID scrub: [storage/snapraid-scrub.md](storage/snapraid-scrub.md)
-- aux-disk failure rescue (read-only): [storage/aux-disk-failure-rescue.md](storage/aux-disk-failure-rescue.md)
 
-## Backup
-- Off-site backup with restic: [backup/offsite-backup.md](backup/offsite-backup.md)
+| Runbook | Use when | Last exercised |
+|---|---|---|
+| [smb-autofs-trigger](storage/smb-autofs-trigger.md) | `smb-mounts-check.service` failed or a container sees an empty share | never |
+| [snapraid-sync](storage/snapraid-sync.md) | Parity is needed before the next timer run, or `SnapRAIDSyncStale` fires | never |
+| [snapraid-scrub](storage/snapraid-scrub.md) | A `SnapRAIDScrub*` alert fires or a scrub reported errors | never |
+| [aux-disk-failure-rescue](storage/aux-disk-failure-rescue.md) | The host aux-disk logs medium errors or no longer mounts | 2026-06-25, applied (incident) |
 
-## Database
-- PostgreSQL backup: [database/pg-backup.md](database/pg-backup.md)
-- PostgreSQL restore: [database/pg-restore.md](database/pg-restore.md)
-- Nextcloud MariaDB backup: [database/mariadb-backup.md](database/mariadb-backup.md)
-- Nextcloud MariaDB restore: [database/mariadb-restore.md](database/mariadb-restore.md)
+## Backup and databases
 
-## Integration
-- Nextcloud -> Paperless ingestion: [integration/nextcloud-paperless.md](integration/nextcloud-paperless.md)
+| Runbook | Use when | Last exercised |
+|---|---|---|
+| [offsite-backup](backup/offsite-backup.md) | The `offsite_backup` role is deployed or an off-site restore is needed | never (VPS not provisioned) |
+| [pg-backup](database/pg-backup.md) | The lxc260 backup is deployed or `PostgreSQLBackupStale` fires | 2026-08-14, pass |
+| [pg-restore](database/pg-restore.md) | A database on lxc260 is lost or corrupt | 2026-08-13, pass; monthly restore test by timer |
+| [mariadb-backup](database/mariadb-backup.md) | The lxc210 backup is deployed or `MariaDBBackupStale` fires | 2026-08-15, pass |
+| [mariadb-restore](database/mariadb-restore.md) | Nextcloud's database on lxc210 is lost or corrupt | never on live; monthly restore test by timer |
 
-## AI Stack
-- OpenWebUI health check: [ai-stack/openwebui-health.md](ai-stack/openwebui-health.md)
+## Services
+
+| Runbook | Use when | Last exercised |
+|---|---|---|
+| [nextcloud-paperless](integration/nextcloud-paperless.md) | Documents from the Nextcloud Paperless Inbox do not reach Paperless | never |
+| [openwebui-health](ai-stack/openwebui-health.md) | OpenWebUI on lxc230 is unreachable or errors | never |

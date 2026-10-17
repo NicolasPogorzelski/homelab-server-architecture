@@ -4,8 +4,8 @@ Description=Weekly drift sweep of the repository against the fleet
 
 [Timer]
 OnCalendar={{ fleet_drift_on_calendar }}
-# The host is powered down most of the night and every Saturday is a slot that can
-# be missed entirely. Persistent=true runs the overdue sweep at the next boot.
+# The host powers down nightly and may miss a Saturday entirely; Persistent=true
+# runs the overdue sweep at the next boot.
 Persistent=true
 RandomizedDelaySec={{ fleet_drift_randomized_delay }}
 

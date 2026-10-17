@@ -1,18 +1,10 @@
 ---
-# EXERCISE, not a control this platform needs.
+# Exercise, not a control this platform needs; scope and exit condition are in
+# docs/decisions/exercise-scope-before-terraform.md. No Enforced control and no
+# alert rule depends on it.
 #
-# Built to be understood rather than because the risk here calls for it; the
-# reasoning, the labelling rules and the exit condition are in
-# docs/decisions/exercise-scope-before-terraform.md. Nothing in
-# security-controls.md is marked Enforced on the strength of it and no rule in
-# alert.rules.yml reads anything it produces.
-#
-# The hypervisor only, and that is the first thing the exercise demonstrates: the
-# kernel audit subsystem is global and not namespaced, so a container cannot have
-# an audit daemon of its own. The role asserts it rather than documenting it.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
+# Hypervisor only: the kernel audit subsystem is not namespaced, so a container
+# cannot run its own audit daemon. The role asserts this.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

@@ -3,9 +3,8 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
-# The module reads its target only at load time, so a changed unit means unload
-# and load again. Restarting a Type=oneshot RemainAfterExit unit runs ExecStop
-# then ExecStart, which is exactly that.
+# The module reads its target only at load time. Restarting the oneshot unit runs
+# ExecStop (unload) then ExecStart (load).
 - name: Restart netconsole
   ansible.builtin.systemd_service:
     name: netconsole.service

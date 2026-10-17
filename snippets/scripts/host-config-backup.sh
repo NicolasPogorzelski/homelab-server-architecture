@@ -3,21 +3,15 @@
 # Backup of the Proxmox host's own configuration - the state no guest archive
 # carries and no Ansible role reproduces.
 #
-# Deployed by the guest_backup role. Edit this file, never the copy on the node.
+# Deployed by the guest_backup role; edit this file, never the node copy.
 #
-# vzdump archives each guest with its own configuration, so a guest can be
-# restored onto any Proxmox host. What it cannot restore is the host those
-# guests expect: the fstab entries for the data disks, the CIFS mounts and their
-# credential files, the IOMMU kernel arguments and vfio bindings for the GPU, the
-# storage definitions that the guest configurations name, the Tailscale node
-# identity, and the hand-written units under /etc/systemd/system. A rebuild
-# without them is a reinstall from memory.
+# vzdump restores guests, not the host they expect: fstab entries, CIFS mounts
+# and credentials, IOMMU arguments and vfio bindings, storage definitions, the
+# Tailscale node identity and the units under /etc/systemd/system.
 #
-# One archive per run, written to two disks: the backup target (the same disk
-# as the guest archives) and the boot disk. Either alone survives the loss of
-# the other, and both are local - this is a restore aid, not an off-site copy.
-# The archive holds secrets (CIFS credentials, the Tailscale node key), so it is
-# root-only on both.
+# One archive per run, written to the backup disk and the boot disk; either
+# survives the loss of the other. Both are local: a restore aid, not an off-site
+# copy. The archive holds secrets, so it is root-only on both.
 
 set -euo pipefail
 

@@ -9,8 +9,8 @@ Wants=network-online.target
 Type=oneshot
 User={{ fleet_drift_user }}
 WorkingDirectory={{ fleet_drift_repo }}/ansible
-# HOME is what makes ansible.cfg's `~/.vault_pass` and the SSH key resolve; both
-# belong to this user and to no other account on the node.
+# HOME makes ansible.cfg's `~/.vault_pass` and the SSH key resolve; both exist
+# only for this user.
 Environment=HOME=/home/{{ fleet_drift_user }}
 Environment=PATH={{ fleet_drift_path }}
 Environment=FLEET_DRIFT_REPO={{ fleet_drift_repo }}
@@ -18,15 +18,12 @@ Environment=FLEET_DRIFT_REPORT_DIR={{ fleet_drift_report_dir }}
 Environment=FLEET_DRIFT_MONITORING_HOST={{ fleet_drift_monitoring_host }}
 Environment=FLEET_DRIFT_PROM_PORT={{ fleet_drift_prom_port }}
 ExecStart={{ fleet_drift_script_dest }}
-# The `+` prefix runs this one step with full privileges while the sweep itself
-# stays unprivileged. node_exporter's collector directory is root-owned and the
-# sweep's user cannot write to it; giving that directory away to make a shell
-# script's life easier would weaken a path three other jobs already write into.
-# Both paths sit under /var/lib, so the rename is atomic.
+# `+` runs only this step privileged: the collector directory is root-owned and
+# shared with other jobs, so it is not handed to the sweep user. Both paths are
+# under /var/lib, so the rename is atomic.
 ExecStartPost=+/bin/mv {{ fleet_drift_report_dir }}/fleet-drift.prom {{ fleet_drift_textfile_dir }}/fleet-drift.prom
-# Twenty-five playbooks across eleven nodes measured 4.3 minutes. The ceiling is
-# generous because a single unreachable node stretches the run rather than
-# failing it, and a sweep held open until the next week reports nothing at all.
+# Generous ceiling: an unreachable node stretches the run rather than failing
+# it, and a sweep still open at the next run reports nothing.
 TimeoutStartSec=2700
 
 [Install]

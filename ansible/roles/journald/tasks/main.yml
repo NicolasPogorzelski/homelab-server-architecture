@@ -27,13 +27,9 @@
 - name: Flush handlers so the read-back sees the new configuration
   ansible.builtin.meta: flush_handlers
 
-# Two read-backs, because they answer different questions and the first one
-# alone was worthless. It asserted that `journalctl --header` names a file under
-# /var/log/journal, which is true whenever that directory exists - with the
-# drop-in or without it, since `auto` is persistent on exactly that condition.
-# Measured 2026-09-15: the drop-in was absent on all ten nodes and this role had
-# been recorded as applied for six days, because the check it ran could not tell
-# the difference.
+# Two read-backs. This one proves the journal is on disk, but under `auto` that
+# is true with or without the drop-in; the merged-config check below proves the
+# configuration applies.
 - name: Read back what the running journal actually does
   ansible.builtin.command:
     cmd: journalctl --header
@@ -51,12 +47,9 @@
       so this node is still logging to memory despite Storage={{ journald_storage }}.
   when: journald_header.rc == 0
 
-# The second one reads the merged configuration rather than the file this role
-# wrote. `systemd-analyze cat-config` prints every source in the order systemd
-# applies them, so the last assignment of a key is the effective one - which
-# catches both the case above, where nothing was written at all, and a drop-in
-# sorting after `10-` that quietly wins. Reading our own template back would
-# have caught neither.
+# Reads the merged configuration, not this role's file: `systemd-analyze
+# cat-config` prints every source in apply order, which catches a missing drop-in
+# and a later-sorting drop-in that overrides this one.
 - name: Read back the configuration journald merges from every source
   ansible.builtin.command:
     cmd: systemd-analyze cat-config systemd/journald.conf
@@ -65,8 +58,8 @@
   check_mode: false
   failed_when: false
 
-# dict() over the key/value pairs in file order: a later assignment overwrites
-# an earlier one, which is systemd's own precedence rule expressed as a mapping.
+# dict() in file order: a later assignment overwrites an earlier one, as in
+# systemd.
 - name: Name the values that actually apply
   ansible.builtin.set_fact:
     journald_effective: >-
@@ -75,10 +68,8 @@
               | map('split', '=')) }}
   when: journald_merged.rc == 0
 
-# Skipped under --check on purpose. The drop-in does not exist yet on a node
-# that has not been applied, so an enforced assert would report the weekly drift
-# sweep a failure where the honest answer is drift - and a sweep that errors is
-# one whose report stops being read.
+# Skipped under --check: on a node not yet applied the drop-in is missing, which
+# is drift for the weekly sweep to report, not a failure.
 - name: Refuse to pass on a node whose journald ignores this configuration
   ansible.builtin.assert:
     that:

@@ -1,76 +1,44 @@
 ---
-# The unprivileged account the exporter runs as. Named here rather than only
-# in the unit template, so the task that creates it and the template that
-# demands it cannot drift apart.
+# The unprivileged account the exporter runs as. One variable for the task that
+# creates it and the unit that uses it.
 node_exporter_user: node_exporter
 
 node_exporter_version: "1.12.1"
 # SHA-256 of node_exporter-<version>.linux-amd64.tar.gz, copied from the
-# release's sha256sums.txt. Kept in the repository rather than fetched beside
-# the archive, so a replaced release asset fails the download instead of being
-# installed on every node. Changes together with the version above.
+# release's sha256sums.txt. Pinned in the repository, so a replaced release asset
+# fails the download. Changes together with the version above.
 node_exporter_sha256: b51d8a76aa2a9156a55d501aca6276fae09e262259a5e4e831d2c2222f084e63
 node_exporter_port: 9100
 
-# Split out of the download URL so the release host can be repointed at an internal
-# mirror without editing a task. Overriding this is the supported way to install
-# node_exporter on a node with no egress to github.com.
+# Override to install from an internal mirror on a node without egress to github.com.
 node_exporter_release_base: https://github.com/prometheus/node_exporter/releases/download
 
-# On by default, fleet-wide. It used to default to "" and be switched on per host,
-# which made it a trap: vm102's unit was hand-written and carried the flag, nothing
-# in host_vars did, and the first fleet-wide run of this role silently rewrote the
-# unit without it. The .prom files stayed on disk, node_exporter stopped reading
-# them, `snapraid_sync_last_success_timestamp` vanished, and the SnapRAIDSyncStale
-# rule quietly evaluated an expression with no series - an alert that can no longer
-# fire, and never goes red to say so. (Introduced and caught on 2026-07-10.)
-#
-# The collector costs nothing on a node with no .prom files, so there is no reason
-# to make its absence expressible. The role creates the directory itself.
+# On fleet-wide. A per-host opt-in lets a role run drop the flag, and the metrics
+# that staleness alerts such as SnapRAIDSyncStale read then vanish without an alert.
+# The collector costs nothing on a node without .prom files; the role creates the
+# directory itself.
 node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
 
 # Enables the `systemd` collector, which exports `node_systemd_unit_state`.
-# Without it a unit sitting in `failed` emits no metric at all, so no alert can
-# fire on it - which is how calibre-import.service failed every 2 minutes for a
-# month while every dashboard stayed green (KE-15). The collector reads unit
-# state over the systemd D-Bus API; read-only property queries do not require
-# root, so it works under the unprivileged `node_exporter` user. Verified on
-# lxc260 before fleet rollout.
+# Without it a unit in `failed` emits no metric and no alert can fire (KE-15).
+# The collector reads unit state over D-Bus with read-only queries, which work
+# under the unprivileged `node_exporter` user.
 node_exporter_systemd_collector: true
 
-# node_exporter's own default is `.+\.(automount|device|mount|scope|slice)`, which
-# drops `.mount` units. Both mount faults found on 2026-07-10 - lxc220's `/books-rw`
-# (KE-15) and vm100's stale `media-mergerfs.mount` - are exactly that unit type, so
-# the stock exclude would filter out the failure class the collector was added for.
-# `.mount` is therefore kept; the two known-noisy mount units are masked at the
-# source by the `systemd_hygiene` role rather than filtered here.
+# The upstream default also excludes `.mount`, the unit type of the mount faults in
+# KE-15. `.mount` is kept here; known-noisy mount units are masked at the source by
+# the `systemd_hygiene` role instead.
 node_exporter_systemd_unit_exclude: '.+\.(automount|device|scope|slice)'
 
-# Gate the exporter on its bind address actually existing, rather than merely on
-# tailscaled having been started. Measured 2026-08-20 across a real container
-# boot: without it, every one of the nine guests failed once with
-# `listen tcp <addr>:9100: bind: cannot assign requested address`, sat in
-# `failed`, and came back 15 s later on the restart below. Nine nodes, nine
-# identical failures, at every boot since the bind was pinned.
-#
-# Nothing reported it, and that is the more useful half of the finding.
-# `SystemdUnitFailed` carries `for: 15m`, so a fifteen-second failure cannot
-# reach it by construction; `systemctl is-active` answers `active` once the
-# restart has landed; and the exporter that would have exported the fault is the
-# one that is down. The gate turns a caught failure into no failure: measured on
-# lxc250, the gated sshd bound 13 s earlier than the ungated exporter beside it.
-#
-# The Proxmox host has had this since 2026-07-28, as a hand-written drop-in whose
-# own comment says ordering is not sufficient. It was applied where it was found
-# and never swept across the fleet - the failure KE-6 already taught this
-# platform once.
+# Gate the exporter on its bind address existing, not merely on tailscaled having
+# started. Without it the first start fails with `bind: cannot assign requested
+# address` and recovers on the restart 15 s later, too briefly for
+# SystemdUnitFailed (for: 15m) to see. See KE-18.
 node_exporter_tailscale_gate: true
 node_exporter_wait_script_src: "{{ playbook_dir }}/../../snippets/scripts/wait-for-tailscale-ip.sh"
 node_exporter_wait_script: /usr/local/bin/wait-for-tailscale-ip.sh
 node_exporter_wait_timeout: 90
 
-# The gate lives in the unit, not in a drop-in, because this role generates the
-# unit - a drop-in exists to override a file you do not own. The hypervisor's
-# hand-written drop-in predates that and would append a second, redundant
-# ExecStartPre once the host is adopted, so the role removes it.
+# The gate lives in the generated unit. An older hand-written drop-in at this path
+# would add a second, redundant ExecStartPre, so the role removes it.
 node_exporter_obsolete_dropin: /etc/systemd/system/node_exporter.service.d/wait-tailscale.conf

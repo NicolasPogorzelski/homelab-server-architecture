@@ -1,279 +1,99 @@
+# Services Bind Loopback and Are Published by Tailscale Serve
+
+## Status
+Implemented. Decided 2026-03-05. Supersedes / superseded by: -.
+
+Verified 2026-10-02: after the cold boot that morning every serve configuration was back without
+intervention; `tailscaled` keeps it in its state file, and the host powers down nightly, so every
+boot repeats the test.
 
 ## Context
+Remote access runs over Tailscale ([DD-4](design-decisions.md#dd-4)); nothing is published to the
+internet and no service is meant to answer on the LAN. This record decides how a service is bound
+and exposed inside that model. Constraints: no public-facing service, no Funnel, no router port
+forwarding, and maintenance kept small enough for one administrator.
 
-All self-hosted services require remote access for a single operator.
-The strategic decision to use Tailscale as Zero-Trust overlay is documented in
-[Design Decisions #4](design-decisions.md#dd-4).
-
-This document addresses the implementation pattern: how services are bound and exposed
-within that framework.
-
-### Operational Constraints
-
-- Single operator - no team, no on-call rotation
-- Maintenance budget must remain sustainable alongside full-time studies
-- No public-facing services required (no multi-user, no external APIs)
-- All access exclusively within the Tailnet (no Funnel)
-
----
+## Options
+- **Nginx or Caddy as reverse proxy.** Lost: certificate renewal, upstream configuration and a
+  further daemon to patch and monitor, for a problem `tailscale serve` already solves.
+- **Traefik with Docker labels.** Lost: label and middleware configuration sized for many services
+  per Docker host; here most nodes run one.
+- **Bind every service to its Tailscale address.** Lost as the default: no TLS termination, and the
+  service cannot start before `tailscaled` has assigned the address
+  ([KE-18](../platform/known-errors.md#ke-18)). Kept as the rule for the cases below.
+- **Bind loopback and publish through `tailscale serve`.** Chosen as the default.
 
 ## Decision
+A service binds `127.0.0.1` and `tailscale serve` publishes it on the node's tailnet hostname.
+For HTTP services serve terminates TLS with the node's `ts.net` certificate and proxies to a plain
+`http://` backend; for other protocols it forwards TCP (`--tcp`). Nothing binds a LAN address.
 
-Every service binds exclusively to `127.0.0.1` (loopback) on its configured port.
-Tailscale Serve acts as the reverse proxy: it terminates TLS on the Tailscale interface
-and forwards traffic to the local loopback port via HTTP.
+A service binds its Tailscale address instead when serve is not suitable, behind the
+`tailscale_boot_gate` drop-in so it starts only once the address exists:
 
-### Pattern
-
-```
-Client (Tailnet) -> Tailscale Serve (HTTPS, :443/:8443/...) -> 127.0.0.1:<port> (HTTP)
-```
-
-### Example: Grafana on LXC200
-
-```bash
-# Grafana binds to loopback only (docker-compose.yml)
-ports:
-  - "127.0.0.1:3000:3000"
-
-# Tailscale Serve exposes it on the Tailscale interface
-tailscale serve --bg --https=443 http://127.0.0.1:3000
-```
-
-- The service is unreachable from LAN (not bound to `0.0.0.0` or the LAN interface)
-- The service is unreachable from the internet (no port-forwarding, no Funnel)
-- Only authenticated Tailnet members can reach it
-
----
-
-## Alternatives Considered
-
-### Nginx / Caddy as Reverse Proxy
-
-A traditional reverse proxy (Nginx, Caddy, Traefik) was evaluated conceptually but not tested.
-No hands-on experience exists with any of these tools at the time of writing.
-
-Reasons for not choosing this path:
-
-- Requires manual TLS certificate management (Let's Encrypt renewal, DNS challenges)
-- Requires firewall rule maintenance and port-forwarding at the router
-- Adds a service dependency that must itself be monitored and updated
-- Significant configuration surface (virtual hosts, upstream blocks, reload handling)
-- Operational overhead disproportionate for a single-operator homelab
-- Learning curve for a tool that is not needed for the current use case
-
-Tailscale Serve eliminates all of these: TLS is automatic, authentication is implicit,
-and no ports are opened to the internet.
-
-**Competency gap acknowledged:** Nginx, Traefik, and HAProxy are industry standard
-in professional environments. Hands-on experience with at least one traditional reverse proxy
-is planned after the core homelab infrastructure is complete - as a dedicated learning exercise,
-separate from production infrastructure.
-
-### Direct Binding to Tailscale IP (100.x.y.z)
-
-Binding services directly to the Tailscale interface IP was considered:
-
-- Removes the need for Tailscale Serve entirely
-- But: no TLS termination (services would need to handle TLS themselves)
-- IP can change if the node is re-registered
-- No centralized access logging via `tailscale serve status`
-- Harder to reason about - loopback-only is a clearer security boundary
-
-Since 2026-10-07 Jellyfin binds this way anyway. A `--tcp` forward ends the client's connection in
-`tailscaled`'s userspace TCP stack and opens a second one to loopback, and long high-bitrate streams
-stalled in between ([KE-28](../platform/known-errors.md#ke-28)). The direct bind leaves TCP to the
-kernel. Its cost is the boot race of [KE-18](../platform/known-errors.md#ke-18), closed with the
-same gate the fleet's exporters use.
-
-### Traefik with Docker Integration
-
-Traefik's automatic container discovery was considered:
-
-- Powerful for multi-service Docker hosts
-- But: adds significant complexity (labels, entrypoints, middleware)
-- Overkill for the current number of services
-- Would require Traefik-specific knowledge that doesn't transfer 1:1
-
----
-
-## Implementation Rules
-
-| Rule | Rationale |
-|---|---|
-| Always bind to `127.0.0.1`, never `0.0.0.0` | Prevents unintended LAN/WAN exposure |
-| One service per Tailscale Serve port | Tailscale Serve does not support subpath routing |
-| Backend protocol is always `http://` | Tailscale Serve terminates TLS; the backend must not use HTTPS |
-| No Funnel | All access restricted to authenticated Tailnet members |
-| Document port assignments per node | Prevents port collisions, enables traceability |
-
-### Current Port Assignments
-
-#### Nodes with Loopback + Tailscale Serve (pattern fully implemented)
-
-| Node | Service | Loopback Port | Tailscale Serve Port | Hostname |
-|---|---|---|---|---|
-| LXC200 | Grafana | 3000 | 443 | monitoring.<tailnet-id>.ts.net |
-| LXC200 | Prometheus | 9090 | 9443 | monitoring.<tailnet-id>.ts.net:9443 |
-| LXC211 | Paperless-ngx | 8000 | 443 | paperless.<tailnet-id>.ts.net |
-| LXC220 | Calibre-Web | 8083 | 443 | calibreweb.<tailnet-id>.ts.net |
-| LXC230 | OpenWebUI | 3000 | 443 | ai-openwebui.<tailnet-id>.ts.net |
-| VM100 | Audiobookshelf | 13378 | 13378 (TCP) | gpu-vm.<tailnet-id>.ts.net:13378 |
-| VM100 | llama-server | 8080 | 8080 (TCP) | gpu-vm.<tailnet-id>.ts.net:8080 |
-| LXC240 | Vaultwarden | 8080 | 443 | vaultwarden.<tailnet-id>.ts.net |
-
-#### Documented Exceptions (no Tailscale Serve, `0.0.0.0` binding)
-
-| Node | Service | Bind Address | Port | Reason |
-|---|---|---|---|---|
-| LXC210 | Nextcloud | 0.0.0.0 | 80, 443 | LAN upload performance for large data volumes; Apache-managed TLS |
-
-#### Nodes Without Web Services
-
-| Node | Reason |
-|---|---|
-| LXC250 | DevOps workstation, SSH access only |
-| lxc260 | PostgreSQL platform service, Tailscale IP binding only (port 5432) |
-
-#### Direct Tailscale IP Binding
-
-| Node | Service | Bind Address | Port | Reason |
-|---|---|---|---|---|
-| VM100 | Jellyfin | `<tailscale-ip-vm100>` | 8096 | High-bitrate streams at 60-100 Mbit/s stalled inside the serve TCP forwarder ([KE-28](../platform/known-errors.md#ke-28)) |
-
-#### Notes on Exceptions
-
-LXC210 does not follow the loopback pattern. VM100 did not either until 2026-10-01, when Jellyfin
-and Audiobookshelf moved to loopback behind TCP forwards (see the table above and
-[vm100.md](../nodes/vm100.md#no-media-ports-on-the-lan)).
-
-- **LXC210 (Nextcloud):** Uploading large data volumes (e.g. multi-GB PDFs) over LAN
-  is significantly faster than routing through the Tailscale overlay. Apache handles TLS termination
-  on port 443 - LAN access is therefore also encrypted. Tailscale Serve is not in use here.
-  Nextcloud is still reachable via `nextcloud.<tailnet-id>.ts.net` - MagicDNS resolves the hostname
-  to the Tailscale IP, and Apache answers the request directly (no Tailscale Serve involved).
-
-#### Security Assessment of Exceptions
-
-Important clarification: even without Tailscale Serve, remote access via Tailscale is protected.
-
-Tailscale establishes a WireGuard tunnel between all nodes. All traffic over
-Tailscale IPs (`100.x.y.z`) is encrypted at the network level - regardless of whether
-the service itself speaks HTTP or HTTPS.
-
-| Access Path | Encryption | Example |
+| Service | Node | Reason |
 |---|---|---|
-| LAN -> VM100 (HTTP) | None (cleartext on LAN) | `http://192.168.x.x:8096` |
-| Tailscale -> VM100 (HTTP) | WireGuard tunnel (encrypted) | `http://100.x.y.z:8096` |
-| LAN -> LXC210 (HTTPS) | Apache TLS (encrypted) | `https://192.168.x.x` |
-| Tailscale -> LXC210 (HTTPS) | WireGuard + Apache TLS (double) | `https://nextcloud.<tailnet-id>.ts.net` |
+| Jellyfin | vm100 | Long high-bitrate streams stalled in serve's userspace TCP forwarder ([KE-28](../platform/known-errors.md#ke-28)) |
+| PostgreSQL | lxc260 | Binary protocol; consumers connect to `<tailscale-ip-lxc260>:5432` ([boot ordering](postgresql-tailscale-boot-ordering.md)) |
+| node_exporter, postgres_exporter, journal receiver | all nodes, lxc260, lxc200 | Scraped or written to directly by Prometheus and the journal senders, no TLS needed |
+| sshd | all guests | [sshd decision](sshd-listen-address.md) |
 
-The absence of Tailscale Serve on VM100 means: no TLS certificate, no MagicDNS HTTPS hostname.
-This is a convenience gap, not a security gap. The WireGuard encryption protects the traffic.
+Apache on lxc210 still binds the wildcard on 80 and 443; `lan_guard` closes the LAN side and moving
+Nextcloud behind serve is open work ([remediation plan](../platform/remediation-plan.md)).
 
-With sufficient upstream bandwidth (~500 Mbit, see DD#9), LAN exposure will be reduced
-and a more consistent model adopted.
+### Example: Grafana on lxc200
 
----
+The monitoring stack runs with `network_mode: host` (`docker/monitoring/docker-compose.yml`), so
+each service sets its own listen address instead of a port mapping: Prometheus through
+`PROM_BIND_ADDRESS=127.0.0.1` (`docker/monitoring/.env.example`), Grafana through its environment
+file, which stays outside the repository. Serve publishes them:
 
-## Known Pitfalls
-
-### 1. HTTPS -> HTTP Mismatch
-
-**Symptom:** Tailscale Serve returns a TLS error or connection refused.
-
-**Cause:** `tailscale serve` was configured with `https://127.0.0.1:...` as backend,
-but the service only speaks HTTP on loopback.
-
-**Fix:**
 ```bash
-# Remove the misconfigured serve entry
-tailscale serve off
-# Re-add with correct http:// backend
-tailscale serve --bg --https=<port> http://127.0.0.1:<backend-port>
+tailscale serve --bg --https=443  http://127.0.0.1:3000   # Grafana
+tailscale serve --bg --https=9443 http://127.0.0.1:9090   # Prometheus
+tailscale serve status                                    # prints the configuration above
 ```
 
-- `serve off` - removes all active serve configurations on this node
-- `--bg` - runs the serve process in the background (persists after terminal close)
-- `--https=<port>` - the port Tailscale Serve listens on externally (TLS-terminated)
-- `http://...` - the backend target; must be `http://` because the local service does not speak TLS
+### Published services
 
-### 2. One Service per Port
+| Node | Service | Backend | Tailnet port |
+|---|---|---|---|
+| lxc200 | Grafana | `127.0.0.1:3000` | 443 |
+| lxc200 | Prometheus | `127.0.0.1:9090` | 9443 |
+| lxc200 | Alertmanager | `127.0.0.1:9093` | 9093 |
+| lxc211 | Paperless-ngx | `127.0.0.1:8000` | 443 |
+| lxc220 | Calibre-Web | `127.0.0.1:8083` | 443 |
+| lxc230 | OpenWebUI | `127.0.0.1:3000` | 443 |
+| vm100 | Audiobookshelf | `tcp://127.0.0.1:13378` | 13378 (TCP) |
+| vm100 | llama-server | `tcp://127.0.0.1:8080` | 8080 (TCP) |
 
-**Symptom:** Second service on the same Tailscale Serve port overwrites the first.
+Per-node detail is in the node documents under `docs/nodes/`.
 
-**Cause:** Tailscale Serve does not support subpath routing
-(`/grafana` -> Service A, `/prometheus` -> Service B does not work).
+### Rules
 
-**Fix:** Assign each service a unique port and document it in the port table above.
-
-### 3. Serve Configuration: Persistence Behavior
-
-**Observation (as of March 2026):** Serve configurations have remained persistent
-across individual LXC/VM reboots. A full Proxmox host reboot (all nodes simultaneously)
-has not yet been performed.
-
-**Verification after restart:**
-```bash
-tailscale serve status
-```
-
-- `serve status` - shows all currently active serve configurations on this node
-
-If empty: re-run the serve commands. Long-term, automate via systemd or Ansible.
-
-**Open item:** Perform a full host reboot test and document persistence behavior.
-
----
-
-## Maintenance Overhead Assessment
-
-### What Tailscale Serve Eliminates (vs. Traditional Reverse Proxy)
-
-- TLS certificate management (no Let's Encrypt, no DNS challenges)
-- Firewall rule maintenance (no open ports, no port-forwarding)
-- Reverse proxy configuration (no nginx.conf, no Caddyfile)
-- No DNS records required for services
-
-### What Remains
-
-- Tailscale Serve must be configured per service (one-time)
-- Port assignments must be documented
-- Serve status should be verified after node restarts
-- Tailscale client updates across all nodes
-
-### Vendor Lock-in Awareness
-
-Tailscale is a central component of the infrastructure. Risks:
-
-- Changes to the free tier could restrict features
-- Coordination server outage prevents new connections
-  (existing connections via DERP remain temporarily functional)
-- No trivial fallback to an alternative VPN without architectural changes
-
-**Assessment:** Acceptable for a single-operator homelab.
-The decision saves significant maintenance time, which is invested in competency building (Ansible, IaC).
-A migration scenario (e.g. to Headscale or direct WireGuard) is deliberately not prepared,
-but the loopback binding convention remains valuable even without Tailscale.
-
----
-
-## Trade-offs
-
-| Advantage | Limitation |
+| Rule | Reason |
 |---|---|
-| No TLS management | Vendor dependency (Tailscale) |
-| No open ports | No subpath routing possible |
-| Implicit authentication | Each service requires its own port |
-| Minimal maintenance overhead | Less learning effect for traditional reverse proxy setups |
-| Clear security model | Serve persistence after full host reboot not yet verified |
-| Consistent pattern for new services | Performance exceptions (VM100, LXC210) require separate documentation |
+| Bind `127.0.0.1` or the Tailscale address, never `0.0.0.0` or a LAN address | No LAN or internet exposure from the bind itself |
+| Backend is `http://` for HTTPS publishing | Serve terminates TLS; an `https://` backend against a plain-HTTP service fails |
+| One port per service on a node | `--set-path` can route sub-paths, but each application would then need its own sub-path configuration (Grafana's root URL, for example) |
+| No Funnel | Only tailnet members, as the ACL grants them, reach a service |
 
----
+## Consequences
+- TLS, certificates and device authentication come from Tailscale: no open router port, and
+  serve-backed nodes need no certificate job (`tailscale_cert` exists only for Apache on lxc210).
+- The services depend on the Tailscale control plane. Established tunnels survive an outage of the
+  coordination server for a while; new connections and key changes do not. Moving the control plane
+  in-house is decided in [Headscale migration](headscale-migration.md); the loopback bind does not
+  change with it.
+- Serve configuration is set by hand on each node and lives in `tailscaled`'s state, not in the
+  repository. A rebuilt node needs its serve commands from its node document.
+- `tailscale serve status` shows what is configured; it records no access log. Availability is
+  checked by the blackbox probes in [monitoring](../platform/monitoring.md).
+- A TCP forward terminates the client connection in `tailscaled`; clients appear to the backend as
+  `127.0.0.1`, and high-bitrate streams can stall there (KE-28).
 
 ## Related Documents
-
-- [Design Decisions #4: Zero-Trust Overlay](design-decisions.md#dd-4)
-- [Design Decisions #8/#9: LAN Exposure](design-decisions.md#dd-8)
-- [Tailscale ACL Model](../platform/tailscale-acl.md)
+- [DD-4: Zero-trust overlay](design-decisions.md#dd-4)
+- [Media over the tailnet](media-over-the-tailnet.md)
+- [Tailscale ACL model](../platform/tailscale-acl.md)
 - [Networking](../platform/networking.md)

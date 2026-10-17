@@ -1,7 +1,6 @@
 ---
-# The script drops a database on every exit path. Refusing here rather than
-# discovering it at 09:00 on the fifteenth: if the client cannot authenticate,
-# the run would fail in the middle rather than before it started.
+# Fails the deploy if no MariaDB client is installed, rather than the first
+# scheduled run.
 - name: Assert the MariaDB client is present
   ansible.builtin.command:
     cmd: bash -c 'command -v mariadb || command -v mysql'
@@ -47,13 +46,8 @@
 - name: Flush handlers so the timer starts against the current unit definition
   ansible.builtin.meta: flush_handlers
 
-# Whether systemd has the unit yet. In check mode the template above was not
-# really written, so on a node seeing this role for the first time the unit does
-# not exist and systemd_service fails the whole play - measured 2026-09-17. This
-# role is in the weekly drift sweep, which runs in check mode, so a role added to
-# that list before it is applied turns its node red every Sunday for a state that
-# is not a fault. On a converged node the unit is there and the check reports
-# accurately, which is the behaviour worth keeping.
+# Whether systemd has the unit yet. Under --check (the weekly drift sweep) the
+# template was not written, and systemd_service would fail on a first run.
 - name: Ask systemd whether the timer unit exists yet  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl list-unit-files --no-legend --plain mariadb-restore-test.timer
@@ -69,14 +63,9 @@
     state: started
   when: mariadb_restore_test_unit_file.stdout | length > 0
 
-# Read the schedule back out of systemd rather than reporting the file that was
-# written. A timer whose calendar expression systemd rejected is enabled, listed
-# and never fires, which is the shape the journald role reported success on for
-# ten nodes before its verification was corrected.
-# noqa: command-instead-of-module - systemd_service has no query-only mode and
-# acts on every call, so reading a property is the one thing it cannot do. The
-# waiver is inline rather than in skip_list so the rule stays armed repo-wide,
-# which is the convention CLAUDE.md records for systemd_hygiene.
+# Reads the schedule back from systemd: a rejected calendar expression leaves the
+# timer enabled and listed but never firing. The noqa is inline because
+# systemd_service cannot query a property, and the rule stays armed repo-wide.
 - name: Read back the next scheduled run  # noqa: command-instead-of-module
   ansible.builtin.command:
     cmd: systemctl show mariadb-restore-test.timer -p NextElapseUSecRealtime --value

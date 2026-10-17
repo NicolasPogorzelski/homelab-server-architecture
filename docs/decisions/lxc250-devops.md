@@ -1,127 +1,58 @@
-# Decision: Central DevOps LXC (LXC250)
+# One Control Node for All Changes (lxc250)
+
+## Status
+Implemented 2026-03-04. Tag changed to `tag:control` on 2026-09-26. Supersedes / superseded by: -.
 
 ## Context
+Code and infrastructure changes were made from several admin machines, which caused synchronization
+overhead and diverging Git state. A single management node removes that: all changes are made in
+one place, every other node only receives them.
 
-Code and infrastructure changes were previously made from multiple machines (admin workstation, admin laptop).
-This created synchronization overhead and inconsistent Git state across devices.
-
-A centralized management node eliminates this problem:
-all changes are made in one place, all other nodes only pull.
-
----
+## Options
+- **A VM.** Lost: no hardware passthrough, no Docker and no custom kernel needed; QEMU and a second
+  kernel would consume part of a 2 GB budget that an LXC uses almost entirely for the workload.
+- **Ubuntu Server.** Lost: slightly larger, and no advantage for this workload; Debian matches the
+  other LXCs.
+- **Keep working from the admin workstations.** Lost: the synchronization problem above.
+- **A dedicated unprivileged Debian LXC.** Chosen.
 
 ## Decision
-
-Create a dedicated unprivileged Debian LXC (CTID 250) as the central DevOps workstation.
-
-All Git operations, code editing, Ansible execution, and IaC work happen exclusively on this node.
-
----
-
-## Alternatives Considered
-
-### VM instead of LXC
-
-A full VM was considered but rejected:
-
-- No hardware passthrough required (no GPU, no special kernel)
-- No Docker needed on this node (build/test VMs can be added later if needed)
-- LXC provides the same user experience with less overhead
-- All existing service LXCs already use the same toolchain (Tailscale, pct exec, Debian)
-- 2 GB RAM in an LXC has almost no overhead; in a VM, QEMU and a separate kernel consume part of that budget
-
-### Ubuntu Server instead of Debian
-
-Considered but not chosen:
-
-- Slightly larger footprint than Debian
-- Would maintain the OS split (VM100 = Ubuntu, rest = Debian)
-- No meaningful advantage for this workload
-
----
-
-## Specification
+CTID 250 is the control node. Git operations, code editing, Ansible runs and IaC work happen on it
+only. It holds the Ansible key, the vault password and root access to the hypervisor through
+Ansible.
 
 | Property | Value |
 |---|---|
 | CTID | 250 |
 | Hostname | devops |
 | OS | Debian 12 (bookworm) |
-| Cores | 2 |
-| RAM | 2048 MB |
-| Swap | 512 MB |
-| Disk | 8 GB (local-lvm) |
-| Unprivileged | Yes |
-| Nesting | Enabled (required for Tailscale) |
-| Tailscale Tag | `tag:admin` |
-| Onboot | Yes |
+| Resources | 2 cores, 2048 MB RAM, 512 MB swap, 8 GB disk on local-lvm |
+| Unprivileged | yes, nesting enabled (required for Tailscale) |
+| Tailscale tag | `tag:control` |
+| Onboot | yes |
 
----
+CTID ranges: 100-109 hardware-proximate VMs, 200-209 monitoring, 210-219 cloud, 220-229 media,
+230-239 AI stack, 250-259 DevOps and management tooling, 260-269 database and platform services.
 
-## CTID Schema Rationale
+**Tag.** lxc250 carries its own `tag:control`, not `tag:admin`. It is an automation identity with
+one job: SSH to every node and the Prometheus API for the drift sweep. Admin workstations reach it on
+22 only. The grants are owned by [tailscale-acl.md](../platform/tailscale-acl.md); lxc250 advertises
+its tag itself, so a re-registration asks for the same one.
 
-The CTID 250 follows the established numbering model:
+**Access.** SSH with ED25519 keys from admin devices. Password authentication is off, as on every
+node (`ssh_hardening`). sshd binds the Tailscale address only
+([sshd decision](sshd-listen-address.md)); the fallback when the tailnet is down is `pct exec 250`
+on the hypervisor.
 
-- 100-109: Hardware-proximate VMs (GPU, Storage)
-- 200-209: Monitoring
-- 210-219: Cloud (Nextcloud)
-- 220-229: Media (Calibre-Web)
-- 230-239: AI Stack (OpenWebUI)
-- 240-249: Secrets (Vaultwarden)
-- 250-259: DevOps / Management Tooling
-- 260-269: Database / Platform Services
----
-
-## Tailscale Tag Rationale
-
-`tag:admin` was chosen because:
-
-- The DevOps node requires broad access to all tiers (tier0, tier1, tier2, storage) for management and Ansible
-- This matches the access profile of existing admin devices (admin workstation, admin laptop)
-- A dedicated `tag:devops` was considered but deferred to avoid premature ACL complexity
-- Can be revisited when automated (non-human) access patterns emerge (e.g., CI runners, scheduled Ansible)
-
-### ACL Impact
-
-Adding a second `tag:admin` node revealed a gap in the existing ACL policy:
-admin-to-admin communication was not explicitly allowed.
-
-Fix applied:
-```json
-{
-    "action": "accept",
-    "src":    ["tag:admin"],
-    "dst": [
-        "tag:admin:*",
-        "tag:tier0:*",
-        "tag:tier1:*",
-        "tag:tier2:*",
-        "tag:storage:*"
-    ]
-}
-```
-
----
-
-## Access Model
-
-- SSH key-based authentication (ED25519) from admin devices
-- Password authentication available as fallback
-- VS Code Remote SSH for graphical editing (optional)
-- Direct terminal SSH + tmux/neovim for lightweight work
-
----
-
-## Trade-offs
-
-- Single point of failure for all Git/IaC operations (acceptable for a single-operator homelab)
-- Requires discipline: no ad-hoc changes from other machines
-- 2 GB RAM limits concurrent heavy workloads (sufficient for Git + Ansible + editing)
-
----
+## Consequences
+- Single point of failure for Git and IaC operations; accepted for a single-administrator platform.
+  Its credentials are escrowed off-site ([remediation plan](../platform/remediation-plan.md)).
+- No ad-hoc changes from other machines.
+- 2 GB RAM limits concurrent heavy workloads; enough for Git, Ansible and editing.
+- Until 2026-09-26 lxc250 shared `tag:admin` with the workstations and `tag:admin:*` connected them
+  on every port; the separate tag removed that path in both directions.
 
 ## Related Documents
-
-- [Architecture Overview](../architecture/overview.md)
 - [Tailscale ACL Model](../platform/tailscale-acl.md)
 - [Node Documentation: LXC250](../nodes/lxc250.md)
+- [Architecture Overview](../architecture/overview.md)

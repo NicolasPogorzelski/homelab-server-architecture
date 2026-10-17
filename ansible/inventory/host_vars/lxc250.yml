@@ -1,47 +1,26 @@
 ---
-# sshd on this node binds the Tailscale address only, which is why SSH is
-# unreachable for the first half minute after a boot. The pin comes from
-# `ssh_hardening` like on every other pinned node; socket activation was never on
-# here, so there is no socket to hand back.
+# sshd binds the Tailscale address only, so SSH is unreachable for the first
+# half minute after a boot. This node never used socket activation.
 ssh_hardening_listen_address: "{{ ansible_host }}"
 
-# The boot gate below is what makes that pin survivable. Until 2026-08-20 that was handled by a hand-written drop-in doing nothing
-# but retrying every 15 s - the fifth instance of KE-18, and the one that survived
-# the sweep because it worked well enough to look intentional.
-#
-# It is gated rather than merely ordered because of what a failure costs here.
-# This node is the Ansible control node: it holds the only copy of the vault
-# password, the real inventory and the deployment key, and when its sshd does not
-# come up the only remaining way in is `pct exec` from the hypervisor.
+# Gated rather than only ordered (KE-18): this is the control node, holding the
+# only copy of the vault password, the real inventory and the deployment key.
+# If its sshd does not come up, the only way in is `pct exec` from the hypervisor.
 tailscale_boot_gate_units:
   - ssh.service
 
 # Debian's ssh.service sets RestartPreventExitStatus=255 and sshd exits 255 on a
-# failed bind, so the restart backstop is inert unless that list is cleared. The
-# hand-written drop-in had this right; it is carried over deliberately.
+# failed bind, so the restart backstop only works with that list cleared.
 tailscale_boot_gate_clear_restart_prevent: true
 
-# MagicDNS resolves nothing on this node, and has not since at least 2026-09-08.
-# `systemd-resolved` is active here and on no other container, `/etc/nsswitch.conf`
-# consults `resolve` before `dns`, and `[!UNAVAIL=return]` ends the lookup on
-# resolved's "not found" - so glibc never reads the /etc/resolv.conf that
-# tailscaled writes correctly, nameserver and search domain included. A direct
-# query to the Tailscale resolver answers; every program on the node does not.
-#
-# Taking `resolve` out of the line is the fix rather than pointing resolved at the
-# Tailscale resolver, because the working answer already exists in a file nothing
-# was reading. `myhostname` stays: it resolves this node's own name without a
-# lookup, and removing it is a second change with a second failure mode.
-#
-# Measured 2026-09-12: the other six containers read `files dns` with resolved
-# inactive, and all of them resolve MagicDNS. This is a one-node fault, not the
-# fleet-wide nsswitch ordering it was recorded as.
+# This is the only container with systemd-resolved, and with `resolve` ahead of
+# `dns` in nsswitch.conf, `[!UNAVAIL=return]` ended every lookup at resolved's
+# "not found", so MagicDNS names never resolved. Dropping `resolve` lets glibc use
+# the /etc/resolv.conf that tailscaled writes. `myhostname` stays: it resolves
+# the node's own name without a lookup.
 nsswitch_hosts: "files myhostname dns"
 
-# systemd-resolved is stopped and disabled here. After the line above took it out
-# of the resolution path on 2026-09-12 it kept running with nothing to resolve,
-# and its only remaining effect was an LLMNR and mDNS responder on 0.0.0.0:5355 -
-# unauthenticated, on the untrusted LAN, on the node that holds hypervisor root
-# and the vault password. The role refuses the change if anything still points at
-# the 127.0.0.53 stub.
+# With `resolve` out of the path, systemd-resolved only served LLMNR and mDNS on
+# 0.0.0.0:5355, unauthenticated, on the LAN. It is stopped and disabled; the role
+# refuses if anything still points at the 127.0.0.53 stub.
 nsswitch_disable_resolved: true

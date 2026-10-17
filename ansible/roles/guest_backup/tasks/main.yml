@@ -1,17 +1,8 @@
 ---
-# The target has to exist before anything is deployed, and the role asserts it
-# rather than creating it.
-#
-# Creating it would be actively harmful here. `file: state=directory` on an
-# unmounted path produces an empty directory on pve-root that looks exactly like
-# the mount and is not, and vzdump would then write gigabytes per run into the
-# thin pool on the boot SSD - filling the disk that carries every guest, in order
-# to back up those guests. That is the KE-7 failure class, and it is the same
-# reason mariadb_backup asserts its CIFS mount instead of creating /mnt/backups.
-#
-# Two conditions, not one. A bind mount of a local directory satisfies
-# `mountpoint` while still living on the root device, which would put the backup
-# in the failure domain it exists to survive.
+# Asserted, never created: a directory on an unmounted path would let vzdump
+# fill the boot SSD that carries every guest (the KE-7 failure class).
+# Two conditions, because a bind mount of a local directory is a mountpoint that
+# still lives on the root device.
 - name: Assert the backup target is a mountpoint on a device other than root
   ansible.builtin.assert:
     that:
@@ -34,9 +25,7 @@
       install a job that writes ten gigabytes a week onto the boot SSD.
     success_msg: "{{ guest_backup_dir }} is a mountpoint on its own device - safe to deploy."
 
-# Read-only probe, so it must run under --check as well; without this the
-# registered value would not exist and the assert below would fail on a dry run
-# for a reason unrelated to the host's actual state.
+# Read-only probe; runs under --check so the assert below has a value.
 - name: Measure free space on the backup target
   ansible.builtin.command:
     cmd: "df --output=avail -BG {{ guest_backup_dir }}"
@@ -44,11 +33,8 @@
   changed_when: false
   check_mode: false
 
-# A guard against the quiet version of this job failing: the target filling up.
-# vzdump prunes only after a successful write, so a target with no room produces
-# a failed run rather than a rotated one, and the newest backup stays whatever it
-# was. Two full runs of headroom is the smallest margin that survives one bad
-# week.
+# vzdump prunes only after a successful write, so a full target fails instead of
+# rotating. Two full runs of headroom survive one bad week.
 - name: Assert the target has room for at least two full runs
   ansible.builtin.assert:
     that:

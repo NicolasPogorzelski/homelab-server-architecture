@@ -3,9 +3,6 @@
 #
 # Targets vm100 by name: it is the only node configured through netplan. The
 # containers and vm102 are Debian and use ifupdown; the hypervisor uses ifupdown2.
-#
-# Playbooks run from the working tree on lxc250, not from a commit.
-# preflight.yml refuses the run if that tree does not match origin/main.
 - name: Preflight - the control node must match a published commit
   import_playbook: preflight.yml
 

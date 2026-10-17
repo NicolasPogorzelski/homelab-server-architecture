@@ -1,14 +1,10 @@
-# Known Errors & Workarounds
+# Known Errors
 
-This document records errors that have been observed in production, their root cause, and the applied fix or workaround.
+Faults observed on this platform, their root cause, fix and current status. Generic failure
+scenarios and response procedures are in [operations.md](./operations.md).
 
-Unlike the incident response playbooks in [operations.md](./operations.md), these are specific, previously encountered issues - not hypothetical failure scenarios.
-
-Every entry carries an explicit `<a id="ke-N"></a>` anchor above its heading, so other documents
-can link to `known-errors.md#ke-N` without depending on the heading text. Four such links were
-already broken on 2026-07-10 because the auto-generated anchor is the full slugified title, and
-titles get reworded. Keep the anchor when adding an entry; `validate-repo.sh` Check 2 verifies the
-file path, not the fragment.
+Every entry carries an explicit `<a id="ke-N"></a>` anchor; link to `known-errors.md#ke-N`, not to
+the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 
 ---
 
@@ -16,39 +12,34 @@ file path, not the fragment.
 
 | # | Fault | Status |
 |---|---|---|
-| [KE-1](#ke-1) | SQLite on CIFS - database is locked | Resolved - architectural decision |
+| [KE-1](#ke-1) | SQLite on CIFS - database is locked | Resolved - no database files on CIFS (architectural rule) |
 | [KE-2](#ke-2) | Grafana datasource unreachable after host networking switch | Resolved |
-| [KE-3](#ke-3) | Failed run-rpc_pipefs.mount in LXC210 | Resolved 2026-09-11, at the package |
-| [KE-4](#ke-4) | Docker creates directories for missing bind-mount files | Systematic - Docker design behaviour |
-| [KE-5](#ke-5) | Vaultwarden SQLite on CIFS | Closed 2026-09-01 by decommissioning |
-| [KE-6](#ke-6) | Tailscale userspace networking prevents the exporter binding | Resolved 2026-07-28, cold-boot verified |
+| [KE-3](#ke-3) | Failed run-rpc_pipefs.mount in LXC210 | Resolved 2026-09-11 |
+| [KE-4](#ke-4) | Docker creates directories for missing bind-mount files | Open - Docker design behaviour, manual recovery |
+| [KE-5](#ke-5) | Vaultwarden SQLite on CIFS | Resolved 2026-09-01 by decommissioning |
+| [KE-6](#ke-6) | Tailscale userspace networking prevents the exporter binding | Resolved 2026-07-28; stray unit removed 2026-09-01 |
 | [KE-7](#ke-7) | Package corruption when the LVM thin pool overflows | Resolved 2026-04-26 |
-| [KE-8](#ke-8) | Media services hang while the node stays healthy | Resolved 2026-06-08 |
-| [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09, reboot verified |
-| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Open - workaround only, fault still active |
-| [KE-11](#ke-11) | Grafana admin password not updated after first start | Known, non-blocking |
-| [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25, cold-boot verified |
-| [KE-13](#ke-13) | aux-disk physical failure | Open - in service under protest, replacement pending |
-| [KE-14](#ke-14) | Intermittent boot-time I/O errors on the boot SSD | Open - physical verification pending |
+| [KE-8](#ke-8) | Media services hang while the node stays healthy | Mitigated 2026-06-08 - service probes alert; cause not found |
+| [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09 |
+| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Mitigated - fault active, stream-aware watchdog restart |
+| [KE-11](#ke-11) | Grafana admin password not updated after first start | Open - Grafana design behaviour, non-blocking |
+| [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12 |
+| [KE-13](#ke-13) | aux-disk physical failure | Open - degrading, in service, replacement planned |
+| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Open - drive replacement in the second half of October 2026 |
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
-| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - no cause found, no durable fix applied |
-| [KE-18](#ke-18) | Services start before Tailscale is ready | Class - vm100 `docker.service` gated 2026-10-07, cold-boot confirmed 2026-10-10 |
-| [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15 |
-| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown, not being pursued |
-| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-11; upgrade and memory test pending |
+| [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - cause unknown, one occurrence |
+| [KE-18](#ke-18) | Services start before Tailscale is ready | Mitigated - every known instance gated, cold boot 2026-10-13 |
+| [KE-19](#ke-19) | A file that changes during a sync poisons the array signal | Resolved 2026-08-15; recurrence fixed 2026-10-08 |
+| [KE-20](#ke-20) | VM100 froze during a live CIFS unmount | Open - cause unknown; vm100 snapshottable since 2026-10-10 |
+| [KE-21](#ke-21) | A kernel oops cascade wedged the hypervisor | Resolved 2026-09-12; memory test pending |
 | [KE-22](#ke-22) | A retired deployment stayed on disk and broke the backup | Resolved 2026-09-01 |
-| [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved on the guests, open on the host |
+| [KE-23](#ke-23) | A role gained a task and seven nodes never received it | Resolved 2026-09-16 |
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
-| [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15 |
-| [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25 |
-| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Applied 2026-10-03, unit enabled, re-check at `changed=0` |
-| [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 by binding the Tailscale address; boot gate cold-boot confirmed 2026-10-10 |
-
-Status is quoted from each entry's `**Status:**` line. Four of them carried no such line when this
-index was built - KE-16, KE-17, KE-20 and KE-21 expressed it through other headings instead - and
-stood here marked *(inferred)* until 2026-09-16, when each was given the line the minimum shape in
-`CLAUDE.md` asks for.
+| [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15; second instance 2026-10-08 |
+| [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
+| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - retry not yet exercised by a real failure |
+| [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 
 ---
 
@@ -56,22 +47,20 @@ stood here marked *(inferred)* until 2026-09-16, when each was given the line th
 
 ## KE-1: SQLite on CIFS - "database is locked"
 
-**Affected service:** OpenWebUI (CT230)
+- **Status:** Resolved - no database files on CIFS (architectural rule)
+- **Affects:** OpenWebUI (lxc230)
 
-**Symptom:**
-`peewee.OperationalError: database is locked`
+**Symptom.** `peewee.OperationalError: database is locked`.
 
-**Root cause:**
-SQLite relies on POSIX file locking semantics that are not reliably supported on CIFS/SMB network filesystems. When OpenWebUI's default SQLite database was stored on a CIFS mount, concurrent access caused persistent locking failures.
+**Cause.** SQLite relies on POSIX file locking, which CIFS/SMB does not implement reliably.
+OpenWebUI's default SQLite database lived on a CIFS mount.
 
-**Fix:**
-SQLite was replaced with PostgreSQL running on local block storage in a dedicated platform container (lxc260). This is now an architectural rule: no database files (SQLite or PostgreSQL data directories) may reside on CIFS/SMB or automount-backed network shares.
+**Fix.** OpenWebUI uses PostgreSQL on local block storage in lxc260. Platform rule: no database
+files (SQLite or PostgreSQL data directories) on CIFS/SMB or automount-backed shares.
 
-**Status:** Resolved (architectural decision)
-
-**References:**
-- [OpenWebUI service documentation](../services/openwebui.md)
-- [PostgreSQL platform service](../services/postgresql-platform.md)
+**Verification.** OpenWebUI runs against lxc260
+([PostgreSQL platform service](../services/postgresql-platform.md),
+[OpenWebUI](../services/openwebui.md)).
 
 ---
 
@@ -79,21 +68,19 @@ SQLite was replaced with PostgreSQL running on local block storage in a dedicate
 
 ## KE-2: Grafana datasource unreachable after host networking switch
 
-**Affected service:** Grafana (LXC200)
+- **Status:** Resolved
+- **Affects:** Grafana (lxc200)
 
-**Symptom:**
-Grafana dashboards failed silently. The provisioned Prometheus datasource returned connection errors.
+**Symptom.** Dashboards empty; the provisioned Prometheus datasource returned connection errors.
 
-**Root cause:**
-The monitoring stack was switched to `network_mode: host` in Docker. In bridge mode, Docker provides internal DNS resolution between containers (e.g. `http://prometheus:9090`). With host networking, containers share the host network stack directly - Docker does not create a virtual network and provides no DNS. The datasource URL `http://prometheus:9090` became unresolvable.
+**Cause.** The monitoring stack moved to `network_mode: host`. Docker's container-name DNS exists
+only on bridge networks, so `http://prometheus:9090` no longer resolved.
 
-**Fix:**
-Changed the datasource URL from `http://prometheus:9090` to `http://127.0.0.1:9090`. This applies to all inter-service references in host-networked Docker stacks: configuration files, environment variables, and provisioning templates must use `127.0.0.1` or the host's Tailscale IP, never container names.
+**Fix.** Datasource URL changed to `http://127.0.0.1:9090`. In host-networked stacks every
+inter-service reference uses `127.0.0.1` or the node's Tailscale IP, never a container name
+([design decisions](../decisions/design-decisions.md)).
 
-**Status:** Resolved
-
-**References:**
-- [Design Decision #10](../decisions/design-decisions.md)
+**Verification.** Datasource health check in Grafana returns OK.
 
 ---
 
@@ -101,35 +88,21 @@ Changed the datasource URL from `http://prometheus:9090` to `http://127.0.0.1:90
 
 ## KE-3: Failed run-rpc_pipefs.mount in LXC210
 
-**Affected service:** Nextcloud (LXC210)
+- **Status:** Resolved 2026-09-11
+- **Affects:** Nextcloud node (lxc210)
 
-**Symptom:**
-`systemctl --failed` shows `run-rpc_pipefs.mount` as failed.
+**Symptom.** `systemctl --failed` lists `run-rpc_pipefs.mount`.
 
-**Root cause:**
-This systemd mount unit is related to NFS/RPC services. It is automatically generated but not required for the Nextcloud stack (which uses CIFS, not NFS). The unit fails because the unprivileged LXC does not have the necessary kernel capabilities for RPC pipe filesystem mounting.
+**Cause.** The unit is generated by `nfs-common`. The unprivileged container lacks the
+capability to mount the RPC pipe filesystem, and Nextcloud uses CIFS, not NFS. The same package
+pulled in `rpcbind`, listening on `0.0.0.0:111`.
 
-**Fix:**
-Masked by the `systemd_hygiene` role from 2026-08-17, so that a failed unit anywhere on the fleet
-would mean something again. That treated the symptom: the unit kept being generated and kept being
-shadowed.
+**Fix.** `nfs-common` and `rpcbind` removed through `systemd_hygiene_absent_packages` in
+`ansible/inventory/host_vars/lxc210.yml`. The `systemd_hygiene` role simulates the removal with
+`apt-get -s` and refuses if apt would remove anything else. The earlier mask is deleted.
 
-Removed at the source on 2026-09-11 by taking `nfs-common` off the node, which is what generated
-the unit. The same removal closes a second finding the 2026-08-17 audit recorded separately and
-nobody connected to this one: `rpcbind` listening on `0.0.0.0:111` and `[::]:111`, a wildcard bind
-on a node with no NFS mount at all. One package, two entries, eight months apart.
-
-The mask is retired rather than left in place. A mask for a unit that can no longer be generated
-reads at review time exactly like one that is still holding something back.
-
-**Status:** Resolved 2026-09-11 by removing `nfs-common` and `rpcbind`
-(`systemd_hygiene_absent_packages` in `host_vars/lxc210.yml`). The role simulates the removal with
-`apt-get -s` and refuses if apt would take anything else with it; Nextcloud's storage is CIFS, which
-shares no part of the NFS client stack.
-
-**References:**
-- [Nextcloud service documentation](../services/nextcloud.md)
-- [Ansible platform doc - the `systemd_hygiene` role](ansible.md#roles)
+**Verification.** Verified 2026-09-12: both packages absent on lxc210, port 111 closed, no failed
+unit ([ansible.md](ansible.md#roles)).
 
 ---
 
@@ -137,33 +110,29 @@ shares no part of the NFS client stack.
 
 ## KE-4: Docker creates directories for missing bind-mount files
 
-**Affected services:** Any Docker service with bind-mounted config files (observed: Prometheus on LXC200)
+- **Status:** Open - Docker design behaviour, manual recovery
+- **Affects:** any Compose stack that bind-mounts a gitignored config file (seen: Prometheus on
+  lxc200)
 
-**Symptom:** Container fails to start. Error message: `error mounting "..." to rootfs: not a directory`. Exit code may be misleading (e.g. 127).
+**Symptom.** Container fails to start with `error mounting "..." to rootfs: not a directory`; the
+exit code can mislead (for example 127).
 
-**Root cause:** When a Docker bind-mount references a host path that does not exist, Docker does not fail - it silently creates an empty directory at that path. If the container expects a file (e.g. a config file), the mount fails with a type mismatch. This is documented Docker behavior, not a bug.
+**Cause.** When a bind-mount source does not exist, Docker creates an empty directory at that
+path. A container expecting a file then fails on the type mismatch. Typical triggers: the config
+was never created from its `.example`, was removed by `git clean -x`, or was deleted by hand.
 
-**Common triggers:**
-- Config file was never created from `.example` template after initial clone
-- Config file was removed by `git clean` (especially with `-x` flag)
-- Accidental manual deletion
+**Fix.** Per occurrence:
 
-**Fix:**
-1. Remove the empty directory: `rmdir <path>`
-2. Recreate the config from the corresponding `.example` template
-3. Restart the container
+1. `rmdir <path>`
+2. Recreate the file from its `.example` template.
+3. Restart the container.
 
-**Scope:** Applies to all gitignored config files mounted as Docker bind-mounts. Currently affected files:
-- `docker/monitoring/prometheus/prometheus.yml`
-- `docker/monitoring/grafana.env`
+Files affected today: `docker/monitoring/prometheus/prometheus.yml` and
+`docker/monitoring/grafana.env`. `scripts/validate-repo.sh` checks the repository, not whether
+runtime files exist on a node; after a clone, copy each `.example` before starting containers.
 
-**Prevention:** No automated prevention. The repo validation script (`scripts/validate-repo.sh`) is a repo structural validator - it checks for `.env.example` files, doc section requirements, sanitization, and committed secrets. It does not check whether runtime config files derived from `.example` templates have been created. After cloning, manually copy each `.example` file to the required config path before starting containers.
-
-**Status:** Systematic (Docker design behavior)
-
-**References:**
-- [Monitoring platform](./monitoring.md)
-- [Design Decision #10](../decisions/design-decisions.md)
+**Verification.** `docker compose ps` shows the container running; `stat -c %F <path>` reports
+`regular file`. See [monitoring.md](./monitoring.md).
 
 ---
 
@@ -171,47 +140,21 @@ shares no part of the NFS client stack.
 
 ## KE-5: Vaultwarden SQLite on CIFS - acknowledged technical debt
 
-**Affected service:** Vaultwarden (LXC240)
+- **Status:** Resolved 2026-09-01 by decommissioning
+- **Affects:** Vaultwarden (withdrawn)
 
-**Symptom:**
-Vaultwarden's SQLite database (`db.sqlite3`) resides on the CIFS mount at `/opt/vaultwarden`
-(mp0 on LXC240). This violates the architectural rule established by KE-1: no database files
-on CIFS/SMB-backed mounts.
+**Symptom.** Vaultwarden kept its SQLite database on a CIFS mount, violating the rule from
+[KE-1](#ke-1).
 
-**Root cause:**
-Vaultwarden was deployed with its default SQLite backend before the KE-1 resolution codified
-the "no database files on CIFS" rule. The `/opt/vaultwarden` bind-mount was configured as the
-service data directory without isolating the database to local storage.
+**Cause.** Deployed with the default SQLite backend before KE-1 set the rule.
 
-**Fix:**
-The planned migration to PostgreSQL never happened. The service was decommissioned on 2026-09-01
-instead, which takes the database off CIFS by deleting it
-([decision](../decisions/vaultwarden-decommission.md)).
+**Fix.** The service was withdrawn instead of migrated
+([decommission decision](../decisions/vaultwarden-decommission.md)). The decision record keeps the
+PostgreSQL route for a reinstatement.
 
-That closes the entry without solving the problem behind it. The rule KE-1 set is no longer violated
-on this node; SQLite over CIFS is unchanged as a constraint, and the Calibre library still lives with
-it under its own workaround. Anyone reaching this entry looking for the solution should read the
-PostgreSQL route in the decision record.
-
-The shutdown produced one measurement worth keeping, which corrected the assumption it was expected
-to confirm. `db.sqlite3` carried an mtime of 2026-02-16 beside a 57712-byte `db.sqlite3-wal` written
-2026-06-11, reading like months of committed transactions stranded outside the database.
-`PRAGMA wal_checkpoint(TRUNCATE)` returned zero frames and `PRAGMA integrity_check` returned `ok`.
-The log was empty and the file had simply never been truncated. A write-ahead log's size and
-timestamp say nothing about whether it holds data.
-
-Left unexplained: a clean SQLite close deletes `-wal` and `-shm`, and both survived a graceful
-`pct shutdown`. That fits a container being stopped by the nightly host power cycle rather than
-closing in order. Not pursued, since the service is gone.
-
-**Status:** Closed 2026-09-01 by decommissioning. Data retained until 2026-11-30.
-
-**References:**
-- [KE-1: SQLite on CIFS - "database is locked"](#ke-1)
-- [KE-19: a file that changes during a sync](#ke-19)
-- [Decommissioning decision](../decisions/vaultwarden-decommission.md)
-- [Vaultwarden service documentation](../services/vaultwarden.md)
-- [PostgreSQL platform service](../services/postgresql-platform.md)
+**Verification.** Before shutdown, `PRAGMA wal_checkpoint(TRUNCATE)` returned zero frames and
+`PRAGMA integrity_check` returned `ok`: the surviving `-wal` file held no data. The node and its
+share data no longer exist; see the decision record for the cold archive.
 
 ---
 
@@ -219,76 +162,40 @@ closing in order. Not pursued, since the service is gone.
 
 ## KE-6: Tailscale userspace-networking prevents node_exporter from binding to Tailscale IP
 
-**Affected service:** node_exporter (LXC240 Vaultwarden)
+- **Status:** Resolved 2026-07-28; stray unit removed 2026-09-01
+- **Affects:** any node running `tailscaled` in userspace mode (seen on lxc220 and on a container
+  since decommissioned)
 
-**Symptom:**
-`listen tcp <tailscale-ip-lxc240>:9100: bind: cannot assign requested address`
-node_exporter fails to start. `tailscale status` shows the node as reachable,
-but `ip addr show tailscale0` reports the device does not exist.
+**Symptom.** Two forms:
 
-**Root cause:**
-`/etc/default/tailscaled` contained `FLAGS="--tun=userspace-networking"`.
-In userspace-networking mode, Tailscale does not create a kernel `tailscale0`
-interface. The Tailscale IP is not assigned to any OS-level interface,
-so `bind()` calls targeting that IP fail with EADDRNOTAVAIL.
-This was a legacy workaround predating the CT210-pattern TUN configuration.
+- Bind fails: `listen tcp <tailscale-ip-...>:9100: bind: cannot assign requested address`, and
+  `ip addr show tailscale0` reports no device.
+- Bind succeeds, scrape fails (lxc220): `node_exporter` active and listening on the Tailscale IP,
+  `tailscale0` present, Prometheus reports `connection refused`. `tailscale serve` traffic still
+  works, so blackbox probes stay green.
 
-**Fix:**
-Remove the flag from `/etc/default/tailscaled`. Restart tailscaled. Verify `tailscale0` appears
-with the correct IP via `ip addr show tailscale0`. Then restart node_exporter.
+**Cause.** `tailscaled` in userspace-networking mode terminates connections in its own netstack
+and never hands them to kernel sockets. On the first node the mode came from
+`FLAGS="--tun=userspace-networking"` in `/etc/default/tailscaled`. On lxc220 it came from a second,
+hand-written `tailscaled-userspace.service` enabled beside the packaged unit, so every boot started
+two daemons on the same state and socket paths. Config files showed nothing; only the process
+list did.
 
-### Recurrence on LXC220 (2026-07-28) - same cause, different delivery, misleading symptom
+**Fix.** Remove the flag, or `systemctl disable --now tailscaled-userspace.service`, then
+`systemctl restart tailscaled.service`. The lxc220 unit file was deleted on 2026-09-01
+([KE-22](#ke-22)).
 
-Closing this entry on LXC240 in 2026 fixed the node where the error was noticed. **No fleet sweep
-followed**, and LXC220 was running in userspace-networking mode the whole time - its
-`node_exporter` had, as far as can be established, never been scraped successfully.
-
-Two things made it hard to see:
-
-**It was not a flag in a config file.** `/etc/default/tailscaled` on LXC220 read `FLAGS=""`, and
-the packaged unit is unmodified. The mode came from a second, hand-written systemd unit,
-`/etc/systemd/system/tailscaled-userspace.service`, `enabled` alongside the stock
-`tailscaled.service`. Every boot started *two* daemons against the same `--state` and `--socket`
-paths, 2 s apart. Grepping configuration files finds nothing; only the running process shows it:
+**Verification.** Check the running state, not the bind:
 
 ```
-ps -o pid,ppid,lstart,args -C tailscaled     # expect exactly one process
-systemctl list-unit-files | grep -i tailscale # expect exactly one enabled unit
-systemctl status <pid>                        # maps a stray process back to its unit
-```
-
-**The symptom is the inverse of the one described above.** On LXC240 the bind *failed* and the
-service would not start. On LXC220 `node_exporter` was `active`, `ss -tlnp` showed it listening on
-the Tailscale IP, and `ip addr show tailscale0` showed the interface with its address - everything
-an operator would check looked correct. Only the scrape failed, with `connection refused`, because
-the userspace daemon terminates the connection in netstack and never hands it to the kernel socket
-that `node_exporter` is bound to. `tailscale serve` traffic (port 443, Calibre-Web) worked
-throughout, since serve is answered inside that same process - which is why the node looked healthy
-in the blackbox probes while its metrics target was down.
-
-**Do not conclude from a successful `bind()` that this error is absent.** The discriminator is a
-scrape from the monitoring node, not the local socket state:
-
-```
+ps -o pid,args -C tailscaled                  # exactly one process
+systemctl list-unit-files | grep -i tailscale # exactly one enabled unit
 pct exec 200 -- curl -s -o /dev/null -w '%{http_code}\n' http://<tailscale-ip-lxc220>:9100/metrics
 ```
 
-**Fix applied:** `systemctl disable --now tailscaled-userspace.service`, then
-`systemctl restart tailscaled.service` so the remaining daemon claims the TUN device cleanly.
-Verified: one `tailscaled` process, `tailscale0` carries the address, scrape returns `HTTP 200`,
-Prometheus target `health: up`, `NodeDown` cleared, and Calibre-Web still answers `HTTP 302`
-through `tailscale serve` with `probe_success = 1`. `/dev/net/tun` was present on the node all
-along, so the userspace mode had no remaining purpose.
-
-**Status:** Resolved on LXC240 (2026) and on LXC220 (2026-07-28). **Cold-boot verified
-2026-08-13:** exactly one `tailscaled` process on lxc220 after a real host power cycle, no failed
-unit, node scraped. The unit file is disabled, not deleted (confirmed still present 2026-08-13),
-so a future `systemctl enable` would revive it - remove it during the next lxc220 pass.
-**Lesson: a per-node fix is not a fleet fix.** When closing a configuration error, sweep the other
-nodes for the same condition and record that you did.
-
-**References:**
-- [KE-18 - Tailscale readiness races](#ke-18-services-start-before-tailscale-is-ready-ordering-is-not-readiness) (different cause, same `EADDRNOTAVAIL` symptom - check which one you have)
+Verified 2026-08-13 after a host power cycle: one `tailscaled` on lxc220, scrape `200`. The same
+`EADDRNOTAVAIL` message also comes from the boot race in [KE-18](#ke-18); a restart fixes that one
+and not this one.
 
 ---
 
@@ -296,67 +203,38 @@ nodes for the same condition and record that you did.
 
 ## KE-7: Package corruption when LVM thin-pool overflows during apt upgrade
 
-**Affected:** All nodes (platform-wide)
+- **Status:** Resolved 2026-04-26
+- **Affects:** every guest on the `local-lvm` thin pool (seen 2026-04-25 on lxc230 and lxc260,
+  2026-04-26 on lxc220)
 
-**Observed instances:**
-- 2026-04-25: LXC230 (`tailscaled`), LXC260 (`bash`, `tailscaled`) - discovered during incident
-- 2026-04-26: LXC220 (`dockerd`, `runc`, `ctr`) - discovered post-incident via service outage
+**Symptom.**
 
-**Symptom:**
-- `No space left on device` during `apt dist-upgrade` despite `df -h /` reporting free space
+- `No space left on device` during `apt dist-upgrade` while `df -h /` shows free space
 - `dpkg-deb: error: not a Debian format archive` on cached `.deb` files
-- `file /usr/sbin/tailscaled` returns `data` instead of `ELF 64-bit executable`
-- `file /bin/bash` returns `data` - bash non-functional, SSH sessions return `Exec format error`
-- `file /usr/bin/dockerd` returns `data` - Docker daemon fails with `status=203/EXEC` (systemd cannot exec binary)
-- `file /usr/bin/runc` returns `data` - containers fail to start: `exec format error`
-- Ansible: `Failed to create temporary directory` on affected nodes
-- VM enters `status: io-error` state (QEMU suspends on write failure)
-- After reinstalling corrupt Docker packages: `docker start` fails with `container with given ID already exists` - stale containerd task state left over from ungraceful daemon shutdown
+- `file /usr/sbin/tailscaled` (or `/bin/bash`, `/usr/bin/dockerd`, `/usr/bin/runc`) returns `data`;
+  SSH returns `Exec format error`, Docker fails with `status=203/EXEC`
+- VMs enter `status: io-error`; after a Docker reinstall, `container with given ID already exists`
 
-**Root cause:**
-The `local-lvm` thin-pool on the Proxmox host reached 100% utilization during a parallel
-`apt dist-upgrade` across all nodes. When the pool is full, disk writes fail silently at the
-block level - packages are partially downloaded, dpkg writes are truncated mid-binary,
-and the filesystem still reports virtual free space because thin-pool utilization is not
-visible from inside the container.
+**Cause.** The thin pool reached 100 % during a parallel `apt dist-upgrade` on all nodes. Writes
+failed at the block layer and truncated binaries mid-write, while guests still saw virtual free
+space. No periodic `fstrim` returned deleted blocks to the pool. Binaries already in memory kept
+running, so corruption surfaced only at the next start of each service.
 
-No periodic `fstrim` was running, so deleted blocks were never returned to the pool.
+**Fix.**
 
-Corruption may not surface immediately - binaries already loaded into memory continue running
-until the next restart. Services that were upgraded but not restarted during the incident
-(e.g. `dockerd` on LXC220) only fail when systemd attempts to exec the corrupt binary on
-the next start.
+1. `apt-get clean` on all nodes; `fstrim` every LXC from the host through `nsenter`.
+2. `qm resume <vmid>` for suspended VMs.
+3. `dpkg --configure -a` and `apt --fix-broken install -y`.
+4. List corrupt files: `dpkg --verify 2>&1 | grep -v ' c /'` (lines with `c` are edited conffiles).
+5. `apt-get install --reinstall <packages>` in one pass, then restart the services.
+6. For stale containerd state: `docker rm -f <container>`, then `docker compose up -d`.
 
-**Fix:**
-1. Clear apt cache on all nodes: `apt-get clean`
-2. Run fstrim via `nsenter` from Proxmox host for all LXCs (fstrim blocked inside containers)
-3. Resume frozen VMs: `qm resume <vmid>`
-4. Repair dpkg state: `dpkg --configure -a`, `apt --fix-broken install -y`
-5. Find all corrupt non-conffile packages: `dpkg --verify 2>&1 | grep -v ' c /'`
-6. Reinstall all corrupt packages in one pass: `apt-get install --reinstall <pkg1> <pkg2> ...`
-7. Restart affected services: `systemctl restart <service>`
-8. If Docker containers fail to start after Docker reinstall - clear stale containerd state:
-   ```
-   docker rm -f <container>
-   cd <compose-dir> && docker compose up -d
-   ```
-9. Re-run upgrade with `serial: 1` to prevent pool spike
+Prevention: upgrades run `serial: 1`; LXC `fstrim` runs on a timer
+(`snippets/scripts/lxc-fstrim.sh`, deployed by `proxmox_host_units`); thin-pool usage is
+exported and alerted (`LvmThinPool*` rules).
 
-**Detection after the fact:**
-`dpkg --verify` compares every installed file against its dpkg-recorded checksum.
-Output lines without a `c` flag are non-conffile mismatches - these are corrupt binaries.
-Lines with `c` are admin-modified conffiles and are expected.
-
-```bash
-# Show only corrupt non-conffiles (ignore expected conffile modifications):
-dpkg --verify 2>&1 | grep -v ' c /'
-```
-
-**Status:** Resolved (2026-04-25 initial incident; LXC220 recovered 2026-04-26)
-
-**References:**
-- [Runbook: LVM thin-pool full](../../runbooks/platform/lvm-thin-pool-full.md)
-- [lxc-fstrim.sh](../../snippets/scripts/lxc-fstrim.sh)
+**Verification.** `dpkg --verify 2>&1 | grep -v ' c /'` prints nothing on every node. Procedure:
+[LVM thin-pool full runbook](../../runbooks/platform/lvm-thin-pool-full.md).
 
 ---
 
@@ -364,39 +242,31 @@ dpkg --verify 2>&1 | grep -v ' c /'
 
 ## KE-8: Media services hang while the node stays healthy (observability blind spot)
 
-**Affected services:** Jellyfin + Audiobookshelf (VM100)
+- **Status:** Mitigated 2026-06-08 - service probes alert; cause not found
+- **Affects:** Jellyfin and Audiobookshelf (vm100)
 
-**Observed instance:**
-- 2026-06-06 (~12:00-14:36 UTC): both services unreachable; recovered only after a VM100 restart. Nextcloud (LXC210) and other nodes stayed reachable.
+**Symptom.** 2026-06-06, about 12:00-14:36 UTC: neither web UI answered. Jellyfin logged only
+sporadic `WS request -> closed`; Audiobookshelf was silent after `Listening on port :80`. Processes
+alive, not serving. A vm100 restart restored both. No alert fired.
 
-**Symptom:**
-- From the client side, no connection to Jellyfin or Audiobookshelf could be established - both web UIs were simply unreachable.
-- Server-side the picture was a hang, not a crash: Jellyfin logged only sporadic `WS request -> closed` with no error; Audiobookshelf went silent after `Listening on port :80`. The processes were alive but not serving.
-- A VM100 restart restored both immediately.
+**Cause.** Not determined; the application logs for the window were not retained. Excluded by
+measurement:
 
-**What was proven and excluded:**
-- **Not** the storage pool being full: VM102 ran continuously through the window (`wtmp`); MergerFS was ~96% but never 0 bytes (no `ENOSPC`).
-- **Not** VM102 down, not network/Tailscale loss: Prometheus `up{job="node-vm100-gpu"}` was `1` for 300/300 samples in the window (one 60s gap = the restart only).
-- **Not** a hard CIFS hang: no `CIFS VFS: server not responding` / hung-task messages in `/var/log/kern.log`.
-- **Not** GPU/kernel break: GPU transcoding worked immediately after the restart (the morning's `unattended-upgrade` kernel bump to `5.15.0-181` was unrelated).
-- **Not** resource exhaustion: `node_procs_blocked` max = 1, `node_load5` max = 0.27, >=14 GiB RAM free throughout.
+- vm102 up throughout (`wtmp`); pool never at 0 bytes free.
+- `up{job="node-vm100-gpu"}` was 1 for 300 of 300 samples; no network loss.
+- No `CIFS VFS: server not responding` or hung-task message in `/var/log/kern.log`.
+- `node_procs_blocked` max 1, `node_load5` max 0.27, at least 14 GiB RAM free.
 
-**Root cause:** Not definitively determined. Leading (unproven) hypothesis: an application-level degradation of the shared media backend (slow/stalled SMB to VM102 - an interruptible wait, therefore invisible in `procs_blocked`/load) or an internal container deadlock. Unprovable after the fact because the application/kernel logs for the window were lost (see gaps below).
+Leading hypothesis: a stalled SMB read to vm102 (an interruptible wait, invisible in
+`procs_blocked`) or a container-internal deadlock.
 
-**Recovery:** Restart VM100, or less invasively restart the affected containers (`docker restart jellyfin audiobookshelf` on VM100). This re-establishes the automount/SMB sessions and clears any wedged container state.
+**Fix.** Recovery: `docker restart jellyfin audiobookshelf`, or restart vm100. Detection:
+`blackbox_exporter` on lxc200 probes every service endpoint and `ServiceDown` alerts
+([monitoring.md](./monitoring.md)). Journald persistence is pinned by the `journald` role
+(`Storage=persistent`).
 
-**Contributing observability gaps (the real lesson):**
-1. **No service-level monitoring.** Alerts cover `NodeDown` (node_exporter:9100) and disk only. node_exporter answered the whole time while ports 8096/13378 were dead - no alert fired. A healthy node can have dead services.
-2. **journald not persisting logs.** Despite `/var/log/journal`, the June logs were gone (`journalctl --list-boots` jumped from May 28 to the current boot); forensics relied on `wtmp`, `apt`/`dpkg` text logs, Docker JSON logs, and Prometheus instead.
-
-**Status:**
-- **Monitoring gap (RESOLVED 2026-06-08):** `blackbox_exporter` deployed on LXC200 probes 7 service endpoints (HTTP + Tailscale Serve HTTPS) with a `ServiceDown` alert rule. Tailscale ACL Rule 1c grants monitoring access to service ports. See [changelog 2026-06-08](./changelog.md) and [Monitoring platform](./monitoring.md).
-- **Root cause (OPEN):** Media hang root cause not definitively determined.
-- **journald persistence (NOT A GAP - corrected 2026-07-10, re-measured 2026-08-13):** the logs for the incident window were indeed lost, but not because the journal is volatile. Both VMs have `/var/log/journal/<machine-id>/` and retain many boots - vm100 111 boots, vm102 29 as of 2026-08-13. `Storage=` is unset, so `auto` applies, which is persistent whenever that directory exists. What remains is hardening, not repair: pin `Storage=persistent` and an explicit `SystemMaxUse=`, so persistence is a property of the configuration rather than of a directory that happens to exist and would degrade to RAM-only if it were ever removed.
-
-**References:**
-- [VM100 node documentation](../nodes/vm100.md)
-- [Monitoring platform](./monitoring.md)
+**Verification.** `ServiceDown` has since fired for real outages ([KE-16](#ke-16),
+[KE-17](#ke-17)).
 
 ---
 
@@ -404,39 +274,37 @@ dpkg --verify 2>&1 | grep -v ' c /'
 
 ## KE-9: PostgreSQL binds only loopback after boot (Tailscale-IP startup race)
 
-**Affected services:** OpenWebUI (LXC230), Paperless-ngx (LXC211) - i.e. all consumers of the central PostgreSQL on LXC260. Services not using LXC260 (Jellyfin, Audiobookshelf, Calibre-Web, Nextcloud=local MariaDB, Vaultwarden=SQLite) were unaffected.
+- **Status:** Resolved 2026-06-09
+- **Affects:** PostgreSQL on lxc260 and its clients (OpenWebUI, Paperless-ngx)
 
-**Observed instance:**
-- 2026-06-08: discovered by the newly deployed `blackbox_exporter` on its very first run - `probe_success=0` for paperless + openwebui (both 502 from `tailscale serve`).
+**Symptom.** Found 2026-06-08 by the first blackbox run: `tailscale serve` returned 502 for
+Paperless and OpenWebUI. OpenWebUI crash-looped with `UnboundLocalError: cannot access local
+variable 'db'` in `handle_peewee_migration`. `pg_up` stayed 1, because `postgres_exporter`
+connects over loopback.
 
-**Symptom:**
-- `tailscale serve` on :443 answered but returned HTTP 502 (dead backend).
-- OpenWebUI crash-looped with `UnboundLocalError: cannot access local variable 'db'` in `handle_peewee_migration` (its own buggy handling of a failed DB connect).
-- Paperless app did not answer on `127.0.0.1:8000` (later found to have a *separate* Redis fault - see note).
+**Cause.** `listen_addresses` is `127.0.0.1, <tailscale-ip-lxc260>`. PostgreSQL binds only
+addresses that exist at start; it started before the Tailscale IP was assigned, bound loopback
+alone and never retried the other address. Signature:
 
-**Root cause:** The native PostgreSQL on LXC260 (re)started at boot (~07:08) before the Tailscale interface had its IP (`100.x`). `listen_addresses` is correctly set to `127.0.0.1, <tailscale-ip>`, but PostgreSQL can only bind addresses that exist at startup -> it bound loopback only and never re-bound the Tailscale IP. Remote DB clients over Tailscale -> connection refused/timeout -> services fail.
-
-**Why monitoring missed it (until blackbox):** `pg_up=1` was green because `postgres_exporter` runs locally on LXC260 and connects via loopback - it cannot see that the *remote* (Tailscale) bind is missing. Node-level `up` was also green. Only the service-level blackbox probe exposed it. This is the KE-8 lesson, validated.
-
-**Verification commands:**
 ```bash
-ss -ltn | grep ':5432'                                # which addresses is postgres actually bound to?
-sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # what it is *supposed* to bind
+ss -ltn | grep ':5432'                                # actual binds
+sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # configured binds
 ```
-A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the signature.
 
-**Recovery:** Restart PostgreSQL once the Tailscale IP is up - `systemctl restart postgresql` on LXC260 -> it then binds `<tailscale-ip>:5432`. OpenWebUI recovered automatically via its restart policy.
+**Fix.** Recovery: `systemctl restart postgresql` once the Tailscale IP exists. Durable: role
+`postgresql_boot_order` adds a drop-in to `postgresql@15-main.service` with `After=`/`Wants=`
+`tailscaled.service` and `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh`.
+`listen_addresses='*'` was rejected because it binds the LAN interface
+([ADR](../decisions/postgresql-tailscale-boot-ordering.md)).
 
-**Durable fix (applied 2026-06-09):** Ansible role `postgresql-boot-order` deploys a systemd drop-in on `postgresql@15-main.service` (`After=`/`Wants=tailscaled.service`) plus an `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh` that blocks until this node's Tailscale IPv4 is actually present in `ip addr` before PostgreSQL starts. `listen_addresses='*'` was rejected - it binds `0.0.0.0` incl. the LAN interface, violating the platform binding rule. Rationale and rejected alternatives: [ADR - PostgreSQL Boot Ordering](../decisions/postgresql-tailscale-boot-ordering.md). Verified by a fresh reboot of LXC260: the gate reported `tailscale IP present after 2s` and PostgreSQL bound `<tailscale-ip>:5432` with no bind error (vs. `Cannot assign requested address` on the prior two boots).
+A separate fault surfaced in the same window: Paperless crash-looped (`RestartCount` 2443) on
+`Error 111 connecting to localhost:6379`. The `paperless_env` default was
+`redis://localhost:6379`; on a Compose bridge network Redis is reachable by service name. Default
+is now `redis://redis:6379`.
 
-**Note (separate fault - resolved 2026-06-09):** Paperless did not fully recover after the DB fix - it crash-looped (`RestartCount` 2443) on `Error 111 connecting to localhost:6379` (Redis). Root cause: the `paperless-env` role's `defaults/main.yml` shipped `paperless_redis: redis://localhost:6379`. On a Compose bridge network `localhost` resolves to paperless' *own* container (no Redis there) - Redis is reachable by its service name (`redis://redis:6379`, the same service-name-DNS pattern the compose already uses for `gotenberg`/`tika`). The wrong default was written into `.env` when the role was first applied (2026-05-23) and went unnoticed until blackbox (2026-06-08) - again the KE-8 lesson. Fix: corrected the role default to `redis://redis:6379` and redeployed; container now `healthy`, `RestartCount` reset to 0, backend returns HTTP 302 (login redirect, i.e. alive).
-
-**Status:** Resolved. Boot-ordering race fixed + reboot-verified (2026-06-09, `postgresql-boot-order` role); paperless Redis config regression fixed + verified (2026-06-09, `paperless-env` role default).
-
-**References:**
-- [LXC260 PostgreSQL node](../nodes/lxc260.md)
-- [Tailscale ACL - Rule 1c](./tailscale-acl.md)
-- [Monitoring platform](./monitoring.md)
+**Verification.** Verified 2026-06-09 by reboot of lxc260: gate logged `tailscale IP present after
+2s`, PostgreSQL bound `<tailscale-ip-lxc260>:5432`; Paperless `healthy`, backend HTTP 302. See
+[KE-18](#ke-18) for the general pattern.
 
 ---
 
@@ -444,46 +312,29 @@ A mismatch (config lists the Tailscale IP, `ss` shows only `127.0.0.1`) is the s
 
 ## KE-10: Jellyfin loses CUDA access intermittently - container restart required
 
-**Affected service:** Jellyfin (VM100)
+- **Status:** Mitigated - fault active, stream-aware watchdog restart
+- **Affects:** Jellyfin (vm100)
 
-**Symptom:**
-Hardware transcoding stops working intermittently. Jellyfin becomes effectively unusable -
-video playback stalls or fails for all clients. The service appears running but cannot serve
-media. A container restart restores GPU access and full functionality.
+**Symptom.** Hardware transcoding stops; playback that needs a transcode stalls or fails. The
+container stays up. `nvidia-smi` inside the container fails. A container restart restores it.
 
-**Root cause:**
-Not fully determined. `pid: "host"` is required for initial NVIDIA Container Toolkit access
-and is set in the Compose config (`docker/jellyfin/docker-compose.yml`). The intermittent
-loss of CUDA access at runtime suggests the NVML connection to the host driver becomes stale -
-exact trigger unknown.
+**Cause.** Not determined. `pid: "host"` is set in `docker/jellyfin/docker-compose.yml` for
+NVIDIA Container Toolkit access; the runtime loss suggests the NVML connection to the host driver
+goes stale. Trigger unknown.
 
-**Workaround:**
-```bash
-docker restart jellyfin
+**Fix.** Workaround only. Role `jellyfin_watchdog` runs
+`snippets/scripts/jellyfin-cuda-watchdog.sh` every minute. On CUDA loss it queries Jellyfin's
+`/Sessions` API: it restarts the container when nothing plays or a stream transcodes video, and
+holds while only direct streams play, since a restart ends every running stream.
+`JellyfinCudaLost` fires after ten minutes without CUDA, so a held restart is visible
+([jellyfin.md](../services/jellyfin.md)).
+
+**Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, the
+latest 2026-10-08 11:29:
+
 ```
-
-Restores hardware transcoding immediately.
-
-**Automated workaround:** A watchdog script polls `nvidia-smi` inside the container every
-30 minutes and restarts Jellyfin automatically on CUDA loss. See deployment instructions
-in [Jellyfin service doc](../services/jellyfin.md#cuda-watchdog) and script at
-[`snippets/scripts/jellyfin-cuda-watchdog.sh`](../../snippets/scripts/jellyfin-cuda-watchdog.sh).
-
-**Status:** Known, unresolved - automated restart workaround deployed. The fault is active: the
-watchdog journal on vm100 holds 30 restarts between 2026-05-29 and 2026-10-08, 16 of them after
-the 2026-08-13 reading, the latest at 2026-10-08 11:29 (`journalctl -t jellyfin-cuda-watchdog |
-grep "CUDA access lost"`, read 2026-10-08). Every occurrence is absorbed by the workaround, so that
-journal is the only record and no alert fires.
-
-The workaround is not free. A restart ends every running stream, direct play included, and the
-script restarts without looking for active sessions. The 2026-10-08 restart was observed from the
-client side: a direct-play stream to the streaming box stopped at 11:29:20, ten seconds after the
-watchdog fired, when Docker's stop timeout ran out and the container was killed.
-
-**References:**
-- [VM100 node doc](../nodes/vm100.md)
-- [Jellyfin service doc](../services/jellyfin.md)
-- [`docker/jellyfin/docker-compose.yml`](../../docker/jellyfin/docker-compose.yml)
+journalctl -t jellyfin-cuda-watchdog | grep "CUDA access lost"
+```
 
 ---
 
@@ -491,27 +342,22 @@ watchdog fired, when Docker's stop timeout ran out and the container was killed.
 
 ## KE-11: Grafana admin password not updated by environment variable after first start
 
-**Affected service:** Grafana (LXC200)
+- **Status:** Open - Grafana design behaviour, non-blocking
+- **Affects:** Grafana (lxc200)
 
-**Symptom:**
-After changing `GF_SECURITY_ADMIN_PASSWORD` in the `.env` file and restarting the container,
-login with the new password fails. The old password remains active.
+**Symptom.** After changing `GF_SECURITY_ADMIN_PASSWORD` in `.env` and restarting, the new
+password is rejected; the old one still works.
 
-**Root cause:**
-Grafana writes the admin password to its internal database (`grafana.db`) on first container
-start. On subsequent starts, the environment variable is ignored - the persisted value in the
-database takes precedence. This is documented Grafana behavior, not a bug.
+**Cause.** Grafana writes the admin password to `grafana.db` on first start and ignores the
+variable afterwards.
 
-**Fix:**
+**Fix.**
+
 ```bash
 docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
 ```
 
-**Status:** Known, non-blocking
-
-**References:**
-- [LXC200 node doc](../nodes/lxc200.md)
-- [Monitoring platform](./monitoring.md)
+**Verification.** Login with the new password succeeds. See [lxc200](../nodes/lxc200.md).
 
 ---
 
@@ -519,48 +365,31 @@ docker exec -it grafana grafana-cli admin reset-admin-password <new-password>
 
 ## KE-12: pveproxy fails to start after boot (Tailscale-IP bind race)
 
-**Affected component:** Proxmox host - `pveproxy` (web UI / API proxy on `:8006`)
+- **Status:** Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12
+- **Affects:** Proxmox host, `pveproxy` (web UI and API on `:8006`)
 
-**Symptom:**
-After a host reboot, SSH works but the Proxmox web UI on `:8006` is unreachable.
-`systemctl is-active pveproxy` is `failed` and nothing listens on `:8006`. The
-journal shows, five times within a few seconds of boot:
+**Symptom.** After a host boot SSH works, `:8006` does not answer, `systemctl is-active pveproxy`
+is `failed`. The journal shows, five times within seconds of boot:
 
 ```
 start failed - unable to create socket - Cannot assign requested address
 pveproxy.service: Start request repeated too quickly.
 ```
 
-**Root cause:**
-`pveproxy` binds only the host Tailscale IP (`/etc/default/pveproxy` ->
-`LISTEN_IP=<tailscale-ip-proxmox-host>`, intentional "UI on the tailnet only"
-hardening). On boot it starts before `tailscaled` has assigned that IP, so the
-bind fails with `EADDRNOTAVAIL`. Unlike PostgreSQL (KE-9) it does not fall back to
-a partial bind - it exits non-zero, and after five fast retries systemd stops
-trying. The service stays dead until a manual restart. Same fault class as
-[KE-9](#ke-9-postgresql-binds-only-loopback-after-boot-tailscale-ip-startup-race).
+**Cause.** `/etc/default/pveproxy` sets `LISTEN_IP=<tailscale-ip-proxmox-host>` (web UI on the
+tailnet only). `pveproxy` started before `tailscaled` assigned that IP, exited on `EADDRNOTAVAIL`,
+and systemd's start limit stopped it after five fast retries. An instance of [KE-18](#ke-18).
 
-**Fix:**
-Immediate - `systemctl reset-failed pveproxy && systemctl restart pveproxy` (the
-`reset-failed` clears the start-limit counter; the restart binds because the IP is
-present now). Durable - systemd drop-in
-`/etc/systemd/system/pveproxy.service.d/wait-tailscale.conf` ordering after
-`tailscaled` plus an `ExecStartPre` that polls until the Tailscale IP is on
-`tailscale0` (<=30 s). Validated by warm restart (HTTP 200) at the time.
+**Fix.** Recovery: `systemctl reset-failed pveproxy && systemctl restart pveproxy`. Durable: the
+`tailscale_boot_gate` role (`pveproxy.service` in `ansible/inventory/group_vars/proxmox.yml`)
+writes `10-wait-tailscale.conf` with `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh`, and
+removes the hand-written `wait-tailscale.conf` that held the race shut from 2026-06-25
+([ADR](../decisions/pveproxy-tailscale-boot-ordering.md),
+[runbook](../../runbooks/platform/pveproxy-tailscale-boot-race.md)).
 
-**Cold-boot verified 2026-08-13.** On a real host power cycle (boot at 10:52:21) the unit started
-once and stayed up: start requested 10:52:26, main process 10:52:30, `NRestarts=0`, `Result=success`
-- i.e. the `ExecStartPre` poll absorbed a four-second wait for the address instead of burning the
-start limit on it.
-
-**Status:** Resolved (drop-in installed 2026-06-25, cold-boot verified 2026-08-13). Note the
-drop-in still hard-codes the Tailscale IP inline rather than calling the shared
-`wait-for-tailscale-ip.sh`; harmless, tracked in [KE-18](#ke-18)
-
-**References:**
-- [ADR - pveproxy Tailscale boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
-- [Runbook - pveproxy boot-race recovery](../../runbooks/platform/pveproxy-tailscale-boot-race.md)
-- [Proxmox Host](./proxmox-host.md)
+**Verification.** Cold boot 2026-08-13 with the hand-written gate: start requested 10:52:26, main
+process 10:52:30, `NRestarts=0`. Verified 2026-09-12: `pveproxy.service.d/` holds only
+`10-wait-tailscale.conf`, the gate's `ExecStartPre` exited 0, re-check `changed=0`.
 
 ---
 
@@ -568,289 +397,78 @@ drop-in still hard-codes the Tailscale IP inline rather than calling the shared
 
 ## KE-13: aux-disk physical disk failure (medium errors)
 
-**Affected component:** Proxmox host - aux-disk auxiliary disk (`/mnt/aux-disk`)
+- **Status:** Open - degrading, in service, replacement planned
+- **Affects:** Proxmox host aux-disk (`/mnt/aux-disk`), which holds the Docker data-roots of
+  lxc200, lxc211, lxc220, lxc230 and lxc260, vm100's `scsi1` (qcow2), and the guest backup target
+  (`/mnt/vzdump`)
 
-**Symptom:**
-aux-disk will not mount on boot; five LXCs (LXC200/211/220/230/260) fail to start
-because their Docker data-root bind-mount sources under `/mnt/aux-disk` are missing.
-Earlier, the same mount failure dropped the host into emergency mode (the original
-lockout).
+**Symptom.** 2026-06-25: the disk would not mount at boot; the host dropped into emergency mode,
+and later the five containers above refused to start because their bind-mount sources were missing
+([incident](./incidents/2026-06-25-aux-disk-failure-and-recovery.md)).
 
-**Root cause:**
-Unrecoverable hardware medium errors on the disk (a consumer-grade drive,
-~6.5 years power-on) - not a filesystem-only or cabling fault. Verified in the
-kernel log (`critical medium error ... Unrecovered read error`) and SMART
-(`Current_Pending_Sector` = `Offline_Uncorrectable` = 7688, `Reported_Uncorrect`
-= 18). A read-only mount (`mount -o ro,noload`, no journal replay) still succeeded,
-so the live data was recoverable.
+**Cause.** Unrecoverable medium errors on a consumer drive with about 6.5 years power-on: kernel
+`critical medium error ... Unrecovered read error`, and SMART counters below. A contributing risk
+was found on 2026-07-09: the same partition was mounted on the host and passed through to vm102 as
+`scsi8` (vm102 did not mount it).
 
-**Fix / mitigation:**
-`nofail` on the aux-disk fstab entry keeps the boot out of emergency mode (already in
-place). All live data was rescued read-only before any repair attempt -
-per-directory `tar --numeric-owner --ignore-failed-read` streamed to the admin
-workstation, 12 archives (tens of GB), all integrity-verified, 0 real read errors. This
-invalidates the `docker-data-root-migration` runbook and CLAUDE.md "Adding a New Service"
-step 6, which both target `/mnt/aux-disk`.
+SMART, identified by serial (`by-id`), never by kernel letter ([KE-14](#ke-14)):
 
-The sentence "disk to be decommissioned; affected services not yet restored" stood here until
-2026-08-13 and had been wrong since the disk went back into service - see the Status below,
-which is the authoritative half of this entry. Verified 2026-08-13: the aux-disk is mounted and
-carries the five container data-roots as described.
+| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 |
+|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 |
+| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | 21 | 21 | 21 |
 
-**Status:** Diagnosed; data rescued; disk returned to service under protest pending a
-replacement. The disk carries the Docker
-data-roots of LXC200/211/220/230/260 again - and VM100's `scsi1` data disk - because
-no alternative target exists: the MergerFS pool on VM102 has a low-hundreds-of-GB free, and the LVM
-thin pool on the boot SSD has no headroom.
+The first step happened at the boot of 2026-09-20 (Prometheus history: 7848 at 20:17, 8168 at
+20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38). `Reported_Uncorrect`
+has not moved since July, so no read by a consumer has failed; the new sectors point at the drive's
+own offline scan. `smartctl -H` reports `PASSED`, because `Current_Pending_Sector` normalises to
+`054` against threshold `000`; do not read it as a health check.
 
-**Degradation paused for two months and then stepped twice.** SMART re-reads (identify the
-disk by `by-id`, not by kernel letter - see the note in [KE-14](#ke-14)):
+**Fix.** Mitigations in place:
 
-| Attribute | 2026-06-25 | 2026-07-09 | 2026-07-28 | 2026-08-13 | 2026-09-15 | 2026-10-08 | 2026-10-13 |
-|---|---|---|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** | **8784** |
-| `Offline_Uncorrectable` | 7688 | 7680 | 7680 | 7680 | 7680 | **8168** | **8784** |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | **21** | 21 | 21 | 21 | 21 | 21 |
+- `nofail` on the fstab entry keeps the host out of emergency mode.
+- All data rescued read-only before any repair
+  ([rescue runbook](../../runbooks/storage/aux-disk-failure-rescue.md)).
+- 2026-07-09: passthrough removed (`qm set 102 --delete scsi8`); vm102's commented fstab line
+  replaced by a warning.
+- 2026-08-17: `appdata_aux-disk` in `/etc/pve/storage.cfg` carries `is_mountpoint 1`, so Proxmox
+  does not write into the empty mountpoint on `pve-root` if the disk fails to mount
+  ([KE-7](#ke-7) failure class).
+- 2026-09-15: `smart_metrics` replaced the hand-written collector; `SmartAttributeDegrading` keys
+  counters by serial since 2026-10-10.
 
-The 2026-09-15 column is the first sample `smart_metrics` exported. The step is in the Prometheus
-history on 2026-09-20, read back at one-minute resolution on 2026-10-10: the first sample of that
-evening's boot, 20:17, already read 7848, and 20:30 read 8168. Nothing recorded it at the time.
-`SmartAttributeDegrading` could not have told it apart: the rule watched each kernel letter rather
-than each disk, and the aux-disk and an IronWolf traded `/dev/sdi` and `/dev/sdb` between boots, so
-over the thirty days to 2026-10-10 it was in alert during 151 hours, 125 of them outside this one
-real step.
-Re-keyed by serial number that day; replayed over the same history it fires for this step until
-2026-09-21 21:24, and for nothing else.
-The second step came with the boot of 2026-10-13, while the starting guests read about 7.5 GB
-from the disk: the first sample, 12:25, read 8344, and 12:38 read 8784. The re-keyed rule went
-pending at 12:26 and fired at 12:40. A guest backup wrote about 13 GB to the disk that afternoon
-and left all four counters where they were.
-`Reported_Uncorrect` did not move, so no read has failed since July:
-the 488 new sectors moved `Offline_Uncorrectable` with them, which points at the drive's own
-offline scan rather than a failed read by a consumer.
+The disk returned to service on 2026-07-09 because no other target has room. The
+`docker-compose-update` hold was lifted 2026-09-05. Treat everything on the disk as unbacked off
+site. Replacement: [remediation plan](remediation-plan.md#aux-disk-replacement-and-disposal).
 
-`Reported_Uncorrect` rose by 3 in the first fortnight back in service and has **not moved in the
-35 days since**. The 8 sectors that left `pending` were rewritten and proved usable; none were
-reallocated, so the drive's spare pool is untouched and the remaining 7680 sectors hold data
-that cannot be read back.
-
-**Static was never safe, and it is no longer static.** The pending sectors are still unreadable;
-the drive has simply not been asked to read them again. The September step does not make this an
-emergency - `Reported_Uncorrect` is flat and the image pulls of 2026-10-08 wrote to all five
-data-roots with the counters reading 21 / 8168 / 8168 before and after - but it removes the premise
-that lifted the `docker-compose-update` hold on 2026-09-05, which was a disk unchanged since July.
-Replacement stays a planned task with a shorter horizon. Do not read `smartctl -H` as a second
-opinion - measured again 2026-08-13, it returns `PASSED` on this disk, because
-`Current_Pending_Sector` normalises to `VALUE=054` against `THRESH=000` and can therefore never
-trip the self-assessment. The textfile collector on the host inherits that blindness verbatim:
-it exports `smart_health_passed{disk=...} 1` for this drive and nothing else that would contradict
-it (see the SMART gap in [`operations.md`](./operations.md)).
-
-**What is at stake** (measured 2026-07-09, ~20% of the disk used):
-
-| Path | Used |
-|---|---|
-| `images/` - VM100's `scsi1` (300 G apparent, sparse) | 106 G |
-| `Archiv/` | 45 G |
-| `openwebui/`, `paperless/`, `monitoring/`, `calibreweb/` | 31 G combined |
-| `postgres/`, `nextcloud/` | 247 M combined |
-
-`vm-disks/vm100-jellyfin.raw` claims 300 G but allocates 8 K and is referenced by no guest
-config - an orphan from January, left in place.
-
-Consequences while the disk remains in service:
-
-- **Do not run `docker-compose-update` against the fleet.** Pulling new images writes
-  gigabytes of new blocks onto this disk. Image pins can wait for the replacement.
-- Treat anything on `/mnt/aux-disk` as unbacked. It has no off-site copy.
-- Disk identity for the physical swap: `<disk-model>`, serial `<disk-serial>`,
-  the aux disk (AHCI `ata6.00`).
-
-### Follow-up finding (2026-07-09): the disk was simultaneously host-mounted and passed through to VM102
-
-Discovered while mapping the disk topology. The aux-disk's single partition was mounted `rw` on
-the Proxmox host at `/mnt/aux-disk` and attached to the running VM102 as `scsi8`
-(`/dev/disk/by-id/<aux-disk-by-id>`), confirmed against the live `kvm`
-process arguments, not just `qm config`. Both refer to the same filesystem - UUID
-`<fs-uuid>` appears in the host's `EXT4-fs ... mounted filesystem`
-line and as VM102's a member disk.
-
-VM102 did not mount it: its `/etc/fstab` entry had been commented out when the disk moved
-to the host after the 2026-06-25 incident, but the passthrough was never removed from the VM
-config. No corruption resulted. Had anything in VM102 mounted a member disk - an uncommented
-fstab line, a manual `mount`, a rebuild from an older fstab - two kernels would have written
-to one ext4 with no locking between them. ext4 is not a cluster filesystem; the outcome would
-have been metadata corruption, not a race that can be won.
-
-This is a plausible contributing factor to the original 2026-06-25 mount failure and
-emergency-mode lockout, though not a substitute explanation: the 7680 unreadable sectors are
-drive-reported and independent of any mount topology.
-
-Fix applied 2026-07-09 (live):
-
-1. `qm set 102 --delete scsi8` - hot-unplug of the passthrough. VM102 held no mount, no open
-   file handle, no LVM PV and no md member on the device, all verified before the change. The
-   guest logged the expected `Synchronize Cache(10) failed ... DID_BAD_TARGET` (the device was
-   gone before the cache flush; nothing was dirty). Proxmox removed the config line without
-   creating an `unusedN` entry, because a raw device path is not a storage-managed volume -
-   no data was touched.
-   Reversal: `qm set 102 --scsi8 /dev/disk/by-id/<aux-disk-by-id>,size=<size>`
-2. VM102's commented `/etc/fstab` line replaced with an explicit four-line warning naming the
-   host mount and the corruption consequence. A bare `#` documents nothing; the next person to
-   tidy up would have uncommented it. Backup at `/etc/fstab.bak-<date>`; `findmnt --verify`
-   clean; `systemctl daemon-reload` run.
-
-### Related latent fault (not fixed): `appdata_aux-disk` storage lacks `is_mountpoint 1`
-
-The directory storage in `/etc/pve/storage.cfg` declares `path /mnt/aux-disk` and `mkdir 0`, but
-not `is_mountpoint 1`. `mkdir 0` stops Proxmox from *creating* the path; it does not stop it
-from *writing into* an existing empty mountpoint. If aux-disk fails to mount at boot - as it did
-on 2026-06-25 - Proxmox considers the storage active and writes VM100's disk into `pve-root`
-on the boot SSD, filling it. That is the KE-7 failure class. Deferred with all other Proxmox
-host changes.
-
-**References:**
-- [Incident write-up - aux-disk failure and recovery](./incidents/2026-06-25-aux-disk-failure-and-recovery.md)
-- [Runbook - aux-disk failure rescue](../../runbooks/storage/aux-disk-failure-rescue.md)
-- [VM100 node doc](../nodes/vm100.md)
-- [VM102 node doc](../nodes/vm102.md)
-- [KE-7: Package corruption when LVM thin-pool overflows](#ke-7-package-corruption-when-lvm-thin-pool-overflows-during-apt-upgrade)
+**Verification.** `SmartAttributeDegrading` went pending at 12:26 and fired at 12:40 on
+2026-10-13; replayed over the 30 days before 2026-10-10 it fires only for the 2026-09-20 step. A
+guest backup wrote about 13 GB to the disk on 2026-10-13 with all four counters unchanged.
 
 ---
 
 <a id="ke-14"></a>
 
-## KE-14: Intermittent boot-time I/O errors on the boot SSD (SAS HBA transport, not media)
+## KE-14: Read commands to the boot SSD time out under load (SAS HBA transport, not media)
 
-**Affected component:** Proxmox host - the boot SSD behind the LSI SAS2008 HBA
-(`scsi 9:0:0:0`, `phy(3)`, driver `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`)
+- **Status:** Open - drive replacement in the second half of October 2026
+- **Affects:** Proxmox host boot SSD behind the LSI SAS2008 HBA (`scsi 9:0:0:0`, `phy(3)`,
+  `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`); it holds `/boot/efi`, `pve-root` and the
+  `pve-data` thin pool with every guest root disk
 
-> **Do not identify this disk by its kernel letter.** `sd*` names are assigned in probe order and
-> change between boots: this entry documented `sdc` throughout July 2026, and on the 2026-08-13
-> boot the same disk came up as `sda`. Identify it by the SCSI address `9:0:0:0` or by `by-id`;
-> both are stable. The same applies to the aux-disk of [KE-13](#ke-13). This is the KE-15 lesson
-> one layer down - a name that *looks* like an identifier but only describes a position.
-
-**Symptom:**
-On some boots the kernel logs a burst of read failures against the boot SSD roughly three
-minutes after start, then falls silent (`<boot-ssd>` below is whatever letter that boot
-assigned):
+**Symptom.** Bursts of failed read commands, each a roughly 30 s stall:
 
 ```
 sd 9:0:0:0: [<boot-ssd>] tag#628 FAILED Result: hostbyte=DID_SOFT_ERROR driverbyte=DRIVER_OK cmd_age=19s
-sd 9:0:0:0: [<boot-ssd>] tag#628 CDB: Read(10) 28 00 07 7c 0e 60 00 00 18 00
 I/O error, dev <boot-ssd>, sector 125570656 op 0x0:(READ) flags 0x80700 phys_seg 3 prio class 2
 ```
 
-The disk carries `/boot/efi`, `pve-root`, and the entire `pve-data` thin pool - i.e. the root
-disks of every VM and LXC on the host. No filesystem damage has resulted so far (no
-`EXT4-fs error`, no read-only remount).
+Some commands report `DID_TIME_OUT` instead; count both host bytes. Kernel letters (`sda`, `sdc`)
+change between boots; identify the disk by `9:0:0:0` or `by-id`.
 
-Observed frequency (persistent journal, `journalctl -k -b <n>`):
-
-| Boot | Date | Error lines |
-|---|---|---|
-| - | 2026-08-13 10:52 | 2 |
-| - | 2026-08-10 08:36 | 0 |
-| 0 | 2026-07-09 07:38 | 11 |
-| -1 | 2026-07-08 10:44 | 0 |
-| -2 | 2026-07-06 16:10 | 20 |
-| -3 | 2026-07-05 07:31 | 0 |
-
-Errors occur only during the boot window and never afterwards; the 11 errors of 2026-07-09 hit
-11 distinct sectors, so no single block is repeatedly unreadable. The fault is still live:
-the 2026-08-13 boot produced `cmd_age=29s` at boot + 3 min while the preceding boot was clean,
-which is the documented on/off pattern rather than a drift toward failure.
-
-**Root cause:** *Not yet confirmed.* What has been ruled out:
-
-- **Not media failure.** `DID_SOFT_ERROR` is the host adapter reporting a transient fault. A
-  genuine bad sector produces `hostbyte=DID_OK driverbyte=DRIVER_SENSE` with
-  `Sense Key: Medium Error` / `Add. Sense: Unrecovered read error`. There is no sense data
-  here. The drive's own SMART error log reads `No Errors Logged`, and every media counter is
-  zero (`Reallocated_Sector_Ct`, `Runtime_Bad_Block`, `Program_Fail_Cnt_Total`,
-  `Erase_Fail_Count_Total`). `cmd_age=19s` is a command timeout, not a read failure - a drive
-  that cannot read a sector reports so in milliseconds.
-- **Not HBA firmware.** `FWVersion(20.00.07.00)` is the known-good P20 phase; the problematic
-  phases are 20.00.00.00 through 20.00.04.00.
-- **Not the SATA controller.** The boot SSD is not on AHCI at all. It hangs off the SAS2008
-  (`scsi target9:0:0`, `phy(3)`, driver `mpt2sas`); the only AHCI devices on this host are the
-  two auxiliary disks (`ata5.00` and `ata6.00`, the latter being the KE-13 aux-disk). Confirmed
-  again 2026-08-13 with `lsblk -dno NAME,TRAN`: the boot SSD reports `sas`, the aux-disk `sata`.
-
-Leading hypothesis: 12 V rail sag under peak boot load. Boot is the moment of maximum draw
-- two mechanical drives spin up simultaneously (spindle inrush current is several times the
-running current), the HBA initialises, guests start. `sensors` reports `+12V Voltage: 10.03 V`,
-which is 16% below nominal and outside the ATX +/-5% tolerance (11.4-12.6 V). This is consistent
-with the timing, but unverified: motherboard voltage sensors - `asus_wmi_sensors` in
-particular - are frequently inaccurate or mislabelled, and `AIO Pump: 0 RPM` in the same output
-suggests some channels are reading unconnected headers. The SAS2008 is also passively cooled
-and known to run hot without forced airflow, which remains a plausible alternative.
-
-**Verification steps (physical, not yet performed):**
-
-1. Multimeter on a spare Molex/SATA power connector, yellow to black, at idle and during boot.
-   A real ~12 V reading falsifies the sensor and closes this lead.
-2. Reseat the SAS cable at both the HBA and `phy(3)`.
-3. Check the SAS2008 heatsink temperature (host powered off, by hand). If hot, fit a 40 mm fan
-   - the standard remedy for this controller in desktop chassis.
-4. Establish PSU model and age. The drives report ~6.6 years power-on; a PSU of the same
-   vintage with aged capacitors would explain a sagging 12 V rail.
-
-**Fix / mitigation:** None applied. The fault is currently self-limiting (boot window only, no
-filesystem damage). The risk is that an `EIO` returned into the thin pool during guest start
-could corrupt a guest filesystem.
-
-**Status:** Diagnosed to transport layer; media and firmware causes excluded; physical root
-cause unconfirmed pending the verification steps above. Re-confirmed live on 2026-08-13 and
-daily since 2026-10-05, at a rate that has risen - see the measurement of 2026-10-12 below. None of
-the four verification steps has been performed.
-
-**Decided 2026-10-12: the drive is replaced, and the replacement is the test.** At 110 GiB of
-volume group it is too small for what it carries, and it leaves in the second half of October.
-The power-path check is not run first; the swap answers part of its question. The count of failed
-commands per boot is the measurement, read before and after. On the same HBA port and cable it
-separates the media from the transport; on an onboard SATA port (remediation item 7) it separates
-the HBA path from the power. Errors that follow the drive point at the path, and the
-[power-path runbook](../../runbooks/platform/ke14-power-path-check.md) applies unchanged.
-
-The kernel pin is released now rather than at the swap, so the two changes do not land together:
-the baseline for the comparison is the old drive under the 7.0 kernel, from 2026-10-13 until it
-leaves.
-
-**The verification is a runbook since 2026-09-11**, rather than four bullet points that had been
-restated in three documents without ever becoming a step:
-[`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md). It needs host
-downtime, which the nightly RTC cycle already provides, and no purchase. Its last section is the
-part that matters for this entry: a negative result gets written here too, because an unrecorded
-measurement is one somebody repeats.
-
-**What this entry has never mentioned, added 2026-09-11.** The drive is a consumer SSD with 58,540
-power-on hours. `Wear_Leveling_Count` normalises to 047 at 633 program-erase cycles, and
-`Used_Rsvd_Blk_Cnt_Tot` carries `WHEN_FAILED=In_the_past` with a worst value of 001 against a
-threshold of 010 - it has been below its threshold at some point, though the raw value reads 0 and
-the current value 100, consistent with a known firmware artefact on this drive family. Measured by
-the 2026-08-20 audit and recorded only in the remediation plan until now. The entry excludes the
-media as a cause on the strength of the error signature, which still holds; age is not the same
-claim as media failure, and leaving it out of the entry that names every other excluded cause made
-the exclusion look broader than it is.
-
-**Load, not boot, measured 2026-10-08.** The day's updates produced four bursts, all `READ`, all
-`DID_SOFT_ERROR` with `cmd_age` around 26 s, none outside an I/O-heavy step:
-
-| Time | Lines | Running at the time |
-|---|---|---|
-| 13:45 | 6 | image pulls on five containers |
-| 14:26 | 10 | fleet `apt-upgrade.yml` |
-| 14:46 | 10 | fleet `apt-upgrade.yml` |
-| 15:36 | 1 | hypervisor `dist-upgrade` |
-
-No write failed, and no filesystem, thin-pool or device-mapper error followed. The entry's title
-says boot-time; the fault is load-driven, and the boot window is simply the most reliable load.
-
-**Every day now, and with a second host byte, measured 2026-10-12.** Failed commands at
-`9:0:0:0` per calendar month, from every boot the persistent journal holds:
+Failed commands at `9:0:0:0` per month, every boot in the persistent journal (measured 2026-10-12):
 
 | Month | Boots | Boots with failures | Failed commands |
 |---|---|---|---|
@@ -860,27 +478,31 @@ says boot-time; the fault is load-driven, and the boot window is simply the most
 | 2026-09 | 28 | 10 | 211 |
 | 2026-10, to the 12th | 12 | 9 | 333 |
 
-October passed September's total in eleven days, and every boot from 2026-10-05 to 2026-10-11
-failed somewhere. The bursts are no longer tied to boot or to a heavy step. On 2026-10-07 the disk
-stopped answering for about 30 s at 11:00, 11:03, 14:00, 18:33, 18:46, 22:00 and 22:01, two of
-them during drift sweeps; from then to 2026-10-11 the failures fall in 31 distinct minutes, ten of
-them in the first minute of an hour, which points at something the fleet schedules hourly and was
-not traced further. They also arrive as two host bytes: `DID_TIME_OUT`, the command abort after the timeout,
-appears beside `DID_SOFT_ERROR` and on some boots alone, so a count keyed on the first host byte
-reads zero on a bad day - the power-path runbook counts both since 2026-10-10. What has not changed
-is the direction: every `I/O error` line on those seven boots is a `READ`, none a `WRITE`, and
-`EXT4-fs error`, device-mapper and `Buffer I/O error` lines number zero. Write commands are among
-the aborted ones and were retried successfully. Nothing in this paragraph moves the diagnosis; it
-moves the urgency, and the runbook still has not been run.
+Bursts follow I/O-heavy steps (image pulls, fleet upgrades, boot) and since 2026-10-05 occur on
+every boot and outside boot, often in the first minute of an hour. Every `I/O error` line is a
+`READ`; no `EXT4-fs error`, device-mapper or `Buffer I/O error` line has been logged.
 
-**Incidental correction:** all nine disks are attached to the Proxmox host. VM102 reaches
-six of them through `/dev/disk/by-id/` passthrough and sees only virtio-SCSI devices, so SMART
-data is readable *only on the host*. Any SMART monitoring must therefore run there, not on
-VM102 as previously documented.
+**Cause.** Not confirmed. Excluded:
 
-**References:**
-- [Proxmox Host](./proxmox-host.md)
-- [KE-13 - aux-disk physical disk failure](#ke-13) (a separate, genuine media failure on the aux-disk, which is an AHCI device and not behind the HBA; do not conflate)
+- Media: `DID_SOFT_ERROR`/`DID_TIME_OUT` are adapter-side timeouts with no sense data; a bad
+  sector reports `DRIVER_SENSE` with `Medium Error` within milliseconds. SMART error log: `No
+  Errors Logged`; reallocation and program/erase fail counters zero.
+- HBA firmware: `20.00.07.00`, outside the faulty P20 phases 20.00.00.00 to 20.00.04.00.
+- SATA controller: the SSD is on the SAS2008 (`lsblk -dno NAME,TRAN` reports `sas`).
+
+Candidates: 12 V rail sag (`sensors` reads `+12V 10.03 V`, an unverified board sensor), or HBA
+heat (passively cooled). The drive is worn but not failing: 58,540 power-on hours,
+`Wear_Leveling_Count` normalised 047, `Used_Rsvd_Blk_Cnt_Tot` `WHEN_FAILED=In_the_past` with raw 0.
+
+**Fix.** The drive is replaced in the second half of October 2026
+([boot SSD replacement](../../runbooks/platform/boot-ssd-replacement.md), [remediation plan](remediation-plan.md#boot-ssd-replacement)); its 110 GiB volume
+group is also too small. The 6.17.13 kernel pin was released 2026-10-12 so the kernel and the
+drive do not change together; the baseline is the old drive on the 7.0 kernel from 2026-10-13.
+
+**Verification.** Failed commands per boot before and after the swap. On the same port and cable
+this separates drive from transport; on an onboard SATA port it separates the HBA path from power.
+If errors persist, run the
+[power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
 
 ---
 
@@ -888,148 +510,47 @@ VM102 as previously documented.
 
 ## KE-15: Guard tests mount existence, not mount identity - calibre-import dead for a month
 
-**Affected component:** LXC220 (Calibre-Web) - `calibre-import.service`, the `calibre_importer`
-role, and `snippets/scripts/calibre-import.sh`
+- **Status:** Resolved 2026-07-14
+- **Affects:** lxc220 `calibre-import.service`, role `calibre_importer`,
+  `snippets/scripts/calibre-import.sh`; host CIFS mount `/mnt/smb/books-rw`
 
-**Symptom:**
-`calibre-import.service` fails every 2 minutes (the timer interval) and has done so since
-2026-06-08. No dropped ebook has been imported in that window. Nothing alerted.
+**Symptom.** From 2026-06-08 `calibre-import.service` failed every 2 minutes; no ebook was
+imported and nothing alerted:
 
 ```
 calibre-import.sh[3904]: mkdir: cannot create directory '/books-rw/_import': Permission denied
-systemd[1]: calibre-import.service: Main process exited, code=exited, status=1/FAILURE
 ```
 
-**Root cause:** a four-step chain, each step individually unremarkable:
+**Cause.** A chain:
 
-1. On the Proxmox host, the rw CIFS mount `/mnt/smb/books-rw` (`//vm102/Books`) is **not
-   mounted**. This is the documented CIFS boot-race, except it is not transient - it has
-   persisted for a month.
-2. The `mp2` bind still maps the host path into LXC220 as `/books-rw`. With the CIFS mount
-   absent, the bind exposes the empty directory *underneath* it, on `pve-root`.
-3. That directory is owned by host root. LXC220 is an unprivileged container, so host UID 0
-   appears inside as `65534` (`nobody`). With mode `0755`, container root cannot write to it.
-4. `mkdir -p "${FAILED_DIR}"` fails with `EACCES`; `set -euo pipefail` aborts the script with
-   exit 1.
+1. On the host, `/mnt/smb/books-rw` (`//vm102/Books`) was not mounted. Its fstab line lacked
+   `x-systemd.automount`, so systemd tried once at boot, before `pve-guests` had started vm102
+   (`mount error(113)`), and never retried.
+2. The `mp2` bind exposed the empty directory beneath it on `pve-root`, owned by host root, which
+   the unprivileged container sees as `65534`.
+3. `mkdir` failed with `EACCES`; `set -euo pipefail` exited 1.
 
-**Why both guards failed to catch it:**
+Both guards used `mountpoint -q /books-rw`, which succeeds because the bind is itself a mount. The
+Ansible guard also lacked `check_mode: false`, so `--check` skipped it. A failed unit raised no
+alert at the time.
 
-The script (line 49) and the Ansible role each guarded with:
+**Fix.**
 
-```bash
-mountpoint -q /books-rw
-```
+- Guards test identity: `findmnt -no FSTYPE /books-rw` must return `cifs`, and `metadata.db` must
+  exist. The script exits 1, not 0, when the library is absent; the role probe runs in check mode
+  and deploys the script before asserting the mount.
+- Host fstab: every `/mnt/smb/*` entry carries `x-systemd.automount`, so the mount happens on first
+  access, after vm102 is up.
+- The old `trigger-smb.mounts.service`, which ran before vm102 started and swallowed errors, is
+  replaced by `smb-mounts-check.service` (`After=pve-guests.service`, fails if any `/mnt/smb/*` is
+  not `cifs`), deployed by `proxmox_host_units`
+  ([runbook](../../runbooks/storage/smb-autofs-trigger.md)).
+- `node_exporter --collector.systemd` with `.mount` units in scope, plus `SystemdUnitFailed`.
 
-This returns success. `/books-rw` is a mountpoint - the `mp2` bind itself is one, whether or
-not the CIFS mount underneath the host path succeeded. The guard tested the *existence* of a
-mount and could not, in principle, detect a *substituted* one. It was blind to exactly the
-failure class it was written for.
-
-This is the same structural error as `appdata_aux-disk` lacking `is_mountpoint 1`: a check that
-asserts a path exists, where what matters is what is mounted at it.
-
-Compounding it, the Ansible guard was an `ansible.builtin.command` without `check_mode: false`,
-so `--check` skipped it. A dry-run reported the role healthy.
-
-**Fix (applied 2026-07-10, repo side):**
-
-- Both guards now test the mount's *identity*, not its existence: `findmnt -no FSTYPE /books-rw`
-  must return `cifs`. A healthy bind of a CIFS mount reports `cifs` inside the container; the
-  failed one reports `ext4` (pve-root). A second guard requires `metadata.db` to be present,
-  covering the "right fstype, wrong share" case.
-- The script now exits 1, not 0, when the library is absent. The previous `exit 0` was a
-  deliberate no-op ("VM102/network down") and is precisely why a month of failure stayed
-  invisible. Transient absence during the boot window is absorbed by the alert rule's `for:`
-  window, not by silencing the script.
-- The role's probe carries `check_mode: false` so it also runs during `--check`, and the task
-  order was changed to deploy the script and units *before* asserting the mount - otherwise a
-  broken host mount blocks delivery of the script that handles broken host mounts.
-
-**Host-side root cause found and fixed (2026-07-14) - it was never "a boot race that stuck":**
-
-The host mount did not fail *randomly*. It failed deterministically, at every boot, and the
-`/etc/fstab` line says why:
-
-```
-# working sibling (read-only)
-//<lan-ip-vm102>/Books-service  /mnt/smb/books     cifs  _netdev,nofail,x-systemd.automount,...
-# broken (read-write)
-//<lan-ip-vm102>/Books          /mnt/smb/books-rw  cifs  _netdev,nofail,noatime,...
-```
-
-`books-rw` lacked `x-systemd.automount`. Without it, systemd mounts the share once, during
-boot, and if that attempt fails it is never retried - `nofail` lets the boot proceed and the unit
-stays `failed` forever. The journal shows the same line at every single boot:
-
-```
-mount error(113): could not connect to <lan-ip-vm102> - Unable to find suitable address.
-```
-
-The reason it cannot succeed at boot is structural, and it is why no amount of ordering would have
-helped: **the Proxmox host is mounting a share from a VM that the host itself has not started
-yet.** Boot timeline of 2026-07-14:
-
-| Time | Event |
-|---|---|
-| 12:16:15 | `trigger-smb.mounts.service` starts (the "boot stabilization" unit) |
-| 12:16:22 | `pve-guests.service` starts |
-| 12:16:23 | VM102 is started - the SMB server only comes up now |
-| 12:18:37 | CT220 starts |
-
-`x-systemd.automount` is what makes the sibling work: the mount is established lazily, on first
-access, and the first access happens when Proxmox sets up the container's bind - by then VM102 has
-been up for two minutes. Proven on the live host: with `noatime` replaced by
-`x-systemd.automount,x-systemd.mount-timeout=30,noatime`, `/mnt/smb/books-rw` now reports
-`autofs` + `cifs` stacked, exactly like `/mnt/smb/books`.
-
-**Side finding, fixed the same day - the "boot stabilization" service was cargo cult.**
-`trigger-smb.mounts.service` ran *before* `pve-guests` starts VM102, so it poked automounts whose
-server did not exist yet, and its script swallowed every error (`timeout 3s ls ... || true`), so it
-always reported success. Removed and replaced by `smb-mounts-check.service`, which runs
-`After=pve-guests.service` and exits 1 if any `/mnt/smb/*` path is not `cifs`. Its prerequisite
-was fixed too: the host's `node_exporter` had no `--collector.systemd`, so a failed unit on the
-host reached no alert. Both verified, including the negative case. See
-[runbook](../../runbooks/storage/smb-autofs-trigger.md).
-
-**Verification (2026-07-14):**
-
-- Container bind before `pct reboot 220`: `/books-rw` -> `ext4 /dev/mapper/pve-root[...]` - the
-  KE-15 signature, the empty directory on the boot SSD.
-- After the reboot: `/books-rw` -> `cifs //<lan-ip-vm102>/Books`, and a write as container root
-  succeeds.
-- `calibre-import.service`: `Result=success`, exit 0. Two consecutive timer runs finished cleanly
-  (12:19:10, 12:20:12 UTC); the last failure was 12:17:32, before the fix. **lxc220 now has no
-  failed unit at all.**
-- The `findmnt -no FSTYPE` guard added on 2026-07-10 now passes for the right reason rather than
-  failing for the right reason.
-
-**Proven across a host reboot (2026-08-13).** All seven `/mnt/smb/*` fstab entries carry
-`x-systemd.automount` and every one resolves to `cifs`; the `books-rw` automount included.
-`smb-mounts-check.service` reports `Result=success` / exit 0, `calibre-import.service` on lxc220
-likewise, and `findmnt -no FSTYPE /books-rw` inside the container returns `cifs` - the identity
-test, not the existence test. The fstab audit
-(`grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount`) prints nothing.
-
-**The gap that let it run for a month (closed 2026-07-10):** a `failed` systemd unit raised no
-alert. Monitoring covered `NodeDown` (node_exporter), disk fill, and `ServiceDown` (blackbox HTTP
-probes); a unit that fails 20,000 times fits none of those. This was the KE-8 blind spot one level
-deeper. Remediated the same day: `node_exporter --collector.systemd` (with `.mount` units kept in
-scope - the stock exclude drops them, and this fault *is* a mount fault) plus the
-`SystemdUnitFailed` Prometheus rule. Verified: lxc220 now exports
-`node_systemd_unit_state{name="calibre-import.service",state="failed"} 1` and Prometheus raises
-the alert.
-
-**Status:** RESOLVED 2026-07-14. Root cause confirmed on both sides: the guard was blind
-(fixed 2026-07-10), and the host mount lacked `x-systemd.automount`, so a mount against a VM the
-host had not yet started failed once at boot and was never retried (fixed 2026-07-14). Import path
-restored and verified; lxc220 has no failed unit. Closed 2026-08-13 - confirmed across a real
-host power cycle, see above.
-
-**References:**
-- [LXC220 node doc](../nodes/lxc220.md)
-- [ADR - Calibre CIFS SQLite import](../decisions/calibre-cifs-sqlite-import.md)
-- [KE-8 - observability blind spot](#ke-8)
-- [KE-13 - the `appdata_aux-disk` `is_mountpoint` note](#ke-13) (same structural error: a check that asserts a path exists where what matters is what is mounted at it)
+**Verification.** Verified 2026-08-13 after a host power cycle: all seven `/mnt/smb/*` resolve to
+`cifs`, `grep '/mnt/smb/' /etc/fstab | grep -v x-systemd.automount` prints nothing,
+`smb-mounts-check` and `calibre-import` exit 0, and `findmnt -no FSTYPE /books-rw` in lxc220
+returns `cifs`.
 
 ---
 
@@ -1037,143 +558,67 @@ host power cycle, see above.
 
 ## KE-16: Apache serves an expired certificate that was already renewed on disk
 
-**Affected component:** LXC210 (Nextcloud) - Apache + the Tailscale-issued TLS certificate
+- **Status:** Resolved 2026-07-10
+- **Affects:** Nextcloud on lxc210 (Apache with the Tailscale-issued certificate)
 
-**Symptom:**
-`ServiceDown` fired for `nextcloud` on 2026-07-10. The blackbox probe reported
-`probe_success = 0`; `curl` against the same URL returned `http=000` with
-`ssl_verify_result=10` (`X509_V_ERR_CERT_HAS_EXPIRED`) and exit 60. With `-k` (verification
-disabled) the same URL answered `302`. Apache, MariaDB, Redis and PHP-FPM were all `active`.
+**Symptom.** 2026-07-10: `ServiceDown` fired for `nextcloud`. `curl` returned `http=000`,
+`ssl_verify_result=10` (`X509_V_ERR_CERT_HAS_EXPIRED`); with `-k` it answered `302`. Apache,
+MariaDB, Redis and PHP-FPM were all `active`.
 
-**Root cause:**
-The certificate Apache was *serving* had `notAfter=Jul 10 09:53:15 2026 GMT` - it had expired
-about an hour earlier. The certificate *on disk* at `/var/lib/tailscale/certs/` was valid from
-`Jul 10 09:38:32` to `Oct 8 09:38:31`.
+**Cause.** The served certificate had `notAfter=Jul 10 09:53:15 2026 GMT`. The file in
+`/var/lib/tailscale/certs/` had been renewed by `tailscaled` fifteen minutes before expiry. Apache
+reads `SSLCertificateFile` at start and kept serving the old certificate from memory. lxc210 is
+the only node whose service reads the file directly; the others terminate TLS in
+`tailscale serve`, which fetches the certificate per connection.
 
-`tailscaled` had renewed the file fifteen minutes before the old one expired. **Renewal was never
-the problem.** Apache reads its certificate at start-up and holds it in memory; nothing told it
-to re-read. It went on presenting the April certificate from RAM while a valid one sat on disk
-beside it.
+**Fix.** Immediate: `tailscale cert ... --min-validity 720h <fqdn>` (reported unchanged), then
+`systemctl reload apache2`. Durable: role `tailscale_cert` on inventory group
+`tailscale_cert_ondisk` (lxc210 only) deploys `snippets/scripts/tailscale-cert-refresh.sh` with a
+daily `Persistent=true` timer. The script hashes the certificate, runs `tailscale cert
+--min-validity 720h`, and reloads Apache only if the hash changed. Its boot-time failure mode is
+covered in [KE-18](#ke-18).
 
-Why only this node: the other five certificate-holding nodes (lxc200, lxc211, lxc220, lxc230,
-lxc240) terminate TLS through `tailscale serve`, which asks `tailscaled` for the certificate per
-connection - renewal is transparent there. LXC210 is the only node whose service reads the file
-directly, via `SSLCertificateFile /var/lib/tailscale/certs/<fqdn>.crt` in
-`sites-available/nextcloud-ssl.conf`.
+**Verification.** Probe returned `http=302`, `ssl_verify=0` after the reload. A manual run logs
+`certificate unchanged (valid for at least 720h) - no reload needed` and exits 0. The reload branch
+has not been exercised against a real renewal.
 
-**Immediate fix (applied 2026-07-10):** `tailscale cert --cert-file ... --key-file ...
---min-validity 720h <fqdn>` (reported "unchanged", confirming tailscaled had already renewed),
-then `systemctl reload apache2`. Verified from the wire: the probe now returns `http=302` with
-`ssl_verify=0`, and the served certificate is the October one.
-
-**Durable fix (applied 2026-07-10):** new `tailscale_cert` role - `tailscale-cert-refresh.sh`
-plus a daily systemd timer, targeted at the new inventory group `tailscale_cert_ondisk` (only
-lxc210; serve-backed nodes must not be listed). The script hashes the certificate, runs
-`tailscale cert --min-validity 720h` (a no-op while more than 30 days remain, so a daily run
-costs nothing), and reloads Apache only if the hash changed. `reload`, not `restart`: Apache
-re-reads certificates on a graceful reload and live connections survive. The timer carries
-`Persistent=true`, because the host is powered down overnight and a fixed nightly slot would
-simply be missed.
-
-Verified: timer `active`/`enabled`; a manual run of the service logs
-`certificate unchanged (valid for at least 720h) - no reload needed` and exits 0. The reload
-branch was not exercised against a real renewal - forcing one would consume a Let's Encrypt rate
-limit to re-prove a `systemctl reload apache2` that had already succeeded minutes earlier.
-
-**Note:** the detection worked. `ServiceDown` fired within minutes of the expiry and reached
-Discord. The gap was that nothing acted on it, and nothing prevented the recurrence that would
-have happened again on 8 October.
-
-**Related, not fixed:** Apache on lxc210 listens on `*:80` and `*:443`, i.e. on the LAN
-interface, violating the platform binding rule - the same defect class as vm100's sshd. MariaDB
-and Redis on the same node bind single addresses correctly. Re-confirmed live 2026-08-13: both
-wildcard listeners are still present.
-
-**Status:** Resolved 2026-07-10. The certificate was replaced by hand that day and the recurrence
-closed by the `tailscale_cert` role. The wildcard listener recorded above is a different defect
-and remains open.
-
-**References:**
-- [LXC210 node doc](../nodes/lxc210.md)
-- [Nextcloud service doc](../services/nextcloud.md)
-- [KE-8 - the blind spot this alert closed](#ke-8)
+Apache still listens on `*:80` and `*:443`, a separate deferred binding-rule exception (recorded in
+`listener_metrics_allowed` for lxc210, see [lxc210](../nodes/lxc210.md)).
 
 ---
 
 <a id="ke-17"></a>
+
 ## KE-17: VM100 silent guest hard-freeze - no logged root cause, recovered by hard power-cycle
 
-**Affected component:** VM100 (GPU / NVIDIA-passthrough node, Ubuntu 22.04.5, kernel
-`5.15.0-185-generic`) - the guest OS, not the hypervisor.
+- **Status:** Open - cause unknown, one occurrence
+- **Affects:** vm100 guest OS (GPU passthrough node), not the hypervisor
 
-**Symptom:**
-On 2026-07-11 vm100 was unreachable over SSH and Tailscale. `ssh gpu` hung at the TCP-connect
-stage - no `Connection refused`, no auth prompt - placing the fault in the reachability class, not
-a bind or key fault. `tailscale status` showed the node `offline, last seen 8h ago, tx ... rx 0`:
-the host was sending into the tunnel and getting nothing back. `qm status 100` reported
-`running`, but that only means the hypervisor is scheduling the vCPU and says nothing about guest
-health. A WebUI reboot returned `QEMU Guest Agent is not running - guest-ping ... got timeout` and
-`VM quit/powerdown failed - got timeout`: both the guest agent and ACPI were unresponsive. The
-serial console (`qm terminal 100`) was completely blank - no login prompt, no echo on Enter, no
-panic trace. The guest was hard-frozen.
+**Symptom.** 2026-07-11: vm100 unreachable over SSH and Tailscale; `ssh` hung at TCP connect.
+`tailscale status`: `offline, last seen 8h ago`. `qm status 100` reported `running`. QEMU guest
+agent ping and ACPI powerdown both timed out; `qm terminal 100` was blank.
 
-**Root cause:** Undetermined from logs - named as such rather than guessed. What the evidence
-rules in and out:
+**Cause.** Not determined. Evidence:
 
-- The guest's own journal (`journalctl -b -1`) ends abruptly at `01:41:13 UTC` mid-normal-operation,
-  with no shutdown sequence (`Stopping...` / `Reached target Shutdown` absent). That is the signature
-  of a freeze so hard journald could not write another line - not a reboot. A kernel-signature grep
-  (`oom|hung task|soft lockup|BUG:|call trace|watchdog`) over that boot returned only the benign
-  boot-time `NMI watchdog: Enabled` line. No OOM, no lockup, no panic was logged inside the guest.
-- The host was healthy at the freeze moment. `01:41:13 UTC = 03:41:13 CEST` (see the timeline
-  caveat). The host journal for 03:30-03:50 CEST holds no `kvm` / `vfio` / `nvidia` / `oom` /
-  VMID-100 message, and the `node-exporter-smarttext` SMART collector completed successfully at
-  03:41:14-16. This is not KE-14 - the host disk / HBA layer threw nothing.
+- Guest journal (`journalctl -b -1`) ends at `01:41:13 UTC` with no shutdown sequence. A grep for
+  `oom|hung task|soft lockup|BUG:|call trace|watchdog` found only the boot-time
+  `NMI watchdog: Enabled`.
+- Host journal 03:30-03:50 CEST: no `kvm`, `vfio`, `nvidia`, `oom` or VMID-100 message, and the SMART
+  collector completed at 03:41. Not [KE-14](#ke-14).
+- Guest clock is UTC, host clock CEST: the freeze was 03:41 CEST, inside a host boot that had been
+  started by hand that night.
 
-So: a silent, guest-internal hard freeze on a node that does NVIDIA GPU passthrough and already
-carries an intermittent NVIDIA/CUDA fault (KE-10). A causal link to KE-10 is plausible but unproven.
+A link to the NVIDIA path ([KE-10](#ke-10)) is plausible and unproven.
 
-**Timeline caveat (load-bearing):** the guest clock is `Etc/UTC`, the host clock is
-`Europe/Berlin` (CEST, +2h). Read naively, the guest's last line (`01:41`) falls inside the host's
-nightly power-off gap - host boot -1 ended `01:01:10 CEST`, boot 0 began `01:58:09 CEST` - which is
-impossible, since the guest cannot log while the host is off. The +2h offset resolves it: the
-freeze was `03:41 CEST`, well inside host boot 0. The host was up off-schedule because the admin
-had powered it on manually for night work and gone to sleep before the freeze; this is not a
-`homelab_schedule` defect.
+**Fix.** Recovery: `qm stop 100` then `qm start 100`; node back within about 2 minutes. Not
+applied: a QEMU watchdog device (`i6300esb`) with `softdog` in the guest for automatic reset, and
+`kdump`/`pstore` for a trace that survives a freeze. The in-guest NMI watchdog is not a substitute;
+it depends on PMU counters that KVM virtualizes unreliably. vm100's kernel log streams to the host
+by netconsole ([KE-20](#ke-20)).
 
-**Immediate fix (applied 2026-07-11):** graceful recovery was already exhausted (QGA guest-ping
-and ACPI powerdown both timed out), so a hard power-cycle - `qm stop 100` (QMP quit attempt, then
-the QEMU process is killed, the plug-pull equivalent) followed by `qm start 100`. The node returned
-to `active; direct` within ~2 min; the clean host disk layer made the unclean-shutdown journal
-replay low-risk. All alerts resolved at 11:45 CEST.
-
-**Detection worked; response did not.** `NodeDown` fired at 03:45 CEST - ~4 min after the freeze,
-after >2 min of failed scrapes - alongside `ServiceDown` for jellyfin and audiobookshelf
-(independent blackbox probes). The alerts stayed firing for ~8 h and re-notified at 07:50. The gap
-was purely human: the alert reached Discord at 03:45 while the admin slept, and there is no
-overnight escalation and no auto-recovery. For a hobby media node, an auto-recovering watchdog is
-the proportionate fix, not a 03:45 page.
-
-**Durable fix - not yet applied (follow-ups):**
-
-- Auto-recovery: a QEMU watchdog device (`i6300esb`) plus `softdog` in the guest would reset a
-  wedged guest automatically instead of leaving it dead for 8 h. The in-guest **NMI watchdog is not
-  a substitute** - it depends on hardware PMU counters that are unreliably virtualized under KVM,
-  which is why it caught nothing here.
-- Post-mortem forensics that survive the freeze: `kdump` / `pstore` to capture a panic trace next
-  time, since the live console and journal yield nothing after a hard freeze.
-- Recurrence is unquantified - this is the first recorded occurrence. If it repeats, escalate to a
-  real investigation (candidate: the KE-10 NVIDIA path).
-
-**Status:** Open. Recovery on 2026-07-11 was a hard power cycle, the logs never yielded a cause,
-and none of the durable follow-ups above is applied. One occurrence on record.
-
-**References:**
-- [VM100 node doc](../nodes/vm100.md)
-- [Incident record - 2026-07-11 vm100 silent freeze](incidents/2026-07-11-vm100-silent-freeze.md)
-- [KE-10 - Jellyfin loses CUDA access (same node, NVIDIA path)](#ke-10)
-- [KE-14 - boot-SSD I/O errors (excluded here)](#ke-14)
-- [KE-8 - the observability model that caught this](#ke-8)
+**Verification.** Detection worked: `NodeDown` and `ServiceDown` fired at 03:45 CEST, about 4
+minutes after the freeze; the outage lasted about 8 hours because no one responded overnight. See
+the [incident record](incidents/2026-07-11-vm100-silent-freeze.md).
 
 ---
 
@@ -1181,284 +626,48 @@ and none of the durable follow-ups above is applied. One occurrence on record.
 
 ## KE-18: Services start before Tailscale is ready (ordering is not readiness)
 
-**Affected:** platform-wide class. Start here when a service that binds or queries a Tailscale
-resource fails during the boot window, before opening the per-service entries below.
+- **Status:** Mitigated - every known instance gated, cold boot 2026-10-13
+- **Affects:** any unit that binds a Tailscale address or queries `tailscaled` at boot
 
-**Why this entry exists:** the platform binding rule requires services to bind their Tailscale IP
-rather than `0.0.0.0`. The rule is right, but it makes those services depend on a resource that does
-not exist yet at boot. The same fault has now been diagnosed from scratch four times. This entry
-records the shape once so the fifth is a lookup rather than an investigation.
-
-**Symptom:** during the boot window only - a manual start afterwards always succeeds.
+**Symptom.** In the boot window only; a manual start later succeeds:
 
 ```
-bind: cannot assign requested address        # kernel EADDRNOTAVAIL
-could not determine the node's MagicDNS name # the query-time variant
+bind: cannot assign requested address        # bind-time variant (EADDRNOTAVAIL)
+could not determine the node's MagicDNS name # query-time variant
 ```
 
-### Why `After=tailscaled.service` is not enough
+**Cause.** `After=tailscaled.service` orders a unit after `tailscaled` has started; a
+`Type=simple` service counts as started when its process exists, before it joins the tailnet and
+gets an address. With `Restart=on-failure` and the default `RestartSec=100ms`, five attempts run
+inside about 24 ms and the start limit stops the unit for good. The host powers down nightly, so
+every day is a cold boot, and `Persistent=true` timers fire inside the boot window by design.
 
-`After=` orders the unit after tailscaled has started, and systemd considers a `Type=simple`
-service started the moment its process is alive. Joining the tailnet, negotiating with the control
-plane and assigning an address all happen *afterwards*. Ordering guarantees sequence, not
-readiness - the unit must poll for the resource it actually needs.
+Retry loops can hide the fault: on 2026-08-20 all nine guest `node_exporter` units showed
+`NRestarts=1`, and `SystemdUnitFailed` (`for: 15m`) never saw the 15-second failure.
 
-The second, quieter half is systemd's restart rate limiter. `Restart=on-failure` with the default
-`RestartSec=100ms` means five attempts inside ~24 ms; `StartLimitBurst` is then exhausted and the
-unit stays dead until someone intervenes. A rapid-restart loop is not a retry strategy - it is a
-way to convert a two-second race into a permanent outage.
+**Fix.** Bind-time: `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh <timeout>` plus a
+`RestartSec` well above the default, through role `tailscale_boot_gate` or the owning role's unit
+template. Query-time: poll for the value inside the script. Do not write the poll inline in a unit
+file: systemd expands `$` in `ExecStartPre=`, and an inline loop can silently run zero times.
 
-### The race, drawn
-
-Both halves are timing, which is why a flowchart cannot show them. What fails is the order of events
-inside the first seconds of a boot.
-
-**How to read these two.** Time runs downward. The boxes along the top are the participants, the
-vertical lines are their lifetimes, and every horizontal arrow is one event in the order it happens.
-The example is the host's `node_exporter`, which is the instance that failed at every boot for two
-weeks; the shape is identical for the other three.
-
-The whole fault sits in the shaded band: the service gives up before the thing it is waiting for
-arrives.
-
-```mermaid
-sequenceDiagram
-  accTitle: The Tailscale readiness race without a gate
-  accDescr: systemd starts the unit after tailscaled is alive but before an address exists, the bind fails with EADDRNOTAVAIL, and the restart limiter exhausts itself before the address arrives.
-  autonumber
-  participant S as systemd
-  participant T as tailscaled
-  participant K as kernel
-  participant U as node_exporter.service
-
-  S->>T: start
-  T-->>S: process alive
-  Note over S,T: Type=simple - "started" means the process exists,<br/>not that it has joined the tailnet
-  Note over S,U: node_exporter.service carries After=tailscaled.service,<br/>so systemd now considers the condition met
-  S->>U: start
-  U->>K: bind tailscale-ip:9100
-  K-->>U: EADDRNOTAVAIL - no such address on any interface
-  rect rgb(255, 228, 228)
-    Note over S,U: Restart=on-failure, RestartSec=100ms<br/>five attempts inside about 24 ms
-    S->>U: restart x5
-    S--xU: StartLimitBurst exhausted, systemd gives up
-    T->>K: address assigned - seconds too late
-  end
-  Note over K,U: The address now exists and the bind would succeed.<br/>Nothing is left running to try it.
-```
-
-The gate turns the assumption into a measurement. The unit stops trusting the ordering and waits for
-the thing it actually needs, and the restart interval is widened so that a retry outlives the race
-instead of consuming it.
-
-```mermaid
-sequenceDiagram
-  accTitle: The same boot with the readiness gate in place
-  accDescr: ExecStartPre polls for the Tailscale address until it exists, then the bind succeeds on the first attempt.
-  autonumber
-  participant S as systemd
-  participant T as tailscaled
-  participant K as kernel
-  participant P as ExecStartPre wait-for-tailscale-ip.sh 90
-  participant U as node_exporter.service
-
-  S->>T: start
-  S->>P: run before the service starts
-  rect rgb(228, 245, 232)
-    loop until an address exists, up to 90 s
-      P->>T: tailscale ip -4
-      T-->>P: not yet
-    end
-    T->>K: address assigned
-    P->>T: tailscale ip -4
-    T-->>P: the node's address
-  end
-  P-->>S: exit 0
-  S->>U: start
-  U->>K: bind tailscale-ip:9100
-  K-->>U: bound on the first attempt
-  Note over S,U: RestartSec=5, so a retry outlasts the race<br/>instead of exhausting the limiter inside it
-```
-
-The query variant on lxc210 is the same shape one layer up: the script asked for `Self.DNSName`
-rather than for an address, received an empty answer and failed. Its fix polls for the name the same
-way. On the cold-boot confirmation of 2026-08-13 the catch-up run fired 82 s into the boot window and
-the poll waited 11 s before the name resolved - inside the window the gate exists for.
-
-### Instances
-
-| Node / unit | Variant | Status |
+| Node / unit | Variant | Fix |
 |---|---|---|
-| lxc260 `postgresql@15-main` | bind | Fixed 2026-06-09 - [KE-9](#ke-9), `postgresql-boot-order` role |
-| host `pveproxy` | bind | Fixed 2026-06-25 - [KE-12](#ke-12), `wait-tailscale.conf` drop-in |
-| host `node_exporter` | bind | Fixed 2026-07-28 (below) |
-| lxc210 `tailscale-cert-refresh` | query | Fixed 2026-07-28 (below) |
-| nine guests `node_exporter` | bind | Fixed 2026-08-20, fleet cold-boot confirmed 2026-08-21 (below) |
-| vm100 `ollama` | bind | Closed 2026-10-01 by removing the service, found 2026-09-29: 166 failed binds in the journal, one per boot, masked by the packaged `Restart=always`. Its successor binds loopback behind `tailscale serve` ([rollout](../services/llm-inference.md#rollout-state)) |
-| lxc200 `blackbox-exporter` | resolver | Found 2026-10-07: the container copied `resolv.conf` at boot before tailscaled wrote it, kept the LAN router as resolver, and four `ServiceDown` alerts fired for services that answered. Fixed by naming the MagicDNS resolver in the compose file |
-| vm100 `docker.service` (Jellyfin) | bind | Opened 2026-10-07 when Jellyfin moved off `tailscale serve` ([KE-28](#ke-28)). Gated by `tailscale_boot_gate`, `docker_boot_retry` behind it; cold-boot confirmed 2026-10-10: boot 08:42:40, gate found the address after 0 s, `docker` active 08:43:57 with `NRestarts=0`, no `docker-boot-retry` line, all three containers up |
+| lxc260 `postgresql@15-main` | bind | `postgresql_boot_order` ([KE-9](#ke-9)) |
+| host `pveproxy` | bind | `tailscale_boot_gate` ([KE-12](#ke-12)) |
+| host and nine guests `node_exporter` | bind | gate in the `node_exporter` unit template |
+| lxc210 `tailscale-cert-refresh` | query | FQDN poll, up to 90 s, in `snippets/scripts/tailscale-cert-refresh.sh` |
+| sshd on every guest | bind | `tailscale_boot_gate` with `ssh_hardening_listen_address` ([decision](../decisions/sshd-listen-address.md)) |
+| lxc200 `blackbox-exporter` | resolver | MagicDNS resolver named in the compose file |
+| vm100 `docker.service` (Jellyfin) | bind | `tailscale_boot_gate`, `docker_boot_retry` behind it ([KE-28](#ke-28)) |
 
-**What makes this platform unusually exposed:** `homelab-schedule` powers the host down every night and
-wakes it by RTC the next working day, so every day is a cold boot. Timers that carry `Persistent=true`
-to catch up runs missed overnight therefore fire *inside the boot window* by design - that is how
-the lxc210 certificate job became a boot-time job without anyone choosing that. On this platform the
-boot window is a routine execution context, not an edge case.
+For sshd, Debian's `ssh.service` sets `RestartPreventExitStatus=255` and sshd exits 255 on a
+failed bind; `tailscale_boot_gate_clear_restart_prevent` clears it so the retry backstop works.
 
-### Instance: host `node_exporter` (found and fixed 2026-07-28)
-
-A regression introduced by `54402ed` (2026-07-14), which moved the host's `node_exporter` from a
-wildcard bind to `--web.listen-address=<tailscale-ip-proxmox-host>:9100` - correct per the binding
-rule, but it placed the unit into this failure class. It had failed at every boot since, i.e. daily,
-and the failure hid itself: the host's own down-ness is exactly what stops it from being reported.
-`NodeDown` did fire, and was read as a stale artifact of the nightly power cycle.
-
-Diagnosis: `Active: failed`, `Duration: 24ms`, `Start request repeated too quickly`, restart counter
-at 5.
-
-Fix: `/usr/local/bin/wait-for-tailscale-ip.sh` (copied from lxc260, unchanged - it derives the
-address via `tailscale ip -4` rather than hard-coding it) plus a drop-in at
-`/etc/systemd/system/node_exporter.service.d/wait-tailscale.conf` with
-`ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh 90` and `RestartSec=5`.
-
-Verified: `ExecStartPre` `status=0/SUCCESS`, listening on `:9100`, Prometheus target `health: up`
-with an empty `lastError`, `NodeDown` cleared.
-
-**Cold-boot verified 2026-08-13**, and the gate demonstrably did work rather than merely being
-present - the journal of that boot reads:
-
-```
-10:52:24  Starting node_exporter.service ...
-10:52:30  wait-for-tailscale-ip: <tailscale-ip-proxmox-host> present after 6s
-10:52:30  Started node_exporter.service
-```
-
-Six seconds of real waiting, `NRestarts=0`. Without the gate the bind would have been attempted at
-10:52:24 against an address that did not exist until 10:52:30 - the original failure, exactly.
-
-### Instance: lxc210 `tailscale-cert-refresh` (found and fixed 2026-07-28)
-
-The query-time variant: the unit does not bind anything, it *asks* tailscaled for the node's
-MagicDNS name (`tailscale status --json` -> `Self.DNSName`) and derives the certificate paths from
-it. At boot that field is still empty, so under `set -euo pipefail` the script exited 1 - on every
-boot from at least 2026-07-26 onward, and most likely on every boot-triggered run ever. Renewal was
-therefore never running; the certificate happened to be valid until 2026-10-08, so nothing had
-broken yet. See [KE-16](#ke-16) for what happens when that certificate does go stale.
-
-Fix: the FQDN derivation in `snippets/scripts/tailscale-cert-refresh.sh` now polls for up to 90 s
-instead of reading once, with `|| true` inside the loop so `pipefail` cannot abort the script while
-tailscaled is still starting.
-
-Verified 2026-07-28: `Result=success`, `ExecMainStatus=0`, no failed unit anywhere in the fleet,
-certificate untouched (`no reload needed`, still `notAfter=Oct 8 2026`). That run happened with
-tailscaled already up, so it exercised only the normal path.
-
-**The race path itself is now proven (2026-08-13).** The host booted at 08:52:21 UTC and the
-`Persistent=true` catch-up fired the overdue 04:30 job at **08:53:43 - 82 seconds into the boot
-window**, precisely the condition that used to fail. The unit finished at 08:53:54 with
-`ExecMainStatus=0`: the FQDN poll spent 11 seconds waiting for `Self.DNSName` to become
-non-empty and then proceeded normally (`certificate unchanged ... no reload needed`). This is the
-one instance in this class whose fix could not be proven by a warm restart, and it has now been
-exercised by the boot window it was written for.
-
-### Fix shapes
-
-- **Bind-time** (a service binds the address): gate the unit with
-  `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh <timeout>`, plus `RestartSec` well above the
-  default so a later tailscaled blip cannot exhaust the start limit in milliseconds.
-- **Query-time** (a script reads a value from tailscaled): poll for the value inside the script.
-  An `ExecStartPre` that waits for the *IP* is not a correct proxy for the *DNS name* being known.
-
-Prefer reusing `wait-for-tailscale-ip.sh` over writing shell into a unit file: systemd applies its
-own `$`-expansion to `ExecStartPre=`, so an inline `for i in $(seq 1 30)` can silently degrade to a
-zero-iteration loop that exits 0 without ever waiting - a gate that reports success while doing
-nothing.
-
-**Status:** Class documented 2026-07-28. Four instances fixed and cold-boot confirmed on
-2026-08-13, a fifth on 2026-08-20 - and the same evening the class turned out to be nine instances
-larger than anyone had counted. Those nine were fixed in the `node_exporter` role's unit template
-and confirmed across the whole fleet by the cold boot of 2026-08-21 (below). Every known instance
-in this class is now fixed and proven by a boot rather than by a restart.
-
-**The count was wrong because the evidence destroyed itself (measured 2026-08-20).** Verifying the
-lxc250 sshd gate against a container reboot produced a control case nobody had asked for: the
-`node_exporter` on the same node, binding the same address, ordered after tailscaled but with no
-gate. It failed with `listen tcp <addr>:9100: bind: cannot assign requested address`, sat in
-`failed`, and came back 15 s later on its restart. Swept across the fleet immediately: **nine of
-nine guests, `NRestarts=1`, every one of them.** The hypervisor read `NRestarts=0` - it has carried
-the gate as a hand-written drop-in since 2026-07-28.
-
-Three mechanisms hid it, and they are worth more than the fault:
-
-- The retry loop makes the end state correct, so the node converges and the failure leaves no
-  trace anyone looks at.
-- `SystemdUnitFailed` carries `for: 15m`. A fifteen-second failure cannot reach that rule by
-  construction - the guard is not blind by accident but by threshold.
-- The exporter that would have exported the fault is the one that is down, which is the same
-  self-concealing shape as the host exporter whose failure stopped the host from reporting.
-
-And the fix already existed. The host's drop-in says in its own comment that ordering after
-tailscaled is not sufficient. It was applied where it was found and never swept - the lesson KE-6
-was supposed to have taught. The gate now lives in the `node_exporter` role's unit template rather
-than in a drop-in, because the role generates that unit and a drop-in is for overriding a file you
-do not own.
-
-One loose end, not a readiness fault: the host's `pveproxy` drop-in still hard-codes its Tailscale
-IP inline rather than calling the shared script - harmless today, worth folding into the same
-pattern on the next host pass.
-
-### Fleet cold-boot confirmation (2026-08-21)
-
-The nightly power cycle is the test this platform gets for free, and it exercised all nine gated
-units at once. Every guest booted between 07:05:54 and 07:09:20 UTC, every `node_exporter` reached
-`active` 3 to 13 seconds later, and all nine reported `NRestarts=0` with no failed unit anywhere.
-The previous day the same command over the same nine nodes had read `NRestarts=1` on every one.
-
-`NRestarts=0` on its own proves nothing. The counter also reads 0 on a node that never rebooted,
-and the role had been applied by hand the evening before, which resets it just as effectively. What
-makes this a measurement is the timestamp beside it: each unit's `ActiveEnterTimestamp` falls after
-that node's `uptime -s`, so all nine values were produced by a cold boot rather than by the rollout.
-Verify both or neither.
-
-The gate's own log line gives the width of the race per node:
-
-| Wait reported by `wait-for-tailscale-ip.sh` | Nodes |
-|---|---|
-| 0 s | vm100 |
-| 2 s | lxc211, lxc230, lxc240, lxc250, lxc260 |
-| 6 s | vm102 |
-| 12 s | lxc210, lxc220 |
-
-Eight of the nine waited; only vm100 already held its address when the unit started. On lxc210 and
-lxc220 an ungated unit attempts its bind twelve seconds before the address exists. That is a wide
-race rather than a narrow one, and the retry loop had been absorbing it every morning without
-recording anything.
-
-**The interval from boot to active is not the gate's wait, and reading it that way is wrong.**
-vm100 carries both numbers: twelve seconds from boot to active, of which the gate accounts for
-zero. The remainder is systemd reaching the unit at all, which has nothing to do with Tailscale.
-Only the `present after Ns` line measures the gate; the boot-to-active delta measures the boot.
-
-- **The fifth instance was fixed on 2026-08-20, and reading it first changed the fix.**
-  lxc250's hand-written `ssh.service.d/override.conf` used `After=` plus a `RestartSec=15s` retry
-  loop instead of a readiness gate. It is now owned by the `tailscale_boot_gate` role, which puts
-  `wait-for-tailscale-ip.sh` in front of sshd as `ExecStartPre=` and keeps the retry as a backstop.
-  The detail worth carrying forward: Debian's packaged `ssh.service` sets
-  `RestartPreventExitStatus=255`, and sshd exits 255 when it cannot bind - so the retry loop only
-  ever worked because the hand-written drop-in cleared that list with an empty assignment. A
-  replacement that had reproduced the visible half and dropped that line would have removed the
-  backstop while appearing to improve it. **Cold-boot confirmed the same day** against
-  `pct reboot 250`: `wait-for-tailscale-ip: <address> present after 2s`, sshd listening 25 ms
-  later, `NRestarts=0`, no failed unit. The ungated exporter on the same node bound 13 s later
-  than the gated sshd beside it - the gate is not only cleaner than the retry loop, it is
-  faster.
-
-**References:**
-- [KE-6 - userspace-networking](#ke-6-tailscale-userspace-networking-prevents-node_exporter-from-binding-to-tailscale-ip) - produces the *same* `EADDRNOTAVAIL` message from an unrelated cause; a restart fixes this class and does nothing for that one
-- [KE-9 - PostgreSQL loopback-only bind](#ke-9)
-- [KE-12 - pveproxy boot failure](#ke-12)
-- [KE-16 - stale certificate served from memory](#ke-16)
-- [ADR - PostgreSQL boot ordering](../decisions/postgresql-tailscale-boot-ordering.md)
-- [ADR - pveproxy boot ordering](../decisions/pveproxy-tailscale-boot-ordering.md)
+**Verification.** Fleet cold boot 2026-08-21: all nine guest `node_exporter` units `NRestarts=0`,
+each `ActiveEnterTimestamp` after the node's `uptime -s`. Gate waits (`present after Ns`) ranged
+from 0 s (vm100) to 12 s (lxc210, lxc220). Cold boot 2026-10-10: vm100 `docker` active 77 s after
+boot, `NRestarts=0`. Cold boot 2026-10-13 confirmed vm102's sshd pin and vm100's `docker.service`
+gate. Read `NRestarts` together with the boot timestamp; a manual restart also resets it.
 
 ---
 
@@ -1466,14 +675,11 @@ Only the `present after Ns` line measures the gate; the boot-to-active delta mea
 
 ## KE-19: A file that changes during a sync poisons the health signal of the whole array
 
-**Affected:** vm102, SnapRAID. Start here when `SnapRAIDSyncStale` and `SystemdUnitFailed` fire
-together for `snapraid-maintenance@sync.service` while the array itself looks fine.
+- **Status:** Resolved 2026-08-15; recurrence fixed 2026-10-08
+- **Affects:** SnapRAID on vm102; `SnapRAIDSyncStale` and `SystemdUnitFailed` for
+  `snapraid-maintenance@sync.service`
 
-**Why this entry exists:** the failure looks like a storage fault and is not one. The array was
-fully in sync except for a log file nobody wants protected, and the alert said "no sync for more
-than 26 hours".
-
-**Symptom:** the sync runs to completion, saves and verifies every content file, and then exits 1.
+**Symptom.** The sync completes, saves its content files, then exits 1:
 
 ```
 Unexpected size change at file '/mnt/disk03/Nextcloud/nextcloud.log' from 3541768 to 3554509.
@@ -1481,46 +687,19 @@ WARNING! You cannot modify files during a sync.
       14 file errors
        0 io errors
        0 data errors
-WARNING! Unexpected file errors!
 ```
 
-`0 io errors` and `0 data errors` are the discriminator: no media fault and no corruption. All
-14 errors were the same file.
+`0 io errors` and `0 data errors` rule out media faults and corruption.
 
-### Root cause
+**Cause.** SnapRAID cannot protect a file that changes while it is read; it fails that file and
+exits non-zero. The 23:00 slot was chosen for quiet, but the host powers down nightly, so
+`Persistent=true` usually runs the sync at the next boot, while services write. One non-zero exit
+stops `snapraid-maintenance.sh` (`set -e`) before it writes the success metric, so the whole array
+reads stale. 2026-10-08: same symptom from a PostgreSQL dump renaming its `*.partial` mid-sync
+(`Missing file '.../pg_dumpall_20261008_102227.sql.gz.partial'`).
 
-SnapRAID computes parity over the bytes it reads. A file that changes underneath a running sync
-cannot be parity-protected, so SnapRAID fails that file, continues with the rest, and exits
-non-zero at the end. Nextcloud writes its own application log inside the protected pool.
-
-### Why it surfaces in the morning rather than at 23:00
-
-The sync is scheduled for 23:00 precisely because nothing is active then. But `homelab_schedule`
-powers the host down overnight, so the timer never fires at 23:00 - `Persistent=true` catches it up
-**at the next boot**, in the morning, when the services are running again. The journal shows both
-patterns: runs at 23:02 on nights the host stayed up, and at 07:34 / 09:30 / 10:09 after a
-power-down.
-
-**The catch-up semantics that fixed one failure created another.** They are still correct - a
-backup-class job must be caught up - but the quiescence the 23:00 slot was chosen for is gone, and
-nothing recorded that trade. Same shape as the `PostgreSQLBackupStale` finding: a property everyone
-assumed still held after the mechanism underneath it changed.
-
-### Why one log file breaks the signal for the whole array
-
-`snapraid sync` exits 1 -> `set -e` in `snapraid-maintenance.sh` aborts -> the success metric is never
-written -> `SnapRAIDSyncStale` fires, and `SystemdUnitFailed` alongside it. Parity was current for
-everything except that log.
-
-**A health signal that is all-or-nothing gets held hostage by its least important member.** Same
-abstraction as `DiskSpaceCritical` firing 21 times for one fact ([changelog 2026-07-10](changelog.md))
-and as `smart_health_passed` reading PASSED on a disk with 7680 unreadable sectors
-([KE-13](#ke-13)): the measurement does not answer the question being asked of it.
-
-### Fix
-
-Exclude the volatile files. SnapRAID is built for archives of files that do not change, and the
-config had excludes only for `*.tmp`, `*.bak`, `lost+found/`, `/tmp/` and `/cache/`.
+**Fix.** The `snapraid_maintenance` role owns the exclude rules in a marked `blockinfile` block of
+`/etc/snapraid.conf`:
 
 ```
 exclude /Nextcloud/nextcloud.log
@@ -1530,137 +709,51 @@ exclude *.sqlite3-wal
 exclude *.db-shm
 exclude *.db-wal
 exclude /Nextcloud/appdata_*/richdocuments/remoteData/
+exclude *.partial
 ```
 
-**A first attempt used `exclude *.log` and was wrong.** The next `diff` showed it also dropping four
-static CD-rip logs out of the audiobook archive - files that never change and were never the
-problem. The rule is exclude what changes, not what shares a suffix; an over-broad exclude
-silently reduces coverage, which is the failure mode this whole entry is about, one layer up.
+Exclude by what changes, not by suffix: `exclude *.log` also dropped static files from the
+archive and was narrowed. SQLite side files are excluded because parity taken at a different moment
+than the main database is inconsistent. The disk and parity layout above the block stays
+hand-written, because it carries real device labels.
 
-### Recurrence on 2026-10-08
+**Verification.** 2026-08-15, in order (sync has no rollback,
+[snapraid-sync runbook](../../runbooks/storage/snapraid-sync.md)): `snapraid diff` before and after
+the excludes, every change explained; `systemctl start snapraid-maintenance@sync.service`
+`Result=success`; `snapraid diff` reports no differences; both alerts cleared. Live block marker on
+vm102: `# BEGIN ANSIBLE MANAGED - exclude rules (KE-19)`.
 
-Same symptom after the morning boot, different file: the sync's catch-up ran at the same boot as
-the PostgreSQL dump's, and the dump renamed its `*.partial` once verified, so a file the sync had
-scanned was gone before it was read:
-
-```
-Missing file '/mnt/disk02/Postgres-Backups/pg_dumpall_20261008_102227.sql.gz.partial'.
-WARNING! You cannot modify data disk during a sync.
-```
-
-`*.partial` is excluded since that day; the MariaDB dump uses the same pattern. The finished
-dumps stay in the array.
-
-### The finding that outlives the incident
-
-`diff` also reported `Vaultwarden/db.sqlite3-shm` and `-wal` inside the array. Those are SQLite side
-files, ephemeral by definition, and parity over them captured at a different moment than the main
-database is an inconsistent set - a reconstruction from it can be corrupt.
-
-`db.sqlite3` itself deliberately stays in the array: imperfect protection beats none while
-Vaultwarden has no consistent export at all. That export is remediation plan Tier 1 #3, and this is
-the second, purely technical reason for it - the first being that parity does not survive deletion
-or ransomware. See [`data-classification.md`](data-classification.md).
-
-### Verification (2026-08-15)
-
-Ordered deliberately, because `snapraid sync` has no rollback (see the rollback section of
-[`snapraid-sync.md`](../../runbooks/storage/snapraid-sync.md)):
-
-1. `snapraid diff` before touching anything: 2 added (both explainable - the day's PostgreSQL
-   dump and the first MariaDB dump), 1 removed (retention), 5 updated. No unexplained deletion.
-2. Excludes added, `diff` re-run: over-broad `*.log` caught, narrowed, re-run again - 0 updated,
-   7 removed, every one accounted for.
-3. `systemctl start snapraid-maintenance@sync.service` -> `Result=success`, `ExecMainStatus=0`.
-4. `snapraid diff` -> No differences, every file equal.
-5. Metric written, scraped, both alerts cleared. vm102 reports no failed units.
-
-**Status:** Fixed 2026-08-15, and fully closed since. This entry read "Open: `/etc/snapraid.conf`
-is hand-managed ... these excludes are lost on a rebuild of vm102" until 2026-08-17, by which time
-it had stopped being true: the `snapraid_maintenance` role owns the exclude rules through a marked
-`blockinfile` block, verified live on vm102 (`# BEGIN ANSIBLE MANAGED - exclude rules (KE-19)`).
-The remediation plan had recorded the closure; this register had not. The disk, parity and content
-layout above the block stays hand-written on purpose - it carries the real device labels that
-Check 18 keeps out of version control, and it changes only when hardware does.
-
-**References:** [runbooks/storage/snapraid-sync.md](../../runbooks/storage/snapraid-sync.md) -
-[KE-13](#ke-13); [data-classification.md](data-classification.md)
+---
 
 <a id="ke-20"></a>
 
 ## KE-20: VM100 froze during a live CIFS unmount, no evidence recorded
 
-**Affected component:** VM100 (compute node, GPU passthrough)
+- **Status:** Open - cause unknown; vm100 snapshottable since 2026-10-10
+- **Affects:** vm100
 
-**Symptom:**
-On 2026-08-16 at 19:20 UTC, `systemctl stop` on the two media `.mount` units wedged the guest.
-SSH over Tailscale and ICMP over the LAN both stopped answering. QEMU reported the VM as running
-with QMP responsive and memory allocated; the guest agent did not answer. ACPI shutdown timed out.
-Only `qm stop` followed by `qm start` recovered it, costing roughly 25 minutes of Jellyfin and
-Audiobookshelf.
+**Symptom.** 2026-08-16 19:20 UTC: `systemctl stop` on the two media `.mount` units wedged the
+guest. SSH over Tailscale and ICMP over the LAN stopped; QMP answered, the guest agent did not, ACPI
+shutdown timed out. `qm stop` and `qm start` recovered it after about 25 minutes of media outage.
 
-**What the evidence shows, and what it does not:**
-The journal of that boot ends at 19:20:39 UTC, inside the SSH session in which the command ran.
-The last kernel message is at 19:20:17, the teardown of the two container veth interfaces from the
-preceding `docker stop`. Nothing follows: no `CIFS VFS` error, no `task blocked for more than 120
-seconds`, no call trace, no shutdown record. systemd logs `Unmounting ...` before it stops a mount
-unit, and even that line is absent.
+**Cause.** Unknown. The guest journal ends at 19:20:39 inside the SSH connection that ran the
+command; the last kernel line, 19:20:17, is the veth teardown from the preceding `docker stop`. No
+`CIFS VFS` error, no `task blocked for more than 120 seconds`, no call trace, and not even
+systemd's `Unmounting ...`. A userspace deadlock would have kept logging; this points below the
+logging layer. The client recorded `Connection reset by peer` (exit 255) without a timestamp, so
+it may come from the restarted guest. The host logged no kernel message in that window, so the
+[KE-13](#ke-13) disk is not implicated. Weak signal: six `perf: interrupt took too long` lines
+between 17:01 and 17:15.
 
-That rules out an ordinary userspace deadlock, which would have kept logging and would have
-produced a blocked-task warning after two minutes. It points to a freeze below the logging layer.
-It does not establish the cause, because nothing was recorded.
+**Fix.** The share change was completed without unmounting on a running system: new mount units on
+new paths, `.env` repointed, containers recreated, old automounts disabled and retired by the next
+power-off. Evidence for a repeat: the `netconsole` role on vm100 streams the guest kernel log to
+the host receiver (`ansible/roles/proxmox_host_units/templates/netconsole-receiver.service.j2`)
+with `console_loglevel` 7, so `INFO: task blocked` reaches it. vm100's data disk is qcow2 since
+2026-10-10, so a repeat attempt can be preceded by a snapshot.
 
-**Client-side evidence, recovered 2026-08-17.** The guest wrote nothing, but the other end of the
-SSH session recorded how it died: `Read from remote host: Connection reset by peer`, exit 255 -
-a reset, not a timeout. That is worth writing down and worth not over-reading. A reset means a RST
-segment arrived, and there are two readings: the guest's network stack answered while the process
-behind it was already gone, or - the likelier one - the RST came after `qm start`, when the
-restarted guest received packets for a connection it knew nothing about. The second reading makes
-the reset evidence of the recovery, not of the freeze. The two cannot be separated after the fact,
-because the client's message carries no timestamp of its own.
-
-The lesson is the one this file keeps relearning: an artefact recovered late is still worth
-recording, and is still only worth what its timeline can prove. Attach a timestamped client-side
-transcript to the next attempt, so this ambiguity does not repeat.
-
-The Proxmox host logged no kernel message at all in that window, so the failing auxiliary disk
-([KE-13](#ke-13)) is not implicated. One weak signal exists: between 17:01 and 17:15 UTC the guest
-reported `perf: interrupt took too long` six times, lowering its sample rate from 78000 to 23750.
-That is two hours earlier and proves nothing on its own.
-
-**Root cause:** unknown.
-
-**Why it was not pursued further:**
-Reproducing it requires a rollback path, and VM100 has none. Its `scsi1` is a 300 GB raw file on
-directory storage, which Proxmox cannot snapshot, and it sits on the KE-13 disk. The thin pool
-holding `scsi0` is at 84 % with zero free space in the volume group. A repeat attempt would
-therefore risk an unrecoverable guest for a change whose benefit was incremental.
-
-**What was done instead:**
-The operation was avoided rather than made safe. The media shares were rescoped by creating new
-mount units on new paths, repointing the two `.env` files and recreating the containers; the old
-automount units were only disabled, which drops the boot symlink without unmounting, leaving the
-nightly power-off to retire them. Nothing was unmounted on a running system.
-
-`netconsole` now streams the guest kernel log over UDP to the Proxmox host, so a repeat would
-leave evidence even if disk writes stop. Note `console_loglevel` is 4, which filters
-`INFO: task blocked` at priority 6 - it must be raised to 7 before any repeat attempt, or the
-channel will be silent for exactly the message being sought.
-
-**Open:**
-- Cause unknown; do not schedule further live unmounts on VM100 until it can be rolled back.
-- ~~`netconsole` and the loglevel are not persistent across a reboot.~~ Closed 2026-08-17. Both
-  were gone after the nightly power cycle, as predicted: the module was not loaded and
-  `console_loglevel` was back to 4, so the channel had been dead for a day without saying so. Now
-  owned by the `netconsole` role on vm100 plus a hand-deployed receiver unit on the host. The unit
-  is ordered `After=network-online.target` rather than listed in `/etc/modules-load.d/`, because
-  the latter runs before the interface has an address and would fail into silence - see
-  [KE-18](#ke-18).
-- VM100 cannot be snapshotted at all. That is the precondition for investigating this.
-
-**Status:** Open, and not being pursued. No evidence survived the freeze on the guest side, and
-the investigation waits on VM100 becoming snapshottable. The `netconsole` half is closed since
-2026-08-17.
+**Verification.** Not reproduced. Do not unmount CIFS live on vm100 without a snapshot and a
+timestamped client transcript.
 
 ---
 
@@ -1668,174 +761,53 @@ the investigation waits on VM100 becoming snapshottable. The `netconsole` half i
 
 ## KE-21: A kernel oops cascade wedged the hypervisor, and nothing could report it
 
-**Affected component:** Proxmox host (hypervisor)
+- **Status:** Resolved 2026-09-12; memory test pending
+- **Affects:** Proxmox host
 
-**Symptom:**
-On 2026-08-20 from roughly 12:39 the host stopped accepting new SSH sessions - TCP connected, the
-banner never arrived, at 60 seconds as at 20. The web interface served its login page and then
-refused authentication with `401 invalid PVE ticket`. Every guest showed as `unknown` in the
-interface. A shutdown requested through the interface produced neither confirmation nor effect.
-Meanwhile the machine pinged in 2 to 4 ms, all ten guests kept running, and both VMs answered SSH
-normally with a load average of 0.00. Recovery required a hard reset; the outage lasted about two
-and a half hours.
-
-**What was measured while it was happening:**
-The host's `node_exporter` kept answering for most of the incident, which is the only reason any of
-this is quantified rather than reconstructed. It reported load 22 with `node_procs_running` between
-1 and 3, `node_procs_blocked` at 0, 7.4 GB memory available, 25 GB free on `/`, every
-`node_disk_io_now` at 0, and no failed unit. Pressure-stall figures over three samples ten seconds
-apart put I/O stall at about 1 % and CPU pressure at 0.2 %.
-
-Load 22 with neither CPU nor I/O pressure is not a busy machine. It is twenty-two tasks blocked on
-a lock. The discriminating measurement was one label:
+**Symptom.** 2026-08-20 from about 12:39: new SSH connections got no banner; the web UI refused
+login with `401 invalid PVE ticket`; every guest showed `unknown`; shutdown through the API had no
+effect. Guests kept running. Recovery needed a hard reset after about 2.5 hours. `node_exporter`
+still answered: load 22 with 1-3 running processes, no blocked processes, no I/O pressure, and:
 
 ```
-node_filesystem_device_error{device="lxcfs", fstype="fuse.lxcfs",
-                             mountpoint="/var/lib/lxcfs",
-                             device_error="mountpoint timeout"} 1
+node_filesystem_device_error{device="lxcfs",mountpoint="/var/lib/lxcfs",device_error="mountpoint timeout"} 1
 ```
 
-**Root cause, from the kernel log of the previous boot:**
-
-The journal is persistent on this host, so the whole sequence survived the reset.
-
-*12:38:25 - the first fault, and the only one that is a cause rather than a consequence:*
+**Cause.** Persistent host journal, previous boot. 12:38:25, first oops (taint `P O`, no `D` yet):
 
 ```
 BUG: unable to handle page fault for address: ffff8adf00000051
 CPU: 3  PID: 140185  Comm: lxc-info   Tainted: P O
 RIP: anon_vma_interval_tree_insert+0x4b/0xe0
-RDX: ffff8adf00000001
-Call Trace: __anon_vma_prepare -> __vmf_anon_prepare -> do_fault
-            -> __handle_mm_fault -> handle_mm_fault -> do_user_addr_fault
 ```
 
-The taint field reads `P O` and not yet `D`, which is what identifies this as the first oops. A
-process took an ordinary userspace page fault; the kernel walked the anonymous-mapping interval
-tree to prepare it and found a node pointer of `ffff8adf00000001` - a plausible kernel prefix with
-a garbage low half. A kernel data structure was already corrupt at that moment.
+Then six general protection faults in `kmem_cache_alloc_noprof+0x203/0x3e0`, each with the same
+non-canonical pointer `0xcfb9e3d45bba8275`: a corrupted slab freelist. The last victim, 12:39:06,
+was `fuse_worker` of `lxcfs`. Everything reading lxcfs-backed `/proc` files then blocked: PAM
+(container logins, host sshd, web authentication), `pvestatd` (hence `unknown`), and PID 1. FUSE
+waits are killable, so the hung-task detector never fired.
 
-*12:38:34 onwards - six further oopses, all identical in shape:*
+The identical poisoned value in every oops points at one software corruption event; the kernel
+was `6.17.4-1-pve`. The memory has no ECC, so the absence of MCE/EDAC errors does not exclude
+hardware. `kernel.panic_on_oops` was 0, so the host degraded instead of rebooting, and with the GPU
+passed through (`x-vga=1`), no serial console and no BMC there was no way in.
 
-```
-general protection fault, probably for non-canonical address 0xcfb9e3d45bba8275
-RIP: kmem_cache_alloc_noprof+0x203/0x3e0
-```
+**Fix.**
 
-That is the slab allocator, and the poisoned pointer is the same value in every one of them. A
-freelist had been corrupted, so every subsequent allocation from that cache faulted. Victims in
-order: `pve-firewall`, `apache2`, `proxmox-firewall`, `bash`, `bash`, `cron`, and at 12:39:06
-`fuse_worker`.
+- `kernel_panic_policy`: `kernel.panic_on_oops=1`, `kernel.panic=10`, read back from the running
+  kernel ([decision](../decisions/hypervisor-panic-and-watchdog.md)).
+- Alert rules `FilesystemMountTimeout` and `SystemdUnitStuckActivating` (a hung unit never becomes
+  `failed`).
+- Kernel: 6.17.13 installed 2026-10-08 with the PVE 9.2 upgrade and pinned; pin released
+  2026-10-12, the host boots the 7.0 default since ([KE-14](#ke-14)).
+- `softdog` not armed: that needs an HA resource, which on a single node fences the node itself.
+  Revisit on a lockup with no oops and no netconsole frames, or when out-of-band access exists.
+- Pending: `memtest86+` from the boot menu (needs physical presence).
 
-**Why one dead thread cost the whole host:**
-
-`fuse_worker` is the worker thread of `lxcfs`, the FUSE filesystem that gives every container its
-own view of `/proc/meminfo`, `/proc/stat` and `/proc/cpuinfo`. With it gone, lxcfs stopped
-answering, and everything that reads those files blocked:
-
-| What blocked | Why |
-|---|---|
-| Any login into any container | PAM reads `/proc/meminfo` |
-| `pvestatd` | polls container usage through lxcfs - **this is why every guest showed `unknown`** |
-| systemd, PID 1 | caught with them, so timers stopped and no session could be created |
-| Host `sshd` | accepts the connection, then hangs building the session |
-| Web authentication | same PAM path, hence the 401 |
-| Shutdown via the API | the request never returns, hence no confirmation and no effect |
-
-**The absence of a hung-task warning is evidence, not a gap.** `kernel.hung_task_timeout_secs` was
-120 and the detector was active, yet it never fired across two hours. FUSE waits are deliberately
-*killable*, so a dead FUSE daemon does not leave unkillable processes - and the detector skips
-killable waits by construction. A genuine disk or kernel lock would have reported after two
-minutes. `node_exporter` outlasted everything else because it is the one collector with a mount
-timeout; eventually its forty request slots filled too, and it answered
-`Limit of concurrent requests reached (40)`.
-
-**Hardware or software:**
-The poisoned pointer `0xcfb9e3d45bba8275` is byte-for-byte identical in all six follow-on oopses.
-Sporadic memory faults produce different garbage each time; one value repeating is a single
-corruption event being re-read deterministically. That points at software, and the kernel was
-`6.17.4-1-pve` with `6.17.13-21` sitting unapplied - nine point releases behind on a young series.
-No MCE and no EDAC error was logged.
-
-Hardware cannot be excluded, and the reason is worth stating plainly rather than filing under
-"unlikely": the memory has no error correction (`Error Correction Type: None`, DDR4 on a
-consumer AM4 board). Silent corruption on such a machine is undetectable by design, so the absence
-of a machine-check exception proves nothing at all.
-
-The first oops occurred in `lxc-info`, which `pct exec` invokes and which `pvestatd` also runs every
-few seconds. Manual `pct exec` calls were being issued at the time. That is a correlation and it is
-recorded as one; it is not established as the trigger.
-
-**Damage:** none that survived the reset. All ten guests returned, no failed unit on the host or in
-any container, both databases recovered from their logs - MariaDB replayed 215 InnoDB pages from
-checkpoint LSN 3556122373 and reported ready for connections - and every backup on the share was
-intact. The auxiliary disk read `Reported_Uncorrect=21` and `Current_Pending_Sector=7680` after the
-cut, unchanged. `Dirty bit is set` and a journal recovery on the auxiliary filesystem were the
-expected traces of an unclean stop and nothing more.
-
-**Incidental confirmation of an existing rule:** the kernel letters moved again across this reboot.
-The boot SSD went from `sdc` to `sda` and the auxiliary disk from `sdb` to `sdi`. A SMART sweep
-written against the old letters reported all zeroes for the failing disk, which would have read as
-a recovery. Identify by `9:0:0:0` or by `by-id`, never by letter - see [KE-14](#ke-14).
-
-**What made it a two-hour outage instead of a thirty-second reboot:**
-
-Kernels oops occasionally. What turned this one into a total loss of control was that
-`kernel.panic_on_oops` was `0`. With it set, the machine would have panicked at 12:38:25 and, with
-`kernel.panic` set to a delay, rebooted itself before the slab corruption could spread. Instead it
-degraded for two hours into a state with no way in at all, because the single GPU is passed through
-with `x-vga=1` and there is no serial console and no BMC. **On a single host with no out-of-band
-access, an immediate reboot is strictly better than a machine that is alive and unreachable.**
-
-**Monitoring gaps this exposed:**
-
-1. No rule watched `node_filesystem_device_error`. The value read 1 from the first minute, in every
-   scrape, for two hours. Same class as `smart_health_passed` reporting PASSED for a disk with 7680
-   unreadable sectors: the measurement existed and no guard read it. Closed by
-   `FilesystemMountTimeout`.
-2. `SystemdUnitFailed` could not see this, and not because of a threshold. A unit that hangs stays
-   `activating` and never becomes `failed`, because it never reaches a timeout. Three units sat in
-   `activating` for two hours while that rule read green - correctly, by its own definition. Closed
-   by `SystemdUnitStuckActivating`.
-3. `softdog` is loaded and its device is active, and nothing can make it fire. `watchdog-mux`
-   feeds it and no HA resource exists that could stop that. A watchdog whose feeding stops when
-   systemd blocks is exactly the missing exit from this incident, and this one has no such client.
-
-**Remediation:**
-
-- `FilesystemMountTimeout` and `SystemdUnitStuckActivating` added to the `kernel` rule group,
-  verified against live series (71 and 1810 respectively) and confirmed to return empty on a
-  healthy fleet.
-- `kernel.panic_on_oops=1` with `kernel.panic=10` - **applied 2026-09-12**, owned by the
-  `kernel_panic_policy` role. Re-read from the running kernel the same day, outside the run that
-  wrote it: `sysctl kernel.panic_on_oops kernel.panic` returns 1 and 10. The role reads both values
-  back out of the running kernel rather than reporting the file it wrote, because a drop-in that a
-  later file in `/etc/sysctl.d/` overrides leaves the kernel exactly as it was. The reasoning for
-  ten seconds rather than zero, and the decision not to arm `softdog`, are in
-  [the panic and watchdog decision](../decisions/hypervisor-panic-and-watchdog.md).
-- Install the pending kernel, `6.17.4-1` to `6.17.13-21` - **installed 2026-10-08** with the PVE 9.2
-  upgrade, and pinned with `proxmox-boot-tool kernel pin`, because 9.2 makes the 7.0 kernel line the
-  default and a driver change under the open [KE-14](#ke-14) diagnosis would make its measurements
-  incomparable. Active from the first boot after that date.
-- `memtest86+` from the boot menu, to rule the memory in or out - **pending**, needs a maintenance
-  window and physical presence.
-- Arm `softdog` - **decided against 2026-09-11**, with the conditions for revisiting written down
-  rather than left as a feeling. Arming it means configuring an HA resource, and an HA stack on a
-  single node with no quorum partner fences the node it is meant to protect. The device itself has
-  been open since boot and reads `active`, corrected here 2026-09-16 along with the decision, which
-  carries the measurements. The residual risk is accepted and stated: `panic_on_oops` only
-  helps where the kernel is well enough to notice, and a hard lockup is precisely where it is not.
-  Revisit on the first lockup that leaves no oops and no netconsole frames, or the day this machine
-  gains an out-of-band path. See the decision for why `nmi_watchdog` is not the middle option it
-  looks like.
-
-**Status:** Resolved 2026-09-11 in the part that was actionable. `panic_on_oops` is applied and
-was read back out of the running kernel on 2026-09-12, and both alert rules are live. The kernel
-upgrade and the memory test are pending; `softdog` is declined on record.
-
-**Related:** [KE-14](#ke-14) (kernel letters are not identifiers), [KE-17](#ke-17) and
-[KE-20](#ke-20) (guest freezes with no recorded cause - unlike those two, this one left a complete
-kernel trace), [hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
+**Verification.** Verified 2026-09-12: `sysctl kernel.panic_on_oops kernel.panic` returns 1 and 10.
+Both rules returned empty on a healthy fleet and matched the incident series. After the reset all
+guests returned with no failed unit; MariaDB replayed its InnoDB log cleanly. See
+[hard shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
 
 ---
 
@@ -1843,77 +815,33 @@ kernel trace), [hard shutdown recovery](../../runbooks/platform/hard-shutdown-re
 
 ## KE-22: A retired deployment stayed on disk and broke the backup seven months later
 
-**Affected component:** LXC220 (Calibre-Web)
+- **Status:** Resolved 2026-09-01
+- **Affects:** lxc220 (Calibre-Web), `guest_backup`
 
-**Symptom:**
-The first full guest-backup run, on 2026-08-21, failed for one guest:
+**Symptom.** The first full guest backup, 2026-08-21, failed for lxc220:
 
 ```
 tar: ./opt/calibreweb: Cannot open: Permission denied
 ```
 
-`vzdump 220` exited non-zero, `guest_backup_failed_guests` read 1, and the unit ended in `failed`.
-The other seven guests completed. lxc220 then had no archive for eleven days.
+`vzdump 220` exited non-zero and `guest_backup_failed_guests` read 1 until 2026-09-01.
 
-**Root cause (measured 2026-09-01):**
-It was first recorded as a UID-mapping fault. The node has documented UID-mapping debt, the error
-reads like a permission problem, and that reading went into the runbook's failure table without
-anyone testing it.
+**Cause.** Not the UID mapping, which is the Proxmox default and correct. `/opt/calibreweb` was the
+deployment that `/srv/calibreweb` replaced in February, left in place and owned by host
+`1000:1000`, outside the container's map (100000-165535). Inside the container its owner reads
+`65534`, and container root gets `EACCES` because capabilities only reach mapped owners. `vzdump`
+archives unprivileged containers through `lxc-usernsexec -m u:0:100000:65536`, so it reads only
+what the container can read.
 
-The mapping was never the problem. `pct config 220` shows the Proxmox default, and every other path
-on the node behaves correctly under it. One directory was wrong.
+**Fix.** The directory (220 KB: old compose file, `app.db` with accounts all present in the live
+database, a Flask key) was archived cold off the node, compared against live, and deleted. Removed
+in the same pass: `/etc/systemd/system/tailscaled-userspace.service` ([KE-6](#ke-6)) and a stale
+clone of this repository under `/opt`. The orphaned `smart.prom.*` temporary files in the host's
+textfile directory were cleared on 2026-09-15 with the `smart_metrics` rollout.
 
-`/opt/calibreweb` is the Calibre-Web deployment that `/srv/calibreweb` replaced. Its log ends with a
-clean `webserver stop` on 2026-02-14 and the new compose file is dated 2026-02-20. The old directory
-was left in place.
-
-It is owned by host `1000:1000`. The container maps host UIDs 100000 to 165535, so that owner falls
-outside the map, with two effects:
-
-- The kernel cannot translate the owner and substitutes `/proc/sys/kernel/overflowuid`, so `ls`
-  inside the container reports `65534`.
-- Container root also gets `EACCES`. Capabilities are scoped to the user namespace, so
-  `CAP_DAC_OVERRIDE` reaches only owners the namespace maps.
-
-`vzdump` archives an unprivileged container through `lxc-usernsexec -m u:0:100000:65536`. That is
-deliberate - the archive has to carry container-relative ownership, or restoring it onto a host with
-a different range rewrites every file wrongly. The consequence is that the backup can read what the
-container can read.
-
-Who wrote the directory from the host side is not recorded. The January file dates fit the original
-deployment, before the stack moved to `/srv`, and nothing else on the node accounts for it.
-
-**What it held:** 220 KB. The retired compose file, and a `config/` tree with `app.db`, a 44-byte
-Flask key, `gdrive.db`, a log, and a `client_secrets.json` containing `{}`. Three accounts in
-`app.db`, all three present in the live database under `/srv`, which carries a fourth added after
-the move.
-
-**Fix:**
-Archived to a cold copy held in two places off the node, compared against live, then deleted. Two
-other orphans on the same node went in the same pass:
-
-- `/etc/systemd/system/tailscaled-userspace.service`, disabled at the KE-6 recurrence on 2026-07-28
-  and never removed.
-- `/opt/homelab-server-architecture`, a clone of this repository last updated 2026-03-05. No unit,
-  timer or crontab referenced it.
-
-**The class: give the thing being replaced a removal step, in the change that replaces it.**
-Three artefacts on one node, each left behind by a change that worked. Replacing something has an
-obvious end and retiring what it replaced does not, so the second job is the one that gets dropped.
-The cost then appears somewhere unrelated and much later: a January directory as an August backup
-fault, a disabled unit as a second `tailscaled` at every boot. Other instances here are
-[KE-6](#ke-6), [KE-4](#ke-4), and - still open - the orphaned `smart.prom.*` files in the host's
-textfile directory.
-
-On this node that would have been one line in the February compose change: delete
-`/opt/calibreweb` after `/srv/calibreweb` answers.
-
-**Status:** Resolved 2026-09-01. Orphans removed, Calibre-Web unaffected. `vzdump 220` then wrote
-1.03 GB in 33 s and exited 0. The scheduled job ran in full afterwards: `status=0/SUCCESS`,
-`guest_backup_failed_guests` 0, 268 s. That is the unit's first clean finish since 2026-08-21.
-
-The runbook's failure table carries the corrected diagnosis, in
-[guest backup and restore](../../runbooks/platform/guest-backup-restore.md).
+**Verification.** `vzdump 220` wrote 1.03 GB in 33 s, exit 0; the next scheduled run ended
+`status=0/SUCCESS` with `guest_backup_failed_guests 0`. The diagnosis is in the failure table of the
+[guest backup runbook](../../runbooks/platform/guest-backup-restore.md).
 
 ---
 
@@ -1921,63 +849,29 @@ The runbook's failure table carries the corrected diagnosis, in
 
 ## KE-23: A role gained a task and seven nodes never received it
 
-**Affected component:** `ssh_hardening` role, seven of ten inventory nodes
+- **Status:** Resolved 2026-09-16
+- **Affects:** `ssh_hardening`; lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, vm102 (guests,
+  2026-09-04) and the Proxmox host (2026-09-16)
 
-**Symptom:**
-None. Nothing failed, nothing alerted, and the security posture the role exists to produce is
-correct on every node. The gap is visible only by comparing what the role writes against what is
-on disk, which is why it lasted eight weeks.
+**Symptom.** None visible. Measured 2026-09-04 with `sshd -T` and a directory listing: vm100,
+lxc250 and the host had `sshd_config.d/00-hardening.conf`; seven guests had an empty
+`sshd_config.d/`. Effective values were correct everywhere (`passwordauthentication no`,
+`kbdinteractiveauthentication no`; `permitrootlogin no`, host `without-password`).
 
-**Measured 2026-09-04**, `sshd -T` as root through the inventory, plus a directory listing:
+**Cause.** `6faf809` (2026-07-08) added the drop-in task to fix vm100 and was applied only there.
+lxc250 and the host got it later on adoption. Debian's `sshd_config` starts with
+`Include /etc/ssh/sshd_config.d/*.conf`, and sshd keeps the first value it reads, so a later file in
+that directory would override the main file's lines. On vm100, `50-cloud-init.conf` had done
+exactly that; `00-` sorts first.
 
-| Node | `sshd_config.d/` | effective |
-|---|---|---|
-| vm100 | `00-hardening.conf`, `50-cloud-init.conf` | `permitrootlogin no`, `passwordauthentication no` |
-| lxc250 | `00-hardening.conf` | same |
-| proxmox-host | `00-hardening.conf` | `without-password`, `passwordauthentication no` |
-| lxc200, lxc210, lxc211, lxc220, lxc230, lxc260, vm102 | empty | same as lxc250 |
+**Fix.** Role applied to the nine guests on 2026-09-04 and to the host on 2026-09-16, the host run
+behind a `systemd-run --on-active=300` dead-man switch. The host keeps `prohibit-password` from
+`ansible/inventory/group_vars/proxmox.yml`. The weekly drift sweep now reports such gaps
+([remediation plan](remediation-plan.md#open-items)). Applying the role surfaced [KE-24](#ke-24).
 
-`kbdinteractiveauthentication no` on all ten, which closes the PAM route that
-`PasswordAuthentication no` alone leaves open.
-
-**Root cause:**
-`6faf809` (2026-07-08), subject `fix(vm100): neutralize cloud-init sshd drop-in in ssh-hardening
-role`, added the drop-in task. The subject names one node; the role targets `guests`. It was applied
-to vm100. lxc250 and the Proxmox host received it later, on adoption, because the role ran there
-from scratch. The other seven have not seen a run of this role since.
-
-**Why the drop-in and the `sshd_config` lines are not equivalent:**
-Debian's `sshd_config` opens with `Include /etc/ssh/sshd_config.d/*.conf`, and sshd takes the
-first value it obtains for a directive, not the last. A file in that directory therefore beats a
-line further down in the main file. On the seven nodes the directory is empty today, so the main
-file's lines apply and the result is right; the moment anything writes into that directory, they
-lose. vm100 is the proof that this happens: `50-cloud-init.conf` is there, and `00-` sorting
-before `50-` is the whole reason the fix worked.
-
-**Status:** Resolved on the nine guests 2026-09-04, open on the Proxmox host.
-
-The dry run did not match the expectation, which is why the expectation was written down first.
-Nine of ten showed `changed=2` rather than seven: vm100 differed by one character, an em dash the
-role lost in `cd24328` ("use ASCII punctuation") and never redeployed, and the Proxmox host would
-have had its hand-written comment block replaced by the role's. Neither is a value change. Applied
-to the guests afterwards; `sshd -T` across all ten is byte-identical to the table above, which is
-the pass condition. The drop-in is now present on every node.
-
-Applying it also set off [KE-24](#ke-24): six containers had `ssh.socket` enabled beside
-`ssh.service`, and the handler's reload left the service dead while the socket kept serving SSH.
-
-The host is deliberately held back. Its delta is a comment block, its value stays
-`prohibit-password` from `group_vars/proxmox.yml`, and socket activation is disabled there, so the
-change is low-value and the blast radius is the whole platform: per that same group_vars file the
-physical recovery path is unavailable while the GPU is passed through. It belongs in a window with
-a second session already open, not at the end of an unplanned sequence.
-
-This is [KE-6](#ke-6) again, in a different medium: the rule that entry produced - sweep the other
-nodes when closing a configuration error, and record that you did - was written six weeks after
-`6faf809` had already broken it, and it sat in the repository for the whole eight weeks this gap
-stayed open. The drift check in the [remediation plan](remediation-plan.md) would have reported it
-on 2026-07-15; the applied state is in A.8.5 of [security controls](security-controls.md).
-Applying the fix is what turned up [KE-24](#ke-24).
+**Verification.** `sshd -T` across all ten nodes matches the expected values; the drop-in is present
+on every node; re-check at `changed=0`. Control status: A.8.5 in
+[security controls](security-controls.md).
 
 ---
 
@@ -1985,77 +879,34 @@ Applying the fix is what turned up [KE-24](#ke-24).
 
 ## KE-24: sshd's reload is a re-exec, and under socket activation it cannot rebind
 
-**Affected component:** LXC200, LXC210, LXC211, LXC220, LXC230, LXC260
+- **Status:** Resolved 2026-09-04
+- **Affects:** `ssh_hardening` handler on socket-activated nodes (on 2026-09-04: lxc200, lxc210,
+  lxc211, lxc220, lxc230, lxc260)
 
-**Symptom:**
-Applying [KE-23](#ke-23) ran `ssh_hardening` across the guests. Six containers came back with
-`ssh.service` in `failed`, while SSH kept working. `sshd -T` on those six exited 255 with
-`Missing privilege separation directory: /run/sshd`, which is what made the fault visible - the
-verification step returned nothing where it had returned four directives an hour earlier.
+**Symptom.** After the [KE-23](#ke-23) run, `ssh.service` was `failed` on six containers while SSH
+still worked. `sshd -T` exited 255 with `Missing privilege separation directory: /run/sshd`.
 
-**Root cause:**
-Recorded initially as two units both claiming port 22, with the fix being to disable `ssh.socket`
-and restore the long-running daemon. That reading was wrong and would have removed a supported
-configuration from six nodes.
-
-`systemctl cat ssh.socket` settles it: `Accept=no`, `ListenStream=22`, `WantedBy=sockets.target`.
-That is socket activation with descriptor passing. systemd holds the listening socket and hands it
-to `ssh.service` on the first connection, so `ss -lntp` shows both as owners:
+**Cause.** The Debian 12 template enables `ssh.socket` (`Accept=no`, `ListenStream=22`): systemd
+holds port 22 and hands the descriptor to `ssh.service`, so both units active is correct. On
+SIGHUP sshd re-execs itself and binds port 22 afresh instead of reusing the inherited descriptor;
+systemd still holds it, so:
 
 ```
-LISTEN 0 4096 *:22 *:* users:(("sshd",pid=4983,fd=3),("systemd",pid=1,fd=38))
-```
-
-Both units active is the correct steady state, not a collision. The Proxmox Debian 12 template
-enables it; vm100, vm102, lxc250 and the hypervisor have it disabled and run the daemon alone.
-
-sshd does not re-read its configuration on SIGHUP. It re-execs itself, and the new process binds
-port 22 rather than reusing the descriptor it inherited. systemd still holds the socket, so the
-bind fails and the daemon exits:
-
-```
-systemd[1]: Reloading ssh.service - OpenBSD Secure Shell server...
 sshd[192]: Received SIGHUP; restarting.
 sshd[192]: error: Bind to port 22 on 0.0.0.0 failed: Address already in use.
 ```
 
-`RuntimeDirectory=` cleanup removed `/run/sshd` with the unit, which is why every later `sshd -t`
-failed for a second, unrelated reason and hid the first.
+`RuntimeDirectory=` cleanup then removed `/run/sshd`, which broke `sshd -t` for a second reason.
+The socket restarted the service on the next connection, so the fault repaired itself.
 
-Nothing was unreachable at any point, and the fault repairs itself: the socket starts the service
-again on the next connection. All six were back to `active` within the hour, with nothing done to
-them. That is the reason this entry exists at all - without it the next `ssh-hardening.yml` run
-would have produced the same failure and the same quiet repair, and the third or fourth time round
-somebody would still be starting the diagnosis from nothing.
+**Fix.** In the role: `ssh_hardening` reads `systemctl is-active ssh.socket` and uses `restarted`
+where the socket is active and `reloaded` elsewhere; the reasoning is in the comment above the
+detection task in `ansible/roles/ssh_hardening/tasks/main.yml`. Since 2026-10-10 the role also
+disables `ssh.socket` wherever the bind is pinned, because `ListenAddress` has no effect under
+socket activation ([sshd decision](../decisions/sshd-listen-address.md)).
 
-**Fix:**
-In the role, not on the nodes. `ssh_hardening` reads `systemctl is-active ssh.socket` and picks the
-verb per node. The reasoning, the fallback and the `KillMode=process` property the choice rests on
-are in the comment above the detection task in `ansible/roles/ssh_hardening/tasks/main.yml`, which
-is where somebody changing that line will be.
-
-Verified 2026-09-04 by dry run against the fleet: six nodes select `restarted`, four select
-`reloaded`, `changed=0` on all nine guests. Socket activation is left in place.
-
-**What it confirmed, rather than uncovered:** none of the six carries `ListenAddress` in
-`sshd_config`, and port 22 listens on `*:22`. That is not new. The `ss -tlnH` sweep of 2026-08-17
-recorded sshd on the wildcard on ten of eleven nodes, with lxc250 the only one pinning an address,
-and A.8.21 in [security controls](security-controls.md) has carried it since. Note for whoever
-closes it: under socket activation `ListenAddress` has no effect, and the binding rule would have
-to be expressed as `ListenStream=<tailscale-ip>:22` in a socket drop-in - an address that does not
-exist yet at boot, which is [KE-18](#ke-18) one layer down.
-
-**Status:** Resolved 2026-09-04 in the role. No node was changed; the six repaired themselves and
-the fleet reports `changed=0`.
-
-**The class: read what a signal does to the process, not what the verb promises.** `reload` names
-an intention. The mechanism sshd implements for it is `execve()` on itself, so the new process has
-to obtain everything the old one held, and under socket activation the listening socket is not
-obtainable that way. [KE-18](#ke-18) is the same kind of mismatch one layer up, where `After=` was
-read as a readiness guarantee rather than an ordering constraint.
-
-A latent conflict that only routine maintenance disturbs is the same shape as the fstab entry
-without `x-systemd.automount` in [KE-15](#ke-15).
+**Verification.** Dry run 2026-09-04: six nodes select `restarted`, four `reloaded`, `changed=0` on
+all nine guests.
 
 ---
 
@@ -2063,83 +914,39 @@ without `x-systemd.automount` in [KE-15](#ke-15).
 
 ## KE-25: A UID map that exists only in the container's description
 
-**Affected component:** LXC240 (Vaultwarden, decommissioned 2026-09-01), `guest_backup`
+- **Status:** Resolved 2026-09-15; second instance 2026-10-08
+- **Affects:** `guest_backup` and unprivileged containers holding files owned by unmapped host
+  UIDs (seen on lxc210 and on the since-decommissioned Vaultwarden container)
 
-**Symptom:**
-`guest-backup.service` exited 1 on 2026-09-15 with `guest_backup_failed_guests 1`, having backed
-up eight of nine guests. The failing one:
+**Symptom.** 2026-09-15: `guest-backup.service` exited 1, `guest_backup_failed_guests 1`:
 
 ```
 tar: ./home/media/.bash_history: Cannot open: Permission denied
-tar: ./home/media/.local/share: Cannot open: Permission denied
-tar: Exiting with failure status due to previous errors
 ERROR: Backup of VM 240 failed - command 'set -o pipefail && lxc-usernsexec
   -m u:0:100000:65536 -m g:0:100000:65536 -- tar cpf - ...' failed: exit code 2
 ```
 
-**Root cause:**
-`vzdump` reads an unprivileged container's rootfs through `lxc-usernsexec` with the map the
-container declares. LXC240 declares the default one, `u:0:100000:65536`, so the archiving process
-can read files owned by host UIDs 100000 to 165535 and nothing else. Eight paths under
-`/home/media` are owned by host UID 1000:
+**Cause.** `vzdump` reads the rootfs through the map the container declares, here the default
+`u:0:100000:65536`. Paths under `/home/media` were owned by host UID 1000:
 
 ```
-# find /var/lib/lxc/240/rootfs -xdev \( -uid -100000 -o -uid +165535 \) -printf '%U:%G %p\n'
-1000:1000 /var/lib/lxc/240/rootfs/home/media
-1000:1000 /var/lib/lxc/240/rootfs/home/media/.bash_history
-...
-0:0       /var/lib/lxc/240/rootfs/lost+found
+# find /var/lib/lxc/<vmid>/rootfs -xdev \( -uid -100000 -o -uid +165535 \) -printf '%U:%G %p\n'
 ```
 
-Those files were meant to be reachable. `pct config 240` carries the line
+`pct config` carried `description: Pin host UID 1000 <-> container UID 1000 (media)` but no
+`lxc.idmap` entry: the mapping was never configured.
 
-```
-description: Pin host UID 1000 <-> container UID 1000 (media)
-```
+**Fix.** `chown -R 100000:100000` on the affected tree in the stopped container's rootfs, valid
+because the account no longer logged in. On a live container the correct repair is the `lxc.idmap`
+pair plus matching `/etc/subuid` and `/etc/subgid` entries.
 
-and no `lxc.idmap` entry anywhere. The description is the only surviving trace of an intention
-that was never configured, and it reads as documentation of a working arrangement. `lost+found`
-is outside the map too and causes nothing, because `vzdump` passes `--exclude=lost+found`.
+Second instance, lxc210, 2026-10-08: 13,944 files of `/var/www/nextcloud` owned by host UID 1000,
+8,228 with host GID 101000. They read `nobody:nogroup` in the container, so the Nextcloud updater
+(`www-data`) could not replace them, and a host process running as UID 1000 could rewrite the PHP
+Nextcloud executes. Fixed after a fresh `vzdump 210` by `chown -h 100033:100033` from the host.
 
-The fault is older than the symptom. LXC240 was absent from the `GUESTS` array in
-`guest-backup.sh` until the drift sweep of 2026-09-09 added it, so 2026-09-15 was the first run
-that ever tried. [KE-22](#ke-22) produced the same `tar` line on lxc220 from a different cause,
-which is why `CLAUDE.md` and the remediation plan both named lxc220 as the guest that fails; on
-the day this was measured lxc220 backed up in 73 s and lxc240 was the one that did not.
-
-**Fix:**
-`chown -R 100000:100000` on `/home/media` in the stopped container's rootfs, which makes the
-directory root-owned inside the container. Correct for this node because the service is withdrawn
-and the `media` user no longer logs in; on a live container the honest repair would be the
-`lxc.idmap` pair the description promises, plus the matching `/etc/subuid` and `/etc/subgid`
-entries on the host.
-
-**Status:** Resolved 2026-09-15. `vzdump 240` wrote 715 MB in 48 s at exit 0, and
-`systemctl reset-failed` cleared the unit. `GuestBackupPartial` keeps firing until the next
-scheduled run, because `guest_backup_failed_guests` is written by the job and by nothing else.
-Note what the archive does not hold: `mp0` is a bind mount of `/mnt/smb/vaultwarden` and `vzdump`
-reports `excluding bind mount point mp0 ... (not a volume)`, so this is a copy of the machine,
-not of its data.
-
-**Second instance, lxc210, found 2026-10-08** while preparing the Nextcloud upgrade. The
-application tree under `/var/www/nextcloud` held 13,944 files owned by host UID 1000, among them
-`index.php`, `lib/` and `updater/`, plus 8,228 with host GID 101000:
-
-```
-# find /proc/<pid>/root/var/www/nextcloud -xdev -printf '%u:%g\n' | sort | uniq -c
-  17182 100033:100033
-   8228 100033:ns-uid1000
-  13944 media:media
-```
-
-Inside the container those read as `nobody:nogroup`, so the web server could execute the code and
-the updater, running as `www-data`, could not replace it. This instance did not break the backup,
-because the files were world-readable and `tar` read them under the map; the archive stores them as
-65534. It had a second cost the lxc240 case did not: a process on the hypervisor running as `media`
-could rewrite the PHP that Nextcloud executes. Fixed by `chown -h 100033:100033` from the host
-over every path with host UID 1000 or GID 1000/101000, after a fresh `vzdump 210`; afterwards all
-39,354 entries read `100033:100033`, `occ integrity:check-core` was clean, and the upgrade to 34
-ran on that tree.
+**Verification.** 2026-09-15: the container's `vzdump` exited 0. 2026-10-08: all 39,354 entries
+read `100033:100033`, `occ integrity:check-core` clean, Nextcloud upgrade ran on that tree.
 
 ---
 
@@ -2147,76 +954,28 @@ ran on that tree.
 
 ## KE-26: The wake alarm was programmed for the right time on the wrong day
 
-**Affected component:** Proxmox host - `homelab-setwake.sh`, run from
-`/etc/cron.d/homelab-schedule` at 00:45.
+- **Status:** Resolved 2026-09-25
+- **Affects:** Proxmox host, `homelab-setwake.sh` (role `homelab_schedule`)
 
-**Symptom:**
-The host powered down reliably at 01:01 every night and then stayed off until somebody pressed the
-button. Nobody reported it, because pressing the button is indistinguishable from the machine
-having woken on its own if you arrive after it is up.
+**Symptom.** The host powered down every night and then stayed off until switched on by hand. The
+boot history showed six starts, one at a scheduled time, against shutdowns that never varied.
+Measured 2026-09-17: `/sys/class/rtc/rtc0/wakealarm` was empty after the alarm should have fired.
 
-**Root cause:**
-The script runs at 00:45, a quarter of an hour after the calendar has rolled over, and computed its
-target with `date -d tomorrow`. At 00:45 on Thursday that is Friday, so the machine shutting down at
-01:00 on Thursday was told to wake on Friday at 07:30 - thirty-one hours later instead of six and a
-half. The weekday test carried the same offset, selecting the 16:00 rule from the day after the one
-it would wake on.
+**Cause.** The script then ran from cron at 00:45, after midnight, and computed its target with
+`date -d tomorrow`: a host shutting down early Thursday was told to wake Friday. The weekday test
+had the same offset. `rtcwake` accepts a far-future time and exits 0, and the host was usually
+switched on by hand before the alarm came due.
 
-**How it stayed invisible:**
-Three things had to line up, and they did. The machine is switched on by hand during the day, so
-the alarm was always overtaken before it came due and never observed to be wrong. `rtcwake`
-accepts a far-future time and exits 0, so the job succeeded every night. And cron reports a failure
-to nobody - the platform's own rule that every scheduled job must be a systemd timer exists for
-exactly this, and this job is the documented exception, because it is what powers the host down and
-cannot depend on the host being up.
+**Fix.** `homelab-setwake.sh` is called by `homelab-shutdown.sh` immediately before power-off. It
+computes the next start from `homelab_schedule_plans` in the role defaults, starting with today,
+requires at least 600 s of lead time, and reads the alarm back from
+`/sys/class/rtc/rtc0/wakealarm`. The read-back allows 60 s either way: `rtcwake` subtracts the
+RTC-to-system-clock difference read across a second boundary and can arm one second early
+(`alarm reads 1790314199 ..., expected 1790314200`). Both host scripts run through `systemd-cat`,
+so output reaches the journal instead of cron's local mailer.
 
-**What made it visible:**
-Reading the boot history rather than the script. Six starts - 18:52, 16:00, 10:09, 16:10, 15:09,
-08:08 - of which one falls on a scheduled time, with a gap of two and a half days in the middle,
-against shutdowns at 01:01 that never varied. Measured on the host the same day, `date -d tomorrow`
-returned Friday and `/sys/class/rtc/rtc0/wakealarm` was empty.
-
-**Fix (applied to the repository 2026-09-17):**
-`today` rather than `tomorrow`, in both the weekday test and the timestamp. Two checks were added
-with it: the computed time must lie in the future, and the alarm is read back out of
-`/sys/class/rtc/rtc0/wakealarm` and compared with what was asked for. `rtcwake` returning 0 says
-the ioctl was accepted; the read-back says the hardware holds it, and those two came apart for long
-enough to be worth the lines.
-
-**The first night after the apply, both additions misfired.** The host woke at 07:31 on 2026-09-25,
-the first scheduled wake in the boot history, yet the script had exited 1. The deferred cron mail
-held its output:
-
-```text
-rtcwake: wakeup using /dev/rtc0 at Fri Sep 25 05:29:59 2026
-ERROR: alarm reads 1790314199 (Fri Sep 25 07:29:59 AM CEST 2026), expected 1790314200 (Fri Sep 25 07:30:00 AM CEST 2026)
-```
-
-`rtcwake` reads the RTC and then `time(NULL)`, and subtracts the difference from the requested
-time (`get_basetimes()` and `alarm -= ctl->sys_time - ctl->rtc_time` in util-linux's
-`rtcwake.c`). When the second ticks between the two reads, the alarm lands one second early. The
-old script's run on 2026-09-24 shows the same `05:29:59`, the nights before it `05:30:00`. The
-read-back now accepts up to 60 s either way, which still refuses an empty alarm and the wrong day.
-
-That output was only readable from the mail queue. The line meant to reach the journal went
-where cron sends all stdout, to the local mailer, and Postfix on the host defers everything
-because `/etc/aliases.db` does not exist - 29 messages were queued, among them smartd's daily
-KE-13 warnings. The cron lines now run both scripts through `systemd-cat`, so each night leaves
-a journal entry under `homelab-setwake` whether the script succeeds or not.
-
-**Not caused by the role adoption of 2026-09-16, and worth separating.** The `homelab_schedule`
-role was applied for the first time the day before this was found, and its `--check --diff` showed
-only comments, an em dash and column alignment - the logic was byte-identical on both sides. The
-role faithfully adopted a script that had been wrong since it was written. An adoption proves that
-Ansible reproduces what the node had; it says nothing about whether what the node had was correct.
-
-**Status:** Applied 2026-09-24; the wake itself is proven by the boot at 07:31:14 on 2026-09-25.
-The read-back tolerance and the journal routing are in the repository, not yet applied; after the
-apply, the proof is a `wakealarm armed for` line in `journalctl -b -1 -t homelab-setwake`.
-
-**References:**
-- [The scheduling entry in CLAUDE.md](../../CLAUDE.md)
-- [KE-14 - the boot SSD this host starts from](#ke-14)
+**Verification.** The host woke by RTC at 07:31:14 on 2026-09-25. Each night leaves a line in
+`journalctl -t homelab-setwake`; success reads `wakealarm armed for <time>`.
 
 ---
 
@@ -2224,93 +983,66 @@ apply, the proof is a `wakealarm armed for` line in `journalctl -b -1 -t homelab
 
 ## KE-27: A container whose start fails at boot stays down until someone starts it
 
-**Affected component:** vm100 - every container that binds a CIFS automount or needs the NVIDIA
-prestart hook: Jellyfin, Audiobookshelf, `llama-server`.
+- **Status:** Mitigated 2026-10-03 - retry not yet exercised by a real failure
+- **Affects:** vm100 containers that bind a CIFS automount or need the NVIDIA prestart hook
+  (Jellyfin, Audiobookshelf, `llama-server`)
 
-**Symptom:**
-After a boot, Jellyfin does not answer on 8096 while the VM, Docker and every other container are up.
-`docker ps -a` shows it exited, and `docker inspect` carries the reason in `State.Error`:
+**Symptom.** After boot, the container is `Exited (128)` while Docker and the other containers run.
+`docker inspect` shows the reason in `State.Error`:
 
 ```text
-jellyfin Exited (128) 10 hours ago
-failed to create task for container: failed to create shim task: OCI runtime create failed: runc
-create failed: unable to start container process: error during container init: error mounting
-"/srv/media/filme" to rootfs at "/media/Filme": ... no such device
+OCI runtime create failed: ... error mounting "/srv/media/filme" to rootfs at "/media/Filme": ... no such device
 ```
 
-**Root cause:**
-`restart: unless-stopped` reacts to a container that ran and exited. A start that fails inside
-`runc create` never produces a running container, so there is nothing for the policy to react to:
-dockerd tries once while it restores its containers and then leaves it. Two different triggers have
-reached that one attempt on this node. The journal holds four instances since 2026-05-16:
+**Cause.** `restart: unless-stopped` reacts to a container that ran and exited. A start that fails
+in `runc create` never runs, so dockerd tries once while restoring containers and stops. Journal
+instances (`journalctl -u docker.service | grep "failed to start container"`):
 
 ```text
-$ journalctl -u docker.service --since 2026-05-16 | grep "failed to start container"
 2026-08-05 22:50  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
 2026-08-24 22:55  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
 2026-09-29 10:19  error mounting "/srv/media/filme" ...      (and "/srv/media/audiobooks")
 2026-10-03 09:02  error mounting "/srv/media/filme" ...
 ```
 
-The two mount failures had different causes underneath. On 2026-09-29 vm102 was unreachable
-(`cifs_mount failed w/return code = -113`, `EHOSTUNREACH`), and Audiobookshelf went down with
-Jellyfin. On 2026-10-03 vm102 was up - smbd since 08:59:33 - and logged nothing for vm100, while
-vm100's kernel reported `Send error in SessSetup = -11` (`EAGAIN`) on the film share 12 ms after
-the audiobook mount had started. The working explanation, not proven: the CIFS client carries every
-mount to one server over a single TCP connection, and the session setup for the `media-jf` user ran
-into the one for `media-abs` that was still in progress. Two users exist only since the share split
-of 2026-08-16, and the `-11` appears once in the 121 boots the journal holds.
+2026-09-29: vm102 unreachable (`cifs_mount failed w/return code = -113`). 2026-10-03: vm102 up;
+vm100 logged `Send error in SessSetup = -11` 12 ms after another share's mount started. Working
+explanation, unproven: two session setups for different users collided on the CIFS client's
+single connection to vm102.
 
-`docker_mount_ordering` does not prevent any of this, and is right not to. It orders Docker after
-the automount trigger, and a trigger existing says nothing about the mount behind it succeeding -
-the [KE-18](#ke-18) gap one layer further down. Ordering Docker after the mount itself would tie the
-daemon to vm102 being up, the [KE-15](#ke-15) failure rebuilt.
+`docker_mount_ordering` orders Docker after the automount trigger, which says nothing about the
+mount succeeding. Ordering Docker after the mounts themselves would tie it to vm102 being up
+([KE-15](#ke-15)).
 
-**How it stayed invisible:**
-Every instance was repaired by hand the same day - a `docker start`, or a mount restarted first -
-and none was written down, so each was diagnosed from nothing. The CUDA watchdog, the one job that
-looks at Jellyfin after boot, logs `container not running - skipping` by design. The August pair
-reached this repository only as an example sentence in the glossary entry for Docker's restart
-policy.
+**Fix.** Role `docker_boot_retry` (`snippets/scripts/docker-boot-retry.sh`): a unit after
+`docker.service` runs once per boot and starts every exited container with policy `always` or
+`unless-stopped` and a non-empty `State.Error`; six passes, 30 s apart. If something is still down,
+the unit fails and `SystemdUnitFailed` reports it. `docker stop` leaves `State.Error` empty, so
+deliberately stopped containers are not touched.
 
-**Fix (applied to vm100 2026-10-03):**
-Role `docker_boot_retry`: a unit ordered after `docker.service` runs once per boot and starts every
-container that is exited, carries `always` or `unless-stopped`, and has a non-empty `State.Error`.
-Six passes, 30 s apart; whatever is still down after that leaves the unit `failed`, which
-`SystemdUnitFailed` reports. `docker stop` leaves `State.Error` empty, so a container stopped on
-purpose is not touched. The selection was checked against the live node, where it found nothing to
-do, and against four synthetic rows, where it picked exactly the two with a policy and an error.
+**Verification.** Applied 2026-10-03, re-check `changed=0`; selection tested against the live node
+(nothing to start) and four synthetic rows. Proof of a real retry: a
+`started <name> (attempt n/6)` line in `journalctl -b -t docker-boot-retry`. Related:
+[KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md).
 
-**Status:** Applied 2026-10-03, unit enabled, re-check at `changed=0`. Not yet proven against a real
-failure: the triggers are rare, and the first boot only shows the unit exiting 0 with nothing to
-start. The proof is a `started <name> (attempt n/6)` line in
-`journalctl -b -t docker-boot-retry` after a boot on which one of the four errors above recurs.
+---
 
 <a id="ke-28"></a>
 
 ## KE-28: Jellyfin streams stalled inside the `tailscale serve` TCP forwarder
 
-**Affected component:** vm100 - Jellyfin on 8096, from 2026-10-01 to 2026-10-07, while it was
-published on `127.0.0.1` behind `tailscale serve --tcp 8096`. The client was Moonfin on the
-streaming box (`tag:media-player`), connected directly over the LAN, not through a relay.
+- **Status:** Resolved 2026-10-07
+- **Affects:** Jellyfin on vm100, 2026-10-01 to 2026-10-07, while published on `127.0.0.1` behind
+  `tailscale serve --tcp 8096`; client a media player (`tag:media-player`) on a direct path
 
-**Symptom:**
-Playback loads and never starts, or starts and stops after a few seconds. The library browses
-normally. Jellyfin's log shows the client giving up:
+**Symptom.** Playback loads and never starts, or stops after seconds; browsing works. Jellyfin
+logged `Playback stopped ... Stopped at "3890" ms`. In the afternoon instance the attempts did not
+reach Jellyfin at all (no entry 10:51:41 to 15:34), while `/health` on loopback answered `200` in
+3 ms and `tailscale ping` answered in 1 ms.
 
-```text
-[10:11:10] Playback stopped reported by app "Moonfin for Android TV" "2.6.0" playing "<episode>". Stopped at "3890" ms
-```
-
-In the afternoon instance the attempts did not reach Jellyfin's log at all: no entry between
-10:51:41 and the fix at 15:34, through several starts, while `/health` on loopback answered `200`
-in 3 ms and `tailscale ping` to the box answered in 1 ms over the LAN.
-
-**Root cause:**
-`tailscale serve --tcp` ends the client's connection in `tailscaled`'s own userspace TCP stack, the
-netstack, and copies the bytes into a second connection to loopback. The stream stopped between the
-two. Both ends of the loopback connection during the stall, unchanged over three readings four
-seconds apart:
+**Cause.** `tailscale serve --tcp` terminates the client connection in `tailscaled`'s userspace
+netstack and copies bytes to a second connection on loopback. The stream stopped between the two.
+Both loopback ends during a stall, unchanged over three readings:
 
 ```text
 $ ss -tnp | grep 52868
@@ -2318,58 +1050,20 @@ ESTAB 0       4116981 127.0.0.1:8096   127.0.0.1:52868 users:(("docker-proxy",pi
 ESTAB 5865362 0       127.0.0.1:52868  127.0.0.1:8096  users:(("tailscaled",pid=851,fd=39))
 ```
 
-`tailscaled` held 5.8 MB of video it had received and was not reading (`Recv-Q`). In the same
-windows it turned away the box's new connections:
+`tailscaled` held 5.8 MB unread (`Recv-Q`) and refused new connections from the client
+(`netstack: decrementing connsInFlightByClient[...] because the packet was not handled`: 52 lines
+at 10:00, 8 at 15:00). Which netstack limit tripped was not established. The rollout had been
+validated with an SMB transfer over the kernel path through `tailscale0`, which never touches the
+forwarder.
 
-```text
-tailscaled[851]: netstack: decrementing connsInFlightByClient[<tailscale-ip-shield>] because the packet was not handled; new value is 0
-```
+**Fix.** 2026-10-07 15:34: `tailscale serve --tcp=8096 off`; Jellyfin publishes on
+`${JELLYFIN_BIND_ADDR}` (vm100's Tailscale address) in `docker/jellyfin/docker-compose.yml`.
+`tailscaled` runs in kernel mode on vm100, so the kernel carries TCP. `docker.service` waits for the
+address through `tailscale_boot_gate`, with `docker_boot_retry` ([KE-27](#ke-27)) as backstop
+([KE-18](#ke-18)).
 
-Counted per hour on 2026-10-07: 52 at 10:00, 2 at 11:00, 8 at 15:00 - the two failing windows and
-the working one between them, plus 395 lines dropped by the journal's rate limit. Which limit inside
-the netstack tripped was not established.
-
-Two things made the morning instance look like something else. The first starts of an episode and
-of a 46 GB film each triggered a whole-file subtitle extraction (see
-[jellyfin.md](../services/jellyfin.md#subtitle-extraction)), and one stream ran cleanly for 26
-minutes at 64-99 Mbit/s during the morning, which was read at the time as clearing the forwarder.
-The afternoon stall happened with no extraction running and no ffmpeg process at all.
-
-**Why the rollout did not catch it:**
-The change of 2026-10-01 was justified by an SMB transfer at 95 MB/s between two tailnet nodes.
-That transfer ran over the kernel path through `tailscale0`, not through `serve`, so the measurement
-never touched the forwarder the media streams were about to use. `llama-server` had used the same
-forwarder for a week without trouble; its requests are kilobytes.
-
-**Fix (applied 2026-10-07, 15:34):**
-
-```text
-# tailscale serve --tcp=8096 off
-# (compose) ports: "<tailscale-ip-vm100>:${JELLYFIN_PORT}:8096"
-# docker compose up -d
-$ ss -tlnp | grep 8096
-LISTEN 0 4096 <tailscale-ip-vm100>:8096 0.0.0.0:* users:(("docker-proxy",pid=45518,fd=8))
-```
-
-`tailscaled` runs in kernel mode on vm100 with a TUN device, so the address is a kernel address and
-the kernel carries TCP; `tailscaled` only encrypts. The repository carries the address as
-`JELLYFIN_BIND_ADDR` in the node's `.env`. The bind brings Jellyfin into [KE-18](#ke-18):
-`docker.service` started 0.6 s after `tailscaled`'s first DERP contact at the boot of 2026-10-07.
-It now carries the `tailscale_boot_gate` drop-in, with `docker_boot_retry` ([KE-27](#ke-27)) as the
-backstop.
-
-**Verification (2026-10-07, 15:38-15:39, same box, same episode):**
-
-| | Through `serve` (10:19) | Direct bind (15:38) |
-|---|---|---|
-| Throughput to the box | 64-99 Mbit/s | 62-95 Mbit/s |
-| `tailscaled` CPU | 90-154 % | 49-82 % |
-| New `connsInFlight` lines | 8 in the 15:00 hour | none after 15:27:40 |
-
-The halved CPU at the same rate is the second TCP stack leaving the path.
-
-**Status:** Resolved 2026-10-07 by binding the Tailscale address. The `docker.service` gate is
-proven by the cold boot of 2026-10-10: `docker` became active at 08:43:57 after a boot at 08:42:40,
-Jellyfin came up with no `docker-boot-retry` line. Open: a measurement of three concurrent 4K
-streams.
-Audiobookshelf and `llama-server` still use the forwarder; neither has shown the fault.
+**Verification.** Same client and episode, 15:38: throughput 62-95 Mbit/s (64-99 through `serve`),
+`tailscaled` CPU 49-82 % (90-154 %), no new `connsInFlight` lines after 15:27:40. Cold boot
+2026-10-10: Jellyfin up with no `docker-boot-retry` line; the gate held again on 2026-10-13. Audiobookshelf and
+`llama-server` still sit behind `serve` on loopback and have not shown the fault. Not yet measured:
+three concurrent 4K streams. See [jellyfin.md](../services/jellyfin.md).

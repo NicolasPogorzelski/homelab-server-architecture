@@ -5,10 +5,8 @@
     state: present
     update_cache: true
 
-# The script and its units are deployed before the mount is asserted: they carry
-# their own runtime guard and are safe to converge whether or not the CIFS share
-# is up. Asserting first would make a broken host mount block delivery of the very
-# script that handles a broken host mount.
+# Script and units are deployed before the mount assertion: they carry their own
+# runtime guard, and a broken host mount must not block their delivery.
 - name: Deploy import script
   ansible.builtin.copy:
     src: "{{ calibre_importer_script_src }}"
@@ -35,10 +33,9 @@
     mode: "0644"
   notify: Reload systemd
 
-# `mountpoint -q` was the previous guard. It is true for the mp2 bind itself even
-# when the host-side CIFS mount failed, so it could not see the failure class it
-# was written for (2026-07-10 incident). check_mode: false makes the probe run
-# during --check too; a guard that is skipped in a dry-run guards nothing.
+# Checks the filesystem type, not `mountpoint -q`: the mp2 bind is a mountpoint
+# even when the host-side CIFS mount failed (see KE-15). check_mode: false so the
+# probe also runs under --check.
 - name: Probe the filesystem type of the rw library mount
   ansible.builtin.command:
     cmd: findmnt -no FSTYPE {{ calibre_importer_library }}

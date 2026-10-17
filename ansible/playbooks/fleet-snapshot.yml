@@ -1,43 +1,25 @@
 ---
-# Record the unmanaged surface of every node, and diff it against the last run.
+# Record the surface of every node that no role manages, and diff it against
+# the last run. `--check` (fleet-drift.yml) only sees state a role owns; this
+# covers listening sockets, local unit files, root's crontab, mounts, running
+# images and modified packaged files.
 #
-# Why this exists next to the `--check` drift sweep rather than instead of it:
-# `ansible-playbook --check` can only report on state a role already owns. It
-# says nothing about what nobody deploys, and that is where this platform's
-# worst findings have come from - the hand-written `node_exporter` on lxc250
-# that bound `*:9100` for four months while `systemctl is-active` answered
-# `active`, the second `tailscaled` on lxc220, the wildcard sshd binds that no
-# playbook manages. Measured 2026-09-08: `ssh-hardening.yml --check` reports
-# vm100 clean while vm100's sshd listens on `0.0.0.0:22`.
+# Each projection is normalised (sorted, clocks and counters removed) so the
+# diff carries only changes. `systemctl list-timers` is left out: its columns
+# are all volatile, and which timers exist is in the unit-file projection.
 #
-# So the projections below are chosen for what no role would notice: which
-# addresses are listened on, which unit files exist locally, what root's crontab
-# still holds, what is mounted, which images are running.
-#
-# Every projection is normalised - sorted, with clocks and counters removed - so
-# that a diff carries only what changed. `systemctl list-timers` is deliberately
-# absent: its output is four volatile time columns, and which timers exist is
-# already covered by the unit-file projection.
-#
-# Read-only throughout, which is why no preflight gate is imported - the same
-# reasoning as fleet-health-check.yml.
+# Read-only, so no preflight gate (same as fleet-health-check.yml).
 - name: Collect the per-node snapshot
   hosts: all
   gather_facts: false
-  # Not become: true at the play level. Four of the six projections read
-  # world-readable state - sockets, unit files, the mount table, the local unit
-  # directory - and only two genuinely need root: root's crontab, and the Docker
-  # socket. A weekly privileged read of every node is a standing grant that the
-  # task list has to justify each time, so the grant sits on the two tasks that
-  # need it and the recap shows which they are.
+  # No play-level become. Four of the seven projections read world-readable
+  # state; only root's crontab, the Docker socket and dpkg --verify need root,
+  # so become sits on those three tasks.
   become: false
 
   tasks:
-    # Ports at or above the ephemeral range are dropped. Tailscale's peerapi
-    # picks a fresh one per start, so keeping them would put one changed line
-    # per node into every diff and train the reader to skim. Every service this
-    # platform runs listens below 32768; measured 2026-09-08, the fifteen ports
-    # above it were all transient.
+    # Ports in the ephemeral range (>= 32768) are dropped: Tailscale's peerapi
+    # picks a new one per start. Every service on the platform listens below it.
     - name: Read the listening sockets
       ansible.builtin.shell:
         cmd: >-
@@ -60,11 +42,9 @@
       changed_when: false
       failed_when: false
 
-    # The highest-value line here. A unit file under /etc/systemd/system that no
-    # role writes is, by definition, something a rebuild would lose and a sweep
-    # would miss. Symlinks are labelled because a mask is a link to /dev/null and
-    # an enablement is a link into the unit directory - the same filename means
-    # different things.
+    # A unit file under /etc/systemd/system that no role writes would be lost in
+    # a rebuild. The type column separates masks (links to /dev/null) and
+    # enablements (links into the unit directory) from real files.
     - name: List locally-defined unit files
       ansible.builtin.shell:
         cmd: >-
@@ -77,8 +57,7 @@
       changed_when: false
       failed_when: false
 
-    # One of the two tasks that needs root, and the reason is not the crontab
-    # command but the account: `crontab -l -u root` is refused to anybody else.
+    # Needs root: `crontab -l -u root` is refused to other accounts.
     - name: Read root's crontab
       become: true
       ansible.builtin.shell:
@@ -88,10 +67,8 @@
       changed_when: false
       failed_when: false
 
-    # Container overlay mounts are excluded: their paths carry the container ID,
-    # so every restart rewrites them and thirteen lines of hash churn would bury
-    # the mount that actually moved. What matters here is the persistent mount
-    # table - CIFS shares, bind mounts, the archive pool.
+    # Container overlay mounts are excluded: their paths carry the container ID
+    # and change on every restart.
     - name: Read the mount table
       ansible.builtin.shell:
         cmd: >-
@@ -103,9 +80,8 @@
       changed_when: false
       failed_when: false
 
-    # The second. The Docker socket is root-owned on these nodes and the ansible
-    # account is deliberately not in the docker group - membership there is
-    # equivalent to root and would be a wider grant than this one task.
+    # Needs root: the Docker socket is root-owned, and the ansible account is
+    # deliberately not in the docker group, which would be equivalent to root.
     - name: Read the running container images
       become: true
       ansible.builtin.shell:
@@ -116,22 +92,9 @@
       failed_when: false
       when: "'docker' in group_names"
 
-    # The third and last task that needs root, added 2026-09-17. `dpkg --verify`
-    # compares every installed file against the checksum dpkg recorded at install
-    # time and prints only what differs, so a clean node emits nothing and the
-    # projection costs no diff lines. What it catches is a packaged file edited in
-    # place - the shape every "I just changed one line in /etc" incident has -
-    # and, less comfortably, a binary replaced by something that is not the
-    # distribution's.
-    #
-    # It is not an integrity control and must not be read as one. dpkg's database
-    # lives on the same filesystem as the files it describes, so anything able to
-    # edit the second can edit the first; a real file-integrity monitor keeps its
-    # baseline somewhere the watched machine cannot reach. This is the cheap
-    # ninety per cent: it finds mistakes reliably and an adversary not at all.
-    #
-    # Conffiles are excluded. dpkg expects those to be edited and marks them, so
-    # including them would report every node's sshd_config as a finding for ever.
+    # Needs root. Lists packaged files whose checksum no longer matches dpkg's
+    # record, which catches in-place edits. Not an integrity control: the dpkg
+    # database sits on the same filesystem it describes. Conffiles are excluded.
     - name: Read which packaged files no longer match their package
       become: true
       ansible.builtin.shell:
@@ -169,14 +132,11 @@
 
   vars:
     fs_root: /var/lib/fleet-snapshot
-    # node_exporter_textfile_dir is a role default and roles are not in scope
-    # here, so the path is resolved from an inventory override if one exists
-    # and falls back to the fleet-wide default otherwise.
+    # node_exporter_textfile_dir is a role default and no role is in scope here,
+    # so fall back to the fleet-wide default unless the inventory overrides it.
     fs_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
-    # Hosts that answered. A host that did not is recorded as a count rather
-    # than dropped: a snapshot missing three nodes must not read as a clean one,
-    # which is the failure shape this platform has already met in
-    # PostgreSQLBackupStale and in its own host exporter.
+    # Hosts that answered, published next to the expected count so that a
+    # partial snapshot raises FleetSnapshotIncomplete instead of reading clean.
     fs_reached: "{{ groups['all'] | map('extract', hostvars) | selectattr('fs_snapshot', 'defined') | list | length }}"
     fs_expected: "{{ groups['all'] | length }}"
 
@@ -227,12 +187,8 @@
       register: fs_diff_lines
       changed_when: false
 
-    # Written to the textfile collector rather than reported, so that a run which
-    # stops happening is visible without anyone opening the directory. There is
-    # deliberately no alert on the changed-line count: drift here is expected
-    # weekly and an alert nobody can clear becomes the permanent red this
-    # repository's rules are written to avoid. What is alerted on is the run
-    # going stale and the snapshot being incomplete.
+    # Alerted on: run staleness and missing hosts. Not on the changed-line count,
+    # because weekly drift is expected (see the note in alert.rules.yml).
     - name: Publish the snapshot metrics
       ansible.builtin.copy:
         content: |

@@ -7,9 +7,8 @@
     group: root
     mode: "0755"
 
-# Shared with postgresql_backup, which creates it too. Declared here as well so
-# the role can be applied to a node that has never had the backup role, rather
-# than silently skipping the metric because the directory happens to be absent.
+# Shared with postgresql_backup, which creates it too; declared here so the role
+# also works on a node without the backup role.
 - name: Create textfile collector directory
   ansible.builtin.file:
     path: "{{ pg_restore_test_textfile_dir }}"
