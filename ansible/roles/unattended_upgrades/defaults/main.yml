@@ -1,31 +1,15 @@
 ---
 # === unattended_upgrades ===
 #
-# vm100 is Ubuntu 22.04, not Debian: origins carry `Ubuntu`/`UbuntuESM` ids and the
-# kernel packages are `linux-image-*-generic`. Do not copy these values to the
-# Debian LXCs unchanged.
+# Security updates install themselves; everything else waits for
+# `ansible/playbooks/apt-upgrade.yml`, run while someone is watching. The stock
+# configuration of both distributions also allows the regular archive, so the
+# drop-in replaces the origin lists rather than adding to them.
 #
-# The stock /etc/apt/apt.conf.d/50unattended-upgrades allows
-# "${distro_id}:${distro_codename}" - the *regular* archive, not just security -
-# and ships an empty Package-Blacklist, so a kernel can be installed unattended and
-# the NVIDIA DKMS module rebuilt only at the next boot; if that fails, Jellyfin
-# loses CUDA. Security updates stay automatic; the coupled packages are excluded.
+# Which origins count as security, and which packages are held back, differ
+# between Ubuntu (vm100) and Debian (every other guest). They live in
+# vars/<distribution>.yml and are loaded by ansible_distribution.
 
-# Only security pockets. The plain "${distro_id}:${distro_codename}" entry from the
-# stock config is deliberately absent.
-unattended_upgrades_allowed_origins:
-  - "${distro_id}:${distro_codename}-security"
-  - "${distro_id}ESMApps:${distro_codename}-apps-security"
-  - "${distro_id}ESM:${distro_codename}-infra-security"
-
-# Matched as regular expressions against the package name, not as exact names.
-# Kernels and the NVIDIA stack are coupled: a new kernel needs its DKMS module
-# rebuilt, and a driver bump must be paired with a matching container toolkit.
-# Both belong in `ansible/playbooks/apt-upgrade.yml`, run while someone is watching.
-unattended_upgrades_blacklist:
-  - "linux-image"
-  - "linux-headers"
-  - "linux-generic"
-  - "linux-modules"
-  - "nvidia-"
-  - "libnvidia-"
+# Installs that APT may run on its own. A reboot is never automatic: kernels are
+# held back below, and the containers share the hypervisor's kernel anyway.
+unattended_upgrades_automatic_reboot: false

@@ -70,12 +70,15 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
   - `disk03` -> `/mnt/disk03`
   - `disk04` -> `/mnt/disk04`
   - `disk05` -> `/mnt/disk05`
+  - `disk06` -> `/mnt/disk06`
 - Parity disk:
   - `parity1` -> `/mnt/parity`
 - Auxiliary disk:
-  - `aux-pool` -> `/mnt/aux-pool` (temporarily part of SnapRAID + MergerFS pool as capacity bridge; to be removed when disk06 is added)
+  - `aux-pool` -> `/mnt/aux-pool` (a SnapRAID data disk and MergerFS branch like the others)
 
-`aux-pool` is temporarily included as a 6th data disk.
+`aux-pool` stays in the pool while the enclosure has free bays. It was meant to leave when
+`disk06` arrived; instead it is replaced once the last two bays are in use, because only then is
+the bay worth more than the 3 TB in it.
 
 `aux-pool` is distinct from `aux-disk`, the application-data disk attached to the Proxmox host
 ([KE-13](known-errors.md#ke-13), [proxmox-host.md](proxmox-host.md)); vm102 has no aux-disk mount.
@@ -97,7 +100,8 @@ Content files (one per data disk, improves robustness and recoverability):
 - `content /mnt/disk03/snapraid.content`
 - `content /mnt/disk04/snapraid.content`
 - `content /mnt/disk05/snapraid.content`
-- `content /mnt/aux-pool/snapraid.content` (temporary, remove when disk06 added)
+- `content /mnt/aux-pool/snapraid.content`
+- `content /mnt/disk06/snapraid.content`
 
 Data disks:
 
@@ -106,7 +110,8 @@ Data disks:
 - `data disk03 /mnt/disk03`
 - `data disk04 /mnt/disk04`
 - `data disk05 /mnt/disk05`
-- `data aux-pool /mnt/aux-pool` (temporary capacity bridge, remove when disk06 added)
+- `data aux-pool /mnt/aux-pool`
+- `data disk06 /mnt/disk06`
 
 Excludes are owned by the `snapraid_maintenance` role (`snapraid_excludes` in its defaults) through
 a marked `blockinfile`; the layout above it stays hand-written because it carries real device labels:
@@ -181,12 +186,36 @@ Least privilege on both sides:
 - Read: each consumer share is scoped to one library, so the boundary holds before any filesystem
   mode is evaluated.
 
+### Adding a data disk
+
+Done this way for `disk06` on 2026-10-17, with the pool in use throughout:
+
+1. On the host, one GPT partition from sector 2048, type `8300`, as on every pool disk, then
+   `qm set 102 --scsiN /dev/disk/by-id/<disk>-part1,backup=0`. The disk hot-plugs into the
+   running VM. Without `backup=0` the next guest backup tries to read the whole disk.
+2. On vm102, `mkfs.ext4 -L diskNN` on `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsiN`, a
+   fstab line by UUID with `defaults,noatime`, mount, `chown storage:storage` on the root.
+3. `setfattr -n user.mergerfs.branches -v '+>/mnt/diskNN' /mnt/mergerfs/.mergerfs` appends the
+   branch without a remount, so Samba clients see nothing. Then the same path in the fstab line.
+   With `category.create=mfs` every new file lands on the empty disk from this moment, so taking
+   the disk out again means moving files off it.
+4. A `data` and a `content` line in `/etc/snapraid.conf`, outside the Ansible-managed block;
+   `snapraid devices` must list the disk. The nightly sync takes it in.
+5. `storage-permissions.yml`. The role reads the branch list from MergerFS and creates every
+   share directory on the new branch with its setgid bit.
+
+A data disk may not hold more than the parity disk can cover. `disk06` and the parity disk are
+the same model size, and their file systems differ by a megabyte, so the margin comes from ext4's
+root reservation on the data disk: Samba writes as `storage`, which stops at the reservation,
+while `snapraid` writes the parity file as root, which does not. Formatting a data disk with
+`-m 0` would remove that margin.
+
 ### Mount Persistence (fstab + systemd)
 
 MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot, systemd generates the mount unit automatically via `systemd-fstab-generator`:
 
 - Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
-- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-pool` -> `/mnt/mergerfs` (aux-pool temporary)
+- Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-pool:/mnt/disk06` -> `/mnt/mergerfs`
 - Type: `fuse.mergerfs`
 - Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
 

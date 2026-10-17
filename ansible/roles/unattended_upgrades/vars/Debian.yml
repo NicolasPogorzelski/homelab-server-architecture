@@ -1,0 +1,14 @@
+---
+# Every Debian guest. Debian's security archive is matched by its Release fields
+# (`o=Debian, n=bookworm-security, l=Debian-Security`); the stock config also
+# matches the regular archive (`l=Debian`), which is not repeated here.
+unattended_upgrades_allowed_origins: []
+
+unattended_upgrades_origins_pattern:
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+
+# Only vm102 carries kernel packages; a kernel installed unattended would boot
+# unobserved at the next morning's power-on.
+unattended_upgrades_blacklist:
+  - "linux-image"
+  - "linux-headers"

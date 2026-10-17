@@ -22,9 +22,8 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 11 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
 | 12 | [Identity track](#identity-track) | Every service keeps its own accounts; Terraform waits on this track | Choose a start date, then build the identity node per [the decision](../decisions/identity-before-terraform.md) |
 | 13 | Nextcloud 35 needs Debian 13 on lxc210 | Nextcloud 34 is the last major that runs on Debian 12's PHP 8.2 and is supported until 2027-06 | Upgrade lxc210 to Debian 13, then run `occ maintenance:repair --include-expensive` in its own window |
-| 14 | Jellyfin 12 | Jellyfin 10.11 receives no further releases; 12.x migrates the database with no way back except a restore | Copy `/config`, check that no two user names differ only by case, confirm client support, then change the image in `docker/jellyfin/docker-compose.yml` |
+| 14 | Trailers and the Letterboxd diary after Jellyfin 12 | Cinema Mode and LetterboxdSync have no build for 12, so trailers before films and the diary sync are gone | Install Jellyscribe for the diary; read the code of Trailer Preroll 2.x, which downloads from YouTube and has a single maintainer, before it runs on the GPU node |
 | 15 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
-| 16 | Archive pool capacity | `ArchivePoolLowSpace` fires before writes fail, but the pool has no expansion plan | Re-measure free space and add a data disk to the next hardware order if the trend requires it |
 
 ## Item notes
 

@@ -73,7 +73,7 @@ data disk reattached from the aux-disk.
 
 ## Verification
 
-- `qm config 102` names all seven passthrough disks; `qm config 100` has `scsi1`.
+- `qm config 102` names all eight passthrough disks; `qm config 100` has `scsi1`.
 - On the host: `ls /mnt/smb/*` answers, `systemctl --failed` is empty, `uname -r` is the expected
   kernel.
 - `fleet-health-check.yml` green; no alert other than `Watchdog`.

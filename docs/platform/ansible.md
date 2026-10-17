@@ -158,13 +158,13 @@ tracked in the [remediation plan](remediation-plan.md).
 | `tailscale-boot-gate.yml` | `guests`, then `proxmox` | Applies `tailscale_boot_gate`. |
 | `tailscale-cert.yml` | `tailscale_cert_ondisk` | Applies `tailscale_cert`. |
 | `timezone.yml` | `all` | Applies `timezone`. |
-| `unattended-upgrades.yml` | `vm100` | Applies `unattended_upgrades`. |
+| `unattended-upgrades.yml` | `guests` | Applies `unattended_upgrades`. |
 
 ## Roles
 
 | Role | Targets | What it does |
 |---|---|---|
-| `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory. |
+| `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory, with `TMPDIR` pointed there too. |
 | `auditd` | Proxmox host | Exercise ([decision](../decisions/exercise-scope-before-terraform.md)): syscall auditing with a starter rule set, read back with `auditctl -l`, `SYSLOG` actions and a capped log; no alert reads it. |
 | `breakglass` | vm100, vm102 | Enforces the admin break-glass keys exclusively on each VM's native user and removes retired passwordless sudo rules. |
 | `calibre_importer` | lxc220 | Installs Calibre and a timer that imports ebooks dropped into `/books-rw/_import`. |
@@ -210,7 +210,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `tailscale_boot_gate` | nodes declaring `tailscale_boot_gate_units` | Drop-in putting `wait-for-tailscale-ip.sh` in front of units that bind the Tailscale address. |
 | `tailscale_cert` | `tailscale_cert_ondisk` | Renews the on-disk Tailscale certificate on a timer and reloads the consumer only when it changed ([KE-16](known-errors.md#ke-16)). |
 | `timezone` | all nodes | Sets `Europe/Berlin` and reads it back; on lxc210 also pins MariaDB's `default_time_zone`. |
-| `unattended_upgrades` | vm100 | Restricts unattended upgrades to security pockets and blacklists kernel and NVIDIA packages. |
+| `unattended_upgrades` | all guests | Installs `unattended-upgrades`, turns the daily run on and allows the security archive alone, per distribution from `vars/` (`Allowed-Origins` on Ubuntu, `Origins-Pattern` on Debian); kernels are held back, the NVIDIA stack on vm100 too. Reads the merged config back with `apt-config` and asserts it. |
 
 ## SSH Hardening
 

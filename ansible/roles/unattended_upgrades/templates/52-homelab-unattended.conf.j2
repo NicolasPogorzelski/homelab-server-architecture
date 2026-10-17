@@ -1,15 +1,30 @@
 // {{ ansible_managed }}
 //
-// Read after 50unattended-upgrades (lexical order in /etc/apt/apt.conf.d/), so the
-// values here win. `#clear` is required: APT appends to a list option declared
-// again, so without it the regular archive would stay enabled.
+// Read after 20auto-upgrades and 50unattended-upgrades (lexical order in
+// /etc/apt/apt.conf.d/), so the values here win. `#clear` is required: APT
+// appends to a list option declared again, so without it the regular archive
+// would stay enabled.
+
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
 
 #clear Unattended-Upgrade::Allowed-Origins;
+{% if unattended_upgrades_allowed_origins %}
 Unattended-Upgrade::Allowed-Origins {
 {% for origin in unattended_upgrades_allowed_origins %}
     "{{ origin }}";
 {% endfor %}
 };
+{% endif %}
+
+#clear Unattended-Upgrade::Origins-Pattern;
+{% if unattended_upgrades_origins_pattern %}
+Unattended-Upgrade::Origins-Pattern {
+{% for pattern in unattended_upgrades_origins_pattern %}
+    "{{ pattern }}";
+{% endfor %}
+};
+{% endif %}
 
 #clear Unattended-Upgrade::Package-Blacklist;
 Unattended-Upgrade::Package-Blacklist {
@@ -17,3 +32,5 @@ Unattended-Upgrade::Package-Blacklist {
     "{{ pkg }}";
 {% endfor %}
 };
+
+Unattended-Upgrade::Automatic-Reboot "{{ unattended_upgrades_automatic_reboot | lower }}";
