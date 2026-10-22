@@ -71,7 +71,7 @@ off), are in [`physical-controls.md`](physical-controls.md).
 
 | Control | Status | Evidence | Residual risk |
 |---|---|---|---|
-| A.7.1 Physical security perimeter | Partial | The site entrance. | No second boundary between the door and the machine. |
+| A.7.1 Physical security perimeter | Partial | The site entrance. | No second boundary between the entrance and the machine. |
 | A.7.2 Physical entry | Partial | Occupants only. | No entry record. |
 | A.7.3 Securing offices and rooms | Gap | No dedicated, lockable room. | Anyone with access to the site can reach the machine. |
 | A.7.4 Physical security monitoring | Gap | No camera, door contact or tamper seal. | Physical tampering would go unnoticed. |
