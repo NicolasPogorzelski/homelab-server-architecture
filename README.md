@@ -92,7 +92,8 @@ afterwards. Every change is reviewed before it is committed, every decision reco
 decision records can be explained by the author, and every change reaches `main` through a pull
 request that the author opens and merges, with the validator, ansible-lint, gitleaks and the
 commit-message check green. The rules the assistant works under are in [CLAUDE.md](CLAUDE.md), with
-its project hooks and review agents in `.claude/`; documentation conventions are in
+its project hooks, review agents and the hand-started `start-scan` skill in `.claude/`;
+documentation conventions are in
 [CONVENTIONS.md](docs/CONVENTIONS.md).
 
 ## Documentation

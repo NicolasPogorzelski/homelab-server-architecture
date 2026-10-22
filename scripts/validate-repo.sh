@@ -539,7 +539,7 @@ ceiling_for() {
     case "$1" in
         README.md) echo 160 ;;
         CLAUDE.md) echo 120 ;;
-        .claude/agents/*) echo 60 ;;
+        .claude/agents/*|.claude/skills/*) echo 60 ;;
         docs/CONVENTIONS.md) echo 200 ;;
         docs/decisions/design-decisions.md) echo 320 ;;
         docs/decisions/*) echo 130 ;;
@@ -741,15 +741,15 @@ done < <(md_files)
 flush_errors
 
 # =============================================================================
-# Check 42: assistant rules and agents carry no dates
+# Check 42: assistant rules, agents and skills carry no dates
 # =============================================================================
 # A date in a rules file is a status claim, and status lives in the documents that own it.
-echo "Check 42: CLAUDE.md and agent definitions carry no dates"
+echo "Check 42: CLAUDE.md, agent and skill definitions carry no dates"
 
 while read -r rel; do
     { grep -nE '\b20[0-9]{2}-[0-9]{2}(-[0-9]{2})?\b' "${REPO_ROOT}/${rel}" || true; } \
         | while read -r m; do fail "Date in a rules file: ${rel}:${m%%:*}"; done
-done < <(md_files | grep -E '^(CLAUDE\.md|\.claude/agents/)')
+done < <(md_files | grep -E '^(CLAUDE\.md|\.claude/(agents|skills)/)')
 flush_errors
 
 # =============================================================================

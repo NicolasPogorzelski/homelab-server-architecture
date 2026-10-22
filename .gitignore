@@ -106,8 +106,8 @@ ansible/.ansible/
 .aider.tags.cache.v4/
 
 # =====================================================
-# Claude Code: CLAUDE.md, .claude/settings.json and two review agents are tracked;
-# machine-specific settings, session files and patches stay local
+# Claude Code: CLAUDE.md, .claude/settings.json, two review agents and the start-scan
+# skill are tracked; machine-specific settings, session files and patches stay local
 # =====================================================
 .claude/*
 !.claude/settings.json
@@ -115,6 +115,9 @@ ansible/.ansible/
 .claude/agents/*
 !.claude/agents/state-claims.md
 !.claude/agents/prose-tics.md
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/start-scan/
 
 # =====================================================
 # Private sanitization legend (placeholders -> real values, NEVER COMMIT)
