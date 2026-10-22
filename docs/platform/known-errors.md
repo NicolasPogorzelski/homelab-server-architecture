@@ -478,6 +478,11 @@ Failed commands at `9:0:0:0` per month, every boot in the persistent journal (me
 | 2026-09 | 28 | 10 | 211 |
 | 2026-10, to the 12th | 12 | 9 | 333 |
 
+Per boot on the 7.0 kernel, from 2026-10-12 13:50 to 2026-10-17 10:51 (measured 2026-10-17): 0, 11,
+0, 0, 0 and 2. The two on 2026-10-17 fell at 11:06, inside the guest backup. The last three boots on
+6.17 logged 60, 39 and 16. Load differs between these days, so the drop is not attributed to the
+kernel.
+
 Bursts follow I/O-heavy steps (image pulls, fleet upgrades, boot) and since 2026-10-05 occur on
 every boot and outside boot, often in the first minute of an hour. Every `I/O error` line is a
 `READ`; no `EXT4-fs error`, device-mapper or `Buffer I/O error` line has been logged.
@@ -494,6 +499,11 @@ Candidates: 12 V rail sag (`sensors` reads `+12V 10.03 V`, an unverified board s
 heat (passively cooled). The drive is worn but not failing: 58,540 power-on hours,
 `Wear_Leveling_Count` normalised 047, `Used_Rsvd_Blk_Cnt_Tot` `WHEN_FAILED=In_the_past` with raw 0.
 
+A second port shows transport faults. On 2026-10-15 at boot, one `DID_SOFT_ERROR` hit `9:0:2:0`
+(`phy(1)`), an 8 TB data disk identified by WWN. Its UDMA CRC count stood at 368 until 2026-10-13
+and at 393 on 2026-10-17. Faults on two ports fit the HBA, its cabling or its power better than the
+SSD alone.
+
 **Fix.** The drive is replaced in the second half of October 2026
 ([boot SSD replacement](../../runbooks/platform/boot-ssd-replacement.md), [remediation plan](remediation-plan.md#boot-ssd-replacement)); its 110 GiB volume
 group is also too small. The 6.17.13 kernel pin was released 2026-10-12 so the kernel and the
@@ -501,6 +511,8 @@ drive do not change together; the baseline is the old drive on the 7.0 kernel fr
 
 **Verification.** Failed commands per boot before and after the swap. On the same port and cable
 this separates drive from transport; on an onboard SATA port it separates the HBA path from power.
+Since the boot of 2026-10-17 10:51 a sixth 7200 rpm data disk runs on the HBA (`9:0:5:0`) and adds
+12 V load on an unrecorded rail; counts after the swap are compared against this configuration.
 If errors persist, run the
 [power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
 
