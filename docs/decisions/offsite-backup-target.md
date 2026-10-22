@@ -21,14 +21,13 @@ backups on the aux-disk, the user files on the MergerFS pool under SnapRAID pari
 Parity makes ransomware worse: the next `snapraid sync` writes the damage into the parity. Any
 account that can write these backups can delete them, and lxc250 holds hypervisor root.
 
-Measured on vm102, 2026-09-01: Nextcloud user files 35 GB, Paperless documents 5.6 GB, PostgreSQL
-dumps 322 MB, MariaDB dumps 18 MB; about 41 GB in total. `restic` deduplicates and compresses, so
-volume does not drive the choice of target.
+Measured on vm102, 2026-09-01: the user files and both dump sets together are under 100 GB.
+`restic` deduplicates and compresses, so volume does not drive the choice of target.
 
 Two copies outside the server exist, neither running nor restored from (recorded 2026-09-01): a
 rescue of the aux-disk's contents on an administrator workstation, taken 2026-06-25, and a disk at a
-second residential site holding a mirror from May 2026. The second is off site and air-gapped but
-refreshed only during irregular visits, and its scope is the guest root filesystems; the archive
+second site holding a mirror from May 2026. The second is off site and air-gapped but refreshed
+only at irregular intervals, and its scope is the guest root filesystems; the archive
 pool, and so the Nextcloud files, Paperless documents and dump sets, has no off-site copy.
 
 Requirements:
@@ -37,7 +36,7 @@ Requirements:
 2. Deletion resistance: the backup credential can write and cannot delete.
 3. Client-side encryption: the data includes identity documents.
 4. Exercised in routine operation: a target touched twice a year falls out of use.
-5. Single-digit euros per month at 41 GB.
+5. Single-digit euros per month for under 100 GB.
 
 ## Options
 - **Rotated encrypted disk kept elsewhere.** Lost as the main control: the strongest protection
@@ -52,8 +51,8 @@ Requirements:
 ## Decision
 A small VPS at a European provider runs `rest-server --append-only`; `restic` on the homelab writes
 to it over Tailscale. Hetzner Cloud is the working assumption: the smallest instance plus a volume,
-since 41 GB with history does not fit the instance disk. Each source node (vm102 for the user files
-and dumps, lxc250 for the credentials every recovery depends on) gets its own repository and
+since the C1 set with history does not fit the instance disk. Each source node (vm102 for the user
+files and dumps, lxc250 for the credentials every recovery depends on) gets its own repository and
 append-only account. The VPS also holds a second copy of the credential escrow
 ([escrow drill](../platform/remediation-plan.md#escrow-restore-drill)).
 

@@ -89,7 +89,7 @@ demand independently.
 ## Retention and deletion
 
 No retention period exists for documents, logs or monitoring history; the only rule is the dump
-retention above. No deletion procedure exists for media leaving the flat, and the next one is due:
+retention above. No deletion procedure exists for media leaving the site, and the next one is due:
 the aux-disk holds C1 application data and cannot be assumed erasable by software, since thousands
 of its sectors are unreadable ([KE-13](known-errors.md#ke-13)). Both are open items in the
 [remediation plan](remediation-plan.md).
@@ -102,8 +102,7 @@ plus this repository. C3 is excluded; copying the media archive would dominate t
 protect nothing that matters. The target is decided in
 [`offsite-backup-target.md`](../decisions/offsite-backup-target.md).
 
-Verified 2026-09-01: Nextcloud user files 35 GB, Paperless documents 5.6 GB, the two dump sets
-340 MB together, about 41 GB in total.
+Verified 2026-09-01: the C1 set on this platform is under 100 GB.
 
 ## Point-in-time copies off site
 
@@ -112,7 +111,7 @@ No running job copies anything off site. Two point-in-time copies exist:
 | Copy | Location | Taken | What it covers |
 |---|---|---|---|
 | Auxiliary disk rescue | Encrypted storage on an admin workstation, in a different building from the server | 2026-06-25 | The failing aux-disk's contents at that date |
-| Mirror disk | A second residential site, air-gapped | May 2026 | The guest root filesystems, and the databases inside them; not the archive pool, so no Nextcloud file, Paperless document or dump set |
+| Mirror disk | A second site, air-gapped | May 2026 | The guest root filesystems, and the databases inside them; not the archive pool, so no Nextcloud file, Paperless document or dump set |
 
 Neither has been restored from, and neither can be given a cadence. They do not close the off-site
 item.
