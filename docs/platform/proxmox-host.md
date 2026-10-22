@@ -47,8 +47,8 @@ See: [decision](../decisions/pveproxy-tailscale-boot-ordering.md),
 
 ## Disk Passthrough (vm102)
 
-All nine physical disks are attached to the host. vm102 receives seven by ID as virtio-SCSI
-devices (five data disks, the parity disk and aux-pool); the host keeps the boot SSD and aux-disk.
+All ten physical disks are attached to the host. vm102 receives eight by ID as virtio-SCSI
+devices (six data disks, the parity disk and aux-pool); the host keeps the boot SSD and aux-disk.
 Disk models and IDs are kept offline; the logical topology is in [vm102.md](../nodes/vm102.md).
 
 A guest sees virtio devices, so SMART is readable only on the host; the `smart_metrics` role
