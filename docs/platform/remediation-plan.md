@@ -138,11 +138,11 @@ any configuration exists. Stages 3, 4 and 6 are exercises in the sense of
 `dpkg --verify` projection in `fleet_snapshot`; compose images pinned by tag, one by digest; the
 weekly Trivy scan; the monthly SBOM and signature check; Actions pinned to SHAs under Dependabot.
 
-Verified 2026-10-22: no APT proxy on any node, no nftables output hook on any node, `pve-firewall
-status` reports `disabled/running`, by Ansible ad-hoc from lxc250. Third-party APT sources: Tailscale
-on every node, Docker on lxc200, lxc211, lxc220, lxc230 and vm100, NVIDIA container toolkit and the
-graphics-drivers PPA on vm100, HashiCorp on lxc250. Every third-party list except the PPA names its
-key with `signed-by`.
+Verified 2026-10-22: no APT proxy on any node; no nftables output chain on any node drops or
+rejects, every one accepts by policy; `pve-firewall status` reports `disabled/running`; by Ansible
+ad-hoc from lxc250. Third-party APT sources: Tailscale on every node, Docker on lxc200, lxc211,
+lxc220, lxc230 and vm100, NVIDIA container toolkit and the graphics-drivers PPA on vm100, HashiCorp
+on lxc250. Every third-party list except the PPA names its key with `signed-by`.
 
 1. **Trust chain and inventory.** How APT trusts a package (`InRelease`, the hash chain from
    `Release` to `Packages` to the `.deb`, `signed-by` keyrings) and how it chooses a version
