@@ -42,6 +42,7 @@ Budgets are ceilings, not targets. The validator fails a document above its ceil
 | README | `README.md` | 160 | counted claims validated |
 | Assistant rules | `CLAUDE.md` | 120 | rules only: no dates, no status |
 | Assistant agent | `.claude/agents/*.md` | 60 | `tools:` field, no dates |
+| Assistant skill | `.claude/skills/*/SKILL.md` | 60 | `disable-model-invocation: true`, no dates |
 | Decision record | `docs/decisions/*.md` | 130 | `## Status` |
 | Node document | `docs/nodes/*.md` | 130 | `- Tag:` line, `## Configuration Management`, `## Failure Impact` |
 | Service document | `docs/services/*.md` | 130 | `## Access Model` |
