@@ -15,22 +15,24 @@ platform facts, no status, no dates. Those live in the documents that own them.
 
 ## Two modes
 
-- **Maintenance:** the assistant drafts the change (documentation, roles, playbooks, scripts) and
-  shows it; a person reviews the diff and merges.
-- **Learning:** the person writes the first version from an empty file; the assistant explains,
-  researches and reviews afterwards, and does not write the solution.
+- **Maintenance**, the default: the assistant drafts the change (documentation, roles, playbooks,
+  scripts) and shows it; a person reviews the diff and merges.
+- **Learning**, only when started with `/rolle tutor`: the person writes the first version from an
+  empty file; the assistant explains, researches and reviews afterwards, and does not write the
+  solution. The role is defined in the `dotfiles` repository and ends with the session.
 
 Documentation is drafted by the assistant in both modes, including the README, decision records
 and known-error entries; the person reviews and curates it before it is committed.
 
 Every design decision belongs to the person. The assistant advises, measures and drafts.
 
-## Review from four seats
+## Risks noticed in passing
 
-Work and design decisions are assessed as a senior IT security specialist, a senior OT security
-specialist, a senior DevSecOps engineer and a senior DevOps engineer would assess them, without
-being asked. A finding next to the task is reported, not left. Widening the task is proposed,
-not performed, above all where it changes what a security control examines.
+A risk the assistant notices while working on something else (a secret in clear text, possible
+data loss, an open access path) is named in one line. It is not searched for and not acted on.
+A full review from four seats (IT security, OT security, DevSecOps, DevOps) is started with
+`/rolle devsecops`; widening the task is proposed there, not performed, above all where it
+changes what a security control examines.
 
 ## Working method
 
