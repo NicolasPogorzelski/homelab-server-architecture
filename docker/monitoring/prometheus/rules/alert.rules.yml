@@ -539,6 +539,12 @@ groups:
             smartmon_offline_uncorrectable_raw_value
             * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
           )
+      - record: serial:smartmon_udma_crc_error_count_raw_value:max
+        expr: |
+          max by (instance, serial_number) (
+            smartmon_udma_crc_error_count_raw_value
+            * on (instance, disk) group_left (serial_number) disk:smartmon_device_info:latest
+          )
 
       # Growth, not level: several disks already carry non-zero counters (the aux-disk,
       # KE-13), so a level rule would be red on deployment. Compared with the 25-hour minimum
@@ -563,6 +569,22 @@ groups:
         annotations:
           summary: "{{ $labels.device_model }} ({{ $labels.disk }} at this boot) on {{ $labels.instance }} gained unreadable sectors in the last day"
           description: "A SMART error counter on serial {{ $labels.serial_number }} rose above its 25-hour minimum and now reads {{ $value }}. The disk is degrading now, not historically. Read `smartctl -A` on the host via /dev/disk/by-id - the kernel letter in this alert is only valid until the next boot."
+
+      # CRC errors are counted on the link between disk and controller, not on the platter, so a
+      # rise points at cable, backplane, HBA port or power (KE-14) and gets its own warning. The
+      # same 25-hour minimum as above; three disks already carry non-zero counts.
+      - alert: SmartUdmaCrcErrorsGrowing
+        expr: |
+          (serial:smartmon_udma_crc_error_count_raw_value:max
+            > min_over_time(serial:smartmon_udma_crc_error_count_raw_value:max[25h]))
+          * on (instance, serial_number) group_left (disk, device_model)
+            max by (instance, serial_number, disk, device_model) (disk:smartmon_device_info:latest)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.device_model }} ({{ $labels.disk }} at this boot) on {{ $labels.instance }} logged new link CRC errors in the last day"
+          description: "UDMA_CRC_Error_Count on serial {{ $labels.serial_number }} rose above its 25-hour minimum and now reads {{ $value }}. The fault is on the path to the disk, not on the medium: check its cable and port against KE-14 and read `smartctl -A` via /dev/disk/by-id."
 
       # A level rule fits here: every disk reads 0, and a reallocation means a spare block
       # has been spent.
