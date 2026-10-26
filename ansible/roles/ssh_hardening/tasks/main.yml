@@ -4,9 +4,15 @@
     that:
       - ssh_hardening_permit_root_login in ["yes", "no", "prohibit-password", "forced-commands-only"]
       - ssh_hardening_password_authentication in ["yes", "no"]
+      - ssh_hardening_x11_forwarding in ["yes", "no"]
+      - ssh_hardening_allow_tcp_forwarding in ["yes", "no", "all", "local", "remote"]
+      - ssh_hardening_max_auth_tries | int >= 1
     fail_msg: >-
       ssh_hardening_permit_root_login={{ ssh_hardening_permit_root_login }},
-      ssh_hardening_password_authentication={{ ssh_hardening_password_authentication }}.
+      ssh_hardening_password_authentication={{ ssh_hardening_password_authentication }},
+      ssh_hardening_x11_forwarding={{ ssh_hardening_x11_forwarding }},
+      ssh_hardening_allow_tcp_forwarding={{ ssh_hardening_allow_tcp_forwarding }},
+      ssh_hardening_max_auth_tries={{ ssh_hardening_max_auth_tries }}.
       sshd refuses to start on an invalid directive value, and this role reloads it -
       a typo here takes SSH down on the node it was meant to harden.
     quiet: true
@@ -90,6 +96,27 @@
     path: /etc/ssh/sshd_config
     regexp: ^#?PermitRootLogin
     line: PermitRootLogin {{ ssh_hardening_permit_root_login }}
+  notify: Reload ssh_config
+
+- name: X11 forwarding
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?X11Forwarding
+    line: X11Forwarding {{ ssh_hardening_x11_forwarding }}
+  notify: Reload ssh_config
+
+- name: TCP forwarding
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?AllowTcpForwarding
+    line: AllowTcpForwarding {{ ssh_hardening_allow_tcp_forwarding }}
+  notify: Reload ssh_config
+
+- name: Authentication attempts per connection
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?MaxAuthTries
+    line: MaxAuthTries {{ ssh_hardening_max_auth_tries }}
   notify: Reload ssh_config
 
 # Where root may not log in, a key in root's authorized_keys would grant access

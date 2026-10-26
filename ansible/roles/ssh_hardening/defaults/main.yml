@@ -8,6 +8,16 @@
 ssh_hardening_password_authentication: "no"
 ssh_hardening_permit_root_login: "no"
 
+# === Forwarding and authentication attempts ===
+#
+# Debian ships X11 and TCP forwarding on and six attempts per connection. No node
+# runs a display, and no documented path tunnels through sshd; Ansible multiplexes
+# sessions, which needs neither. Four attempts is the CIS limit and leaves room for
+# an agent that offers three keys before the right one.
+ssh_hardening_x11_forwarding: "no"
+ssh_hardening_allow_tcp_forwarding: "no"
+ssh_hardening_max_auth_tries: 4
+
 # === ListenAddress ===
 #
 # Empty by default, which leaves sshd on the wildcard address. Set per node to its
