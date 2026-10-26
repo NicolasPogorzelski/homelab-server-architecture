@@ -17,7 +17,7 @@ size and device: one slot (`-np 1`), flash attention, a `q8_0` KV cache, all lay
 Router mode: each instance starts with `--models-dir` and `--models-max 1`, loads a model on the
 first request that names it, and unloads it after 20 minutes idle (`--sleep-idle-seconds 1200`).
 Each subdirectory of the models directory is one model; an `mmproj` projector beside it enables image
-input. The GPUs carry nothing of the LLM until someone asks. `/health` is answered by the router and
+input. The GPUs hold no model until a request loads one. `/health` is answered by the router and
 loads no model, so the blackbox probe does not occupy the GPU.
 
 Verified 2026-09-29 and 2026-10-01:

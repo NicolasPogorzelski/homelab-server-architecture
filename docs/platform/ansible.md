@@ -1,7 +1,7 @@
 # Ansible Platform
 
 Every node of the platform - the Proxmox host and its nine guests - is managed by Ansible from
-the control node lxc250. This document is the catalogue of playbooks and roles; node membership
+the control node lxc250. The catalogue of playbooks and roles follows; node membership
 lives in `ansible/inventory/hosts.yml.example`, schedules in each role's `defaults/main.yml`.
 
 ## Control Node

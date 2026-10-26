@@ -1,6 +1,6 @@
 # Proxmox Host
 
-The Proxmox VE hypervisor: the bare-metal layer that runs every VM and LXC. This document covers
+The Proxmox VE hypervisor, the bare-metal layer that runs every VM and LXC, and its
 host-level configuration outside any guest: boot ordering, disks, the power schedule, host units
 and timers, SSH, storage definitions and guest backup.
 
@@ -115,8 +115,8 @@ back, and exits 1 if no alarm is armed or the armed time is more than 60 s off
 Before powering off, the script waits while a guarded unit is active: `guest-backup.service` and
 `lxc-fstrim.service` on the host, and on vm102, asked through the QEMU guest agent, the SnapRAID
 sync and scrub and `storage-permissions.service`. If work is still running after 180 minutes, or
-the next start cannot be armed, it exits 1 and the host stays up rather than cutting work short or
-going off with no way back on.
+the next start cannot be armed, it exits 1 and the host stays up, so no work is cut short and the host
+never goes off with no way back on.
 
 Source: `ansible/roles/homelab_schedule/templates/`.
 
@@ -206,7 +206,7 @@ a person through Alertmanager only.
 | `PasswordAuthentication` | `no` | Same as the guests |
 | `PermitRootLogin` | `prohibit-password` | Root is the only administrative account; `no` would end SSH administration (`group_vars/proxmox.yml`) |
 
-sshd is deliberately not pinned to the Tailscale address on the host
+sshd on the host listens on the wildcard address, so SSH works without Tailscale
 ([decision](../decisions/sshd-listen-address.md)); `lan_guard` admits break-glass SSH from the two
 admin workstations only.
 
@@ -230,8 +230,7 @@ it; one would have to write through the symlink and keep the host's own key.
   filesystem is mounted at the path and cannot write into the empty directory on `pve-root`
   ([KE-7](known-errors.md#ke-7) class). `mkdir 0` on it is deprecated in PVE 9; the replacement is
   `create-base-path 0`.
-- No `dir` storage points at an unmounted path on `pve-root`; the former `mergerfs` storage of
-  that kind was removed after verifying it was unused.
+- No `dir` storage points at an unmounted path on `pve-root`.
 
 ## Guest Backup
 
@@ -258,7 +257,7 @@ anything on the platform - it is noticed by a person.
 | `pve/data` thin pool | Every VM and LXC root disk; the volume group has no free extents, so `lvextend` is not a remedy |
 | Boot SSD ([KE-14](known-errors.md#ke-14)) | Both of the above at once; a single consumer drive behind the HBA with unexplained boot-window errors |
 | aux-disk ([KE-13](known-errors.md#ke-13)) | Docker engine state of the Docker-in-LXC services, vm100's data disk, lxc260's database files, and the guest backup target |
-| Tailscale identity | Every service address; nodes are reached by MagicDNS name, and the LAN is deliberately not a fallback |
+| Tailscale identity | Every service address; nodes are reached by MagicDNS name, and the LAN is no fallback for them |
 
 After a total loss of the machine:
 

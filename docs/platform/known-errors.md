@@ -99,7 +99,7 @@ pulled in `rpcbind`, listening on `0.0.0.0:111`.
 
 **Fix.** `nfs-common` and `rpcbind` removed through `systemd_hygiene_absent_packages` in
 `ansible/inventory/host_vars/lxc210.yml`. The `systemd_hygiene` role simulates the removal with
-`apt-get -s` and refuses if apt would remove anything else. The earlier mask is deleted.
+`apt-get -s` and refuses if apt would remove anything else. No mask remains.
 
 **Verification.** Verified 2026-09-12: both packages absent on lxc210, port 111 closed, no failed
 unit ([ansible.md](ansible.md#roles)).
@@ -300,7 +300,7 @@ sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # configured binds
 A separate fault surfaced in the same window: Paperless crash-looped (`RestartCount` 2443) on
 `Error 111 connecting to localhost:6379`. The `paperless_env` default was
 `redis://localhost:6379`; on a Compose bridge network Redis is reachable by service name. Default
-is now `redis://redis:6379`.
+is `redis://redis:6379`.
 
 **Verification.** Verified 2026-06-09 by reboot of lxc260: gate logged `tailscale IP present after
 2s`, PostgreSQL bound `<tailscale-ip-lxc260>:5432`; Paperless `healthy`, backend HTTP 302. See
@@ -652,7 +652,7 @@ could not determine the node's MagicDNS name # query-time variant
 `Type=simple` service counts as started when its process exists, before it joins the tailnet and
 gets an address. With `Restart=on-failure` and the default `RestartSec=100ms`, five attempts run
 inside about 24 ms and the start limit stops the unit for good. The host powers down nightly, so
-every day is a cold boot, and `Persistent=true` timers fire inside the boot window by design.
+every day is a cold boot, and `Persistent=true` timers catch up on missed runs inside the boot window.
 
 Retry loops can hide the fault: on 2026-08-20 all nine guest `node_exporter` units showed
 `NRestarts=1`, and `SystemdUnitFailed` (`for: 15m`) never saw the 15-second failure.
@@ -878,7 +878,7 @@ exactly that; `00-` sorts first.
 
 **Fix.** Role applied to the nine guests on 2026-09-04 and to the host on 2026-09-16, the host run
 behind a `systemd-run --on-active=300` dead-man switch. The host keeps `prohibit-password` from
-`ansible/inventory/group_vars/proxmox.yml`. The weekly drift sweep now reports such gaps
+`ansible/inventory/group_vars/proxmox.yml`. The weekly drift sweep reports such gaps
 ([remediation plan](remediation-plan.md#open-items)). Applying the role surfaced [KE-24](#ke-24).
 
 **Verification.** `sshd -T` across all ten nodes matches the expected values; the drop-in is present

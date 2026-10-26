@@ -37,7 +37,7 @@ Dumps are kept for seven days (`RETENTION_DAYS=7` in
 [`mariadb-backup.sh`](../../snippets/mariadb/mariadb-backup.sh)); `find -mtime +7` deletes a dump
 only once it is more than eight full days old.
 
-**Parity is not backup.** SnapRAID protects against the loss of a disk. Deletion, corruption and
+**Parity:** SnapRAID protects against the loss of a disk. Deletion, corruption and
 encryption by ransomware are legitimate writes to the array, and the next `snapraid sync` copies
 them into the parity. Paperless documents and Nextcloud files have that protection and no other.
 

@@ -1,7 +1,7 @@
 # sshd Binds the Tailscale Address on Every Guest
 
 ## Status
-Implemented 2026-10-13: pinned on all 9 guests; the hypervisor is deliberately unpinned. Decided
+Implemented 2026-10-13: pinned on all 9 guests; the hypervisor stays unpinned for break-glass SSH. Decided
 2026-09-11. Supersedes / superseded by: -.
 
 Verified 2026-10-12 (lxc250: 2026-10-13): on every guest `ss` shows the Tailscale address alone on

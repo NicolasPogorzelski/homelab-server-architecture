@@ -12,7 +12,7 @@ Principles:
 - Every grant names a port and, where a tag holds more than one service, a host
 - The policy is one JSON document with tests, not ad-hoc per service
 
-**Source of truth:** the policy in the Tailscale admin console. This document mirrors it,
+**Source of truth:** the policy in the Tailscale admin console, mirrored here
 sanitized: addresses are placeholders, and people appear by role, never by name, device name or
 e-mail address. Nothing synchronises the two: a change is written here, applied to the console by
 hand, and the console's `tests` block rejects a policy that breaks an assertion on save. A drift
@@ -134,7 +134,7 @@ itself needs no rule (verified 2026-09-26).
 
 The two nodes that opt into central log collection may reach the receiver on lxc200, and nothing
 else there ([exercise decision](../decisions/exercise-scope-before-terraform.md)). The rule names
-the Paperless host rather than `tag:tier1`, so Nextcloud and Calibre-Web cannot send.
+the Paperless host and not `tag:tier1`, so Nextcloud and Calibre-Web cannot send.
 
 ```json
 {
@@ -206,7 +206,7 @@ Port 11434 is closed on both hosts, and the tests below assert it: nothing liste
 
 ### Rule 7 - Admin workstations
 
-Derived from the workstation's own configuration and the documentation rather than from "admin
+Derived from the workstation's own configuration and the documentation, without assuming "admin
 means everything": SSH where an admin key exists (the host, vm102, vm100, lxc250), the web
 interfaces, and the SMB shares the notebook mounts. The LXCs other than lxc250 carry no admin key,
 only the Ansible key, so SSH to them would be an open port nobody can use; `pct exec` on the host is
@@ -303,7 +303,7 @@ tagged individually by the admin (`tagOwners: autogroup:admin`).
 ### Rule 13 - External user, through machine sharing
 
 One external user reaches Jellyfin, Audiobookshelf and Nextcloud Talk. vm100 and lxc210 are shared
-into the user's own tailnet rather than the user's devices joining this one. Tailscale's sharing
+into the user's own tailnet; the user's devices do not join this one. Tailscale's sharing
 documentation: "Sharing gives the recipient access to only the shared
 machine in your tailnet, and nothing else", and the shared machine stays subject to this policy. The
 user's devices no longer sit in this network, cannot be added to it, and a rule written too broadly
@@ -317,14 +317,14 @@ here cannot reach them.
 }
 ```
 
-The rule names the user's account rather than `autogroup:shared`, so a later share with somebody else
+The rule names the user's account and not `autogroup:shared`, so a later share with somebody else
 does not inherit these rights. A grant to an account covers all of its devices; per-device limits
 would require keeping those devices in this tailnet.
 
 ### Rule 14 - Media player: the streaming box at the TV
 
 The streaming box gets Jellyfin over the tailnet and nothing else; media clients use the tailnet,
-not the LAN ([decision](../decisions/media-over-the-tailnet.md)). It has its own tag rather than a
+not the LAN ([decision](../decisions/media-over-the-tailnet.md)). It has its own tag and no
 grant under `tag:isolated`, because that tag promises no access at all. Its Mullvad attribute is
 bound to the device's address, not to the tag.
 
@@ -457,13 +457,13 @@ exposed host, no MyFRITZ! shares).
 
 The tailnet policy file is HuJSON and accepts a `tests` block. Each entry names a source
 identity and lists destinations that must be reachable and destinations that must not be;
-when an assertion fails, Tailscale rejects the edited policy on save rather than applying it.
+when an assertion fails, Tailscale rejects the edited policy on save and does not apply it.
 
 The block below has one entry per source role, per tier1 host and for the external user.
 
 Deny assertions carry the weight here. An allow that breaks announces itself the next time somebody
 uses the service; a deny that breaks is silent. Where a rule's source is a host alias, the test names
-the host rather than the tag, because a test from `tag:tier1` would say nothing about which of the
+the host and not the tag, because a test from `tag:tier1` would say nothing about which of the
 three tier1 nodes it describes.
 
 ```json

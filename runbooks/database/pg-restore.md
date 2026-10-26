@@ -8,7 +8,7 @@
   and roles compared against live). Validation runs monthly by timer (`postgresql_restore_test`).
 
 The backup is a `pg_dumpall` of the whole cluster (all databases plus roles), written by
-`snippets/postgres/pg-backup.sh`. It cannot be replayed for one database alone. This runbook has two
+`snippets/postgres/pg-backup.sh`. It cannot be replayed for one database alone, so there are two
 paths:
 
 - **Path A (one database):** restore the dump into a scratch cluster on port 5433, `pg_dump` the one
