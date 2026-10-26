@@ -93,7 +93,7 @@ into the same situation.
 
 ## Why it stays off here, in one sentence per reason
 
-- **There is nobody to fail over to.** Fencing frees a workload for another node
+- There is nobody to fail over to. Fencing frees a workload for another node
   to claim. With one node the workload goes down either way, and the reset adds
   the boot time of nine guests to an outage that did not need it.
 - **A transient becomes an outage.** Anything that stalls the LRM - a pmxcfs

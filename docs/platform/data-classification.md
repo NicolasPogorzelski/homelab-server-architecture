@@ -41,7 +41,7 @@ only once it is more than eight full days old.
 encryption by ransomware are legitimate writes to the array, and the next `snapraid sync` copies
 them into the parity. Paperless documents and Nextcloud files have that protection and no other.
 
-**Nextcloud is split across two disks.** Its files sit on the archive pool, its database on the
+Nextcloud is split across two disks. Its files sit on the archive pool, its database on the
 boot SSD of [KE-14](known-errors.md#ke-14). Without the database the files are blobs in Nextcloud's
 storage layout with no owner, share or name, so the database's RPO must not exceed the files'.
 
@@ -63,7 +63,7 @@ night, and a job missed while it is off runs at the next boot.
 | Platform configuration | Minutes | Keep | 1 h | Met by git |
 | Media library | Not applicable | - | Best effort | Reacquisition, not restoration |
 
-**No platform-level RTO is stated.** This is a single host without high availability; a hardware
+No platform-level RTO is stated. This is a single host without high availability; a hardware
 loss is bounded by procurement, with lead times measured in weeks. The per-dataset objectives
 assume working hardware. An outage of days in exchange for a simple, cheap platform is the
 accepted trade for a small, closed set of users.
@@ -76,11 +76,11 @@ contacts in Nextcloud, and the viewing activity of the people who use the media 
 Article 2(2)(c) GDPR exempts processing "by a natural person in the course of a purely personal or
 household activity". The platform sits close to two edges of that exemption:
 
-- **It ends when access is granted outside the household.** The [ACL model](tailscale-acl.md)
+- It ends when access is granted outside the household. The [ACL model](tailscale-acl.md)
   records one external user with access to Jellyfin, Audiobookshelf and Nextcloud through machine
   sharing. The assessment for those three services is due again and has not been redone
   ([remediation plan](remediation-plan.md)).
-- **It never covers the security obligation in practice.** The data belongs to identifiable people
+- It never covers the security obligation in practice. The data belongs to identifiable people
   who did not choose this platform's controls.
 
 The C1 rows are therefore handled as though Article 32 applied, which their loss consequences

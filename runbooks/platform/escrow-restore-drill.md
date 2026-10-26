@@ -20,7 +20,7 @@ copy off site. The drill proves the escrow holds all three, complete, and that t
 ## Preconditions
 
 - A workstation other than lxc250, with a checkout of this repository and Ansible installed.
-- The paper copy retrieved physically, not a photograph.
+- The paper copy, retrieved in person; a photograph does not count.
 - No live change planned for the same session.
 
 ## Steps
@@ -95,7 +95,7 @@ Nothing on the platform changes. If the drill stops early, run step 6 anyway.
 
 ## Background
 
-Two of the three artefacts are files, not passwords; a password manager does not necessarily hold
-a private key or a YAML file intact. Records follow the convention of
+Two of the three artefacts are files (`hosts.yml` and the SSH key), and a password manager may not
+return a private key or a YAML file intact. Records follow the convention of
 [`pg-restore.md`](../database/pg-restore.md): date, what was exercised, what was found, including a
 pass with no findings.

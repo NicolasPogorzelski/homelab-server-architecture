@@ -58,23 +58,23 @@ flowchart LR
 
 ## What the Picture Shows
 
-**Both database chains are verified at write time.** Each dump is written under a `.partial` name
+Both database chains are verified at write time. Each dump is written under a `.partial` name
 and renamed only after three checks pass: non-empty, `gzip -t`, and exactly one completion marker.
 The marker check is the one that catches a dump killed halfway, which is still valid gzip. The
 checks run before the retention delete, so a failed run never removes the last good dump.
 
-**Both chains are restored monthly.** The PostgreSQL dump goes into a throwaway cluster on port 5433,
+Both chains are restored monthly. The PostgreSQL dump goes into a throwaway cluster on port 5433,
 the MariaDB dump into a throwaway database; neither touches the live database. Results feed
 `PostgreSQLRestoreTestStale` and `MariaDBRestoreTestStale`.
 
-**The guest backup shares a disk with what it would rebuild.** `guest_backup` writes a weekly
+The guest backup shares a disk with what it would rebuild. `guest_backup` writes a weekly
 `vzdump` of all nine guests to `/mnt/vzdump` on the aux-disk, lxc250 first. vm100 contributes its
 root disk only; its `jellyfin-data` disk carries `backup=0`. A restore was verified on 2026-08-21
 ([guest backup runbook](../../runbooks/platform/guest-backup-restore.md)). The host's configuration
 is archived daily to the same disk and to the boot SSD, so either survives the loss of the other
 ([platform restore](../../runbooks/platform/platform-restore.md)).
 
-**Nothing is copied off site.** Every arrow ends inside the building. The archive pool holds the
+Nothing is copied off site. Every arrow ends inside the building. The archive pool holds the
 backups and the primary data of two services, so fire, theft or encryption takes originals and
 copies together. What exists elsewhere is point in time: this repository, the escrowed Ansible
 secrets, and the irregular disk copies listed in
