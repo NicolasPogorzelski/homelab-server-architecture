@@ -26,6 +26,8 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 15 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
 | 16 | Nextcloud ingest into Paperless ([KE-29](known-errors.md#ke-29)) | Documents uploaded to the two ingest folders never reach Paperless, and nothing alerts | Add Rule 15 and its test in the admin console, then switch mounts 4 and 5 to vm102's full MagicDNS name |
 | 17 | Power-only Proxmox user for the admin phone | The phone logs in to the Proxmox interface as root, so a stolen phone holds full control of the hypervisor | Create a user whose role holds only `Sys.PowerMgmt`, with a second factor, as [tailscale-acl.md](tailscale-acl.md) describes |
+| 18 | [Package supply track](#package-supply-track), stages 1 to 4 and 6 | Every node fetches packages and images from public sources itself; nothing records or controls what enters the fleet, and an egress filter cannot be built | Read the theory of stage 1, then record every package source per node |
+| 19 | [Egress filter](#package-supply-track), stage 5 | No guest is limited in the outbound connections it opens, and the hypervisor firewall is disabled; a compromised service can reach any address | After stage 4, list per guest the outbound destinations it needs, then write the decision record |
 
 ## Item notes
 
@@ -126,6 +128,57 @@ start condition, the exercise block applied, is met. Order:
 2. The clients: Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum that gates
    Terraform; Audiobookshelf and Calibre-Web follow. Nextcloud and Proxmox VE are deferred for the
    reasons in the decision.
+
+### Package supply track
+
+A learning track as well as a fix: each stage starts with the theory it needs, written up before
+any configuration exists. Stages 3, 4 and 6 are exercises in the sense of
+[`exercise-scope-before-terraform.md`](../decisions/exercise-scope-before-terraform.md).
+
+**In place.** Security-only `unattended_upgrades` with kernels and the NVIDIA stack held back;
+`apt-upgrade.yml` for the rest; `apt_metrics` and `AptSecurityUpdatesPending`; a weekly
+`dpkg --verify` projection in `fleet_snapshot`; compose images pinned by tag, one by digest; the
+weekly Trivy scan; the monthly SBOM and signature check; Actions pinned to SHAs under Dependabot.
+
+Verified 2026-10-22: no APT proxy on any node; no nftables output chain on any node drops or
+rejects, every one accepts by policy; `pve-firewall status` reports `disabled/running`; by Ansible
+ad-hoc from lxc250. Third-party APT sources: Tailscale on every node, Docker on lxc200, lxc211,
+lxc220, lxc230 and vm100, NVIDIA container toolkit and the graphics-drivers PPA on vm100, HashiCorp
+on lxc250. Every third-party list except the PPA names its key with `signed-by`.
+
+1. **Trust chain and inventory.** How APT trusts a package (`InRelease`, the hash chain from
+   `Release` to `Packages` to the `.deb`, `signed-by` keyrings) and how it chooses a version
+   (`apt-cache policy`, pinning) are covered by [SecureApt](https://wiki.debian.org/SecureApt), the
+   [repository format](https://wiki.debian.org/DebianRepository/Format) and `man apt_preferences`.
+   The package sources per node then go into the node documents, and the PPA is bound to its key
+   with `signed-by`.
+2. **APT cache.** A caching proxy and a mirror differ in what they store and when; HTTPS sources
+   need their own handling behind a proxy, and the cache becomes a single point of failure for
+   patching ([apt-cacher-ng manual](https://www.unix-ag.uni-kl.de/~bloch/acng/)). A decision record
+   comes first, then the `apt-cacher-ng` container, a role that sets `Acquire::http::Proxy` on every
+   node, and a scrape target or alert for the cache.
+3. **Offline install drill (exercise).** An air-gapped site gets packages by downloading them on an
+   identical system, transferring them with checksums and importing them into a local repository
+   ([aptly overview](https://www.aptly.info/doc/overview/)). One disposable container without a
+   route out receives a package that is not cached, and the steps become a runbook.
+4. **Staged rollout from snapshots (exercise).** Fleets freeze a package set, test it on one node
+   and promote it after. Here an `aptly` snapshot is published through the cache, tried on one
+   guest, then the fleet.
+5. **Egress filter.** Default-deny outbound with an allowlist per role, read in the
+   [Proxmox VE firewall](https://pve.proxmox.com/wiki/Firewall) documentation,
+   [Tailscale firewall ports](https://tailscale.com/kb/1082/firewall-ports) and the
+   [nftables wiki](https://wiki.nftables.org/). Known needs: Tailscale coordination and DERP on
+   every node, registries and media metadata on vm100, the off-site target, the issuer for
+   `tailscale_cert`, NTP for `chrony`. The decision record precedes the filter, which is applied one
+   guest at a time; it must not flush Tailscale's chains
+   ([`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)), and LAN SSH to the
+   hypervisor stays the recovery path.
+6. **Container images (exercise).** A tag can move, a digest cannot; `registry-mirrors` in the
+   Docker daemon covers Docker Hub only
+   ([pull-through cache](https://distribution.github.io/distribution/recipes/mirror/)); provenance
+   is the subject of [Sigstore cosign](https://docs.sigstore.dev/) and [SLSA](https://slsa.dev/).
+   Every compose image ends pinned by digest, and a decision says whether a pull-through registry
+   is worth running here.
 
 ## Deferred on purpose
 
