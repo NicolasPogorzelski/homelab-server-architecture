@@ -39,7 +39,7 @@ removes the hand-written drop-ins it supersedes. No address is written into the 
    journalctl -u pveproxy -b --no-pager | tail -20
    ```
    Check: `failed`, nothing on 8006, and `Cannot assign requested address` in the journal. Any other
-   error (certificate, `pmxcfs`) means this runbook does not apply.
+   error (certificate, `pmxcfs`) is a different fault; stop here.
 
 2. Clear the start limit and restart.
    ```bash

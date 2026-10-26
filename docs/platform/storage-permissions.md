@@ -2,7 +2,7 @@
 
 The target state of the filesystem underneath the Samba shares, and how it is verified.
 
-[`samba.md`](samba.md) documents what Samba enforces. This page covers the filesystem underneath:
+[`samba.md`](samba.md) documents what Samba enforces. The filesystem underneath:
 what the objects on the disks must look like after Samba has written them, or when Samba was never
 involved.
 
@@ -90,7 +90,7 @@ nothing left to recreate, and subdirectories inherit setgid from their share.
 The branch list is not kept in the repository. The script reads it from the running MergerFS
 instance (`user.mergerfs.branches` on the pool's control file), for three reasons: a disk added to
 the pool is covered on the next run without editing anything; the control file reports what is
-mounted rather than what fstab intended; and the real disk labels stay out of version control
+mounted, which can differ from what fstab intended; and the real disk labels stay out of version control
 (enforced by the repository validator).
 
 ### Modes

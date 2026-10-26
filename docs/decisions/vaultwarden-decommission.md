@@ -59,7 +59,7 @@ matter are in the external password manager and the paper escrow
 
 ## Consequences
 - KE-5 is closed by removing its subject, not by solving SQLite on CIFS.
-- Credential escrow is a single mechanism now; its annual retrieval drill is the only evidence it
+- Credential escrow is a single mechanism; its annual retrieval drill is the only evidence it
   works.
 - One fewer service to patch, probe, certify and back up.
 - Reopening a secrets store goes through PostgreSQL on lxc260, with the phase-1 archive as input

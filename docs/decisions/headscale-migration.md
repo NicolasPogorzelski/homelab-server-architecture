@@ -38,7 +38,7 @@ runs the control plane.
 The coordination server is replaced by Headscale, the open-source reimplementation
 (https://headscale.net/), with a self-hosted DERP relay beside it. Both run on a small public VPS
 outside the Proxmox host, because every client, including mobile ones outside the home, must reach
-the control plane, and the platform has no public ingress by design.
+the control plane, and the platform has no public ingress.
 
 Order of work:
 

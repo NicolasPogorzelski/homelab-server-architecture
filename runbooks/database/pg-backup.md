@@ -97,8 +97,8 @@ A systemd timer instead of cron because the host powers down nightly (`homelab_s
 cron slot is lost, while `Persistent=true` runs the overdue dump at the next boot and a failed unit
 raises `SystemdUnitFailed`.
 
-`pg_dumpall` rather than per-database `pg_dump` because roles and their passwords must be in the
-backup for a full recovery. Restoring a single database from it is covered in
+`pg_dumpall` carries roles and their passwords, which a per-database `pg_dump` leaves out and a
+full recovery needs. Restoring a single database from it is covered in
 [pg-restore.md](pg-restore.md). The dump is verified before publishing because `gzip -t` alone passes
 a truncated dump that restores without errors and leaves empty tables. Restorability is tested monthly
 by `postgresql_restore_test`; see [pg-restore.md](pg-restore.md).

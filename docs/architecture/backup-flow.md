@@ -81,7 +81,7 @@ secrets, and the irregular disk copies listed in
 [data classification](../platform/data-classification.md), none of which covers the archive pool.
 The `offsite_backup` role exists; its target is not provisioned.
 
-## Parity Is Not Backup
+## What Parity Does Not Cover
 
 Everything inside the vm102 box, dumps included, is protected by SnapRAID parity against a failed
 disk, and against nothing else. Parity does not reconstruct a

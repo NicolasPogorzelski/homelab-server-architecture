@@ -5,7 +5,7 @@ This diagram shows how services are accessed and how public ingress is prevented
 **Reading the arrows:** a solid arrow is a path that reaches a service. A dotted arrow is one that
 does not exist - it marks an absent ingress, not a restricted one.
 
-This page answers "what is reachable from where". For "which rule allows it, on which port", see
+What is reachable from where. For "which rule allows it, on which port", see
 [View 1 of the logical architecture](diagram.md#view-1---access-policy), which draws the ACL itself.
 
 ```mermaid

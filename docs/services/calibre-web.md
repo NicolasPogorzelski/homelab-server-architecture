@@ -15,7 +15,7 @@ library. Node details: [lxc220](../nodes/lxc220.md).
 | Data | Mount | Mode |
 |---|---|---|
 | Library for the web UI | `mp0: /mnt/smb/books -> /books`, bound into the container as `/books:ro` | read-only |
-| Local state | `mp1: /mnt/aux-disk/calibreweb -> /var/lib/calibreweb` | read-write |
+| Docker engine state | `mp1: /mnt/aux-disk/calibreweb -> /var/lib/calibreweb`; the application configuration is `/srv/calibreweb/config` on the root disk | read-write |
 | Library for the import job | `mp2: /mnt/smb/books-rw -> /books-rw`, never seen by the container | read-write |
 
 The container never writes the library. The only writer is the import job on the node.

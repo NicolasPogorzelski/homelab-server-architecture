@@ -144,7 +144,7 @@ Prevention is deployed by the
   thresholds are in `docker/monitoring/prometheus/rules/alert.rules.yml` (group `lvm`).
 
 `apt-upgrade.yml` runs `serial: 1`, cleans the apt cache after each node and verifies binaries with
-`dpkg --verify`, so one overflow cannot corrupt the whole fleet at once.
+`dpkg --verify`, so a failure on one node stops the rollout before the next.
 
 Containers cannot trim themselves: the stock `fstrim.timer` carries
 `ConditionVirtualization=!container` and the ioctl is refused, and both report healthy. For a

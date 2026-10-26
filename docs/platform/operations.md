@@ -216,7 +216,7 @@ Runtime data is on local block storage; the dumps are on SMB and survive a runti
 Where a daemon cannot bind narrowly (Samba on vm102, Apache and `coolwsd` on lxc210), the
 `lan_guard` table drops LAN connections before they reach the socket
 ([SMB bind decision](../decisions/smb-bind-and-lan-access.md)). sshd is pinned to the Tailscale
-address on every guest; the hypervisor is deliberately unpinned
+address on every guest; on the hypervisor it stays on the wildcard so LAN break-glass SSH works
 ([decision](../decisions/sshd-listen-address.md)). Remaining wildcard binds are tracked in the
 [remediation plan](remediation-plan.md) and reported by `ListenerOutsideBindingRule`.
 

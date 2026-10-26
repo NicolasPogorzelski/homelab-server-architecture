@@ -45,7 +45,7 @@ The decision prioritizes operational predictability over theoretical performance
 - Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
 - Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
 - DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210; a share of
-  its own rather than a directory inside the Nextcloud export, so whatever reaches the user data
+  its own outside the Nextcloud export, so whatever reaches the user data
   does not also reach its backup)
 
 Ownership enforcement:
