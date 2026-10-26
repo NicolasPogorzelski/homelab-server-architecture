@@ -58,7 +58,8 @@ The `files_external` app gives two users an upload path into Paperless-ngx:
 - Host: `storage.<tailnet-id>.ts.net`, the full MagicDNS name, over the tailnet. The short name
   `storage` also resolves on the LAN, where `smb_guard` refuses lxc210. The path needs the
   `nextcloud` grant to `tag:storage:445` in [tailscale-acl.md](../platform/tailscale-acl.md).
-- SMB user `paperless-ingest`, global credentials stored in Nextcloud.
+- SMB user `paperless-ingest`; login and password are stored on each mount
+  (`password::password`).
 - Paperless consumes and deletes uploaded files within about 30 s.
 - `paperless-inbox-scan.timer` (role `paperless_inbox_scan`) runs `occ files:scan` on each user's
   "Paperless Inbox" hourly, so the file cache drops consumed files.
