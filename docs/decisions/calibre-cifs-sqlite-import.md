@@ -68,7 +68,7 @@ relative to the library root, so a database built under `/tmp/work` resolves und
   sources in place; the next timer run retries them, and `calibredb --automerge ignore` keeps the
   retry idempotent.
 - `calibredb list --with-library /books-rw` hits the same lock and prints nothing, which looks like
-  an empty library rather than an error. Verify against a local copy of `metadata.db`.
+  an empty library and hides the error. Verify against a local copy of `metadata.db`.
 
 ## Related Documents
 - [Calibre-Web: auto-import](../services/calibre-web.md#auto-import)

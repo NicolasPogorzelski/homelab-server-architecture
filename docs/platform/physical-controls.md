@@ -1,7 +1,7 @@
 # Physical and Environmental Controls
 
 The ISO/IEC 27001 Annex A.7 family as it applies to one machine at a residential site: what holds
-each control, and the two decisions that leave a control deliberately open. The status of each
+each control, and the two decisions that leave a control open. The status of each
 control is owned by [`security-controls.md`](security-controls.md#physical-and-environmental-controls-a7).
 
 ## The environment

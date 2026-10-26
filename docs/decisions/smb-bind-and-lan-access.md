@@ -95,7 +95,7 @@ Since 2026-10-01 `lan_guard` drops new inbound LAN connections on every node. On
 exception is TCP/445 from the hypervisor and vm100 (`lan_guard_allow` in
 `ansible/inventory/host_vars/vm102.yml`), the same pair `smb_guard` admits. Both tables drop what
 they do not accept, so a LAN SMB path has to be open in each; IPv6 445 is dropped by both.
-`smb_guard` is now the second layer and still hand-deployed; it is adopted into the `nft_guard` role
+`smb_guard` is the second layer and hand-deployed; it is adopted into the `nft_guard` role
 in the storage network window. `hosts allow` stays underneath as a third.
 
 ## Consequences

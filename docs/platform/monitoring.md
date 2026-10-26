@@ -77,7 +77,7 @@ See: [Runbook index](../../runbooks/README.md)
   without a backup". Details in [postgresql-platform.md](../services/postgresql-platform.md#backup-strategy).
 - **Missing metrics.** `DatabaseBackupMetricsMissing` fires when any of the four database
   timestamps (both backups, both restore tests) is absent, the case in which a staleness rule
-  evaluates to nothing rather than to red. Each absence carries a `metric` label.
+  evaluates to nothing and never turns red. Each absence carries a `metric` label.
 - **SnapRAID.** `SnapRAIDScrubStale` reads when a scrub last succeeded and fires after 10 days;
   the scrub runs weekly (`snapraid_maintenance` defaults). It cannot show how much of the array a
   scrub reached, so `SnapRAIDScrubCoverageAging` (oldest block over 200 days) and

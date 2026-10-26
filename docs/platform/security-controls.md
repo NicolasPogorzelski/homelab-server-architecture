@@ -1,7 +1,7 @@
 # Security Controls - ISO/IEC 27001 Annex A Mapping
 
 A self-assessment of this platform against ISO/IEC 27001:2022 Annex A, as elaborated in
-ISO/IEC 27002:2022. **This is a mapping, not a compliance claim.** Certification covers clauses 4-10,
+ISO/IEC 27002:2022. It maps controls and claims no compliance. Certification covers clauses 4-10,
 the management system (scope, risk assessment, Statement of Applicability, internal audit,
 management review), and a platform run by one person has neither an independent auditor nor a
 management review. What the mapping does is separate controls that a machine enforces from
@@ -26,7 +26,7 @@ appear at most as Practised, with the exercise named in the row.
 
 | Control | Status | Evidence | Residual risk |
 |---|---|---|---|
-| A.5.1 Policies for information security | Partial | Binding rules are stated in [`CONVENTIONS.md`](../CONVENTIONS.md), the binding rules in [`tailscale-acl.md`](tailscale-acl.md) and this file. | The rules are spread over several documents rather than one policy. |
+| A.5.1 Policies for information security | Partial | Binding rules are stated in [`CONVENTIONS.md`](../CONVENTIONS.md), the binding rules in [`tailscale-acl.md`](tailscale-acl.md) and this file. | The rules are spread over several documents; no single policy document exists. |
 | A.5.2 Roles and responsibilities | N/A | One person holds every role. | Bus factor 1; documentation and runbooks are the only compensation. |
 | A.5.3 Segregation of duties | N/A | Impossible with one person; the pull-request flow forces a re-read of every change as a diff. | No second reviewer sees any change. |
 | A.5.7 Threat intelligence | Partial | Dependabot security updates ([`dependabot.yml`](../../.github/dependabot.yml)) and the weekly [image scan](../../.github/workflows/image-scan.yml). | Nothing covers threats beyond published package advisories. |
@@ -61,7 +61,7 @@ appear at most as Practised, with the exercise named in the row.
 |---|---|---|---|
 | A.6.1, A.6.2, A.6.4-A.6.6 Screening, terms, disciplinary, after termination | N/A | No employment relationship exists. | None. |
 | A.6.3 Awareness and training | N/A | No staff. | None. |
-| A.6.7 Remote working | Enforced | Administration runs over Tailscale with key-only SSH; `ssh_hardening` writes `00-hardening.conf` on all ten nodes (`ansible/roles/ssh_hardening/`), and `lan_guard` limits the hypervisor's LAN SSH to the two admin workstations. | The hypervisor's LAN break-glass path bypasses Tailscale by design. |
+| A.6.7 Remote working | Enforced | Administration runs over Tailscale with key-only SSH; `ssh_hardening` writes `00-hardening.conf` on all ten nodes (`ansible/roles/ssh_hardening/`), and `lan_guard` limits the hypervisor's LAN SSH to the two admin workstations. | The hypervisor's LAN break-glass path bypasses Tailscale, so SSH survives a Tailscale outage. |
 | A.6.8 Reporting information security events | Practised | Reporting channel in [`SECURITY.md`](../../.github/SECURITY.md). | No response time is guaranteed. |
 
 ## Physical and environmental controls (A.7)
@@ -100,7 +100,7 @@ off), are in [`physical-controls.md`](physical-controls.md).
 | A.8.11 Data masking | N/A | No shared or exported datasets. | None. |
 | A.8.12 Data leakage prevention | Enforced | Sanitization checks in [`validate-repo.sh`](../../scripts/validate-repo.sh), gitleaks over the full history ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml)), GitHub secret scanning with push protection ([`SECURITY.md`](../../.github/SECURITY.md)). | Pattern matching misses a secret that does not look like one. |
 | A.8.13 Information backup | Partial | Verified daily dumps (`postgresql_backup`, `mariadb_backup`), monthly restore tests, weekly guest backup and daily host configuration backup (`guest_backup`). | Every copy is on site, and the guest backups sit on the failing aux-disk. |
-| A.8.14 Redundancy | N/A | Single host by design; SnapRAID parity protects media against disk loss, not processing. High availability was read, not armed ([`ha-mechanics.md`](ha-mechanics.md)). | A host failure is an outage until hardware is replaced. |
+| A.8.14 Redundancy | N/A | Single host; SnapRAID parity protects media against disk loss, not processing. High availability was read, not armed ([`ha-mechanics.md`](ha-mechanics.md)). | A host failure is an outage until hardware is replaced. |
 | A.8.15 Logging | Partial | `journald` sets `Storage=persistent` and a size cap on all ten nodes (`ansible/roles/journald/`). Exercises: central journal collection on lxc200 from lxc211 and lxc260, `auditd` on the hypervisor. | No tamper protection, and the central store shares the host's failure domain. |
 | A.8.16 Monitoring activities | Enforced | Node, service and unit alerts including absence alerts (`SnapRAIDSyncStale`, `PostgreSQLRestoreTestStale`, `ListenerOutsideBindingRule`) in [`monitoring.md`](monitoring.md). | Monitoring runs on the host it watches; a total outage is silent until the external heartbeat is live. |
 | A.8.17 Clock synchronization | Partial | `chrony` role on vm100 and vm102 (`ansible/roles/chrony/`); containers use the hypervisor's kernel clock. | The hypervisor's time daemon is not role-managed, and no alert watches clock offset. |
@@ -108,7 +108,7 @@ off), are in [`physical-controls.md`](physical-controls.md).
 | A.8.19 Software on operational systems | Partial | Packages are installed by roles and images are pinned; `fleet_snapshot` shows unmanaged changes in a weekly diff. | Ad-hoc installation remains possible and is seen only in the diff. |
 | A.8.20 Networks security | Enforced | No public ingress or port forwarding (router checked 2026-09-26); `lan_guard` drops new inbound LAN connections on every node except named exceptions (`ansible/roles/lan_guard/`); model in [`networking.md`](networking.md). | A manual restart of `nftables.service` flushes the `lan_guard` table until the next boot. |
 | A.8.21 Security of network services | Partial | Services bind loopback or the Tailscale address; sshd is pinned on all nine guests. `listener_metrics` reports every listener outside that rule and `ListenerOutsideBindingRule` fires on any not recorded as an exception in the inventory. Recorded exceptions: Samba on vm102, Apache and `coolwsd` on lxc210 (`coolwsd` behind `nft_guard`), sshd and netconsole on the hypervisor ([decision](../decisions/sshd-listen-address.md)). | Apache on lxc210 still binds the wildcard address. |
-| A.8.22 Segregation of networks | Enforced | Tailnet segregation by tag and host grant, deny by default ([`tailscale-acl.md`](tailscale-acl.md)): only the hypervisor and Nextcloud reach `tag:storage:445`, only Paperless and the AI stack reach `tag:database:5432`, and no grant has vm100 or vm102 as its source. | All nodes share one LAN segment; separation there rests on per-node `lan_guard`, not on a VLAN. |
+| A.8.22 Segregation of networks | Enforced | Tailnet segregation by tag and host grant, deny by default ([`tailscale-acl.md`](tailscale-acl.md)): only the hypervisor reaches `tag:storage:445` (Nextcloud's grant is not live, [KE-29](known-errors.md#ke-29)), only Paperless and the AI stack reach `tag:database:5432`, and no grant has vm100 or vm102 as its source. | All nodes share one LAN segment; separation there rests on per-node `lan_guard`, not on a VLAN. |
 | A.8.23 Web filtering | N/A | No browsing takes place on the platform. | None. |
 | A.8.24 Use of cryptography | Practised | WireGuard for tailnet transport, Ansible Vault for repository secrets, Tailscale-issued certificates for HTTPS. | No key management procedure; SMB on the LAN is not covered by the overlay. |
 | A.8.25 Secure development lifecycle | Partial | Conventional commits, pull requests, linting and the repository validator. | No threat modelling step. |

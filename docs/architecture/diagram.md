@@ -13,7 +13,7 @@ A component drawn inside a box runs inside it. Node names match the inventory.
 ## View 1 - Access Policy
 
 Every arrow is a grant from [`tailscale-acl.md`](../platform/tailscale-acl.md) with its ports; here
-the arrow is the request. Most grants name a host rather than a tag, because `tag:tier1` holds three
+the arrow is the request. Most grants name a host and not a tag, because `tag:tier1` holds three
 services. A service box stands for one host, a tag box for every node carrying the tag.
 
 ### 1a - Access by people and devices

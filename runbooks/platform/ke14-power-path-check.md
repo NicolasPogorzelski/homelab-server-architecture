@@ -82,7 +82,7 @@ Written into [KE-14](../../docs/platform/known-errors.md#ke-14):
 
 No configuration changes. If the host behaves worse afterwards, put the HBA back in the noted slot
 and reseat the moved cable. If a component was swapped, put the original back before drawing a
-conclusion; two changes at once explain neither.
+conclusion, so the result can be attributed to one change.
 
 ## Background
 
