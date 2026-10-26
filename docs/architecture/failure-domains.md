@@ -57,7 +57,7 @@ SCSI address or `by-id`, never by kernel letter; the letter has changed between 
 
 Two [C1](../platform/data-classification.md) datasets sit on it: lxc250's Ansible secrets and
 Nextcloud's MariaDB. MariaDB has a nightly verified dump on vm102 and a monthly restore test. The
-secrets are escrowed since 2026-08-20 in an external password manager and on paper; the escrow has
+secrets are escrowed in an external password manager and on paper; the escrow has
 not been restored from ([escrow drill](../platform/remediation-plan.md#escrow-restore-drill)). The
 host's own configuration is archived daily to the aux-disk and to the boot disk.
 
@@ -69,7 +69,7 @@ regardless, because `Current_Pending_Sector` cannot trip the self-assessment;
 - Docker images and state: class C3, rebuildable from the compose files.
 - PostgreSQL data directory: recovered from the newest nightly dump on vm102.
 - Monitoring history: no backup.
-- vm100's `jellyfin-data`: qcow2 since 2026-10-10, so vm100 can be snapshotted; the snapshots live
+- vm100's `jellyfin-data`: qcow2, so vm100 can be snapshotted; the snapshots live
   on this disk and cover a bad change, not the disk's loss. The disk is excluded from the guest
   backup.
 - `/mnt/vzdump`: the weekly guest backup shares this disk with the Docker state it would rebuild

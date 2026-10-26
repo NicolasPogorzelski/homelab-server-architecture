@@ -19,7 +19,7 @@ most if disclosed are the ones that would hurt most if lost.
 
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
-| Ansible vault password, real inventory, Ansible SSH key | lxc250 home directory, on the boot SSD | C1 | No | Escrowed off site since 2026-08-20; never restored from ([drill](../../runbooks/platform/escrow-restore-drill.md)) |
+| Ansible vault password, real inventory, Ansible SSH key | lxc250 home directory, on the boot SSD | C1 | No | Escrowed off site; never restored from ([drill](../../runbooks/platform/escrow-restore-drill.md)) |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | SnapRAID parity only |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | SnapRAID parity only |
 | Nextcloud MariaDB | Inside lxc210, on the boot SSD | C1 | Yes | Daily verified dump to the `DB-Backups` share on vm102, monthly restore test (`mariadb_backup`, `mariadb_restore_test`) |

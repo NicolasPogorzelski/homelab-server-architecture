@@ -29,8 +29,7 @@ or left mid-merge runs whatever is on disk.
 - **File:** `hosts.yml` beside the example (gitignored, holds the real addresses).
 - **Example:** `ansible/inventory/hosts.yml.example` (sanitized, committed; owner of node and group
   membership).
-- **Managed nodes:** 10 - the Proxmox host (since 2026-08-21) and nine guests. lxc250 is in the
-  inventory since 2026-08-20.
+- **Managed nodes:** 10 - the Proxmox host and nine guests, lxc250 among them.
 
 | Group | Members |
 |---|---|

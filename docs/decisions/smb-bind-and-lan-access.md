@@ -91,7 +91,7 @@ Tailscale's chains unchanged; after the reboot the unit loaded the table and eve
 session came back; from the workstation Tailscale 445 answered and LAN 445 was refused.
 
 ### Relation to `lan_guard`
-Since 2026-10-01 `lan_guard` drops new inbound LAN connections on every node. On vm102 its only
+`lan_guard` drops new inbound LAN connections on every node. On vm102 its only
 exception is TCP/445 from the hypervisor and vm100 (`lan_guard_allow` in
 `ansible/inventory/host_vars/vm102.yml`), the same pair `smb_guard` admits. Both tables drop what
 they do not accept, so a LAN SMB path has to be open in each; IPv6 445 is dropped by both.

@@ -445,7 +445,7 @@ Both approaches are valid; choose per service based on operational needs.
 
 The ACL cannot see the LAN. Services that listen on every address - Nextcloud's Apache, Samba on
 vm102 and sshd on the hypervisor - would stay reachable from the home network and, over IPv6, from
-any address in its prefix. Since 2026-10-01 the `lan_guard` role enforces the LAN side on each node
+any address in its prefix. The `lan_guard` role enforces the LAN side on each node
 instead: an nftables table on the LAN interface drops every new inbound connection except replies,
 ICMP, DHCP, Tailscale's UDP port and a short named list (SMB to vm102 from its two mounting nodes,
 break-glass SSH and netconsole to the hypervisor). See the `lan_guard` role in

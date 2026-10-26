@@ -34,7 +34,7 @@ flowchart LR
     DevOps[Ansible control node<br/>SSH only]
   end
 
-  %% LAN exposure: none since 2026-10-01 (lan_guard on every node)
+  %% LAN exposure: none (lan_guard on every node)
   LAN -.-> Services
 
   %% Tailscale exposure (all services)
@@ -72,7 +72,7 @@ sshd binds the Tailscale address on all nine guests; vm100 and vm102 were the la
 2026-10-12. `listener_metrics` exports every listener outside the rule that the inventory does not
 allow on record, and `ListenerOutsideBindingRule` fires on it.
 
-What keeps the LAN out is the `lan_guard` nftables table on every node, in place since 2026-10-01.
+What keeps the LAN out is the `lan_guard` nftables table on every node.
 It drops new inbound LAN connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100
 and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The router's missing
 forwarding rules keep the internet out.

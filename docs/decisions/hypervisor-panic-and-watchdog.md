@@ -45,7 +45,7 @@ frames that explain the reboot).
 
 Scope is the hypervisor. LXCs share its kernel and cannot set the value. The VMs run their own
 kernels; neither vm100 freeze produced an oops, so the setting would not have caught either. vm100
-can be snapshotted since 2026-10-10; extending the policy to the VMs is a proposal in the
+can be snapshotted; extending the policy to the VMs is a proposal in the
 [remediation plan](../platform/remediation-plan.md).
 
 No HA resource is configured. The softdog device is nevertheless open, measured 2026-09-16:

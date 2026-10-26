@@ -14,7 +14,7 @@ Three artefacts exist on lxc250 only, which lives on the boot SSD
 - `ansible/inventory/hosts.yml`, the real inventory, gitignored.
 - The Ansible SSH key, which opens user `ansible` on the guests and root on the hypervisor.
 
-They are escrowed since 2026-08-20 in a password manager operated by a third party, with a paper
+They are escrowed in a password manager operated by a third party, with a paper
 copy off site. The drill proves the escrow holds all three, complete, and that they work.
 
 ## Preconditions

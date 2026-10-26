@@ -50,7 +50,7 @@ Verified 2026-09-29 and 2026-10-01:
 
 ## Rollout State
 
-Complete since 2026-10-01. Both instances serve OpenWebUI through OpenAI API connections; the former
+Both instances serve OpenWebUI through OpenAI API connections; the former
 Ollama installations on vm100 and the desktop are removed, and port 11434 is closed on both.
 Verified 2026-10-01 from the OpenWebUI container with the stored keys: both models answer, warm
 generation at 39.3 t/s (desktop) and 53.4 t/s (vm100), blackbox `probe_success 1`.
