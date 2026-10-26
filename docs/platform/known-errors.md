@@ -40,6 +40,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
 | [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - retry not yet exercised by a real failure |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
+| [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Open - ACL rule and mount change not applied |
 
 ---
 
@@ -1079,3 +1080,28 @@ address through `tailscale_boot_gate`, with `docker_boot_retry` ([KE-27](#ke-27)
 2026-10-10: Jellyfin up with no `docker-boot-retry` line; the gate held again on 2026-10-13. Audiobookshelf and
 `llama-server` still sit behind `serve` on loopback and have not shown the fault. Not yet measured:
 three concurrent 4K streams. See [jellyfin.md](../services/jellyfin.md).
+
+<a id="ke-29"></a>
+## KE-29: Files uploaded to the Nextcloud ingest folders never reach Paperless
+
+- **Status:** Open - ACL rule and mount change not applied
+- **Affects:** Nextcloud External Storage mounts 4 and 5 on lxc210, the two Paperless ingest
+  shares on vm102; failing from at least 2026-09-29
+
+**Symptom.** A document dropped into either ingest folder stays out of Paperless. Nextcloud logs
+`Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 20 times a
+day, and `occ files_external:verify 4` returns `status: error`. No alert covers it.
+
+**Cause.** Both mounts address vm102 as `storage`, which resolves to its LAN address on lxc210,
+where `smb_guard` refuses lxc210. The tailnet route needs [Rule 15](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares),
+which exists in the repository only: lxc210 and vm102 do not list each other as peers in
+`tailscale status --json`, while every other host-alias grant shows its peer. The 2026-10-10 fix
+wrote the rule and named the console change and the mount change as the next steps; the
+2026-10-14 rewrite of the remediation plan dropped the open item before either was applied. Same
+class as the inference rollout, whose 2026-09-29 policy change had reached the documents only.
+
+**Fix.** Pending: Rule 15 and its test in the admin console, then
+`occ files_external:config <id> host storage.<tailnet-id>.ts.net` for mounts 4 and 5.
+
+**Verification.** Pending: `occ files_external:verify 4` and `5` return `status: ok`, a test file
+reaches Paperless, and the log line stops.

@@ -24,6 +24,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 13 | Nextcloud 35 needs Debian 13 on lxc210 | Nextcloud 34 is the last major that runs on Debian 12's PHP 8.2 and is supported until 2027-06 | Upgrade lxc210 to Debian 13, then run `occ maintenance:repair --include-expensive` in its own window |
 | 14 | Trailers and the Letterboxd diary after Jellyfin 12 | Cinema Mode and LetterboxdSync have no build for 12, so trailers before films and the diary sync are gone | Install Jellyscribe for the diary; read the code of Trailer Preroll 2.x, which downloads from YouTube and has a single maintainer, before it runs on the GPU node |
 | 15 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
+| 16 | Nextcloud ingest into Paperless ([KE-29](known-errors.md#ke-29)) | Documents uploaded to the two ingest folders never reach Paperless, and nothing alerts | Add Rule 15 and its test in the admin console, then switch mounts 4 and 5 to vm102's full MagicDNS name |
 | 17 | Power-only Proxmox user for the admin phone | The phone logs in to the Proxmox interface as root, so a stolen phone holds full control of the hypervisor | Create a user whose role holds only `Sys.PowerMgmt`, with a second factor, as [tailscale-acl.md](tailscale-acl.md) describes |
 
 ## Item notes

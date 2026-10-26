@@ -55,8 +55,9 @@ The `files_external` app gives two users an upload path into Paperless-ngx:
 | 4 | user1 | `Paperless-ingest-user1` | `/mnt/mergerfs/Paperless/consumption/user1` |
 | 5 | user2 | `Paperless-ingest-user2` | `/mnt/mergerfs/Paperless/consumption/user2` |
 
-- Host: `storage.<tailnet-id>.ts.net`, the full MagicDNS name, over the tailnet. The short name
-  `storage` also resolves on the LAN, where `smb_guard` refuses lxc210. The path needs the
+- Host: `storage`, which resolves to vm102's LAN address, where `smb_guard` refuses lxc210, so
+  both mounts fail ([KE-29](../platform/known-errors.md#ke-29)). The target is
+  `storage.<tailnet-id>.ts.net`, the full MagicDNS name, over the tailnet. The path needs the
   `nextcloud` grant to `tag:storage:445` in [tailscale-acl.md](../platform/tailscale-acl.md).
 - SMB user `paperless-ingest`; login and password are stored on each mount
   (`password::password`).
