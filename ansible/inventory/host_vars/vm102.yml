@@ -12,6 +12,11 @@ systemd_hygiene_masked_units:
     reason: >-
       NetBIOS name service, listening on UDP 137/138 on the LAN. Nothing on the
       platform uses NetBIOS names; `disable netbios = yes` in smb.conf goes with it.
+  - name: samba-ad-dc.service
+    reason: >-
+      Active Directory domain controller, enabled by the samba package. This node is
+      a standalone file server; the unit's ExecCondition keeps it from starting, and
+      the mask keeps an upgrade or a changed server role from starting it.
 
 # SMB over the LAN from the two nodes that still mount that way, the same pair
 # smb_guard admits. Both tables drop what they do not accept, so the path has to

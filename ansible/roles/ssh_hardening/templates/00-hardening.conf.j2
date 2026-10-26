@@ -4,6 +4,9 @@
 # 50-cloud-init.conf without editing that regenerated file.
 PasswordAuthentication {{ ssh_hardening_password_authentication }}
 PermitRootLogin {{ ssh_hardening_permit_root_login }}
+X11Forwarding {{ ssh_hardening_x11_forwarding }}
+AllowTcpForwarding {{ ssh_hardening_allow_tcp_forwarding }}
+MaxAuthTries {{ ssh_hardening_max_auth_tries }}
 {% if ssh_hardening_listen_address | length > 0 %}
 # ListenAddress replaces the wildcard bind; safe only with the boot gate the role
 # asserts. See docs/decisions/sshd-listen-address.md.
