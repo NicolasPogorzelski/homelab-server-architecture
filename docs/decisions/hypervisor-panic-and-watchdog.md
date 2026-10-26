@@ -28,11 +28,11 @@ Two monitoring gaps from that incident are closed (`FilesystemMountTimeout`,
 [KE-20](../platform/known-errors.md#ke-20), both guest freezes with no recorded cause.
 
 ## Options
-- **Keep the default (no panic on oops).** Lost: an oops leaves pmxcfs, pveproxy and the storage
+- **Keep the default (no panic on oops).** An oops leaves pmxcfs, pveproxy and the storage
   stack hanging on held locks, with no way back except physical access.
-- **Arm softdog through the HA stack.** Lost: HA on a single node with no quorum partner fences the
+- **Arm softdog through the HA stack.** HA on a single node with no quorum partner fences the
   node it should protect, and the platform is recovery-oriented, not highly available.
-- **`nmi_watchdog` alone.** Lost: its default action is to log, which produces another record on a
+- **`nmi_watchdog` alone.** Its default action is to log, which produces another record on a
   machine nobody can reach. Combined with `panic_on_oops` a hard-lockup panic might inherit the
   reboot; that needs measuring on this hardware first.
 - **Panic on oops, reboot after ten seconds; softdog without a client.** Chosen.

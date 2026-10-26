@@ -19,7 +19,7 @@ the ceiling; vm102's `tailscaled` used most of one core at that rate. The uplink
 from outside the home only.
 
 ## Options
-- **Keep the LAN exception.** Lost: its performance argument does not survive the measurement, and
+- **Keep the LAN exception.** Its performance argument does not survive the measurement, and
   it leaves wildcard listeners answering every device on the home network.
 - **All clients on the tailnet, the LAN closed on every node.** Chosen.
 

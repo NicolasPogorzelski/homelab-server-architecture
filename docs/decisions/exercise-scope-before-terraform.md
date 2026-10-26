@@ -21,8 +21,8 @@ legitimate but not operational, and a control that is indistinguishable from a n
 defended as needed.
 
 ## Options
-- **Skip them.** Lost: the learning goal is not met.
-- **Build them like any other control.** Lost: they would read as necessary and accumulate.
+- **Skip them.** The learning goal is not met.
+- **Build them like any other control.** They would read as necessary and accumulate.
 - **Build them, and label each as an exercise everywhere a reader meets it.** Chosen.
 
 ## Decision

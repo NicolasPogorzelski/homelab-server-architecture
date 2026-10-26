@@ -32,7 +32,7 @@ Measured 2026-09-12 on all seven containers: lxc250 alone carried `resolve` in `
 fleet-wide setting.
 
 ## Options
-- **Give `resolved` the MagicDNS resolver in a drop-in.** Lost: a second place that records the
+- **Give `resolved` the MagicDNS resolver in a drop-in.** A second place that records the
   tailnet's resolver address, which can change without anyone editing the drop-in.
 - **Let `tailscaled` drive `resolved` over D-Bus.** The supported path; why `tailscaled` fell back
   to writing `/etc/resolv.conf` directly was never established. Not pursued.

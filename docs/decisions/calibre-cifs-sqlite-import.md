@@ -29,7 +29,7 @@ the book files cannot move to the container. Calibre keeps `metadata.db` in the 
 so the database cannot be relocated on its own. One node writes the library and imports are rare.
 
 ## Options
-- **`nobrl` on the CIFS mount.** Lost: the client stops sending byte-range locks and SQLite works,
+- **`nobrl` on the CIFS mount.** The client stops sending byte-range locks and SQLite works,
   but a loud failure becomes silent corruption the first time two writers coincide. It also changes
   the host mount for every consumer of the share and needs a remount while the container holds it.
 - **Library (database and files) on local block storage.** Deferred: the correct separation of

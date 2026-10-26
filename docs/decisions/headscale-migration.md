@@ -26,9 +26,9 @@ platform's goal of self-hosting its data does not hold for the metadata as long 
 runs the control plane.
 
 ## Options
-- **Stay on Tailscale SaaS.** Lost: simplest, and payload stays private, but the usage metadata
+- **Stay on Tailscale SaaS.** Simplest, and payload stays private, but the usage metadata
   above stays with a vendor and the ACL lives in its console.
-- **Plain WireGuard without a control plane.** Lost: manual key distribution, no ACL layer, no mesh;
+- **Plain WireGuard without a control plane.** Manual key distribution, no ACL layer, no mesh;
   a regression in operation for every node.
 - **Headscale with Tailscale's DERP servers.** Acceptable as an intermediate state, not as the
   target: relay metadata stays visible to Tailscale.
