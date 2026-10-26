@@ -160,7 +160,7 @@ exists because vm100 froze so completely that its own journal recorded nothing
 
 ## Ansible Management
 
-The host is an Ansible node since 2026-08-21: group `proxmox`, connecting as root because root is
+The host is an Ansible node in group `proxmox`, connecting as root because root is
 its only administrative account. State-changing sweeps reach it only through a named `proxmox`
 play ([ansible.md](ansible.md#why-sweeps-target-guests-and-not-all)).
 

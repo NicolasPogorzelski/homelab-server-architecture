@@ -31,10 +31,10 @@ Same fault class as the [PostgreSQL boot race](postgresql-tailscale-boot-orderin
 [KE-18](../platform/known-errors.md#ke-18).
 
 ## Options
-- **Remove `LISTEN_IP` and bind all interfaces.** Lost: puts the management UI back on the LAN.
-- **`net.ipv4.ip_nonlocal_bind=1`.** Lost: changes bind semantics for every process on the host to
+- **Remove `LISTEN_IP` and bind all interfaces.** Puts the management UI back on the LAN.
+- **`net.ipv4.ip_nonlocal_bind=1`.** Changes bind semantics for every process on the host to
   fix one unit's ordering.
-- **`After=tailscaled.service` alone.** Lost: the daemon being up does not mean the address is
+- **`After=tailscaled.service` alone.** The daemon being up does not mean the address is
   assigned; assignment is asynchronous.
 - **Order after `tailscaled` and gate on the address being present.** Chosen.
 

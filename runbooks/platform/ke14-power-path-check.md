@@ -75,7 +75,7 @@ Written into [KE-14](../../docs/platform/known-errors.md#ke-14):
 | Result | Meaning | Action |
 |---|---|---|
 | 12 V out of tolerance under load | Power hypothesis confirmed | PSU replacement in the next hardware window; record it in KE-14 |
-| 12 V in tolerance at idle and under load | Power weakened, not excluded (a handheld meter misses transients) | Move the SSD to an onboard SATA port: errors stop -> HBA path; persist -> neither |
+| 12 V in tolerance at idle and under load | Power still possible: a handheld meter misses transients | Move the SSD to an onboard SATA port: errors stop -> HBA path; persist -> neither |
 | Host does not come back | Reseating or slot problem | [hard-shutdown-recovery.md](hard-shutdown-recovery.md); the host has no console without [host-console-gpu-swap.md](host-console-gpu-swap.md) |
 
 ## Rollback

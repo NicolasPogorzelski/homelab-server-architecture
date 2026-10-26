@@ -67,10 +67,10 @@ refused while the LAN address answered. The change was rolled back (both paths r
 sessions intact).
 
 ## Options
-- **Explicit bind in Samba.** Lost: measured above, it cuts the tailnet path it was meant to keep.
-- **Keep `hosts allow` as the only control.** Lost: an application filter after the TCP accept, on a
+- **Explicit bind in Samba.** Measured above, it cuts the tailnet path it was meant to keep.
+- **Keep `hosts allow` as the only control.** An application filter after the TCP accept, on a
   socket bound to a routable IPv6 address.
-- **Move every LAN mount to the Tailscale address at once.** Lost for this change: it couples each
+- **Move every LAN mount to the Tailscale address at once.** Not in this change: it couples each
   mount to `tailscaled` at boot, the fault class of [KE-15](../platform/known-errors.md#ke-15).
 - **Wildcard bind, boundary enforced by an nftables table on vm102.** Chosen.
 
@@ -91,7 +91,7 @@ Tailscale's chains unchanged; after the reboot the unit loaded the table and eve
 session came back; from the workstation Tailscale 445 answered and LAN 445 was refused.
 
 ### Relation to `lan_guard`
-Since 2026-10-01 `lan_guard` drops new inbound LAN connections on every node. On vm102 its only
+`lan_guard` drops new inbound LAN connections on every node. On vm102 its only
 exception is TCP/445 from the hypervisor and vm100 (`lan_guard_allow` in
 `ansible/inventory/host_vars/vm102.yml`), the same pair `smb_guard` admits. Both tables drop what
 they do not accept, so a LAN SMB path has to be open in each; IPv6 445 is dropped by both.

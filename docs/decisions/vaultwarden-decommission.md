@@ -28,10 +28,10 @@ nobody watches. ISO/IEC 27001 A.8.10 asks that information no longer required be
 that the asset inventory be current.
 
 ## Options
-- **Keep it as it was.** Lost: a secrets tier in name, without a current, restorable copy.
-- **Build the missing export** (SQLite online-backup API on a timer, plus a staleness alert). Lost:
-  real work for a service nobody used.
-- **Migrate to PostgreSQL on lxc260**, which is dumped nightly and restore-tested monthly. Lost for
+- **Keep it as it was.** A secrets tier in name, without a current, restorable copy.
+- **Build the missing export** (SQLite online-backup API on a timer, plus a staleness alert). Real
+  work for a service nobody used.
+- **Migrate to PostgreSQL on lxc260**, which is dumped nightly and restore-tested monthly. Not for
   now: about a day of work with a credential-store data migration; kept as the reopening path.
 - **Decommission in two phases.** Chosen.
 

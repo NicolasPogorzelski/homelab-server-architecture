@@ -26,11 +26,11 @@ Two mechanisms make the pin harder than one `ListenAddress` line:
   ([KE-24](../platform/known-errors.md#ke-24)).
 
 ## Options
-- **Leave the wildcard bind.** Lost: the platform would document a control it does not implement.
-- **Bind loopback and reach sshd through `tailscale serve`.** Lost: puts the administrative path
+- **Leave the wildcard bind.** The platform would document a control it does not implement.
+- **Bind loopback and reach sshd through `tailscale serve`.** Puts the administrative path
   through the daemon most likely to be broken when that path is needed.
-- **Drop the rule for sshd.** Lost: accepts an SSH daemon on a routable IPv6 address.
-- **Pin `ssh.socket` to the Tailscale address.** Lost: keeps Debian's service model, but moves the
+- **Drop the rule for sshd.** Accepts an SSH daemon on a routable IPv6 address.
+- **Pin `ssh.socket` to the Tailscale address.** Keeps Debian's service model, but moves the
   readiness gate to a socket unit and gives two service models across the fleet.
 - **Turn socket activation off and pin `ListenAddress`, behind the boot gate, one node at a time.**
   Chosen.

@@ -33,9 +33,9 @@ Two constraints bound the design:
   the provider's own `<node>.<tailnet-id>.ts.net`.
 
 ## Options
-- **Keycloak or Authentik as provider.** Lost on footprint: about 7 GB of host memory and 13 GB of
+- **Keycloak or Authentik as provider.** Too large: about 7 GB of host memory and 13 GB of
   thin pool free, on a host that powers down nightly.
-- **LDAP only.** Lost: repeats what was already built and cannot serve browser sign-in flows.
+- **LDAP only.** Repeats what was already built and cannot serve browser sign-in flows.
 - **`lldap` as directory and Authelia as OIDC provider on one new node.** Chosen; `lldap`'s
   upstream README names Authelia for OAuth and OpenID.
 

@@ -39,11 +39,11 @@ Requirements:
 5. Single-digit euros per month for under 100 GB.
 
 ## Options
-- **Rotated encrypted disk kept elsewhere.** Lost as the main control: the strongest protection
+- **Rotated encrypted disk kept elsewhere.** Not as the main control: the strongest protection
   (unplugged), but it depends on visits and cannot be scheduled. It exists in this form already.
-- **Managed storage box over SSH.** Lost: partial deletion resistance (snapshots, or append-only
+- **Managed storage box over SSH.** Partial deletion resistance (snapshots, or append-only
   keys at some providers) and wins on no requirement.
-- **S3-compatible object storage with Object Lock.** Lost: the strongest deletion guarantee,
+- **S3-compatible object storage with Object Lock.** The strongest deletion guarantee,
   enforced by the provider, but a bucket is an API touched rarely (requirement 4) and carries nothing
   else the platform needs.
 - **A small VPS running `rest-server` in append-only mode.** Chosen.

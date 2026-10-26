@@ -44,7 +44,7 @@ leaves the site is degaussed or destroyed, not wiped.
 ## `pve-firewall` is off
 
 The Proxmox firewall is disabled. Inbound exposure on the tailnet is governed by the Tailscale ACL
-([`tailscale-acl.md`](tailscale-acl.md)). On the LAN, `lan_guard` (since 2026-10-01) drops every new
+([`tailscale-acl.md`](tailscale-acl.md)). On the LAN, `lan_guard` drops every new
 inbound connection on every node, the hypervisor included, except SMB to vm102 from vm100 and the
 hypervisor, and break-glass SSH and netconsole to the hypervisor (`ansible/roles/lan_guard/`,
 `ansible/inventory/group_vars/proxmox.yml`). A second, differently expressed policy in

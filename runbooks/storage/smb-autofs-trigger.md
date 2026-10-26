@@ -103,7 +103,7 @@ systemctl reset-failed smb-mounts-check.service && systemctl start smb-mounts-ch
 | Symptom | Cause | Action |
 |---|---|---|
 | Check failed, path with `fstype=ext4` | CIFS mount for that path is down; bare directory on `pve-root` | Steps 3 and 4 |
-| Check failed, `fstype=none` | Stray directory under `/mnt/smb/`, not a mount | Remove it, or add the missing fstab entry |
+| Check failed, `fstype=none` | Stray plain directory under `/mnt/smb/` | Remove it, or add the missing fstab entry |
 | Mount unit `failed` after boot, works by hand | Entry lacks `x-systemd.automount` | Step 2 (KE-15) |
 | Check fails, no alert | Host node_exporter lacks `--collector.systemd` | Add `--collector.systemd --collector.systemd.unit-exclude='.+\.(automount\|device\|scope\|slice)'`, as the `node_exporter` role does |
 | Container sees an empty directory, host mount up | Bind created while the mount was down | `pct reboot <ctid>` |

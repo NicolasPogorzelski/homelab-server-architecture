@@ -60,7 +60,7 @@ the HBA blocks. The per-boot count of failed commands before and after is the KE
 
 ### Escrow restore drill
 
-The escrow exists since 2026-08-20: a password manager operated by a third party, plus a paper copy
+The escrow is a password manager operated by a third party, plus a paper copy
 off site. Two of the three artefacts are files (`hosts.yml` and the Ansible SSH key), so the drill
 confirms that the escrow holds them, not only the vault password. After the first run, repeat it
 yearly and record each run in the runbook's execution log.
