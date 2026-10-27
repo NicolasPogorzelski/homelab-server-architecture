@@ -457,7 +457,7 @@ guest backup wrote about 13 GB to the disk on 2026-10-13 with all four counters 
 - **Status:** Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched
 - **Affects:** Proxmox host boot SSD behind the LSI SAS2008 HBA (`scsi 9:0:0:0`, `phy(3)`,
   `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`), which held `/boot/efi`, `pve-root` and the
-  `pve-data` thin pool until 2026-10-27; it stays fitted at `9:0:0:0`, outside every volume group
+  `pve-data` thin pool until 2026-10-27; it stays fitted at `9:0:0:0` and carries the losable `scratch` pool
 
 **Symptom.** Bursts of failed read commands, each a roughly 30 s stall:
 
@@ -510,8 +510,8 @@ and not on the HBA ([boot disk replacement](../../runbooks/platform/boot-ssd-rep
 Drive and transport changed together, so the swap does not separate them; the cause stays open.
 
 **Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
-NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the idle
-old drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
+NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the old
+drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
 count, and six data disks. If faults continue there, run the
 [power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
 

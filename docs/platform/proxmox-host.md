@@ -61,8 +61,8 @@ carries the ESP (`/boot/efi`, partition 2), and on partition 3 the volume group 
 `root` 37.5 GiB, `swap` 8 GiB, the `pve/data` thin pool of 362.5 GiB with 4 GiB metadata, and
 about 60 GiB unallocated as a reserve. GRUB boots with shim from the `proxmox-nvme` UEFI entry.
 
-The former boot SSD stays fitted on the LSI SAS2008 HBA (`9:0:0:0`), outside every volume group,
-until its reuse is decided. It logged the `DID_SOFT_ERROR` bursts of
+The former boot SSD stays fitted on the LSI SAS2008 HBA (`9:0:0:0`) and carries the `scratch`
+pool ([storage definitions](#storage-definitions)). It logged the `DID_SOFT_ERROR` bursts of
 [KE-14](known-errors.md#ke-14); identify HBA disks by SCSI address or `by-id`, never by kernel
 letter. Procedure: [boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md).
 
@@ -226,6 +226,9 @@ it; one would have to write through the symlink and keep the host's own key.
   ([KE-7](known-errors.md#ke-7) class). `mkdir 0` on it is deprecated in PVE 9; the replacement is
   `create-base-path 0`.
 - No `dir` storage points at an unmounted path on `pve-root`.
+- `scratch` is an `lvmthin` storage on the former boot SSD (VG `scratch`, thin pool of 104 GiB)
+  for data whose loss costs nothing; its volumes are not overcommitted
+  ([decision](../decisions/scratch-pool-on-former-boot-ssd.md)).
 
 ## Guest Backup
 

@@ -27,7 +27,6 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 16 | [Package supply track](#package-supply-track), stages 1 to 4 and 6 | Every node fetches packages and images from public sources itself; nothing records or controls what enters the fleet, and an egress filter cannot be built | Read the theory of stage 1, then record every package source per node |
 | 17 | [Egress filter](#package-supply-track), stage 5 | No guest is limited in the outbound connections it opens, and the hypervisor firewall is disabled; a compromised service can reach any address | After stage 4, list per guest the outbound destinations it needs, then write the decision record |
 | 18 | Full platform restore test | The boot disk moved by `pvmove`, so [`platform-restore.md`](../../runbooks/platform/platform-restore.md) has still never rebuilt the host from the guest backups | Rebuild onto a spare disk or into a scratch VM from one Saturday's archives and record the result in the runbook |
-| 19 | Reuse of the former boot SSD | The 120 GB SSD sits idle on the HBA port where KE-14 was logged | After a week without faults on the boot disk, write the decision record for its use as cache or scratch space, then wipe it |
 
 ## Item notes
 
