@@ -1,0 +1,91 @@
+---
+# The control node's known_hosts for the fleet, written only from host keys read out
+# of band: each guest's key is read through the hypervisor (pct exec, the QEMU guest
+# agent) and must equal the key the node presents on the network. The hypervisor's
+# own entry is the trust anchor; it is in the file before the first run
+# (runbooks/platform/lxc250-rebuild.md), so its connection is already checked.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Read every node's host key on the hypervisor
+  hosts: proxmox
+  become: false # the inventory connects as root; there is no ansible user here
+  gather_facts: false
+  tasks:
+    - name: Read the hypervisor's own host key
+      ansible.builtin.slurp:
+        src: /etc/ssh/ssh_host_ed25519_key.pub
+      register: known_hosts_self
+
+    # Inventory names carry the guest id (lxc200 is CT 200, vm100 is VM 100).
+    - name: Read each container's host key from its filesystem
+      ansible.builtin.command:
+        cmd: "pct exec {{ item | regex_replace('^lxc', '') }} -- cat /etc/ssh/ssh_host_ed25519_key.pub"
+      loop: "{{ groups['guests'] | select('match', '^lxc[0-9]+$') | list }}"
+      register: known_hosts_lxc
+      changed_when: false
+      check_mode: false
+
+    - name: Read each VM's host key through the guest agent
+      ansible.builtin.command:
+        cmd: "qm guest exec {{ item | regex_replace('^vm', '') }} -- cat /etc/ssh/ssh_host_ed25519_key.pub"
+      loop: "{{ groups['guests'] | select('match', '^vm[0-9]+$') | list }}"
+      register: known_hosts_vm
+      changed_when: false
+      check_mode: false
+
+- name: Write the keys that match on the network
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    known_hosts_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/known_hosts.fleet"
+    known_hosts_hv: "{{ groups['proxmox'][0] }}"
+  tasks:
+    - name: Collect the out-of-band keys per inventory host
+      ansible.builtin.set_fact:
+        known_hosts_oob: >-
+          {{ dict(hostvars[known_hosts_hv].known_hosts_lxc.results
+                  | map(attribute='item')
+                  | zip(hostvars[known_hosts_hv].known_hosts_lxc.results
+                        | map(attribute='stdout') | map('split') | map(attribute=1)))
+             | combine(dict(hostvars[known_hosts_hv].known_hosts_vm.results
+                  | map(attribute='item')
+                  | zip(hostvars[known_hosts_hv].known_hosts_vm.results
+                        | map(attribute='stdout') | map('from_json')
+                        | map(attribute='out-data') | map('split') | map(attribute=1))))
+             | combine({known_hosts_hv: (hostvars[known_hosts_hv].known_hosts_self.content
+                  | b64decode).split()[1]}) }}
+
+    - name: Read the key each node presents on the network
+      ansible.builtin.command:
+        cmd: "ssh-keyscan -T 10 -t ed25519 {{ hostvars[item].ansible_host | default(item) }}"
+      loop: "{{ known_hosts_oob.keys() | list }}"
+      register: known_hosts_scan
+      changed_when: false
+      check_mode: false
+
+    # A mismatch is either a rebuilt node whose key was not read yet, or something
+    # else answering on that address. Neither is written.
+    - name: Refuse any node whose network key differs from the one on its disk
+      ansible.builtin.assert:
+        that:
+          - (item.stdout.split() | length) == 3
+          - item.stdout.split()[2] == known_hosts_oob[item.item]
+        fail_msg: >-
+          {{ item.item }} ({{ hostvars[item.item].ansible_host | default(item.item) }}) presents a
+          host key that differs from /etc/ssh/ssh_host_ed25519_key.pub on its disk, or none.
+          Nothing was written for it.
+        quiet: true
+      loop: "{{ known_hosts_scan.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Record each verified key, hashed
+      ansible.builtin.known_hosts:
+        path: "{{ known_hosts_path }}"
+        name: "{{ hostvars[item].ansible_host | default(item) }}"
+        key: "{{ hostvars[item].ansible_host | default(item) }} ssh-ed25519 {{ known_hosts_oob[item] }}"
+        hash_host: true
+        state: present
+      loop: "{{ known_hosts_oob.keys() | list }}"
