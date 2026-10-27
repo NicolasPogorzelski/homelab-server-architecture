@@ -86,7 +86,7 @@ restored. The thin pool's data and metadata are plain linear sub-LVs, which `pvm
 - `lvs pve/data` shows the larger pool; `LvmThinPoolWarning` quiet.
 - KE-14: failed commands per boot over the following week, at `9:0:0:0` (now the idle old disk)
   and on every other HBA port.
-- `GuestBackupStale` and `HostConfigBackupStale` quiet after the first Saturday.
+- `GuestBackupStale` and `HostConfigBackupStale` quiet after the first daily run at midday.
 
 ## Failure modes
 

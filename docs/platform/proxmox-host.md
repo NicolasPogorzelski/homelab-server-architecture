@@ -125,7 +125,8 @@ defaults.
 | `lxc-fstrim.timer` | `proxmox_host_units` | Trim LXC filesystems from the host, returning freed blocks to the `pve/data` thin pool |
 | `lvm-thin-metrics.timer` | `proxmox_host_units` | Export thin-pool data and metadata usage to the textfile collector |
 | `prometheus-node-exporter-smartmon.timer` | `smart_metrics` | Export SMART attributes per disk (`smartmon.sh`) |
-| `guest-backup.timer` | `guest_backup` | Weekly `vzdump` of the nine guests |
+| `guest-backup.timer` | `guest_backup` | Daily `vzdump` of the nine guests, seven days kept |
+| `backup-mirror.timer` | `backup_mirror` | Monthly copy of the newest guest and host-config archives to the Backup-Archive |
 | `host-config-backup.timer` | `guest_backup` | Daily archive of the host configuration |
 
 ### lxc-fstrim.timer
@@ -232,7 +233,7 @@ it; one would have to write through the symlink and keep the host's own key.
 
 ## Guest Backup
 
-Weekly `vzdump --mode snapshot` of all nine guests, deployed by the `guest_backup` role and
+Daily `vzdump --mode snapshot` of all nine guests, seven days kept, deployed by the `guest_backup` role and
 documented in [guest-backup-restore.md](../../runbooks/platform/guest-backup-restore.md). vm100 is
 backed up with its root disk only; its data disk carries `backup=0`. A daily archive of the host
 configuration sits beside the guest archives, and `platform-restore.sh` rebuilds the platform from

@@ -1,0 +1,29 @@
+---
+# === app_backup (vm100) ===
+#
+# Daily application backups onto the data disk /mnt/vm-data, which lives on the
+# aux-disk and is skipped by the guest backup (backup=0): the short-term tier.
+# backup_mirror copies the newest archive of each to the array monthly.
+
+app_backup_script_src: "{{ playbook_dir }}/../../snippets/scripts/app-backup.sh"
+app_backup_script_dest: /usr/local/sbin/app-backup.sh
+app_backup_env_file: /etc/app-backup.env
+app_backup_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# Same time as the guest backup on the host: one daily backup window.
+app_backup_oncalendar: "*-*-* 12:00:00"
+app_backup_persistent: true
+
+# Jellyfin writes its archives to <config>/data/backups. This role names that
+# path for pruning and the mirror.
+app_backup_jellyfin_env: /opt/docker/jellyfin/.env
+app_backup_jellyfin_backup_dir: /mnt/vm-data/jellyfin/config/data/backups
+app_backup_jellyfin_keep: 7
+
+# Audiobookshelf writes and prunes its own archives (backupSchedule,
+# backupsToKeep); its Compose stack binds this directory as /backups.
+app_backup_abs_backup_dir: /mnt/vm-data/backups/audiobookshelf
+
+# The administrator API key jellyfin_watchdog and jellyfin_user_prefs already
+# use. Vault reference; the value lives in the vaulted inventory on lxc250.
+app_backup_jellyfin_api_key: "{{ vault_jellyfin_api_key }}"

@@ -93,3 +93,9 @@ storage_permissions_entries:
     dir_mode: "2770"
     file_mode: "0660"
     setgid: true
+  - name: Backup-Archive
+    owner: storage
+    group: storage
+    dir_mode: "2770"
+    file_mode: "0660"
+    setgid: true

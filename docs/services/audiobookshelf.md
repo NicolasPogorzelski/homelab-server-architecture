@@ -7,6 +7,9 @@ Audiobook and podcast server on vm100. Node details: [vm100](../nodes/vm100.md).
 - Compose stack in `/opt/docker/audiobookshelf`, source `docker/audiobookshelf/docker-compose.yml`
   (image version there), synced by `docker_compose_update`
 - Config and metadata under `${ABS_DATA_ROOT}` on vm100's root disk, which the guest backup covers
+- Audiobookshelf's own daily archive goes to `${ABS_BACKUP_ROOT}` (`/backups` in the container) on
+  the data disk; `backup_mirror` copies the newest to the Backup-Archive monthly
+  ([backup flow](../architecture/backup-flow.md))
 
 ## Storage Integration
 

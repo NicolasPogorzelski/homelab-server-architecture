@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly copy of the newest backups onto the array
+# Implies Requires=: with the share unreachable the unit fails and
+# SystemdUnitFailed reports it, instead of writing into an empty directory.
+RequiresMountsFor={{ backup_mirror_target }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=idle
+ExecStart={{ backup_mirror_script_dest }}

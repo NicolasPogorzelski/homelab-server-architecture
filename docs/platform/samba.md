@@ -47,6 +47,10 @@ The decision prioritizes operational predictability over theoretical performance
 - DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210; a share of
   its own outside the Nextcloud export, so whatever reaches the user data
   does not also reach its backup)
+- Backup-Archive-guests -> /mnt/mergerfs/Backup-Archive/guests (monthly copies of the guest and
+  host-config archives, written by the hypervisor only)
+- Backup-Archive-apps -> /mnt/mergerfs/Backup-Archive/apps (monthly copies of vm100's application
+  archives, written by vm100 only)
 
 Ownership enforcement:
 

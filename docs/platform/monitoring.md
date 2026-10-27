@@ -55,7 +55,7 @@ See: [Runbook index](../../runbooks/README.md)
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
-| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale` |
+| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale`, `AppBackupStale`, `AppBackupMetricsMissing`, `BackupMirrorStale`, `BackupMirrorFailed`, `BackupMirrorMetricsMissing` |
 | `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified` |
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified`, `PrometheusRuleEvaluationFailing` |

@@ -9,7 +9,7 @@ real data.
 
 ## What this repository shows
 
-- **Configuration management:** 53 playbooks and 47 roles, secrets in Ansible Vault, deployed from a
+- **Configuration management:** 55 playbooks and 49 roles, secrets in Ansible Vault, deployed from a
   control node that refuses to run from a tree that matches no published commit
   ([Ansible](docs/platform/ansible.md)).
 - **CI and supply chain:** every push runs the repository validator, ansible-lint and gitleaks over
@@ -136,7 +136,7 @@ foundational ones.
 
 ### Runbooks, nodes and services
 
-23 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
+24 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
 exercised. Index: [runbooks/README.md](runbooks/README.md).
 
 <details>

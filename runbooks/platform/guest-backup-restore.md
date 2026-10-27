@@ -159,7 +159,7 @@ from step 8 the same way.
 ## Background
 
 The backups share a failure domain with their alerts: Prometheus runs on lxc200 on the same host,
-so the stale alerts mean "no backup within 10 days of uptime". The target is on site; the off-site
+so the stale alerts mean "no backup within 4 days of uptime". The target is on site; the off-site
 copy is not in place yet ([remediation plan](../../docs/platform/remediation-plan.md)). Never boot a
 restored clone on the network; if it has to run, set `link_down=1` on `net0` and use `pct exec`.
 Related: [lvm-thin-pool-full.md](lvm-thin-pool-full.md),
