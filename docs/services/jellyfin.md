@@ -7,7 +7,8 @@ Media server on vm100 with NVIDIA hardware transcoding. Node details: [vm100](..
 - Compose stack in `/opt/docker/jellyfin`, source `docker/jellyfin/docker-compose.yml`; the image
   version is pinned there, synced by `docker_compose_update`
 - GPU reserved through the NVIDIA runtime; runs as `${PUID}:${PGID}`, not root
-- Config, cache and metadata on `/mnt/vm-data/jellyfin`, the `jellyfin-data` disk
+- Config and metadata on `/mnt/vm-data/jellyfin`, the `jellyfin-data` disk; the cache on
+  `/mnt/scratch/jellyfin-cache` ([scratch pool](../decisions/scratch-pool-on-former-boot-ssd.md))
 
 ## Storage Integration
 
