@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily application backups (Jellyfin API, Audiobookshelf check)
+RequiresMountsFor=/mnt/vm-data
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=idle
+ExecStart={{ app_backup_script_dest }}

@@ -295,16 +295,16 @@ groups:
 
   - name: backup
     rules:
-      # Weekly job: one missed run plus margin. Persistent=true makes up a slot missed while
-      # the host was off, so a tighter threshold would fire on a normal catch-up.
+      # Daily job; four days covers a long weekend with the host off, as for the host
+      # configuration backup. Persistent=true makes up a missed slot at the next boot.
       - alert: GuestBackupStale
-        expr: (time() - guest_backup_last_run_timestamp_seconds) > 864000
+        expr: (time() - guest_backup_last_run_timestamp_seconds) > 345600
         for: 0m
         labels:
           severity: warning
         annotations:
           summary: "Guest backup is stale"
-          description: "The last vzdump run of all VMs and LXCs finished more than 10 days ago. Every guest root disk lives in one thin pool on the boot SSD, so this is the only copy of the machines themselves."
+          description: "The last vzdump run of all VMs and LXCs finished more than 4 days ago. Every guest root disk lives in one thin pool on the boot SSD, so this is the only copy of the machines themselves."
 
       # The script continues past a failed guest, so a partial run exits non-zero and leaves
       # this counter above zero. A run that ends early counts every unfinished guest, so this
@@ -340,8 +340,57 @@ groups:
           summary: "Host configuration backup is stale or missing"
           description: "No host configuration archive in four days, or no metric at all. Without it a rebuild of the hypervisor has the guest archives and not the host they expect - see runbooks/platform/platform-restore.md."
 
+      # Daily archives on vm100's data disk: Jellyfin through app-backup, Audiobookshelf on
+      # its own schedule. Same four days as the guest backup.
+      - alert: AppBackupStale
+        expr: (time() - app_backup_last_archive_timestamp_seconds) > 345600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.app }} backup is stale"
+          description: "The newest {{ $labels.app }} archive on vm100 is older than four days. Check `journalctl -u app-backup.service` on vm100."
+
+      - alert: AppBackupMetricsMissing
+        expr: absent(app_backup_last_archive_timestamp_seconds)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No application backup metrics are being reported"
+          description: "app_backup_last_archive_timestamp_seconds is absent: app-backup was never deployed on vm100, or its textfile collector stopped writing."
+
+      # Monthly job on the first, with Persistent=true. 38 days leaves a week for a first of
+      # the month that falls on days the host stays off.
+      - alert: BackupMirrorStale
+        expr: (time() - backup_mirror_last_success_timestamp_seconds) > 3283200
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup mirror on {{ $labels.instance }} is stale"
+          description: "No verified monthly copy reached the Backup-Archive on the array in 38 days. The aux-disk then holds the only copies (KE-13). Check `journalctl -u backup-mirror.service`."
+
+      - alert: BackupMirrorFailed
+        expr: backup_mirror_last_run_success == 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup mirror on {{ $labels.instance }} failed"
+          description: "The last monthly mirror run did not copy and verify every source. The previous month on the array is still in place."
+
+      - alert: BackupMirrorMetricsMissing
+        expr: absent(backup_mirror_last_success_timestamp_seconds)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No backup mirror metrics are being reported"
+          description: "backup_mirror_last_success_timestamp_seconds is absent on every node: the mirror never completed a run, or its textfile collectors stopped writing."
+
     # Prometheus runs on the host these backups protect, so these rules cannot see the host
-    # being off: they mean "not 10 days of uptime without a backup". The external
+    # being off: they mean "not 4 days of uptime without a backup". The external
     # heartbeat (Watchdog) covers host-off periods.
 
   - name: offsite

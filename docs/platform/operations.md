@@ -85,8 +85,9 @@ keeps service paths stable while disks are added or replaced ([storage-design.md
   `PostgreSQLRestoreTestStale`.
 - **Paperless-ngx (lxc211):** documents on the archive pool via SMB, database in the PostgreSQL
   platform (covered by its dump), runtime state on local storage.
-- **Machines:** weekly `vzdump` of all nine guests and a daily host-config backup on the host
-  (`guest_backup` role, [runbook](../../runbooks/platform/guest-backup-restore.md)).
+- **Machines:** daily `vzdump` of all nine guests and a daily host-config backup on the host
+  (`guest_backup` role, [runbook](../../runbooks/platform/guest-backup-restore.md)); the newest of
+  each goes to the Backup-Archive monthly ([runbook](../../runbooks/platform/backup-archive.md)).
 
 ### 2.4 Backup Scope & Residual Risk
 
@@ -253,7 +254,7 @@ defaults ([ansible.md](ansible.md#conventions)).
 - Hourly: Nextcloud rescan of the Paperless inbox on lxc210 (`paperless_inbox_scan`); output in
   the journal of its service.
 - Daily: database dumps, SnapRAID sync and status, host-config backup.
-- Weekly: SnapRAID scrub, guest backup, fleet snapshot and drift sweep.
+- Weekly: SnapRAID scrub, fleet snapshot and drift sweep.
 - Monthly: PostgreSQL and MariaDB restore tests.
 
 ### Manual

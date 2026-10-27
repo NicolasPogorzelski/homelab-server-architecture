@@ -1,0 +1,10 @@
+---
+# vm100 only: the applications whose data lives on its data disk (backup=0).
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Daily application backups on vm100
+  hosts: vm100
+  become: true
+  roles:
+    - app_backup

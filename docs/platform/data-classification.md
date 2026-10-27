@@ -26,7 +26,7 @@ most if disclosed are the ones that would hurt most if lost.
 | Documents open in Collabora Online | Transient, in the CODE process's jails under `/tmp` in lxc210 | C1 while open | Yes | None needed; the durable original is the Nextcloud row. The process runs without seccomp and capability jailing ([service document](../services/nextcloud.md)) |
 | Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Daily verified dump, monthly restore test (`postgresql_backup`, `postgresql_restore_test`) |
 | Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump |
-| Guest root disks (search indexes, dashboards, application configuration) | `pve/data` thin pool on the boot SSD | C2 | Indirectly | Weekly `vzdump` of all nine guests to the aux-disk (`guest_backup`) |
+| Guest root disks (search indexes, dashboards, application configuration) | `pve/data` thin pool on the boot SSD | C2 | Indirectly | Daily `vzdump` of all nine guests to the aux-disk, seven kept (`guest_backup`); newest copied monthly to the Backup-Archive (`backup_mirror`) |
 | Platform configuration and documentation | This repository on GitHub and two workstations | C2 | No | Git; the only dataset with a running off-site copy |
 | Monitoring history | Prometheus on lxc200 | C3 | No | None |
 | Media library | Archive pool on vm102 | C3 | No | SnapRAID parity |

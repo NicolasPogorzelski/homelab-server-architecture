@@ -1,0 +1,26 @@
+---
+# === backup_mirror ===
+#
+# Monthly copy of the newest short-term backups onto the SnapRAID array: the
+# long-term tier. The short-term tier is daily and lives on the aux-disk
+# (guest_backup on the host, app_backup on vm100). See docs/architecture/backup-flow.md.
+
+backup_mirror_script_src: "{{ playbook_dir }}/../../snippets/scripts/backup-mirror.sh"
+backup_mirror_script_dest: /usr/local/sbin/backup-mirror.sh
+backup_mirror_conf: /etc/backup-mirror.conf
+backup_mirror_textfile_dir: /var/lib/node_exporter/textfile_collector
+
+# The CIFS mount of this node's Backup-Archive share. Set per node.
+backup_mirror_target: ""
+
+# Three monthly restore points: an error that stays unnoticed for a month is
+# still covered, at about three times one month's size on the array.
+backup_mirror_keep: 3
+
+# First of the month, after the daily backups at 12:00 have had an hour.
+# Persistent=true fires a slot missed while the host was off at the next boot.
+backup_mirror_oncalendar: "*-*-01 13:00:00"
+backup_mirror_persistent: true
+
+# "label|directory|glob|group-regex", newest file per group. Set per node.
+backup_mirror_sources: []

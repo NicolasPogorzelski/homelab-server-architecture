@@ -157,7 +157,7 @@ Global settings (high-level):
 - Mandatory signing (`server signing = mandatory`)
 
 Service shares (read-write, per-service user): `[Nextcloud]`, `[Paperless]`, `[Postgres-backups]`,
-`[DB-Backups]`, and the two Paperless ingest shares. The full list with paths is in
+`[DB-Backups]`, the two Backup-Archive shares and the two Paperless ingest shares. The full list with paths is in
 [samba.md](samba.md).
 
 Owner mapping (current state for RW shares):

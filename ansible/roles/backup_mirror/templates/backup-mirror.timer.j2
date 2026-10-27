@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Monthly backup mirror at {{ backup_mirror_oncalendar }}
+
+[Timer]
+OnCalendar={{ backup_mirror_oncalendar }}
+# The host is off at night and on some days; a missed slot runs at the next boot.
+Persistent={{ backup_mirror_persistent | lower }}
+Unit=backup-mirror.service
+
+[Install]
+WantedBy=timers.target

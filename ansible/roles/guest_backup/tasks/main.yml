@@ -22,7 +22,7 @@
       {{ guest_backup_dir }} is not a mountpoint, or resolves to the root device.
       Bind the current backup disk onto that path first - see
       runbooks/platform/guest-backup-restore.md. Deploying the timer now would
-      install a job that writes ten gigabytes a week onto the boot SSD.
+      install a job that writes ten gigabytes a day onto the boot SSD.
     success_msg: "{{ guest_backup_dir }} is a mountpoint on its own device - safe to deploy."
 
 # Read-only probe; runs under --check so the assert below has a value.

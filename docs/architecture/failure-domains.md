@@ -24,7 +24,7 @@ flowchart TB
   subgraph auxd["aux-disk - /mnt/aux-disk - KE-13, unreadable sectors growing"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230"]
     PGDATA["lxc260: PostgreSQL data directory"]
-    VZDUMP["guest backups - weekly vzdump archives"]
+    VZDUMP["short-term backups - daily vzdump archives, 7 days"]
     MONDATA["lxc200: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
     JELLY["vm100 scsi1 - jellyfin-data, qcow2"]
   end
@@ -71,8 +71,9 @@ regardless, because `Current_Pending_Sector` cannot trip the self-assessment;
   here, those of its system disk in the boot disk's thin pool, and they cover a bad change, not
   the disk's loss. The disk is excluded from the guest
   backup.
-- `/mnt/vzdump`: the weekly guest backup shares this disk with the Docker state it would rebuild
-  ([backup and recovery](backup-flow.md)).
+- `/mnt/vzdump` and the application archives on `jellyfin-data`: the short-term backups share this
+  disk with the state they would rebuild; the monthly Backup-Archive on vm102 is the copy that
+  survives it ([backup and recovery](backup-flow.md)).
 
 Replacement: [aux-disk replacement](../platform/remediation-plan.md#aux-disk-replacement-and-disposal).
 
@@ -87,7 +88,7 @@ nothing: the parity disk is in the same machine. Each dataset's protection is dr
 The Proxmox host is a single point of failure - one machine, no cluster - but its loss is a hardware
 problem and no data problem: the guests live on the disks above. A dead mainboard costs a
 replacement and a rebuild ([platform restore](../../runbooks/platform/platform-restore.md)); a dead
-boot SSD rolls every guest back to its last weekly backup and each database to its last nightly dump.
+boot SSD rolls every guest back to its last daily backup and each database to its last nightly dump.
 
 ## Related
 

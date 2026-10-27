@@ -69,7 +69,7 @@ with the password in `~/.vault_pass` on lxc250 (mode 600, gitignored, loaded by 
 |---|---|
 | `vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key` | `paperless_env` |
 | `vault_postgres_exporter_dsn` | `postgres_exporter` |
-| `vault_jellyfin_api_key` | `jellyfin_watchdog`, `jellyfin_user_prefs` |
+| `vault_jellyfin_api_key` | `jellyfin_watchdog`, `jellyfin_user_prefs`, `app_backup` |
 | `vault_offsite_backup_repository`, `vault_offsite_backup_password` | `offsite_backup` (not yet defined; the role is not deployed) |
 
 Inline vault strings cannot be rekeyed with `ansible-vault rekey`. To change the password: read
@@ -108,8 +108,10 @@ A node presenting any other key is refused before it receives a task.
 |---|---|---|
 | `preflight.yml` | `all`, checks run once on the control node | Refuses the run unless the checkout is a clean `main` in sync with `origin`. |
 | `apt-upgrade.yml` | `lxcs`, then `vms` | Rolling apt upgrade with a `dpkg --verify` integrity check afterwards. |
+| `app-backup.yml` | `vm100` | Applies `app_backup`. |
 | `apt-metrics.yml` | `all` | Applies `apt_metrics`. |
 | `auditd.yml` | `proxmox` | Applies `auditd` (exercise). |
+| `backup-mirror.yml` | `proxmox`, then `vm100` | Applies `backup_mirror` on both writers to the Backup-Archive. |
 | `bootstrap-ansible-user.yml` | `lxcs:!lxc250`, `vm100`, `vm102` | One-time creation of the `ansible` user, key and sudoers rule, connecting as root. |
 | `breakglass.yml` | `vms` | Applies `breakglass`. |
 | `calibre-import.yml` | `lxc220` | Applies `calibre_importer`. |
@@ -164,8 +166,10 @@ A node presenting any other key is refused before it receives a task.
 
 | Role | Targets | What it does |
 |---|---|---|
+| `app_backup` | vm100 | Daily Jellyfin archive through its backup API (database and subtitles, seven kept) onto `/mnt/vm-data`, and a freshness metric for the archive Audiobookshelf writes there itself. |
 | `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory, with `TMPDIR` pointed there too. |
 | `auditd` | Proxmox host | Exercise ([decision](../decisions/exercise-scope-before-terraform.md)): syscall auditing with a starter rule set, read back with `auditctl -l`, `SYSLOG` actions and a capped log; no alert reads it. |
+| `backup_mirror` | Proxmox host, vm100 | Monthly copy of the newest archive per source to the node's Backup-Archive share, sha256-checked, three months kept ([runbook](../../runbooks/platform/backup-archive.md)). |
 | `breakglass` | vm100, vm102 | Enforces the admin break-glass keys exclusively on each VM's native user and removes retired passwordless sudo rules. |
 | `calibre_importer` | lxc220 | Installs Calibre and a timer that imports ebooks dropped into `/books-rw/_import`. |
 | `chrony` | vm100, vm102 | Installs and enables `chrony` with the Debian default configuration. |
@@ -174,7 +178,7 @@ A node presenting any other key is refused before it receives a task.
 | `docker_mount_ordering` | `docker` | Orders `docker.service` after the `.automount` units its containers bind (never the `.mount` units, see KE-15). |
 | `fleet_drift` | lxc250 | Weekly timer running the drift sweep as `devops` and exporting the result as a metric. |
 | `fleet_snapshot` | lxc250 | Weekly timer running `fleet-snapshot.yml`, ordered before the Saturday host jobs. |
-| `guest_backup` | Proxmox host | Weekly `vzdump` of the nine guests to `/mnt/vzdump` (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
+| `guest_backup` | Proxmox host | Daily `vzdump` of the nine guests to `/mnt/vzdump`, seven days kept (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
 | `homelab_schedule` | Proxmox host | Renders the RTC wake and shutdown scripts and the one cron line in `/etc/cron.d/homelab-schedule`; wake plans are role variables. |
 | `jellyfin_user_prefs` | vm100 | Asserts `SubtitleMode` on every Jellyfin user through the API and reports drifted users under `--check`. |
 | `jellyfin_watchdog` | vm100 | Deploys the CUDA watchdog script, its one-minute monotonic timer and a root-only API-key header file. |

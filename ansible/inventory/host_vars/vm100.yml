@@ -93,3 +93,12 @@ systemd_hygiene_masked_units:
     action: remove
     reason: >-
       Backing mount unit of media-audiobookshelf.automount, superseded with it.
+
+# === Backup mirror ===
+#
+# Mounted without x-systemd.idle-timeout: an automatic unmount of a live CIFS
+# mount froze this node once (KE-20).
+backup_mirror_target: /mnt/backup-archive-apps
+backup_mirror_sources:
+  - "jellyfin|/mnt/vm-data/jellyfin/config/data/backups|*.zip|"
+  - "audiobookshelf|/mnt/vm-data/backups/audiobookshelf|*.audiobookshelf|"

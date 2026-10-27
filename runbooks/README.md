@@ -18,6 +18,7 @@ Rollback. Where a step has no rollback, the runbook names its abort criteria ins
 | [host-console-gpu-swap](platform/host-console-gpu-swap.md) | A local console on the host is needed while the GPU is passed through to vm100 | never |
 | [lvm-thin-pool-full](platform/lvm-thin-pool-full.md) | An `LvmThinPool*` alert fires or guests report I/O errors | 2026-04-25, pass (incident) |
 | [docker-data-root-migration](platform/docker-data-root-migration.md) | An LXC keeps its Docker data root on the thin pool | 2026-04-30, pass |
+| [backup-archive](platform/backup-archive.md) | Provisioning or checking the monthly Backup-Archive, restoring a month, or a `BackupMirror*` / `AppBackup*` alert fires | never |
 | [guest-backup-restore](platform/guest-backup-restore.md) | A guest has to be restored, or a `GuestBackup*` alert fires | 2026-08-21, pass |
 | [lxc250-rebuild](platform/lxc250-rebuild.md) | The Ansible control node has to be recreated | never |
 | [pveproxy-tailscale-boot-race](platform/pveproxy-tailscale-boot-race.md) | The web UI on `:8006` is down after boot while SSH works (KE-12) | 2026-06-25, pass |

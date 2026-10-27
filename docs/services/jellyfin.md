@@ -88,8 +88,10 @@ upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/i
 ## Failure Impact
 
 - vm100 down: no media streaming; libraries on vm102 are unaffected.
-- `jellyfin-data` is not in the guest backup; config and watch state are lost with the aux-disk
-  ([KE-13](../platform/known-errors.md#ke-13)).
+- `jellyfin-data` is not in the guest backup. `app_backup` writes Jellyfin's own archive (database
+  and subtitles) daily onto that disk, seven kept, and `backup_mirror` copies the newest to the
+  Backup-Archive monthly; metadata images and trickplay are rebuilt from the media
+  ([KE-13](../platform/known-errors.md#ke-13), [backup flow](../architecture/backup-flow.md)).
 - Recovery: restart vm100, check the automounts, `docker compose ps` in the stack directory.
 
 ## Related Documents

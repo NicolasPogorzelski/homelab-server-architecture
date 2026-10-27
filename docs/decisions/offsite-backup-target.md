@@ -13,7 +13,7 @@ backups on the aux-disk, the user files on the MergerFS pool under SnapRAID pari
 | Threat | Covered by | Holds? |
 |---|---|---|
 | A disk fails | SnapRAID parity; guest backup on a second disk | Yes |
-| A guest is destroyed or misconfigured | Weekly `vzdump`, restore exercised 2026-08-21 | Yes |
+| A guest is destroyed or misconfigured | Daily `vzdump` on the aux-disk, monthly copy in the Backup-Archive, restore exercised 2026-08-21 | Yes |
 | A file is deleted and noticed late | A week of guest backups and of dumps | Partly |
 | Ransomware | nothing | No |
 | Site loss: fire, theft, water, seizure | nothing | No |
