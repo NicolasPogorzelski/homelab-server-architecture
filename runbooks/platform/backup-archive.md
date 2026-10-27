@@ -64,8 +64,9 @@ tier is this archive on the SnapRAID array.
    `docker-compose-update.yml` with `--check --diff` first, then without.
    Check: `docker inspect audiobookshelf` lists the `/backups` bind.
 
-5. Set Audiobookshelf's backup path and schedule (`PATCH /api/settings` or Settings ->
-   Backups): `backupPath` `/backups`, `backupSchedule` `0 12 * * *`, `backupsToKeep` 7.
+5. Set Audiobookshelf's backup path with `PATCH /api/backups/path` (`{"path": "/backups"}`); the
+   server settings endpoint ignores `backupPath`. Set `backupSchedule` `0 12 * * *` and
+   `backupsToKeep` 7 with `PATCH /api/settings`, or both under Settings -> Backups.
    Check: an API backup (`POST /api/backups`) returns `200` and a file appears under
    `/mnt/vm-data/backups/audiobookshelf`.
 
