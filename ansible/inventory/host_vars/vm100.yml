@@ -53,8 +53,11 @@ netplan_no_ra_interfaces:
 
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
+# /mnt/scratch holds Jellyfin's cache; unmounted, Jellyfin would fill the root disk
+# (docs/decisions/scratch-pool-on-former-boot-ssd.md).
 docker_mount_ordering_required_paths:
   - /mnt/vm-data
+  - /mnt/scratch
 
 # Units that can never succeed on this node. Masked by the systemd_hygiene role so
 # that every remaining failed unit on the fleet is a real fault worth alerting on.
