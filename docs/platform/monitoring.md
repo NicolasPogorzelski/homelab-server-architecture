@@ -66,6 +66,7 @@ See: [Runbook index](../../runbooks/README.md)
 | `apt` | `AptSecurityUpdatesPending`, `AptMetricsStale` |
 | `listeners` | `ListenerOutsideBindingRule`, `ListenerMetricsStale`, `ListenerMetricsMissing` |
 | `jellyfin` | `JellyfinCudaLost` |
+| `ingest` | `PaperlessIngestStorageDown`, `PaperlessInboxScanStale`, `PaperlessIngestMetricsMissing` |
 
 ### Notes on specific rules
 

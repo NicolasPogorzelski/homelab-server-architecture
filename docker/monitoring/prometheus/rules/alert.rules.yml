@@ -729,3 +729,38 @@ groups:
         annotations:
           summary: "Jellyfin has no CUDA access on {{ $labels.instance }}"
           description: "nvidia-smi fails inside the Jellyfin container. If jellyfin_watchdog_restart_held is 1, the restart waits for direct streams to end and transcoding is unavailable until then; if it is 0, the watchdog has restarted Jellyfin and CUDA did not come back."
+
+  - name: ingest
+    rules:
+      # Written hourly by scan-paperless-inbox.sh on lxc210 from `occ files_external:verify`
+      # (KE-29: both mounts failed for four weeks with nothing red). Two hours, so a single
+      # failed check during a reboot of vm102 or lxc210 stays quiet.
+      - alert: PaperlessIngestStorageDown
+        expr: paperless_ingest_storage_up == 0
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nextcloud cannot reach Paperless ingest mount {{ $labels.mount_id }}"
+          description: "files_external:verify fails for mount {{ $labels.mount_id }} on lxc210, so documents uploaded to that ingest folder never reach Paperless. Check the mount host (`occ files_external:config {{ $labels.mount_id }} host`), Rule 15 of the Tailscale policy and TCP 445 to vm102 (KE-29)."
+
+      # Three hours against an hourly timer. for: 15m covers the Persistent=true catch-up
+      # after the nightly power-down, when the last value is from the evening before.
+      - alert: PaperlessInboxScanStale
+        expr: (time() - paperless_inbox_scan_last_run_timestamp_seconds) > 10800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Paperless inbox scan has not completed for three hours"
+          description: "paperless-inbox-scan.service on lxc210 last finished more than three hours ago, so PaperlessIngestStorageDown reads an old value and Nextcloud's view of the ingest folders is stale."
+
+      # A script that never ran writes no series, and the two rules above go silent.
+      - alert: PaperlessIngestMetricsMissing
+        expr: absent(paperless_inbox_scan_last_run_timestamp_seconds{job="node-lxc210-nextcloud"})
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Paperless ingest metrics are not being reported"
+          description: "paperless_inbox_scan_last_run_timestamp_seconds is absent on node-lxc210-nextcloud. Either the textfile collector is not read or paperless-inbox-scan.service has never completed since the script gained its mount check."

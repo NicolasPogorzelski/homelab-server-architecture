@@ -193,7 +193,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `nsswitch` | nodes declaring `nsswitch_hosts` (lxc250) | Owns the `hosts:` line of `/etc/nsswitch.conf` and verifies resolution with `getent` ([decision](../decisions/magicdns-and-systemd-resolved.md)). |
 | `offsite_backup` | `offsite_sources` | `restic` to an append-only `rest-server` at a second site; built, not deployed ([decision](../decisions/offsite-backup-target.md)). |
 | `paperless_env` | lxc211 | Renders the Paperless `.env` from vaulted values and derives the Serve URL from `tailscale status`. |
-| `paperless_inbox_scan` | lxc210 | Hourly timer rescanning the Nextcloud Paperless inbox. |
+| `paperless_inbox_scan` | lxc210 | Hourly timer rescanning the Nextcloud Paperless inbox and exporting whether each ingest mount verifies. |
 | `postgres_exporter` | lxc260 | Owns `postgres_exporter.service` bound to the Tailscale address and ordered after `tailscaled`. |
 | `postgresql_backup` | lxc260 | Daily `pg_dumpall` on a timer with write-time verification; refuses to run unless `/mnt/backups` is CIFS. |
 | `postgresql_boot_order` | lxc260 | Drop-in gating PostgreSQL on the Tailscale address ([KE-9](known-errors.md#ke-9)). |

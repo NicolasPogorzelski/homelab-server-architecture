@@ -1105,4 +1105,5 @@ storage.<tailnet-id>.ts.net` for mounts 4 and 5.
 **Verification.** 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
 `occ files_external:verify 4` and `5` return `status: ok`; the last `not available` line is from
 the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. Not yet measured: a document uploaded through Nextcloud
-arriving in Paperless. An alert on the ingest path does not exist.
+arriving in Paperless. `PaperlessIngestStorageDown` reads the hourly `files_external:verify` result
+of each mount.
