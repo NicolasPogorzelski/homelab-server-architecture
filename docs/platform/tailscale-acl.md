@@ -342,8 +342,7 @@ Nextcloud's External Storage writes uploads into two SMB shares on vm102 that la
 consumption directory ([nextcloud.md](../services/nextcloud.md#external-storage-paperless-integration)).
 The LAN path to vm102 is closed, so this grant is the only route. It names the one service, not
 `tag:tier1`, and the mounts address vm102 by its full MagicDNS name, because the short name
-`storage` also resolves on the LAN. The rule is not in the console
-([KE-29](known-errors.md#ke-29)).
+`storage` also resolves on the LAN ([KE-29](known-errors.md#ke-29)).
 
 ```json
 {

@@ -40,7 +40,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
 | [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - retry not yet exercised by a real failure |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
-| [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Open - ACL rule and mount change not applied |
+| [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 
 ---
 
@@ -1084,24 +1084,27 @@ three concurrent 4K streams. See [jellyfin.md](../services/jellyfin.md).
 <a id="ke-29"></a>
 ## KE-29: Files uploaded to the Nextcloud ingest folders never reach Paperless
 
-- **Status:** Open - ACL rule and mount change not applied
+- **Status:** Resolved 2026-10-27
 - **Affects:** Nextcloud External Storage mounts 4 and 5 on lxc210, the two Paperless ingest
-  shares on vm102; failing from at least 2026-09-29
+  shares on vm102; failing from at least 2026-09-29 to 2026-10-27
 
 **Symptom.** A document dropped into either ingest folder stays out of Paperless. Nextcloud logs
 `Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 20 times a
 day, and `occ files_external:verify 4` returns `status: error`. No alert covers it.
 
-**Cause.** Both mounts address vm102 as `storage`, which resolves to its LAN address on lxc210,
+**Cause.** Both mounts addressed vm102 as `storage`, which resolves to its LAN address on lxc210,
 where `smb_guard` refuses lxc210. The tailnet route needs [Rule 15](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares),
-which exists in the repository only: lxc210 and vm102 do not list each other as peers in
+which existed in the repository only: lxc210 and vm102 do not list each other as peers in
 `tailscale status --json`, while every other host-alias grant shows its peer. The 2026-10-10 fix
 wrote the rule and named the console change and the mount change as the next steps; the
 2026-10-14 rewrite of the remediation plan dropped the open item before either was applied. Same
 class as the inference rollout, whose 2026-09-29 policy change had reached the documents only.
 
-**Fix.** Pending: Rule 15 and its test in the admin console, then
-`occ files_external:config <id> host storage.<tailnet-id>.ts.net` for mounts 4 and 5.
+**Fix.** 2026-10-27: Rule 15 in the admin console, with the `nextcloud` test moving
+`tag:storage:445` from deny to accept; then `occ files_external:config <id> host
+storage.<tailnet-id>.ts.net` for mounts 4 and 5.
 
-**Verification.** Pending: `occ files_external:verify 4` and `5` return `status: ok`, a test file
-reaches Paperless, and the log line stops.
+**Verification.** 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
+`occ files_external:verify 4` and `5` return `status: ok`; the last `not available` line is from
+the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. Not yet measured: a document uploaded through Nextcloud
+arriving in Paperless. An alert on the ingest path does not exist.
