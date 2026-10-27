@@ -79,11 +79,11 @@ each value with `ansible-vault encrypt_string`, and replace it in `vault.yml`.
 ## Configuration
 
 `ansible/ansible.cfg` sets `inventory = ./inventory/hosts.yml`, `remote_user = ansible`,
-`roles_path = ./roles`, `vault_password_file = ~/.vault_pass` and `host_key_checking = False`.
-
-**Known gap:** `host_key_checking = False` means the control node accepts any SSH host key, so a
-host impersonating a node on the tailnet would be handed the run and every secret it deploys. It is
-tracked in the [remediation plan](remediation-plan.md).
+`roles_path = ./roles`, `vault_password_file = ~/.vault_pass` and `host_key_checking = True`, with
+`StrictHostKeyChecking=yes` against `~/.ssh/known_hosts.fleet`. That file holds only keys that
+`known-hosts.yml` read on each node's disk through the hypervisor and found equal on the network;
+the hypervisor's own entry is seeded by hand ([lxc250 rebuild](../../runbooks/platform/lxc250-rebuild.md)).
+A node presenting any other key is refused before it receives a task.
 
 ## Conventions
 
@@ -125,6 +125,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `homelab-schedule.yml` | `proxmox` | Applies `homelab_schedule`. |
 | `jellyfin-user-prefs.yml` | `vm100` | Applies `jellyfin_user_prefs`. |
 | `jellyfin-watchdog.yml` | `vm100` | Applies `jellyfin_watchdog`. |
+| `known-hosts.yml` | `proxmox`, then `localhost` | Writes `~/.ssh/known_hosts.fleet` on lxc250 from host keys read out of band; refuses a node whose network key differs. |
 | `journal-central.yml` | `lxc200`, then `guests` | Applies `journal_remote` on the receiver, then `journal_upload` on nodes that opt in (exercise). |
 | `journald.yml` | `all` | Applies `journald`. |
 | `kernel-panic-policy.yml` | `proxmox` | Applies `kernel_panic_policy`. |
