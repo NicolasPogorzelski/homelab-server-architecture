@@ -8,8 +8,9 @@
   reseating.
 - **Last exercised:** never
 
-KE-14: bursts of failed read commands (`DID_SOFT_ERROR`, `DID_TIME_OUT`) against the boot SSD at
-SCSI address `9:0:0:0` behind the LSI SAS2008 HBA, at boot and under load. Media and HBA firmware
+KE-14: bursts of failed read commands (`DID_SOFT_ERROR`, `DID_TIME_OUT`) against the former boot
+SSD at SCSI address `9:0:0:0` behind the LSI SAS2008 HBA, at boot and under load. The boot disk sits
+on PCIe; the HBA ports remain under observation. Media and HBA firmware
 are excluded. Candidates: 12 V rail sag and HBA heat. Identify the disk by `9:0:0:0` or `by-id`,
 never by kernel letter.
 

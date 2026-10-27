@@ -54,22 +54,17 @@ Disk models and IDs are kept offline; the logical topology is in [vm102.md](../n
 A guest sees virtio devices, so SMART is readable only on the host; the `smart_metrics` role
 exports it here.
 
-## Boot SSD - Intermittent I/O Errors (KE-14)
+## Boot Disk
 
-The boot SSD hangs off an LSI SAS2008 HBA (`mpt2sas`, SCSI address `9:0:0:0`), not the SATA
-controller. It carries `/boot/efi`, `pve-root` and the `pve-data` thin pool, which holds every VM
-and LXC root disk.
+A 512 GB NVMe disk in the board's M.2 slot (PCIe 3.0 x4), `/dev/disk/by-id/<boot-nvme-by-id>`. It
+carries the ESP (`/boot/efi`, partition 2), and on partition 3 the volume group `pve` (476 GiB):
+`root` 37.5 GiB, `swap` 8 GiB, the `pve/data` thin pool of 362.5 GiB with 4 GiB metadata, and
+about 60 GiB unallocated as a reserve. GRUB boots with shim from the `proxmox-nvme` UEFI entry.
 
-Identify it by `9:0:0:0` or `by-id`, never by kernel letter: `sd*` names follow probe order and
-change between boots. `lsblk -dno NAME,TRAN` reports the boot SSD as `sas`, the auxiliary disks as
-`sata`.
-
-Some boots log a burst of `DID_SOFT_ERROR` read failures against it, always inside the boot window.
-They are transport-layer faults: the drive's SMART error log is empty and every media counter is
-zero. Root cause is unconfirmed; the leading hypothesis is the 12 V rail under boot load. No
-filesystem damage has occurred. The SSD is to be replaced in the second half of October 2026
-([boot-ssd-replacement](../../runbooks/platform/boot-ssd-replacement.md)); the physical checks
-follow only if the errors persist on the new drive. Analysis: [KE-14](known-errors.md#ke-14).
+The former boot SSD stays fitted on the LSI SAS2008 HBA (`9:0:0:0`), outside every volume group,
+until its reuse is decided. It logged the `DID_SOFT_ERROR` bursts of
+[KE-14](known-errors.md#ke-14); identify HBA disks by SCSI address or `by-id`, never by kernel
+letter. Procedure: [boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md).
 
 ## aux-disk (degraded since 2026-06-25)
 
@@ -254,8 +249,8 @@ anything on the platform - it is noticed by a person.
 | Layer | What its loss takes with it |
 |---|---|
 | Host OS on `pve-root` | Guest configs in `/etc/pve`, host units, the power schedule |
-| `pve/data` thin pool | Every VM and LXC root disk; the volume group has no free extents, so `lvextend` is not a remedy |
-| Boot SSD ([KE-14](known-errors.md#ke-14)) | Both of the above at once; a single consumer drive behind the HBA with unexplained boot-window errors |
+| `pve/data` thin pool | Every VM and LXC root disk; about 60 GiB of the volume group are unallocated for `lvextend` |
+| Boot disk | Both of the above at once; a single consumer NVMe drive without redundancy |
 | aux-disk ([KE-13](known-errors.md#ke-13)) | Docker engine state of the Docker-in-LXC services, vm100's data disk, lxc260's database files, and the guest backup target |
 | Tailscale identity | Every service address; nodes are reached by MagicDNS name, and the LAN is no fallback for them |
 

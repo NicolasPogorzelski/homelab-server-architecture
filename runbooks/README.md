@@ -11,7 +11,7 @@ Rollback. Where a step has no rollback, the runbook names its abort criteria ins
 | Runbook | Use when | Last exercised |
 |---|---|---|
 | [platform-restore](platform/platform-restore.md) | The Proxmox host has to be rebuilt on a fresh install | never |
-| [boot-ssd-replacement](platform/boot-ssd-replacement.md) | The boot SSD is replaced (KE-14) | never |
+| [boot-ssd-replacement](platform/boot-ssd-replacement.md) | The boot disk is replaced by a disk fitted beside it | 2026-10-27, pass |
 | [ke14-power-path-check](platform/ke14-power-path-check.md) | KE-14 errors persist and the 12 V power path is to be measured | never |
 | [escrow-restore-drill](platform/escrow-restore-drill.md) | The yearly restore of the escrowed vault password, inventory and SSH key is due | never |
 | [hard-shutdown-recovery](platform/hard-shutdown-recovery.md) | Guests fail to start after an unclean host shutdown | never |
