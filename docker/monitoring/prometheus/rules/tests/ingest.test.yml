@@ -1,0 +1,53 @@
+# promtool unit tests for the `ingest` group in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  # A mount fails for one hourly check and recovers: quiet. The other fails for three
+  # hours: fires after two.
+  - interval: 1m
+    input_series:
+      - series: 'paperless_ingest_storage_up{job="node-lxc210-nextcloud",mount_id="4"}'
+        values: '1x60 0x60 1x120'
+      - series: 'paperless_ingest_storage_up{job="node-lxc210-nextcloud",mount_id="5"}'
+        values: '1x60 0x180'
+      - series: 'paperless_inbox_scan_last_run_timestamp_seconds{job="node-lxc210-nextcloud"}'
+        values: '0+60x240'
+    alert_rule_test:
+      - {eval_time: 2h, alertname: PaperlessIngestStorageDown, exp_alerts: []}
+      - eval_time: 3h10m
+        alertname: PaperlessIngestStorageDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc210-nextcloud, mount_id: "5"}
+            exp_annotations:
+              summary: "Nextcloud cannot reach Paperless ingest mount 5"
+              description: "files_external:verify fails for mount 5 on lxc210, so documents uploaded to that ingest folder never reach Paperless. Check the mount host (`occ files_external:config 5 host`), Rule 15 of the Tailscale policy and TCP 445 to vm102 (KE-29)."
+      - {eval_time: 3h10m, alertname: PaperlessInboxScanStale, exp_alerts: []}
+  # The scan stops: stale after three hours plus the 15 minutes hold.
+  - interval: 1m
+    input_series:
+      - series: 'paperless_inbox_scan_last_run_timestamp_seconds{job="node-lxc210-nextcloud"}'
+        values: '0x300'
+    alert_rule_test:
+      - {eval_time: 3h5m, alertname: PaperlessInboxScanStale, exp_alerts: []}
+      - eval_time: 3h20m
+        alertname: PaperlessInboxScanStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc210-nextcloud}
+            exp_annotations:
+              summary: "Paperless inbox scan has not completed for three hours"
+              description: "paperless-inbox-scan.service on lxc210 last finished more than three hours ago, so PaperlessIngestStorageDown reads an old value and Nextcloud's view of the ingest folders is stale."
+      - {eval_time: 3h20m, alertname: PaperlessIngestMetricsMissing, exp_alerts: []}
+  # No series at all.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="node-lxc210-nextcloud"}'
+        values: '1x200'
+    alert_rule_test:
+      - eval_time: 2h10m
+        alertname: PaperlessIngestMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node-lxc210-nextcloud}
+            exp_annotations:
+              summary: "Paperless ingest metrics are not being reported"
+              description: "paperless_inbox_scan_last_run_timestamp_seconds is absent on node-lxc210-nextcloud. Either the textfile collector is not read or paperless-inbox-scan.service has never completed since the script gained its mount check."

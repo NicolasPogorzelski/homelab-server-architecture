@@ -63,7 +63,9 @@ The `files_external` app gives two users an upload path into Paperless-ngx:
   (`password::password`).
 - Paperless consumes and deletes uploaded files within about 30 s.
 - `paperless-inbox-scan.timer` (role `paperless_inbox_scan`) runs `occ files:scan` on each user's
-  "Paperless Inbox" hourly, so the file cache drops consumed files.
+  "Paperless Inbox" hourly, so the file cache drops consumed files. The same run writes
+  `paperless_ingest_storage_up` per mount from `occ files_external:verify`;
+  `PaperlessIngestStorageDown` fires after two hours of failure.
 
 Repair procedures: [ingestion runbook](../../runbooks/integration/nextcloud-paperless.md).
 

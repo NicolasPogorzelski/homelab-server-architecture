@@ -15,6 +15,7 @@ subdirectories of `rules/`. CI does not run them; run them before changing a cov
 | File | Covers |
 |---|---|
 | `database.test.yml` | `DatabaseBackupMetricsMissing`: one alert per missing metric, two on one job |
+| `ingest.test.yml` | `ingest` group: one failed check stays quiet, a lasting failure fires, stale scan, absent metric |
 | `host-config.test.yml` | `HostConfigBackupStale`: stale archive and absent metric |
 | `jellyfin.test.yml` | `JellyfinCudaLost`: quick recovery stays quiet, ten minutes without CUDA fires |
 | `listeners.test.yml` | `listeners` group: wildcard listener hold time, missing listener metrics |
