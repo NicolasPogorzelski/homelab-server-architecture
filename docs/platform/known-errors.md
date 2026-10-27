@@ -21,7 +21,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-7](#ke-7) | Package corruption when the LVM thin pool overflows | Resolved 2026-04-26 |
 | [KE-8](#ke-8) | Media services hang while the node stays healthy | Mitigated 2026-06-08 - service probes alert; cause not found |
 | [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09 |
-| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Mitigated - fault active, stream-aware watchdog restart |
+| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Mitigated - no loss since 2026-10-08; watchdog kept |
 | [KE-11](#ke-11) | Grafana admin password not updated after first start | Open - Grafana design behaviour, non-blocking |
 | [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12 |
 | [KE-13](#ke-13) | aux-disk physical failure | Open - degrading, in service, replacement planned |
@@ -313,7 +313,7 @@ is `redis://redis:6379`.
 
 ## KE-10: Jellyfin loses CUDA access intermittently - container restart required
 
-- **Status:** Mitigated - fault active, stream-aware watchdog restart
+- **Status:** Mitigated - no loss since 2026-10-08; watchdog kept
 - **Affects:** Jellyfin (vm100)
 
 **Symptom.** Hardware transcoding stops; playback that needs a transcode stalls or fails. The
@@ -330,8 +330,11 @@ holds while only direct streams play, since a restart ends every running stream.
 `JellyfinCudaLost` fires after ten minutes without CUDA, so a held restart is visible
 ([jellyfin.md](../services/jellyfin.md)).
 
-**Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, the
-latest 2026-10-08 11:29:
+**Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, one
+every four to five days, the latest 2026-10-08 11:29. Verified 2026-10-27: none since, nineteen
+days in which the earlier rate predicts about four, by the command below. The Jellyfin 12
+upgrade (2026-10-13) and the host's 7.0 kernel (2026-10-12) fall into the quiet period; neither is shown
+to be the cause, so the watchdog stays:
 
 ```
 journalctl -t jellyfin-cuda-watchdog | grep "CUDA access lost"
