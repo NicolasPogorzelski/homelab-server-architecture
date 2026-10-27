@@ -57,8 +57,8 @@ Tracked in the [remediation plan](remediation-plan.md):
 
 - Record the UPS (model, age, battery date) and measure one runtime under real load
   ([power path and UPS](remediation-plan.md#power-path-and-ups)).
-- Run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if the KE-14
-  errors follow the replacement boot SSD.
+- Run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if transport
+  faults continue on the HBA ports (KE-14).
 - Decide the disposal method for the KE-13 disk before the replacement arrives
   ([aux-disk replacement and disposal](remediation-plan.md#aux-disk-replacement-and-disposal)).
 

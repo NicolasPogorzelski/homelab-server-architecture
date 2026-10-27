@@ -42,7 +42,7 @@ encryption by ransomware are legitimate writes to the array, and the next `snapr
 them into the parity. Paperless documents and Nextcloud files have that protection and no other.
 
 Nextcloud is split across two disks. Its files sit on the archive pool, its database on the
-boot SSD of [KE-14](known-errors.md#ke-14). Without the database the files are blobs in Nextcloud's
+boot disk. Without the database the files are blobs in Nextcloud's
 storage layout with no owner, share or name, so the database's RPO must not exceed the files'.
 
 ## Recovery objectives

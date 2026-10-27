@@ -25,7 +25,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-11](#ke-11) | Grafana admin password not updated after first start | Open - Grafana design behaviour, non-blocking |
 | [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12 |
 | [KE-13](#ke-13) | aux-disk physical failure | Open - degrading, in service, replacement planned |
-| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Open - drive replacement in the second half of October 2026 |
+| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched |
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - cause unknown, one occurrence |
@@ -454,10 +454,10 @@ guest backup wrote about 13 GB to the disk on 2026-10-13 with all four counters 
 
 ## KE-14: Read commands to the boot SSD time out under load (SAS HBA transport, not media)
 
-- **Status:** Open - drive replacement in the second half of October 2026
+- **Status:** Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched
 - **Affects:** Proxmox host boot SSD behind the LSI SAS2008 HBA (`scsi 9:0:0:0`, `phy(3)`,
-  `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`); it holds `/boot/efi`, `pve-root` and the
-  `pve-data` thin pool with every guest root disk
+  `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`), which held `/boot/efi`, `pve-root` and the
+  `pve-data` thin pool until 2026-10-27; it stays fitted at `9:0:0:0`, outside every volume group
 
 **Symptom.** Bursts of failed read commands, each a roughly 30 s stall:
 
@@ -505,16 +505,14 @@ A second port shows transport faults. On 2026-10-15 at boot, one `DID_SOFT_ERROR
 and at 393 on 2026-10-17. Faults on two ports fit the HBA, its cabling or its power better than the
 SSD alone.
 
-**Fix.** The drive is replaced in the second half of October 2026
-([boot SSD replacement](../../runbooks/platform/boot-ssd-replacement.md), [remediation plan](remediation-plan.md#boot-ssd-replacement)); its 110 GiB volume
-group is also too small. The 6.17.13 kernel pin was released 2026-10-12 so the kernel and the
-drive do not change together; the baseline is the old drive on the 7.0 kernel from 2026-10-13.
+**Fix.** 2026-10-27: the volume group moved by `pvmove` to an NVMe disk in the M.2 slot, on PCIe
+and not on the HBA ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)).
+Drive and transport changed together, so the swap does not separate them; the cause stays open.
 
-**Verification.** Failed commands per boot before and after the swap. On the same port and cable
-this separates drive from transport; on an onboard SATA port it separates the HBA path from power.
-Since the boot of 2026-10-17 10:51 a sixth 7200 rpm data disk runs on the HBA (`9:0:5:0`) and adds
-12 V load on an unrecorded rail; counts after the swap are compared against this configuration.
-If errors persist, run the
+**Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
+NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the idle
+old drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
+count, and six data disks. If faults continue there, run the
 [power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
 
 ---

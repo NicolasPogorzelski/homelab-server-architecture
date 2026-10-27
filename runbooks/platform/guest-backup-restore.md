@@ -163,4 +163,4 @@ so the stale alerts mean "no backup within 10 days of uptime". The target is on 
 copy is not in place yet ([remediation plan](../../docs/platform/remediation-plan.md)). Never boot a
 restored clone on the network; if it has to run, set `link_down=1` on `net0` and use `pct exec`.
 Related: [lvm-thin-pool-full.md](lvm-thin-pool-full.md),
-[KE-14](../../docs/platform/known-errors.md#ke-14) (the boot SSD that holds every guest).
+[boot-ssd-replacement.md](boot-ssd-replacement.md) (the boot disk that holds every guest).

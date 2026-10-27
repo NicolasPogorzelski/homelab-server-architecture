@@ -131,8 +131,8 @@ There is no prior state to return to; these are the abort criteria:
   mountpoint keeps the empty directory and writes onto the boot SSD.
 - A container fails twice for the same reason: stop and diagnose; repeating `pct start` adds
   nothing.
-- The boot SSD logs I/O errors that keep rising: stop starting guests
-  ([boot SSD replacement](../../docs/platform/remediation-plan.md#boot-ssd-replacement)).
+- The boot disk logs I/O errors that keep rising: stop starting guests
+  ([boot disk replacement](boot-ssd-replacement.md)).
 
 A container started too early is undone with `pct stop <ctid>` and started again after step 3.
 
