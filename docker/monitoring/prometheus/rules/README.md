@@ -19,7 +19,7 @@ subdirectories of `rules/`. CI does not run them; run them before changing a cov
 | `jellyfin.test.yml` | `JellyfinCudaLost`: quick recovery stays quiet, ten minutes without CUDA fires |
 | `listeners.test.yml` | `listeners` group: wildcard listener hold time, missing listener metrics |
 | `rule-health.test.yml` | `PrometheusRuleEvaluationFailing` |
-| `smart.test.yml` | `smart` group: kernel letters swapping across boots, real rise, fall |
+| `smart.test.yml` | `smart` group: kernel letters swapping across boots, real rise, fall, link CRC rise |
 
 Run them with the Prometheus image the monitoring stack pins, so the tests use the PromQL engine
 that evaluates the rules in production:
