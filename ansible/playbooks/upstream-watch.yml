@@ -1,0 +1,9 @@
+---
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Weekly check of upstream fixes the platform waits for
+  hosts: lxc250
+  become: true
+  roles:
+    - upstream_watch
