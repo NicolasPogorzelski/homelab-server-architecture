@@ -126,6 +126,8 @@ a marked `blockinfile`; the layout above it stays hand-written because it carrie
   [KE-19](known-errors.md#ke-19) rules: a database side file captured at a different moment than
   its main file yields a parity set from which a reconstruction can be corrupt
 - `exclude /Nextcloud/appdata_*/richdocuments/remoteData/` - Collabora scratch data
+- `exclude *.partial` - a database dump while it is written; the dump scripts rename it once it
+  is verified, and the finished dump is covered by parity as usual
 
 Operational note:
 - `snapraid status` is typically executed with `sudo` because SnapRAID must read content/parity state files.

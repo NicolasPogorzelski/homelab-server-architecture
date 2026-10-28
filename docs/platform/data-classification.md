@@ -19,14 +19,14 @@ most if disclosed are the ones that would hurt most if lost.
 
 | Dataset | Where it lives | Class | Personal data | Protection today |
 |---|---|---|---|---|
-| Ansible vault password, real inventory, Ansible SSH key | lxc250 home directory, on the boot SSD | C1 | No | Escrowed off site; never restored from ([drill](../../runbooks/platform/escrow-restore-drill.md)) |
+| Ansible vault password, real inventory, Ansible SSH key | lxc250 home directory, on the boot NVMe | C1 | No | Escrowed off site; never restored from ([drill](../../runbooks/platform/escrow-restore-drill.md)) |
 | Paperless documents (originals and archive) | `/mnt/smb/paperless` on the archive pool | C1 | Yes - identity documents, contracts, invoices | SnapRAID parity only |
 | Nextcloud user files | `/mnt/smb/nextcloud` on the archive pool | C1 | Yes | SnapRAID parity only |
-| Nextcloud MariaDB | Inside lxc210, on the boot SSD | C1 | Yes | Daily verified dump to the `DB-Backups` share on vm102, monthly restore test (`mariadb_backup`, `mariadb_restore_test`) |
+| Nextcloud MariaDB | Inside lxc210, on the boot NVMe | C1 | Yes | Daily verified dump to the `DB-Backups` share on vm102, monthly restore test (`mariadb_backup`, `mariadb_restore_test`) |
 | Documents open in Collabora Online | Transient, in the CODE process's jails under `/tmp` in lxc210 | C1 while open | Yes | None needed; the durable original is the Nextcloud row. The process runs without seccomp and capability jailing ([service document](../services/nextcloud.md)) |
 | Paperless metadata (`paperless_db`) | PostgreSQL on lxc260 | C2 | Yes, indirectly | Daily verified dump, monthly restore test (`postgresql_backup`, `postgresql_restore_test`) |
 | Other application databases (`openwebui_db` and peers) | PostgreSQL on lxc260 | C2 | Minimal | Same dump |
-| Guest root disks (search indexes, dashboards, application configuration) | `pve/data` thin pool on the boot SSD | C2 | Indirectly | Daily `vzdump` of all nine guests to the aux-disk, seven kept (`guest_backup`); newest copied monthly to the Backup-Archive (`backup_mirror`) |
+| Guest root disks (search indexes, dashboards, application configuration) | `pve/data` thin pool on the boot NVMe | C2 | Indirectly | Daily `vzdump` of all nine guests to the aux-disk, seven kept (`guest_backup`); newest copied monthly to the Backup-Archive (`backup_mirror`) |
 | Platform configuration and documentation | This repository on GitHub and two workstations | C2 | No | Git; the only dataset with a running off-site copy |
 | Monitoring history | Prometheus on lxc200 | C3 | No | None |
 | Media library | Archive pool on vm102 | C3 | No | SnapRAID parity |

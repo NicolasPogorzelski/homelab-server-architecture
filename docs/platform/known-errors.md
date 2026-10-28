@@ -38,7 +38,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15; second instance 2026-10-08 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
-| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - retry not yet exercised by a real failure |
+| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - first real retry 2026-10-22 |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
@@ -418,18 +418,20 @@ was found on 2026-07-09: the same partition was mounted on the host and passed t
 
 SMART, identified by serial (`by-id`), never by kernel letter ([KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 |
-|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 |
-| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | 21 | 21 | 21 |
+| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 | 2026-10-27 |
+|---|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 | 8880 |
+| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 | 8880 |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | 21 | 21 | 21 | 21 |
 
 The first step happened at the boot of 2026-09-20 (Prometheus history: 7848 at 20:17, 8168 at
-20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38). `Reported_Uncorrect`
-has not moved since July, so no read by a consumer has failed; the new sectors point at the drive's
-own offline scan. `smartctl -H` reports `PASSED`, because `Current_Pending_Sector` normalises to
-`054` against threshold `000`; do not read it as a health check.
+20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38), the third across the
+nightly off-window before the boot of 2026-10-19 (8784 the evening before, 8880 at 08:53).
+`Reported_Uncorrect` has not moved since July, so no read by a consumer has failed; the new sectors
+point at the drive's own offline scan. `smartctl -H` reports `PASSED`, because
+`Current_Pending_Sector` normalises to `054` against threshold `000`; do not read it as a health
+check.
 
 **Fix.** Mitigations in place:
 
@@ -998,7 +1000,7 @@ so output reaches the journal instead of cron's local mailer.
 
 ## KE-27: A container whose start fails at boot stays down until someone starts it
 
-- **Status:** Mitigated 2026-10-03 - retry not yet exercised by a real failure
+- **Status:** Mitigated 2026-10-03 - first real retry 2026-10-22
 - **Affects:** vm100 containers that bind a CIFS automount or need the NVIDIA prestart hook
   (Jellyfin, Audiobookshelf, `llama-server`)
 
@@ -1018,6 +1020,7 @@ instances (`journalctl -u docker.service | grep "failed to start container"`):
 2026-08-24 22:55  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
 2026-09-29 10:19  error mounting "/srv/media/filme" ...      (and "/srv/media/audiobooks")
 2026-10-03 09:02  error mounting "/srv/media/filme" ...
+2026-10-22 09:00  error mounting "/srv/media/filme" ...
 ```
 
 2026-09-29: vm102 unreachable (`cifs_mount failed w/return code = -113`). 2026-10-03: vm102 up;
@@ -1033,12 +1036,15 @@ mount succeeding. Ordering Docker after the mounts themselves would tie it to vm
 `docker.service` runs once per boot and starts every exited container with policy `always` or
 `unless-stopped` and a non-empty `State.Error`; six passes, 30 s apart. If something is still down,
 the unit fails and `SystemdUnitFailed` reports it. `docker stop` leaves `State.Error` empty, so
-deliberately stopped containers are not touched.
+a container stopped by hand is not touched.
 
 **Verification.** Applied 2026-10-03, re-check `changed=0`; selection tested against the live node
-(nothing to start) and four synthetic rows. Proof of a real retry: a
-`started <name> (attempt n/6)` line in `journalctl -b -t docker-boot-retry`. Related:
-[KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md).
+(nothing to start) and four synthetic rows.
+
+Verified 2026-10-22: Jellyfin failed on the `/srv/media/filme` mount at 09:00 and was
+`started jellyfin (attempt 1/6)` at 09:02, by `journalctl -t docker-boot-retry` on vm100.
+
+Related: [KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md).
 
 ---
 
