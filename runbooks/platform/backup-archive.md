@@ -7,7 +7,8 @@
 - **Risk:** low. The mirror only reads the short-term tier and writes into its own month directory.
   A share that is not mounted would send the copy to a local disk; the role and the script both
   refuse an unmounted target.
-- **Last exercised:** never
+- **Last exercised:** 2026-10-27, pass (both writers provisioned; first mirror on the host and on
+  vm100 verified with `sha256sum -c`)
 
 Backups run in two tiers ([backup flow](../../docs/architecture/backup-flow.md)). The daily tier
 sits on the aux-disk ([KE-13](../../docs/platform/known-errors.md#ke-13)): `guest_backup` on the
@@ -64,8 +65,9 @@ tier is this archive on the SnapRAID array.
    `docker-compose-update.yml` with `--check --diff` first, then without.
    Check: `docker inspect audiobookshelf` lists the `/backups` bind.
 
-5. Set Audiobookshelf's backup path and schedule (`PATCH /api/settings` or Settings ->
-   Backups): `backupPath` `/backups`, `backupSchedule` `0 12 * * *`, `backupsToKeep` 7.
+5. Set Audiobookshelf's backup path with `PATCH /api/backups/path` (`{"path": "/backups"}`); the
+   server settings endpoint ignores `backupPath`. Set `backupSchedule` `0 12 * * *` and
+   `backupsToKeep` 7 with `PATCH /api/settings`, or both under Settings -> Backups.
    Check: an API backup (`POST /api/backups`) returns `200` and a file appears under
    `/mnt/vm-data/backups/audiobookshelf`.
 
