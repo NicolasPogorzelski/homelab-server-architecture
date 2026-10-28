@@ -248,8 +248,8 @@ filesystem side in [storage-permissions.md](storage-permissions.md).
 
 ### Automated
 
-All scheduled jobs are systemd timers with `Persistent=true`; schedules are in each role's
-defaults ([ansible.md](ansible.md#conventions)).
+Scheduled jobs are systemd timers, calendar timers with `Persistent=true`; schedules are in
+each role's defaults, and the exceptions are listed in [ansible.md](ansible.md#conventions).
 
 - Hourly: Nextcloud rescan of the Paperless inbox on lxc210 (`paperless_inbox_scan`); output in
   the journal of its service.

@@ -87,10 +87,13 @@ A node presenting any other key is refused before it receives a task.
 
 ## Conventions
 
-- **Scheduling:** every scheduled job is a systemd timer with `Persistent=true`, because the host
-  powers down nightly and cron loses every slot it sleeps through; a failed run surfaces through
-  `SystemdUnitFailed`. The single exception is the shutdown itself (`homelab_schedule`, cron in
-  `/etc/cron.d`).
+- **Scheduling:** jobs are systemd timers, except the two cron jobs below, because the host powers
+  down nightly and cron loses every slot it sleeps through; a failed run surfaces through
+  `SystemdUnitFailed`. Calendar timers (`OnCalendar=`) carry `Persistent=true` and catch up a slot
+  missed overnight. The monotonic timers of `listener_metrics` and `jellyfin_watchdog`
+  (`OnBootSec=`, `OnUnitActiveSec=`) restart their interval at every boot and need no catch-up.
+  Two jobs run from cron: the shutdown itself (`homelab_schedule`, `/etc/cron.d`) and Nextcloud's
+  upstream-owned `cron.php` on lxc210 ([lxc210](../nodes/lxc210.md)).
 - **Dry run:** every playbook is run with `--check --diff` before it changes live state. Read-only
   probes carry `check_mode: false` so their registered values exist under `--check`; enabling a
   freshly templated unit carries `when: not ansible_check_mode`.

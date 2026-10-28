@@ -48,7 +48,7 @@ Two rules govern the table:
   that nobody counted on.
 - **The matrix applies per branch, never to the union.** MergerFS answers a stat from the first
   branch holding the path (`category.search=ff`), so `ls /mnt/mergerfs/...` shows one disk out of
-  six and hides any disagreement between them. Every check and every repair iterates branches
+  seven and hides any disagreement between them. Every check and every repair iterates branches
   directly.
 
 ### Why the owner is `storage` and not the service

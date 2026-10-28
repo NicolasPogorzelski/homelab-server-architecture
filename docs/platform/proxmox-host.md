@@ -47,8 +47,9 @@ See: [decision](../decisions/pveproxy-tailscale-boot-ordering.md),
 
 ## Disk Passthrough (vm102)
 
-All ten physical disks are attached to the host. vm102 receives eight by ID as virtio-SCSI
-devices (six data disks, the parity disk and aux-pool); the host keeps the boot SSD and aux-disk.
+All eleven physical disks are attached to the host. vm102 receives eight by ID as virtio-SCSI
+devices (six data disks, the parity disk and aux-pool); the host keeps the boot NVMe, the former
+boot SSD (`scratch`) and aux-disk.
 Disk models and IDs are kept offline; the logical topology is in [vm102.md](../nodes/vm102.md).
 
 A guest sees virtio devices, so SMART is readable only on the host; the `smart_metrics` role
@@ -241,7 +242,7 @@ both ([platform restore](../../runbooks/platform/platform-restore.md)).
 
 The target `/mnt/vzdump` is bound to whichever disk currently holds the role, so a disk change is
 an fstab edit. The role refuses to deploy unless the path is a mountpoint whose backing device
-differs from root, because an unmounted target would fill the boot SSD with backups of the guests
+differs from root, because an unmounted target would fill the boot disk with backups of the guests
 living on it.
 
 ## Failure Impact
@@ -263,7 +264,8 @@ After a total loss of the machine:
 - **Survives:** everything on vm102's disks (passed through by ID, readable in another machine),
   including the database dumps; this repository, which reproduces every role-managed artefact.
 - **Survives only with aux-disk:** the guest archives and the host-config archive under
-  `/mnt/vzdump`; a second host-config copy sits on the boot SSD. No copy exists off site.
+  `/mnt/vzdump`; a second host-config copy sits on `pve-root`, on the boot NVMe. No copy exists off
+  site.
 
 Recovery is a fresh Proxmox install followed by
 [platform-restore.md](../../runbooks/platform/platform-restore.md): the host configuration first,
