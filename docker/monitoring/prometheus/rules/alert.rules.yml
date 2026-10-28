@@ -813,3 +813,35 @@ groups:
         annotations:
           summary: "Paperless ingest metrics are not being reported"
           description: "paperless_inbox_scan_last_run_timestamp_seconds is absent on node-lxc210-nextcloud. Either the textfile collector is not read or paperless-inbox-scan.service has never completed since the script gained its mount check."
+
+  # Upstream fixes the platform waits for (upstream_watch on lxc250). A mitigation that
+  # waits for a fix names it in known-errors.md; this group says when to revert it.
+  - name: upstream
+    rules:
+      - alert: UpstreamFixReleased
+        expr: upstream_watch_fix_released == 1
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "Upstream fix for {{ $labels.item }} is released in {{ $labels.release }}"
+          description: "Pull request {{ $labels.repo }}#{{ $labels.pr }} is part of release {{ $labels.release }}. Follow {{ $labels.known_error }} in known-errors.md: update the image, revert the mitigation, then remove the item from upstream_watch_items."
+
+      # Weekly job; fourteen days is one missed Saturday plus margin, as for FleetDriftStale.
+      - alert: UpstreamWatchStale
+        expr: (time() - upstream_watch_last_run_timestamp_seconds) > 1209600 or absent(upstream_watch_last_run_timestamp_seconds)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Upstream fix check is stale or missing"
+          description: "No upstream-watch run in 14 days, or no metric at all. A released fix would go unnoticed and its mitigation would stay in place."
+
+      - alert: UpstreamWatchFailed
+        expr: upstream_watch_last_run_success == 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Upstream fix check could not query GitHub"
+          description: "The last upstream-watch run failed for at least one item. Check `journalctl -u upstream-watch.service` on lxc250."

@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Weekly upstream fix check
+
+[Timer]
+OnCalendar={{ upstream_watch_on_calendar }}
+# The host may be off on a Saturday; the overdue check runs at the next boot.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

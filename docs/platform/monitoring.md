@@ -62,6 +62,7 @@ See: [Runbook index](../../runbooks/README.md)
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
 | `heartbeat` | `Watchdog` |
 | `blackbox` | `ServiceDown` |
+| `upstream` | `UpstreamFixReleased`, `UpstreamWatchStale`, `UpstreamWatchFailed` |
 | `smart` | `SmartAttributeDegrading`, `SmartUdmaCrcErrorsGrowing`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
 | `apt` | `AptSecurityUpdatesPending`, `AptMetricsStale` |
 | `listeners` | `ListenerOutsideBindingRule`, `ListenerMetricsStale`, `ListenerMetricsMissing` |

@@ -46,5 +46,7 @@ Rules: [tailscale-acl.md](../platform/tailscale-acl.md).
 
 ## Related Documents
 
+- [KE-30](../platform/known-errors.md#ke-30): collections view and the upstream fix it waits for
+
 - [vm100](../nodes/vm100.md)
 - [Storage design](../platform/storage-design.md)

@@ -41,6 +41,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - retry not yet exercised by a real failure |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
+| [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
 
 ---
 
@@ -1110,3 +1111,36 @@ storage.<tailnet-id>.ts.net` for mounts 4 and 5.
 the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. Not yet measured: a document uploaded through Nextcloud
 arriving in Paperless. `PaperlessIngestStorageDown` reads the hourly `files_external:verify` result
 of each mount.
+
+---
+
+<a id="ke-30"></a>
+
+## KE-30: The Audiobookshelf collections page stays empty
+
+- **Status:** Mitigated 2026-10-27 - large groupings moved to tags and filters; waiting for the
+  upstream fix, watched by `upstream_watch`
+- **Affects:** Audiobookshelf on vm100, the Collections view of the web interface
+
+**Symptom.** The Collections view shows nothing for a long time, then empty cards. The
+collections themselves are intact: `GET /api/collections/<id>` returns every book.
+
+**Cause.** The view requests `GET /api/libraries/<id>/collections?minified=1`, but the server
+serializes each book inside a collection in full, with its file and track lists, and builds every
+collection before it pages (`getOldCollectionsJsonExpanded` in `server/models/Collection.js`,
+v2.37.1). The response grows with the number of files per book, so collections of episodic
+audio dramas outgrow what the browser renders. Upstream issue
+[#5170](https://github.com/advplyr/audiobookshelf/issues/5170); the fix is
+[#5358](https://github.com/advplyr/audiobookshelf/pull/5358); no release up to v2.37.2 contains it.
+
+**Fix.** Mitigation until a release contains #5358: groupings that span a large part of the library
+are tags or the built-in genre filter instead of collections (audio dramas carry a tag); collections stay
+for cross-series universes. A locally patched image was not built: it would add an image build and
+a release lag to the supply chain for one view. `upstream_watch` on lxc250 checks weekly whether a
+release contains #5358, and `UpstreamFixReleased` fires when it does.
+
+**Verification.** Verified 2026-10-27: the Collections view renders after the large collections were
+removed. When `UpstreamFixReleased` fires: raise the image in
+`docker/audiobookshelf/docker-compose.yml`, confirm the view loads with a large test collection,
+recreate the removed groupings as collections if wanted, and remove the item from
+`upstream_watch_items`. Related: [Audiobookshelf](../services/audiobookshelf.md).

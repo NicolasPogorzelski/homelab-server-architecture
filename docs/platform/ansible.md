@@ -161,6 +161,7 @@ A node presenting any other key is refused before it receives a task.
 | `tailscale-cert.yml` | `tailscale_cert_ondisk` | Applies `tailscale_cert`. |
 | `timezone.yml` | `all` | Applies `timezone`. |
 | `unattended-upgrades.yml` | `guests` | Applies `unattended_upgrades`. |
+| `upstream-watch.yml` | `lxc250` | Applies `upstream_watch`. |
 
 ## Roles
 
@@ -215,6 +216,7 @@ A node presenting any other key is refused before it receives a task.
 | `tailscale_cert` | `tailscale_cert_ondisk` | Renews the on-disk Tailscale certificate on a timer and reloads the consumer only when it changed ([KE-16](known-errors.md#ke-16)). |
 | `timezone` | all nodes | Sets `Europe/Berlin` and reads it back; on lxc210 also pins MariaDB's `default_time_zone`. |
 | `unattended_upgrades` | all guests | Installs `unattended-upgrades`, turns the daily run on and allows the security archive alone, per distribution from `vars/` (`Allowed-Origins` on Ubuntu, `Origins-Pattern` on Debian); kernels are held back, the NVIDIA stack on vm100 too. Reads the merged config back with `apt-config` and asserts it. |
+| `upstream_watch` | lxc250 | Weekly check whether a release contains an upstream fix a known-error mitigation waits for; exports `upstream_watch_fix_released` for `UpstreamFixReleased`. |
 
 ## SSH Hardening
 

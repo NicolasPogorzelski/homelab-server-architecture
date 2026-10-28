@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# name|owner/repo|pull request|known-errors.md entry
+{% for item in upstream_watch_items %}
+{{ item }}
+{% endfor %}
