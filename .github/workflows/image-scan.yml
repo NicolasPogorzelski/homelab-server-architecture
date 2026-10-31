@@ -64,8 +64,12 @@ jobs:
         # line, so metacharacters in the value would be executed rather than quoted.
         env:
           IMAGE: ${{ matrix.image }}
+        # Tag and digest are cut off: a category that changes with every update leaves the
+        # alerts of the old version open for good, since nothing uploads to it again.
         run: |
-          slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
+          name="${IMAGE%%@*}"
+          case "${name##*/}" in *:*) name="${name%:*}" ;; esac
+          slug="$(printf '%s' "${name}" | tr '/:' '__' | tr -cd 'A-Za-z0-9._-')"
           echo "value=${slug}" >> "$GITHUB_OUTPUT"
 
       - name: Trivy scan - counts for the trend metric
