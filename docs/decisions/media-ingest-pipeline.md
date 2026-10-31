@@ -71,24 +71,50 @@ Two run modes:
 
 | Adapter | Apply | Made visible by |
 |---|---|---|
-| E-Books -> Calibre | `calibre-debug` against a local copy of `metadata.db` in staging, holding `/run/calibre-import.lock`; the database is swapped only if the live hash is unchanged | calibre-web restart |
-| Audiobooks -> Audiobookshelf | stream to `.ingest/<run>/` in the library root on vm102, verify, fix permissions, rename into place | library scan through the API |
-| Filme, Serien -> Jellyfin | same as Audiobookshelf | library scan through the API |
+| E-Books -> Calibre | `calibre-debug` against a local copy of `metadata.db` in staging, holding `/run/calibre-import.lock`; the database is swapped only if the live hash is unchanged, and the replaced one is kept with a timestamp | calibre-web restart |
+| Audiobooks -> Audiobookshelf | stream to `.ingest/<run>/` in the library root on vm102, verify, then `ingest-finalize` | library scan through the API, as a user without the delete permission |
+| Filme, Serien -> Jellyfin | same as Audiobookshelf | manual library scan; lxc221 holds no Jellyfin key, since its API keys carry admin rights |
 | Music -> Navidrome (planned) | staging, because tagging rewrites the files | scan through the API |
 
 The root filesystem is on `local-lvm`. A 20 GiB thin volume on `scratch` with `discard=on` and
 `fstrim.timer` holds staging for Calibre and music; audiobooks, films and series stream from the
 desktop through lxc221 to vm102 without staging.
 
-Each step gets the least access it needs: read-only SSH to the desktop's `Ingest/`, a
-forced-command key on lxc220 that runs the Calibre apply script only, write access to the library
-roots on vm102, and API keys for the scans and for both inference instances on port 8080. Grants
-live in [tailscale-acl.md](../platform/tailscale-acl.md).
+Access per step: read-only SSH to the desktop's `Ingest/`; a forced-command key on lxc220 that
+runs only the Calibre apply script; the `ingest` account on vm102 described below; API keys for
+the Audiobookshelf scan and for both inference instances on port 8080. Grants:
+[tailscale-acl.md](../platform/tailscale-acl.md).
+
+### No deletion through the pipeline
+
+An error in the LLM or the code must not be able to delete or overwrite library content. File
+permissions bound the `ingest` account; the one root step is bounded by its code:
+
+- An account `ingest` on vm102: no password, no `sudo` group, no media group. Its one key carries
+  `restrict`, a forced command `ingest-receive` and a `from=` limit to lxc221. The `storage` login
+  stays the break-glass account, whose keys and sudo rules `breakglass` enforces.
+- `ingest` owns `<library>/.ingest/` (mode 0700) and holds only search permission on the library
+  root, by ACL. It can neither read, change nor delete anything outside its landing folders.
+  `storage-permissions.sh` skips `.ingest/`.
+- Two commands pass `ingest-receive`: `rsync --server` into `.ingest/<run>/`, and
+  `finalize <library> <run>`.
+- `ingest-finalize` runs as root through one sudo rule. It checks library and run against a fixed
+  list, refuses `..` and symlinks, sets owner and mode from the permission matrix, and moves with
+  `RENAME_NOREPLACE`. It never deletes and never replaces; a name conflict leaves the item in
+  `.ingest/` for review.
+- Every move is logged as source and target, so an undo script can return a whole run to
+  `.ingest/`.
+
+A misread field can still place an item under the wrong name. Items waiting for approval are
+checked in the review file; for items the timer run applies, the move log lets an undo return the
+run to `.ingest/`.
 
 ## Consequences
 - A new node with its own document, tag, grants and secrets.
-- Writes to vm102 need an identity that is still to be designed: files must land as
-  `storage:<media group>`, and the `storage` login holds sudo, so its key is too broad for this job.
+- vm102 gains an account, a sudo rule that runs one root program (`ingest-finalize`) and an
+  exception in the permission matrix.
+- Audiobookshelf needs a dedicated user without the delete permission. New films and series appear
+  in Jellyfin only after a manual scan.
 - `rename` from `.ingest/` into place does not return `EXDEV` on this pool. Verified 2026-10-31
   on mergerfs 2.33.5 (`func.rename=epall`, `category.create=mfs`) as `storage`: a file and a
   directory staged on disk06 were renamed into an author directory that existed only on disk03;
