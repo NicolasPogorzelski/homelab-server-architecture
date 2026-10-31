@@ -89,8 +89,12 @@ live in [tailscale-acl.md](../platform/tailscale-acl.md).
 - A new node with its own document, tag, grants and secrets.
 - Writes to vm102 need an identity that is still to be designed: files must land as
   `storage:<media group>`, and the `storage` login holds sudo, so its key is too broad for this job.
-- `rename` from `.ingest/` into place is unverified on mergerfs across branches; it can return
-  `EXDEV`. Measured before the Audiobookshelf adapter is built.
+- `rename` from `.ingest/` into place does not return `EXDEV` on this pool. Verified 2026-10-31
+  on mergerfs 2.33.5 (`func.rename=epall`, `category.create=mfs`) as `storage`: a file and a
+  directory staged on disk06 were renamed into an author directory that existed only on disk03;
+  mergerfs cloned the author path onto disk06 and renamed there. A book stays on the disk `mfs`
+  chose for its staging folder, its author directory spreads over two disks, and the clone stays
+  behind empty if the book is removed again.
 - The smaller model of the timer run sends more items to review; only items whose every field is
   quoted are applied.
 - Library content appears in the review file, which stays on the desktop and never enters the
