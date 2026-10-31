@@ -420,16 +420,17 @@ was found on 2026-07-09: the same partition was mounted on the host and passed t
 
 SMART, identified by serial (`by-id`), never by kernel letter ([KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 | 2026-10-27 |
-|---|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 | 8880 |
-| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 | 8880 |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | 21 | 21 | 21 | 21 |
+| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 | 2026-10-27 | 2026-10-31 |
+|---|---|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 | 8880 | 9200 |
+| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 | 8880 | 9200 |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | 21 | 21 | 21 | 21 | 21 |
 
 The first step happened at the boot of 2026-09-20 (Prometheus history: 7848 at 20:17, 8168 at
 20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38), the third across the
-nightly off-window before the boot of 2026-10-19 (8784 the evening before, 8880 at 08:53).
+nightly off-window before the boot of 2026-10-19 (8784 the evening before, 8880 at 08:53), the
+fourth at the boot of 2026-10-29 (8880 the evening before, 9016 at 11:47, 9200 at 11:57).
 `Reported_Uncorrect` has not moved since July, so no read by a consumer has failed; the new sectors
 point at the drive's own offline scan. `smartctl -H` reports `PASSED`:
 `Current_Pending_Sector` normalises to `054` against threshold `000`, and the flag ignores the raw
@@ -522,6 +523,9 @@ NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evi
 drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
 count, and six data disks. If faults continue there, run the
 [power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
+
+Verified 2026-10-31: 0 transport messages in each of the five boots since the move, by the same
+command per boot; the CRC count at `9:0:2:0` unchanged at 393 over 14 days in Prometheus.
 
 ---
 
@@ -1116,8 +1120,9 @@ storage.<tailnet-id>.ts.net` for mounts 4 and 5.
 
 **Verification.** 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
 `occ files_external:verify 4` and `5` return `status: ok`; the last `not available` line is from
-the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. Not yet measured: a document uploaded through Nextcloud
-arriving in Paperless. `PaperlessIngestStorageDown` reads the hourly `files_external:verify` result
+the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. 2026-10-31: a test PDF written through mount 4 with
+`occ files:put` left the share after 50 s, and Paperless logged `consumption finished` 44 s after
+the upload; the test document was then deleted. `PaperlessIngestStorageDown` reads the hourly `files_external:verify` result
 of each mount.
 
 ---
