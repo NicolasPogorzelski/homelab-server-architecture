@@ -42,7 +42,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
-| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Open - fix in review, applied after merge |
+| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
 
 ---
 
@@ -1165,7 +1165,7 @@ recreate the removed groupings as collections if wanted, and remove the item fro
 
 ## KE-31: An alert with a `for:` of two weeks stays pending forever
 
-- **Status:** Open - fix in review, applied after merge
+- **Status:** Resolved 2026-10-31; restore across a boot not yet observed
 - **Affects:** Prometheus on lxc200; `AptSecurityUpdatesPending` (`for: 14d`), and any later rule
   whose `for:` exceeds one day of uptime
 
@@ -1186,5 +1186,6 @@ runs without pause.
 above the longest off-window of about 35 hours from Thursday night to the Saturday wake. Rolled out with
 `docker-compose-update.yml --limit lxc200` after the merge.
 
-**Verification.** Pending: after the rollout, `/api/v1/status/flags` returns `48h`, and an alert
-pending before a shutdown keeps its `activeAt` across the next boot.
+**Verification.** 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
+Prometheus's spelling of 48 h. Not yet observed: an alert pending before a shutdown keeping its
+`activeAt` across the next boot.
