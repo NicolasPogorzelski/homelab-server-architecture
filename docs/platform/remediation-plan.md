@@ -2,7 +2,7 @@
 
 The register of open platform work, ranked by loss risk and dependency. Each row names the risk of
 leaving the item and the next step. Items whose next step needs more than one sentence have a short
-section below the table. Closed items are removed; the pull request that closed them is the record.
+section below the table. Closed items are removed from the table.
 The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](security-controls.md).
 
 ## Open items
@@ -12,7 +12,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 1 | [Off-site backup](#off-site-backup) | Every copy of the C1 data is on one site; fire, theft or ransomware reaching the SMB mounts destroys originals and backups together | Provision the VPS with [`offsite-vps-provision.md`](../../runbooks/platform/offsite-vps-provision.md), then deploy the `offsite_backup` role |
 | 2 | [Escrow restore drill](#escrow-restore-drill) | The escrow of the vault password, the real inventory and the Ansible SSH key has never been restored from; a gap would be found on the day lxc250 is lost | Run [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) once and record the result |
 | 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
-| 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 produces silence, not an alert | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
+| 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
 | 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Record the UPS and measure its runtime; run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if transport faults continue on the HBA ports |
 | 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
 | 7 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
@@ -51,7 +51,7 @@ Residual risk, accepted in the decision: root on the VPS can still delete the re
 
 The escrow is a password manager operated by a third party, plus a paper copy
 off site. Two of the three artefacts are files (`hosts.yml` and the Ansible SSH key), so the drill
-confirms that the escrow holds them, not only the vault password. After the first run, repeat it
+confirms that the escrow holds both files as well as the vault password. After the first run, repeat it
 yearly and record each run in the runbook's execution log.
 
 ### aux-disk replacement and disposal
@@ -74,8 +74,8 @@ live file on lxc200 still has the single Discord route (measured 2026-09-24).
 
 1. Sign up for a heartbeat service operated by a third party; a self-hosted receiver would need a
    watcher of its own.
-2. Set its grace period above the nightly off-window (`homelab_schedule` defaults), or every
-   morning opens with an alarm.
+2. Set its grace period above the longest off-window (`homelab_schedule` defaults), so that a
+   planned shutdown raises no alarm.
 3. Deploy the route and the receiver URL in the live `alertmanager.yml` together.
 
 ### Power path and UPS
@@ -150,9 +150,8 @@ on lxc250. Every third-party list except the PPA names its key with `signed-by`.
    identical system, transferring them with checksums and importing them into a local repository
    ([aptly overview](https://www.aptly.info/doc/overview/)). One disposable container without a
    route out receives a package that is not cached, and the steps become a runbook.
-4. **Staged rollout from snapshots (exercise).** Fleets freeze a package set, test it on one node
-   and promote it after. Here an `aptly` snapshot is published through the cache, tried on one
-   guest, then the fleet.
+4. **Staged rollout from snapshots (exercise).** An `aptly` snapshot freezes a package set; it is
+   published through the cache, tried on one guest, then promoted to the fleet.
 5. **Egress filter.** Default-deny outbound with an allowlist per role, read in the
    [Proxmox VE firewall](https://pve.proxmox.com/wiki/Firewall) documentation,
    [Tailscale firewall ports](https://tailscale.com/kb/1082/firewall-ports) and the
@@ -162,7 +161,8 @@ on lxc250. Every third-party list except the PPA names its key with `signed-by`.
    guest at a time; it must not flush Tailscale's chains
    ([`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)), and LAN SSH to the
    hypervisor stays the recovery path.
-6. **Container images (exercise).** A tag can move, a digest cannot; `registry-mirrors` in the
+6. **Container images (exercise).** Compose images are pinned by tag, which a registry can repoint
+   to another image; `registry-mirrors` in the
    Docker daemon covers Docker Hub only
    ([pull-through cache](https://distribution.github.io/distribution/recipes/mirror/)); provenance
    is the subject of [Sigstore cosign](https://docs.sigstore.dev/) and [SLSA](https://slsa.dev/).

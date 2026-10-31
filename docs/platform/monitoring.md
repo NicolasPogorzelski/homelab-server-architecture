@@ -44,8 +44,8 @@ See: [Runbook index](../../runbooks/README.md)
 
 - Alertmanager on lxc200, exposed with `tailscale serve --https=9093`; receiver: a Discord webhook.
 - Rules: `docker/monitoring/prometheus/rules/alert.rules.yml` (owner of every threshold). The
-  table below lists every group and alert name; the repository validator holds it against the
-  rules file, and `FleetRulesMismatch` holds the rules file against what Prometheus has loaded.
+  validator holds the table below against the rules file, and `FleetRulesMismatch` holds the
+  rules file against what Prometheus has loaded.
 
 | Group | Rules |
 |---|---|

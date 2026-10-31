@@ -39,7 +39,7 @@ away goes there: vm100's `scsi2` (32 GiB, `backup=0`), mounted at `/mnt/scratch`
 - `docker.service` on vm100 requires `/mnt/scratch` (`docker_mount_ordering`), so Jellyfin never
   writes its cache into the root disk. The price: a dead SSD keeps all of vm100's containers down
   until the mount line is removed and `JF_CACHE` points back to `/mnt/vm-data`.
-- The SSD stays on the HBA port of KE-14; faults there now hit a disk whose content is losable,
+- The SSD stays on the HBA port of KE-14; faults there hit a disk whose content is losable,
   and its `9:0:0:0` count keeps the transport evidence.
 - A package cache for the [package supply track](../platform/remediation-plan.md#package-supply-track)
   can use the same pool.

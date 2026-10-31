@@ -332,7 +332,9 @@ holds while only direct streams play, since a restart ends every running stream.
 ([jellyfin.md](../services/jellyfin.md)).
 
 **Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, one
-every four to five days, the latest 2026-10-08 11:29. Verified 2026-10-27: none since, nineteen
+every four to five days, the latest 2026-10-08 11:29.
+
+Verified 2026-10-27: none since, nineteen
 days in which the earlier rate predicts about four, by the command below. The Jellyfin 12
 upgrade (2026-10-13) and the host's 7.0 kernel (2026-10-12) fall into the quiet period; neither is shown
 to be the cause, so the watchdog stays:
@@ -429,9 +431,9 @@ The first step happened at the boot of 2026-09-20 (Prometheus history: 7848 at 2
 20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38), the third across the
 nightly off-window before the boot of 2026-10-19 (8784 the evening before, 8880 at 08:53).
 `Reported_Uncorrect` has not moved since July, so no read by a consumer has failed; the new sectors
-point at the drive's own offline scan. `smartctl -H` reports `PASSED`, because
-`Current_Pending_Sector` normalises to `054` against threshold `000`; do not read it as a health
-check.
+point at the drive's own offline scan. `smartctl -H` reports `PASSED`:
+`Current_Pending_Sector` normalises to `054` against threshold `000`, and the flag ignores the raw
+count.
 
 **Fix.** Mitigations in place:
 
@@ -511,9 +513,9 @@ A second port shows transport faults. On 2026-10-15 at boot, one `DID_SOFT_ERROR
 and at 393 on 2026-10-17. Faults on two ports fit the HBA, its cabling or its power better than the
 SSD alone.
 
-**Fix.** 2026-10-27: the volume group moved by `pvmove` to an NVMe disk in the M.2 slot, on PCIe
-and not on the HBA ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)).
-Drive and transport changed together, so the swap does not separate them; the cause stays open.
+**Fix.** 2026-10-27: the volume group moved by `pvmove` to an NVMe disk in the M.2 slot, attached over
+PCIe ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)).
+Drive and transport changed together, so the swap cannot tell which of them caused the faults.
 
 **Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
 NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the old
@@ -1104,9 +1106,9 @@ day, and `occ files_external:verify 4` returns `status: error`. No alert covers 
 where `smb_guard` refuses lxc210. The tailnet route needs [Rule 15](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares),
 which existed in the repository only: lxc210 and vm102 do not list each other as peers in
 `tailscale status --json`, while every other host-alias grant shows its peer. The 2026-10-10 fix
-wrote the rule and named the console change and the mount change as the next steps; the
-2026-10-14 rewrite of the remediation plan dropped the open item before either was applied. Same
-class as the inference rollout, whose 2026-09-29 policy change had reached the documents only.
+wrote the rule; the remediation plan of 2026-10-14 dropped the item to apply it before the
+console and mount changes were made. Same class as the inference rollout of 2026-09-29, whose
+policy change reached only the documents.
 
 **Fix.** 2026-10-27: Rule 15 in the admin console, with the `nextcloud` test moving
 `tag:storage:445` from deny to accept; then `occ files_external:config <id> host
