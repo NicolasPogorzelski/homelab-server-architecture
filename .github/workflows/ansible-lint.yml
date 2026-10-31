@@ -18,7 +18,9 @@ jobs:
       - name: Install ansible-lint and collections
         run: |
           pip install 'ansible-lint==26.6.0'
-          ansible-galaxy collection install -r ansible/requirements.yml
+          # --no-cache: the response cache starts empty on every runner, and a
+          # truncated Galaxy reply in it failed run 40720138964.
+          ansible-galaxy collection install --no-cache -r ansible/requirements.yml
       - name: Provide a vault password file for syntax-check
         # ansible.cfg points vault_password_file at ~/.vault_pass, and syntax-check
         # aborts if the file is missing. It parses but never decrypts the vault vars,
