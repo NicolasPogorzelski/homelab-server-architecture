@@ -183,7 +183,8 @@ upgrade touches the kernel and the guest stack and belongs in a watched window. 
 transient unit so an SSH session dropped by a `tailscaled` restart cannot kill `dpkg` halfway:
 
 ```bash
-systemd-run --unit=host-upgrade-<date> /root/host-upgrade.sh   # apt-get dist-upgrade with --force-confold
+systemd-run --unit=host-upgrade-<date> --setenv=DEBIAN_FRONTEND=noninteractive \
+  /bin/bash -c 'apt-get update && apt-get -y -o Dpkg::Options::=--force-confold dist-upgrade && apt-get clean'
 journalctl -u host-upgrade-<date>
 ```
 
