@@ -9,6 +9,10 @@ services:
       - --storage.tsdb.retention.time=${PROM_RETENTION}
       - --web.enable-lifecycle
       - --web.listen-address=${PROM_BIND_ADDRESS}:${PROM_PORT}
+      # Longer than the longest off-window, about 35 h from Thursday night to the
+      # Saturday wake. At the default of 1h every pending alert restarts its `for:`
+      # at each boot (KE-31).
+      - --rules.alert.for-outage-tolerance=48h
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro

@@ -679,7 +679,8 @@ groups:
   # Patch level from Debian's apt.sh collector, by repository origin: the security
   # pockets are the only ones labelled `-Security`/`-security` on Debian and Ubuntu.
   # The threshold is a duration, not a count: for: 14d is longer than the window in
-  # which updates are applied by hand, so the rule fires at a backlog.
+  # which updates are applied by hand, so the rule fires at a backlog. It survives the
+  # nightly power-down only through --rules.alert.for-outage-tolerance (KE-31).
   - name: apt
     rules:
       - alert: AptSecurityUpdatesPending

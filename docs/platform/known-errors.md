@@ -42,6 +42,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
+| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Open - fix in review, applied after merge |
 
 ---
 
@@ -1150,3 +1151,33 @@ removed. When `UpstreamFixReleased` fires: raise the image in
 `docker/audiobookshelf/docker-compose.yml`, confirm the view loads with a large test collection,
 recreate the removed groupings as collections if wanted, and remove the item from
 `upstream_watch_items`. Related: [Audiobookshelf](../services/audiobookshelf.md).
+
+---
+
+<a id="ke-31"></a>
+
+## KE-31: An alert with a `for:` of two weeks stays pending forever
+
+- **Status:** Open - fix in review, applied after merge
+- **Affects:** Prometheus on lxc200; `AptSecurityUpdatesPending` (`for: 14d`), and any later rule
+  whose `for:` exceeds one day of uptime
+
+**Symptom.** Twelve security updates were pending on the hypervisor from 2026-10-17 onward, yet
+on 2026-10-31 `AptSecurityUpdatesPending` was `pending` with `activeAt` at 09:29 that morning,
+minutes after the boot. It had never fired.
+
+**Cause.** Prometheus writes a pending alert's start into `ALERTS_FOR_STATE` and reads it back
+after a restart only when the outage was shorter than `--rules.alert.for-outage-tolerance`
+([Prometheus flags](https://prometheus.io/docs/prometheus/latest/command-line/prometheus/)).
+`/api/v1/status/flags` on lxc200 returned the default `1h`. The host is off from 23:30 until the
+next wake (`homelab_schedule` defaults), at least nine hours, so every boot started the
+fourteen days again. Same class as [KE-26](#ke-26) and the backup staleness notes in
+[monitoring.md](monitoring.md#notes-on-specific-rules): time logic written for a machine that
+runs without pause.
+
+**Fix.** `--rules.alert.for-outage-tolerance=48h` in `docker/monitoring/docker-compose.yml`,
+above the longest off-window of about 35 hours from Thursday night to the Saturday wake. Rolled out with
+`docker-compose-update.yml --limit lxc200` after the merge.
+
+**Verification.** Pending: after the rollout, `/api/v1/status/flags` returns `48h`, and an alert
+pending before a shutdown keeps its `activeAt` across the next boot.
