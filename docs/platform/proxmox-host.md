@@ -226,8 +226,8 @@ it; one would have to write through the symlink and keep the host's own key.
 
 - `appdata_aux-disk` carries `is_mountpoint 1`, so Proxmox treats the storage as inactive unless a
   filesystem is mounted at the path and cannot write into the empty directory on `pve-root`
-  ([KE-7](known-errors.md#ke-7) class). `mkdir 0` on it is deprecated in PVE 9; the replacement is
-  `create-base-path 0`.
+  ([KE-7](known-errors.md#ke-7) class). It carries `create-base-path 0` and `create-subdirs 0`, the
+  PVE 9 replacements for the deprecated `mkdir 0`.
 - No `dir` storage points at an unmounted path on `pve-root`.
 - `scratch` is an `lvmthin` storage on the former boot SSD (VG `scratch`, thin pool of 104 GiB)
   for data whose loss costs nothing; its volumes are not overcommitted
