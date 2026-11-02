@@ -8,12 +8,11 @@
 snapraid_script_src: "{{ playbook_dir }}/../../snippets/storage/snapraid-maintenance.sh"
 snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 
-# Nightly sync; weekly scrub of 12% of the array, a full verification pass about
-# every two months, well inside SnapRAIDScrubCoverageAging. 8% takes about 70
-# minutes, so a 12% run (about 105 minutes) ends before the 23:00 sync.
-# Lower the percentage, not the cadence, if the disk load proves too high.
+# Weekly scrub of 12% of the array, a full pass about every two months (inside SnapRAIDScrubCoverageAging).
+# Starts Sunday midnight: a 12% run takes about 105 minutes and stalled evening streams (KE-33).
+# homelab_schedule holds Sunday's shutdown until it ends; Persistent=true covers a Sunday the host was off.
 snapraid_sync_oncalendar: "*-*-* 23:00:00"
-snapraid_scrub_oncalendar: "Mon *-*-* 20:00:00"
+snapraid_scrub_oncalendar: "Mon *-*-* 00:00:00"
 snapraid_scrub_percent: 12
 
 # Coverage metrics, read from `snapraid status` and written to the textfile

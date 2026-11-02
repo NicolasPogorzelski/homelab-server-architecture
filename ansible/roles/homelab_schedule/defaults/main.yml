@@ -3,8 +3,17 @@ homelab_setwake_dest: /usr/local/sbin/homelab-setwake.sh
 homelab_shutdown_dest: /usr/local/sbin/homelab-shutdown.sh
 homelab_cron_file: /etc/cron.d/homelab-schedule
 
-# The host powers off every night at this time (HH:MM, local time).
+# The host powers off at this time (HH:MM, local time) on the cron weekdays listed
+# (0 and 7 = Sunday).
 homelab_schedule_shutdown_time: "23:30"
+homelab_schedule_shutdown_weekdays: "1-6"
+
+# Sunday night's shutdown runs after midnight, so the weekly SnapRAID scrub
+# (snapraid_maintenance) starts first and the guard below holds the host up until
+# it ends (KE-33). Weekday in cron numbering; empty disables the entry.
+homelab_schedule_late_shutdown:
+  weekday: 1
+  time: "00:05"
 
 # When the host starts by itself. Each plan applies from its date until the next
 # plan's date. Keys are ISO weekdays (1 = Monday, 7 = Sunday); a weekday without

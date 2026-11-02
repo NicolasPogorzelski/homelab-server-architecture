@@ -44,6 +44,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
 | [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
 | [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
+| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09 |
 
 ---
 
@@ -1219,3 +1220,40 @@ when `qm` is missing, so a broken guest check keeps the host up instead of letti
 
 **Verification.** Pending the rollout: `env -i PATH=/usr/bin:/bin` run of the script's guest
 check against vm102, and the next night's sync finishing before the host goes off.
+
+---
+
+<a id="ke-33"></a>
+## KE-33: 4K streams stall on Monday evenings while the weekly scrub reads the array
+
+- **Status:** Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09
+- **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
+  (`homelab_schedule`)
+
+**Symptom.** 2026-11-02 from 20:00: a 4K remux in direct play (about 64 Mbit/s) rebuffered every
+few minutes on the streaming box. The player's buffer fell from 5.9 s to 0.3 s before each stall.
+In the same seconds vm100 sent nothing to the client and read nothing from vm102 for one to three
+seconds (`/proc/net/dev` on `tailscale0` and `enp6s18`, sampled every second). Tailscale and the
+LAN showed no loss at those moments.
+
+**Cause.** `snapraid-scrub.timer` started `snapraid scrub -p 12` every Monday at 20:00, since
+8a512a9 (2026-09-12). It reads every data disk at 82-96 MB/s for about 105 minutes; one disk sat
+at 100 % utilisation (`/proc/diskstats`, 5 s window). Jellyfin's reads from the same disks over
+CIFS waited behind it. Stopping the scrub at 21:37 ended the stalls: from 21:38 the stream ran
+twelve minutes without a second of idle transfer, against up to 36 idle seconds per minute
+before. The member disks use the `none` I/O scheduler, so an idle I/O class or `IOWeight=` would
+not have lowered the scrub's priority.
+
+The same evening also had an unrelated fault at the client: a loose Ethernet plug on the
+streaming box dropped its link about 25 times and then held it at 100 Mbit/s.
+
+**Fix.** `snapraid_scrub_oncalendar` is `Mon *-*-* 00:00:00`. `homelab_schedule` powers the
+host off at 23:30 Monday to Saturday and at 00:05 on Monday for Sunday night, so the shutdown
+guard waits for the scrub (`homelab_schedule_guard_guest_units`). The template unit
+runs the script under `flock`, so a Sunday sync still running at midnight makes the scrub wait
+for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
+scrub after Monday's start.
+
+**Verification.** Pending 2026-11-09: `journalctl -t homelab-shutdown` on the host shows
+`waiting for vm102 snapraid-maintenance@scrub.service` after 00:05, and vm102's journal shows the
+scrub finishing before the host powers off.

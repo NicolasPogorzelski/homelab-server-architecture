@@ -1,4 +1,8 @@
 # {{ ansible_managed }}
 # systemd-cat sends the script's output to the journal instead of to cron's mailer.
 {% set hour, minute = homelab_schedule_shutdown_time.split(':') %}
-{{ minute | int }} {{ hour | int }} * * *  root  systemd-cat -t homelab-shutdown --stderr-priority=err {{ homelab_shutdown_dest }}
+{{ minute | int }} {{ hour | int }} * * {{ homelab_schedule_shutdown_weekdays }}  root  systemd-cat -t homelab-shutdown --stderr-priority=err {{ homelab_shutdown_dest }}
+{% if homelab_schedule_late_shutdown %}
+{% set late_hour, late_minute = homelab_schedule_late_shutdown.time.split(':') %}
+{{ late_minute | int }} {{ late_hour | int }} * * {{ homelab_schedule_late_shutdown.weekday }}  root  systemd-cat -t homelab-shutdown --stderr-priority=err {{ homelab_shutdown_dest }}
+{% endif %}
