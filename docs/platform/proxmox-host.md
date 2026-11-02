@@ -111,8 +111,9 @@ back, and exits 1 if no alarm is armed or the armed time is more than 60 s off
 Before powering off, the script waits while a guarded unit is active: `guest-backup.service` and
 `lxc-fstrim.service` on the host, and on vm102, asked through the QEMU guest agent, the SnapRAID
 sync and scrub and `storage-permissions.service`. If work is still running after 180 minutes, or
-the next start cannot be armed, it exits 1 and the host stays up, so no work is cut short and the host
-never goes off with no way back on.
+the next start cannot be armed, it exits 1 and the host stays up. The script sets its own `PATH`,
+because cron's lacks `/usr/sbin` and with it `qm`, and it exits 1 when `qm` is missing
+([KE-32](known-errors.md#ke-32)).
 
 Source: `ansible/roles/homelab_schedule/templates/`.
 

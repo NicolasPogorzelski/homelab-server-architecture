@@ -43,6 +43,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
 | [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
+| [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
 
 ---
 
@@ -1189,3 +1190,32 @@ above the longest off-window of about 35 hours from Thursday night to the Saturd
 **Verification.** 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
 Prometheus's spelling of 48 h. Not yet observed: an alert pending before a shutdown keeping its
 `activeAt` across the next boot.
+
+---
+
+<a id="ke-32"></a>
+
+## KE-32: The nightly shutdown cut off a running SnapRAID sync on vm102
+
+- **Status:** Open - fix in review, rollout before the next 23:30
+- **Affects:** the Proxmox host (`homelab_schedule`), vm102 (`snapraid_maintenance`)
+
+**Symptom.** On 2026-11-01 the host logged `shutting down` at 23:30:01 with no `waiting for` line
+before it. On vm102, `snapraid-maintenance@sync.service`, started at 23:00, ended at 23:32:31 with
+`Failed with result 'signal'` at 31 % of a sync that resized the parity. `SnapRAIDSyncStale`
+fired the next morning; the last good sync was 2026-10-31 23:04.
+
+**Cause.** `/etc/cron.d/homelab-schedule` sets no `PATH`, so cron starts the shutdown script with
+`/usr/bin:/bin`. `qm` lives in `/usr/sbin`. `env -i PATH=/usr/bin:/bin bash -c "qm status 102"`
+on the host returns `command not found`, rc 127. The script sends that error to `/dev/null`,
+`grep 'status: running'` finds nothing, and vm102 counts as stopped, so none of its guarded units
+is asked. The vm102 journal confirms it: no `guest-exec` call at 23:30. Every earlier sync ended
+before 23:30, so the guard had never been tested against a running guest unit. The host guards
+use `systemctl` from `/usr/bin` and were not affected.
+
+**Fix.** `homelab-shutdown.sh` exports a full `PATH` itself, whatever starts it, and exits 1
+when `qm` is missing, so a broken guest check keeps the host up instead of letting it go off
+(`homelab_schedule`, branch `fix/shutdown-guard-path`).
+
+**Verification.** Pending the rollout: `env -i PATH=/usr/bin:/bin` run of the script's guest
+check against vm102, and the next night's sync finishing before the host goes off.
