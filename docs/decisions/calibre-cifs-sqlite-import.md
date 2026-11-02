@@ -36,7 +36,7 @@ so the database cannot be relocated on its own. One node writes the library and 
   state from bulk data, but there is no block volume large enough for the books. Revisit when one
   exists.
 - **One owning service, others through its API.** Not applicable: one node already owns the
-  library; the problem is where the database lives, not how many consumers it has.
+  library, and the fault lies in the database's location on CIFS.
 - **Keep `metadata.db` on CIFS and never let SQLite open it there.** Chosen.
 
 ## Decision

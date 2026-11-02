@@ -1,6 +1,7 @@
 # Storage Design
 
-The storage layer is implemented as a dedicated VM to enforce separation of concerns between compute, storage and services.
+The storage layer is a dedicated VM, so a rebuild or migration of a compute or service guest does
+not touch the disks.
 
 ## Technologies
 
@@ -134,8 +135,8 @@ Operational note:
 
 Important:
 
-Data written after the last `snapraid sync` is not parity-protected.
-Operational discipline (regular sync + scrub) is required to maintain protection guarantees.
+Data written after the last `snapraid sync` has no parity until the next nightly sync; the weekly
+scrub finds silent corruption in what is already covered.
 
 ### MergerFS (Unified View)
 

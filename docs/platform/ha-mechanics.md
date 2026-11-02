@@ -55,7 +55,7 @@ active
 10
 ```
 
-A ten-second timer is running against this hypervisor right now, held open and
+A ten-second timer runs against this hypervisor, held open and
 fed by `watchdog-mux`. The kernel loads `softdog` at `nowayout=0`, so if that
 process dies its descriptor closes and the timer stops with it - the watchdog is
 lost, not the host. With `nowayout=1` the timer would keep running after
@@ -78,8 +78,7 @@ and started, and no resource exists to start the feeding chain below.
 ## The chain, if a resource did exist
 
 1. The LRM acquires its agent lock and takes responsibility for a guest.
-2. It registers with `watchdog-mux`, which now has a client whose health it
-   tracks.
+2. It registers with `watchdog-mux` as a client whose health it tracks.
 3. Every cycle, the LRM confirms it still holds the lock and is still quorate,
    and tells `watchdog-mux` so.
 4. `watchdog-mux` feeds `/dev/watchdog` on the strength of that confirmation.
@@ -101,8 +100,7 @@ into the same situation.
   on file as [KE-21](known-errors.md#ke-21) - stops the feeding, and the machine
   resets instead of running degraded.
 - **A reboot loop is reachable.** A fault that reproduces after boot cycles the
-  host indefinitely, and the exit is the power button, which is the outcome the
-  watchdog was supposed to prevent.
+  host indefinitely, and the only exit is the power button.
 - **The platform is documented as recovery-oriented and explicitly not highly
   available.** Turning on half a clustering feature to obtain a reboot timer
   contradicts that design.

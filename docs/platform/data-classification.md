@@ -9,11 +9,11 @@ the [off-site backup](remediation-plan.md#off-site-backup).
 | Level | Definition | Consequence of loss |
 |---|---|---|
 | **C1 - Critical** | Unrecoverable by any means, or contains personal data of identifiable people | Permanent; cannot be recreated by effort |
-| **C2 - Important** | Recreatable at a cost of days of work | Expensive and disruptive, not permanent |
+| **C2 - Important** | Recreatable at a cost of days of work | Restorable, at the cost of days of disruption |
 | **C3 - Replaceable** | Reacquirable, regenerable, or of historical interest only | Inconvenient |
 
-Disclosure and loss share one axis: with no external data sharing, the datasets that would hurt
-most if disclosed are the ones that would hurt most if lost.
+Disclosure and loss share one axis: with no external data sharing, the same datasets rank highest
+for both, Paperless and Nextcloud first.
 
 ## What this platform holds
 
@@ -54,19 +54,19 @@ night, and a job missed while it is off runs at the next boot.
 
 | Dataset | RPO today | RPO target | RTO target | Note |
 |---|---|---|---|---|
-| Vault password and automation credentials | Escrow; the content changes rarely | Effectively zero | Immediate | The objective is availability, not freshness; only the drill proves it |
+| Vault password and automation credentials | Escrow; the content changes rarely | Effectively zero | Immediate | The objective is availability; the escrow drill is its only test |
 | Paperless documents | No backup | 24 h | 24 h | Parity only, on site |
 | Nextcloud files | No backup | 24 h | 24 h | Parity only, on site |
 | Nextcloud MariaDB | 24 h of uptime | 24 h | 8 h | Must not exceed the files' RPO |
 | PostgreSQL cluster | 24 h of uptime | 24 h of uptime | 8 h | The staleness alert cannot see a period in which the host is off, because Prometheus runs on it |
 | Guest root disks | One week | One week | 24 h | Restore per [`guest-backup-restore.md`](../../runbooks/platform/guest-backup-restore.md) |
 | Platform configuration | Minutes | Keep | 1 h | Met by git |
-| Media library | Not applicable | - | Best effort | Reacquisition, not restoration |
+| Media library | Not applicable | - | Best effort | Reacquired from the original source; no backup |
 
 No platform-level RTO is stated. This is a single host without high availability; a hardware
 loss is bounded by procurement, with lead times measured in weeks. The per-dataset objectives
-assume working hardware. An outage of days in exchange for a simple, cheap platform is the
-accepted trade for a small, closed set of users.
+assume working hardware. An outage of days is accepted for a small, closed set of users in return
+for a simple, cheap platform.
 
 ## Data protection assessment
 
@@ -80,8 +80,7 @@ household activity". The platform sits close to two edges of that exemption:
   records one external user with access to Jellyfin, Audiobookshelf and Nextcloud through machine
   sharing. The assessment for those three services is due again and has not been redone
   ([remediation plan](remediation-plan.md)).
-- It never covers the security obligation in practice. The data belongs to identifiable people
-  who did not choose this platform's controls.
+- It never covers the security obligation: the data belongs to identifiable people.
 
 The C1 rows are therefore handled as though Article 32 applied, which their loss consequences
 demand independently.
