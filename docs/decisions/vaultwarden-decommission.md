@@ -23,8 +23,8 @@ Measured 2026-09-01, before deciding:
 | Consistent export | never existed |
 | Protection | SnapRAID parity only, side files excluded since [KE-19](../platform/known-errors.md#ke-19) |
 
-The service was unused, unpatched and unbacked. A credential store nobody logs into is a target
-nobody watches. ISO/IEC 27001 A.8.10 asks that information no longer required be deleted, A.5.9
+The service was unused, unpatched and unbacked: no login since February, so nobody would have
+noticed a compromise. ISO/IEC 27001 A.8.10 asks that information no longer required be deleted, A.5.9
 that the asset inventory be current.
 
 ## Options
@@ -40,8 +40,8 @@ Retiring the service and destroying its data are separate acts.
 
 - **Phase 1, 2026-09-01.** The whole guest stopped (not just the container), `onboot` cleared, a
   cold archive of the full file set taken while nothing wrote, and the inventory entry, scrape
-  target and HTTPS probe removed together, so `NodeDown` does not fire for a node that is off by
-  design.
+  target and HTTPS probe removed together, so `NodeDown` does not fire for a node that is off for
+  good.
 - **Phase 2, executed 2026-09-29 and 2026-10-10.** `pct destroy 240` on 2026-09-29. It left `240`
   in the guest backup list, so the weekly job failed on a missing CTID until `GuestBackupPartial`
   was read on 2026-10-07. On 2026-10-10 the rest went: the share data and the share, its Samba and
@@ -78,8 +78,7 @@ Recorded 2026-09-01:
 local copy `PRAGMA wal_checkpoint(TRUNCATE)` returned `(0, 0, 0)` and `integrity_check` returned
 `ok`: the log held no frames, the database file was complete. A checkpointed WAL is not truncated, so
 a stale log and a real backlog look the same from the filesystem. Both side files survived a graceful
-`pct shutdown`, which points to untidy closes by the nightly host power cycle - relevant for any
-future SQLite on CIFS.
+`pct shutdown`, which points to untidy closes by the nightly host power cycle.
 
 ## Related Documents
 - [Known Errors](../platform/known-errors.md)

@@ -736,7 +736,7 @@ exclude /Nextcloud/appdata_*/richdocuments/remoteData/
 exclude *.partial
 ```
 
-Exclude by what changes, not by suffix: `exclude *.log` also dropped static files from the
+Exclusions name the changing files by path: `exclude *.log` also dropped static files from the
 archive and was narrowed. SQLite side files are excluded because parity taken at a different moment
 than the main database is inconsistent. The disk and parity layout above the block stays
 hand-written, because it carries real device labels.
@@ -1179,8 +1179,8 @@ after a restart only when the outage was shorter than `--rules.alert.for-outage-
 `/api/v1/status/flags` on lxc200 returned the default `1h`. The host is off from 23:30 until the
 next wake (`homelab_schedule` defaults), at least nine hours, so every boot started the
 fourteen days again. Same class as [KE-26](#ke-26) and the backup staleness notes in
-[monitoring.md](monitoring.md#notes-on-specific-rules): time logic written for a machine that
-runs without pause.
+[monitoring.md](monitoring.md#notes-on-specific-rules): time logic that assumes continuous uptime on a
+host that is off every night.
 
 **Fix.** `--rules.alert.for-outage-tolerance=48h` in `docker/monitoring/docker-compose.yml`,
 above the longest off-window of about 35 hours from Thursday night to the Saturday wake. Rolled out with
