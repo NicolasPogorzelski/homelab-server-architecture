@@ -208,7 +208,7 @@ Done this way for `disk06` on 2026-10-17, with the pool in use throughout:
 
 A new disk gets a full surface read in four `smartctl -t select,next` spans, one per day: the
 extended test needs about 24 h on 18 TB (`smartctl -c`), longer than the host runs between wake
-and shutdown. `disk06`: spans 1 to 3 without error by 2026-10-31, span 4 started that day.
+and shutdown. Verified 2026-11-02: `disk06` read all four spans without error, by `smartctl -l selftest`.
 
 A data disk may not hold more than the parity disk can cover. `disk06` and the parity disk are
 the same model size, and their file systems differ by a megabyte, so the margin comes from ext4's
