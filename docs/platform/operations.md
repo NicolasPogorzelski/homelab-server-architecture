@@ -114,12 +114,12 @@ Not protected:
 **Layer 1: Storage** - vm102 online, data and parity disks mounted, MergerFS at `/mnt/mergerfs`,
 Samba reachable.
 
-**Layer 2: Compute** - vm100 online; media libraries under `/srv/media/*` through one systemd
-automount per library.
-
-**Layer 3: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
+**Layer 2: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
 before critical workloads start; Docker containers use `restart: unless-stopped`, and
 `docker_boot_retry` restarts containers whose first start failed.
+
+**Layer 3: Compute** - vm100 online, last in the start order; media libraries under `/srv/media/*`
+through one systemd automount per library.
 
 **Layer 4: Validation** - monitoring confirms every target is up; spot-check endpoints over
 loopback or the tailnet.
