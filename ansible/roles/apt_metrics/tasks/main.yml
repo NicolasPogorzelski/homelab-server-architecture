@@ -49,6 +49,23 @@
     state: directory
     mode: "0755"
 
+# Nothing scrapes these files, but they show counts from the install day to
+# anyone who reads the node by hand.
+- name: Find metric files left in the package's textfile directory
+  ansible.builtin.find:
+    paths: "{{ apt_metrics_package_textfile_dir }}"
+    patterns: "*.prom"
+  register: apt_metrics_stale_files
+
+- name: Remove the metric files left in the package's textfile directory
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ apt_metrics_stale_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: apt_metrics_package_textfile_dir != apt_metrics_textfile_dir
+
 - name: Create the drop-in directory for the apt collector unit
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ apt_metrics_unit }}.d"
