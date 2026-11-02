@@ -1,7 +1,7 @@
 # Media Ingest Runs as a Reviewed Pipeline on Its Own Container (lxc221)
 
 ## Status
-Proposed 2026-10-28. Supersedes / superseded by: -.
+Proposed 2026-10-28. Amended by [duplicates](media-ingest-duplicates.md). Supersedes / superseded by: -.
 
 ## Context
 New media reach Calibre, Audiobookshelf and Jellyfin by hand; Navidrome is planned. The work splits
@@ -48,8 +48,8 @@ Constraints:
 ## Decision
 lxc221, an unprivileged Debian LXC in the media range with its own tag `tag:ingest`, runs the
 pipeline. A deterministic core does everything that can be measured; the LLM proposes field values,
-each with a verbatim quote that a check must find in the source text. The stage 3 rules set each
-item to `auto`, `review` or `skip`; the stage 7 deletion is run by a person.
+each with a verbatim quote that a check must find in the source text. Stage 3 sets each item to
+`auto`, `review` or `skip`; a person runs stage 7, except for [duplicates](media-ingest-duplicates.md).
 
 | Stage | Work | Where |
 |---|---|---|
@@ -59,7 +59,7 @@ item to `auto`, `review` or `skip`; the stage 7 deletion is run by a person.
 | 4 Approval | review file `Ingest/_review/<run>.md`; later a tailnet-only page on lxc221 that reads the same format | admin desktop |
 | 5 Apply | packages through the adapter of the media type | see below |
 | 6 Read-back | hashes in the target, database state, `storage-permissions.sh --check`, service answers | lxc221 |
-| 7 Deletion list | written for the source; executed by a person | admin desktop |
+| 7 Deletion list | written for the source; executed by a person; duplicates excepted | admin desktop |
 
 Two run modes:
 
@@ -80,10 +80,10 @@ The root filesystem is on `local-lvm`. A 20 GiB thin volume on `scratch` with `d
 `fstrim.timer` holds staging for Calibre and music; audiobooks, films and series stream from the
 desktop through lxc221 to vm102 without staging.
 
-Access per step: read-only SSH to the desktop's `Ingest/`; a forced-command key on lxc220 that
-runs only the Calibre apply script; the `ingest` account on vm102 described below; API keys for
-the Audiobookshelf scan and for both inference instances on port 8080. Grants:
-[tailscale-acl.md](../platform/tailscale-acl.md).
+Access per step: a desktop key that reads `Ingest/` and deletes only the duplicates a run lists;
+a forced-command key on lxc220 that runs only the Calibre apply script; the `ingest` account on
+vm102 described below; API keys for the Audiobookshelf scan and for both inference instances on
+port 8080. Grants: [tailscale-acl.md](../platform/tailscale-acl.md).
 
 ### No deletion through the pipeline
 
@@ -100,8 +100,8 @@ permissions bound the `ingest` account; the one root step is bounded by its code
   `finalize <library> <run>`.
 - `ingest-finalize` runs as root through one sudo rule. It checks library and run against a fixed
   list, refuses `..` and symlinks, sets owner and mode from the permission matrix, and moves with
-  `RENAME_NOREPLACE`. It never deletes and never replaces; a name conflict leaves the item in
-  `.ingest/` for review.
+  `RENAME_NOREPLACE`. It never deletes; an approved upgrade moves the library copy to
+  `.replaced/<run>/`, any other name conflict leaves the item in `.ingest/` for review.
 - Every move is logged as source and target, so an undo script can return a whole run to
   `.ingest/`.
 
