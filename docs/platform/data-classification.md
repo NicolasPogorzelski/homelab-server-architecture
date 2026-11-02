@@ -102,8 +102,6 @@ plus this repository. C3 is excluded; copying the media archive would dominate t
 protect nothing that matters. The target is decided in
 [`offsite-backup-target.md`](../decisions/offsite-backup-target.md).
 
-Verified 2026-09-01: the C1 set on this platform is under 100 GB.
-
 ## Point-in-time copies off site
 
 No running job copies anything off site. Two point-in-time copies exist:
