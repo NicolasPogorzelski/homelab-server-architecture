@@ -13,9 +13,9 @@ storage_permissions_script_src: "{{ playbook_dir }}/../../snippets/storage/stora
 storage_permissions_script_dest: /usr/local/sbin/storage-permissions.sh
 storage_permissions_conf: /etc/storage-permissions.conf
 
-# Daily, while the nightly snapraid sync may still be running; the check reads only
-# metadata, so it barely competes for disk bandwidth. The nightly shutdown waits
-# while storage-permissions.service is active (homelab_schedule guard units).
+# Daily, ahead of the snapraid sync (snapraid_maintenance defaults); the check reads
+# only metadata, so it barely competes with streaming for disk bandwidth. The nightly
+# shutdown waits while storage-permissions.service is active (homelab_schedule guard units).
 storage_permissions_oncalendar: "*-*-* 23:15:00"
 
 # === The matrix ===

@@ -1247,13 +1247,13 @@ not have lowered the scrub's priority.
 The same evening also had an unrelated fault at the client: a loose Ethernet plug on the
 streaming box dropped its link about 25 times and then held it at 100 Mbit/s.
 
-**Fix.** `snapraid_scrub_oncalendar` is `Mon *-*-* 00:00:00`. `homelab_schedule` powers the
-host off at 23:30 Monday to Saturday and at 00:05 on Monday for Sunday night, so the shutdown
-guard waits for the scrub (`homelab_schedule_guard_guest_units`). The template unit
-runs the script under `flock`, so a Sunday sync still running at midnight makes the scrub wait
+**Fix.** The scrub starts at Monday midnight (`snapraid_scrub_oncalendar` in the
+`snapraid_maintenance` defaults). `homelab_schedule` powers the host off after midnight every
+night, so on Monday the shutdown guard waits for the scrub (`homelab_schedule_guard_guest_units`).
+The template unit runs the script under `flock`, so a Sunday sync still running at midnight makes the scrub wait
 for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
 scrub after Monday's start.
 
 **Verification.** Pending 2026-11-09: `journalctl -t homelab-shutdown` on the host shows
-`waiting for vm102 snapraid-maintenance@scrub.service` after 00:05, and vm102's journal shows the
-scrub finishing before the host powers off.
+`waiting for vm102 snapraid-maintenance@scrub.service` at Monday's shutdown, and vm102's journal
+shows the scrub finishing before the host powers off.
