@@ -83,17 +83,16 @@ See: [KE-13](known-errors.md#ke-13),
 
 ## Host Cron Jobs
 
-The host starts by RTC alarm at a time set per weekday and powers off at 23:30 Monday to
-Saturday. Sunday's shutdown runs at 00:05 on Monday, behind the weekly SnapRAID scrub that starts
-at midnight, and the guard holds it until the scrub ends ([KE-33](known-errors.md#ke-33)). On days
+The host starts by RTC alarm at a time set per weekday and powers off every night at 00:15. On
+Monday the weekly SnapRAID scrub has started at midnight, and the guard holds the shutdown until
+the scrub ends ([KE-33](known-errors.md#ke-33)). On days
 without a start time the host stays off until switched on by hand. The `homelab_schedule` role
 deploys the two scripts and the single cron file. Cron is deliberate here: the job powers the host
 down, so catch-up semantics would be wrong for it.
 
 | Schedule | User | Command | Purpose |
 |---|---|---|---|
-| `30 23 * * 1-6` | root | `systemd-cat -t homelab-shutdown ... /usr/local/sbin/homelab-shutdown.sh` | Wait for guarded work, arm the next start, power off |
-| `5 0 * * 1` | root | the same script | Sunday night's shutdown, after the scrub |
+| `15 0 * * *` | root | `systemd-cat -t homelab-shutdown ... /usr/local/sbin/homelab-shutdown.sh` | Wait for guarded work, arm the next start, power off |
 
 `journalctl -b -1 -t homelab-shutdown -t homelab-setwake` shows the last night's run;
 `homelab-setwake.sh --dry-run` prints the next start without arming anything.
