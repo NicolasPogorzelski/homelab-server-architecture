@@ -45,6 +45,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
 | [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
 | [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09 |
+| [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
 
 ---
 
@@ -1257,3 +1258,45 @@ scrub after Monday's start.
 **Verification.** Pending 2026-11-09: `journalctl -t homelab-shutdown` on the host shows
 `waiting for vm102 snapraid-maintenance@scrub.service` at Monday's shutdown, and vm102's journal
 shows the scrub finishing before the host powers off.
+
+---
+
+<a id="ke-34"></a>
+
+## KE-34: Streams to the streaming box stall while vm100's Tailscale path to it keeps changing
+
+- **Status:** Mitigated 2026-11-08 - the box streams over the LAN; cause not found
+- **Affects:** Jellyfin on vm100, the streaming box (`tag:media-player`)
+
+**Symptom.** 2026-11-08, a Sunday: playback on the streaming box stalled through the evening, with
+the box on Ethernet only. Jellyfin logged the same episode stopped and started again at 18:09 and
+18:14, and at 19:54 and 19:55. Between 17:39 and 17:56, during playback, vm100's `tailscaled`
+logged about 20 path changes to the box, between its LAN endpoint, the router's public address and
+DERP:
+
+```
+magicsock: disco: node [<box>] ... now using <public-ip-router>:50579 mtu=1360
+magicsock: new contact: peer=[<box>] ... via=derp
+magicsock: disco: node [<box>] ... now using <lan-ip-streaming-box>:50040 mtu=1360
+```
+
+The box's disco key stayed the same, so its Tailscale app did not restart. Neither cause of
+[KE-33](#ke-33) applied: no scrub ran, and the box held a gigabit link.
+
+**Cause.** Not found. Measured on 2026-11-08 and ruled out:
+
+- The LAN: 967 Mbit/s from vm100 to the box, no loss in 300 pings under that load.
+- Storage and server: SMB from vm102 read at 102-106 MB/s; Jellyfin logged no error.
+- Load on the tunnel alone: ten minutes at 137 and then 205 Mbit/s produced no path change and no
+  lost ping. The box's tunnel used about 70 % CPU on all four cores at 205 Mbit/s.
+
+The path changes appeared during real playback only. Candidates not yet separated: the player and
+the tunnel competing for the box's CPU, and the Tailscale app's state while another app is in the
+foreground. Client versions at the time: Tailscale 1.104.5 on the box, 1.104.4 on vm100.
+
+**Fix.** The box reaches Jellyfin over the LAN, admitted by `lan_guard` on vm100 from its address
+only ([decision](../decisions/streaming-box-over-the-lan.md)). Nothing in the tunnel was changed.
+
+**Verification.** 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
+player buffer event; the box's `tun0` carried no bytes, CPU averaged 24 %. vm100's path log for the
+box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.

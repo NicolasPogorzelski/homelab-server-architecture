@@ -34,7 +34,7 @@ flowchart LR
     DevOps[Ansible control node<br/>SSH only]
   end
 
-  %% LAN exposure: none (lan_guard on every node)
+  %% LAN exposure: Jellyfin for the streaming box only (lan_guard on every node)
   LAN -.-> Services
 
   %% Tailscale exposure (all services)
@@ -74,5 +74,6 @@ allow on record, and `ListenerOutsideBindingRule` fires on it.
 
 What keeps the LAN out is the `lan_guard` nftables table on every node.
 It drops new inbound LAN connections except DHCP, Tailscale's own UDP port, SMB to vm102 from vm100
-and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The router's missing
+and the hypervisor, break-glass SSH and netconsole to the hypervisor, and Jellyfin on vm100 from the
+streaming box ([decision](../decisions/streaming-box-over-the-lan.md)). The router's missing
 forwarding rules keep the internet out.
