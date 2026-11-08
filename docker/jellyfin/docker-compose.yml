@@ -27,3 +27,6 @@ services:
       # the serve forwarder stalled streams (KE-28). Left empty, the address would
       # bind every interface; docker_compose_update refuses a node whose .env lacks it.
       - "${JELLYFIN_BIND_ADDR}:${JELLYFIN_PORT}:8096"
+      # vm100's LAN address, for the streaming box alone: lan_guard admits only its
+      # address on this port (docs/decisions/streaming-box-over-the-lan.md).
+      - "${JELLYFIN_LAN_BIND_ADDR}:${JELLYFIN_PORT}:8096"
