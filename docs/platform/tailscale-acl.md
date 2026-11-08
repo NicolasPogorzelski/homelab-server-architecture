@@ -323,8 +323,9 @@ would require keeping those devices in this tailnet.
 
 ### Rule 14 - Media player: the streaming box at the TV
 
-The streaming box gets Jellyfin over the tailnet and nothing else; media clients use the tailnet,
-not the LAN ([decision](../decisions/media-over-the-tailnet.md)). It has its own tag and no
+The ACL grants the streaming box Jellyfin's port on the tailnet and nothing else. At home it streams over the LAN
+instead, admitted by `lan_guard` on vm100 from its address only
+([decision](../decisions/streaming-box-over-the-lan.md)); the grant stays. It has its own tag and no
 grant under `tag:isolated`, because that tag promises no access at all. Its Mullvad attribute is
 bound to the device's address, not to the tag.
 

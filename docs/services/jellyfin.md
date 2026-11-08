@@ -19,20 +19,25 @@ Libraries are mounted read-only from vm102 through systemd automounts over SMB:
 
 ## Access Model
 
-- Jellyfin publishes on vm100's Tailscale address only, `<tailscale-ip-vm100>:8096`
-  (`JELLYFIN_BIND_ADDR` in the node's `.env`; `docker_compose_update` refuses an `.env` without it).
+- Jellyfin publishes on vm100's Tailscale address, `<tailscale-ip-vm100>:8096`
+  (`JELLYFIN_BIND_ADDR` in the node's `.env`), and on its LAN address, `<lan-ip-vm100>:8096`
+  (`JELLYFIN_LAN_BIND_ADDR`). `docker_compose_update` refuses an `.env` without either.
   The `tailscale serve` forwarder stalled streams and is not used
   ([KE-28](../platform/known-errors.md#ke-28)).
 - At boot `docker.service` waits for that address through `tailscale_boot_gate`, with
   `docker_boot_retry` behind it ([KE-18](../platform/known-errors.md#ke-18)).
 - Clients use `http://gpu-vm.<tailnet-id>.ts.net:8096`; the transport is WireGuard, with no TLS
-  hostname. No LAN or public path ([media over the tailnet](../decisions/media-over-the-tailnet.md)).
+  hostname ([media over the tailnet](../decisions/media-over-the-tailnet.md)).
+- The streaming box at home uses `http://<lan-ip-vm100>:8096`, plain HTTP on the LAN. `lan_guard` on
+  vm100 admits only its address ([streaming box over the LAN](../decisions/streaming-box-over-the-lan.md),
+  [KE-34](../platform/known-errors.md#ke-34)). No public path.
 
 | Source | Port 8096 |
 |---|---|
 | `tag:admin`, `tag:admin-mobile`, `tag:client`, `tag:untrusted`, `tag:media-player` | allowed |
 | one external user through machine sharing | allowed |
 | `tag:monitoring` | allowed (blackbox probe) |
+| the streaming box's LAN address (`lan_guard`, not the ACL) | allowed |
 | `tag:reader`, `tag:tier0`, every other tag | denied |
 
 Rules: [tailscale-acl.md](../platform/tailscale-acl.md).
@@ -82,8 +87,10 @@ journalctl -t jellyfin-cuda-watchdog -n 20
 
 ## Moonfin Direct Play
 
-Playback hangs on the streaming box are a client fault, not a platform one, and are tracked
-upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775).
+Playback hangs right after an audio passthrough start on the streaming box are a client fault,
+tracked upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775).
+Stalls on its Tailscale path are [KE-34](../platform/known-errors.md#ke-34); the box streams over
+the LAN.
 
 ## Failure Impact
 

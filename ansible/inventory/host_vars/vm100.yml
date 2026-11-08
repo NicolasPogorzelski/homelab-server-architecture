@@ -46,8 +46,24 @@ tailscale_boot_gate_clear_restart_prevent: true
 
 ssh_hardening_listen_address: "{{ ansible_host }}"
 
+# Jellyfin over the LAN for the streaming box alone. Its Tailscale path stalled
+# streams that the LAN carried cleanly (KE-34, docs/decisions/streaming-box-over-the-lan.md).
+lan_guard_allow:
+  - proto: tcp
+    port: 8096
+    sources:
+      - "{{ streaming_box_lan_ip }}"
+    reason: Jellyfin for the streaming box, which streams over the LAN instead of its Tailscale path
+
+# Exceptions to the binding rule that listener_metrics reports. Each names its
+# decision; remove the line when the decision is withdrawn.
+listener_metrics_allowed:
+  - proto: tcp
+    port: 8096
+    reason: "Jellyfin on the LAN address for the streaming box; lan_guard admits only its address - docs/decisions/streaming-box-over-the-lan.md"
+
 # Router advertisements gave enp6s18 a global IPv6 address that every wildcard
-# listener answered on. See docs/nodes/vm100.md#no-media-ports-on-the-lan.
+# listener answered on. See docs/nodes/vm100.md#media-ports-on-the-lan.
 netplan_no_ra_interfaces:
   - enp6s18
 

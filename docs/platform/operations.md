@@ -25,8 +25,9 @@ Node detail lives in `docs/nodes/`; membership in `ansible/inventory/hosts.yml.e
 ### Trust Boundaries
 
 - **Public Internet:** no exposure, no router port forwarding.
-- **LAN:** no service is reachable; `lan_guard` admits only SMB to vm102 from vm100 and the
-  hypervisor, and break-glass SSH and netconsole to the hypervisor.
+- **LAN:** `lan_guard` admits only SMB to vm102 from vm100 and the hypervisor, break-glass SSH
+  and netconsole to the hypervisor, and Jellyfin on vm100 from the streaming box
+  ([decision](../decisions/streaming-box-over-the-lan.md)).
 - **Tailnet:** identity-based access for administration and use ([tailscale-acl.md](tailscale-acl.md)).
 - **Storage:** segmentation at the SMB layer with separate read-write and read-only identities
   ([samba.md](samba.md)).
@@ -212,7 +213,8 @@ Runtime data is on local block storage; the dumps are on SMB and survive a runti
 - No public reverse proxy, no router port forwarding.
 - Internal services bind loopback where possible; infrastructure services bind the Tailscale
   address.
-- No service is reachable from the LAN; the SMB path to vm102 is the only named LAN flow.
+- One service is reachable from the LAN, Jellyfin for the streaming box; the other named LAN flows
+  are SMB to vm102 and break-glass access to the hypervisor.
 
 Where a daemon cannot bind narrowly (Samba on vm102, Apache and `coolwsd` on lxc210), the
 `lan_guard` table drops LAN connections before they reach the socket
