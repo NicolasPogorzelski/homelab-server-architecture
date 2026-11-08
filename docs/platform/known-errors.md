@@ -1262,7 +1262,6 @@ shows the scrub finishing before the host powers off.
 ---
 
 <a id="ke-34"></a>
-
 ## KE-34: Streams to the streaming box stall while vm100's Tailscale path to it keeps changing
 
 - **Status:** Mitigated 2026-11-08 - the box streams over the LAN; cause not found

@@ -63,7 +63,7 @@ listener_metrics_allowed:
     reason: "Jellyfin on the LAN address for the streaming box; lan_guard admits only its address - docs/decisions/streaming-box-over-the-lan.md"
 
 # Router advertisements gave enp6s18 a global IPv6 address that every wildcard
-# listener answered on. See docs/nodes/vm100.md#no-media-ports-on-the-lan.
+# listener answered on. See docs/nodes/vm100.md#media-ports-on-the-lan.
 netplan_no_ra_interfaces:
   - enp6s18
 

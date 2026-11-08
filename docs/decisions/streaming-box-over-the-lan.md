@@ -8,30 +8,32 @@ on the LAN" in [Media over the tailnet](media-over-the-tailnet.md). Superseded b
 Since 2026-10-01 every media client reaches Jellyfin over the tailnet. The streaming box at the TV
 is an Android TV device; its Tailscale app runs WireGuard in userspace on the device's CPU.
 
-On 2026-11-08 playback on the box stalled again. The scrub and the loose plug of
+On 2026-11-08 playback on the box stalled. The scrub and the loose plug of
 [KE-33](../platform/known-errors.md#ke-33) were ruled out: no scrub ran, and the box held a
 gigabit link. What remained was the Tailscale path ([KE-34](../platform/known-errors.md#ke-34)):
 
-Verified 2026-11-08: during playback with Ethernet only, vm100's `tailscaled` switched its path to
-the box about 20 times in 17 minutes, between the LAN endpoint, the router's public address and a
-DERP relay.
+Verified 2026-11-08: about 20 path changes to the box between 17:39 and 17:56, during playback with
+Ethernet only, between the LAN endpoint, the router's public address and a DERP relay, by
+`journalctl -u tailscaled | grep "now using"` on vm100.
 
-Verified 2026-11-08: the box's tunnel carried 205 Mbit/s for five minutes at about 70 % CPU on all
-four cores. The highest-bitrate file in the library averages 121.8 Mbit/s, so the tunnel leaves
-less than twice that as headroom for bitrate peaks.
+Verified 2026-11-08: saturated with HTTP downloads from Jellyfin over the tailnet, the box's tunnel
+carried 205-229 Mbit/s at about 70 % CPU on all four cores, by `/proc/net/dev` (`tun0`) and
+`/proc/stat` sampled each second on the box. The highest-bitrate file in the library averages
+121.8 Mbit/s, which leaves the tunnel under twice that rate for bitrate peaks.
 
-Verified 2026-11-08: the LAN between vm100 and the box carried 967 Mbit/s, with no loss in 300
-pings under that load. Playback over the LAN ran 29 minutes without a stall or a player buffer
-event, at 24 % CPU on the box, with no byte through its `tun0`.
+Verified 2026-11-08: 967 Mbit/s from vm100 to the box over the LAN, by `nc` into a listener on the
+box for 40 s, and no loss in 300 pings from the hypervisor during that run. Playback over the LAN
+then ran 29 minutes without a stall or a player buffer event (`logcat` on the box), at 24 % CPU,
+with no byte through its `tun0`.
 
 The cause of the path changes is not found. Ten minutes of synthetic load over the tunnel produced
 none.
 
 ## Options
-- **Keep the box on the tailnet until the cause is found.** Lost: the stalls continue for an
+- **Keep the box on the tailnet until the cause is found.** The stalls would continue for an
   unknown time, and the tunnel's CPU cost on the box stays whatever the cause turns out to be.
-- **Open Jellyfin to the whole LAN again, as DD-8 did.** Lost: every device at home would reach
-  it, phones and TVs included, for a problem only one device has.
+- **Open Jellyfin to the whole LAN, as DD-8 did.** Every device at home would reach it, phones and
+  TVs included, for a problem only one device has.
 - **The LAN for the streaming box alone.** Chosen.
 
 ## Decision
@@ -46,8 +48,8 @@ and service stays tailnet-only, and the box keeps its tag and ACL rule.
   ([DD-9](design-decisions.md#dd-9)).
 - Jellyfin speaks HTTP without TLS on this path. Login and token of the box's Jellyfin user can be
   read by a device that intercepts LAN traffic.
-- The box needs a fixed DHCP reservation. Without it, the box gets another address and `lan_guard`
-  drops it; the failure is closed, not open.
+- The box needs a fixed DHCP reservation. Without it, the box gets another address, `lan_guard`
+  drops its connections, and playback fails until the reservation is restored.
 - The client is bound to vm100's LAN address. If that address changes, the client is repointed.
 - Revisit when KE-34's cause is found: with a stable tunnel, the exception goes.
 
