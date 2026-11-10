@@ -118,7 +118,8 @@ automount per library.
 
 **Layer 3: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
 before critical workloads start; Docker containers use `restart: unless-stopped`, and
-`docker_boot_retry` restarts containers whose first start failed.
+`docker_boot_retry` restarts containers whose first start failed; on the host,
+`guest_boot_retry` starts onboot guests whose start failed.
 
 **Layer 4: Validation** - monitoring confirms every target is up; spot-check endpoints over
 loopback or the tailnet.

@@ -123,6 +123,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `fleet-snapshot.yml` | `all`, then `lxc250` | Read-only record of sockets, unit files, crontabs, mounts and images per node, diffed against the previous run and exported as `fleet_snapshot_*` metrics. |
 | `fleet-snapshot-schedule.yml` | `lxc250` | Applies `fleet_snapshot`. |
 | `guest-backup.yml` | `proxmox` | Applies `guest_backup`. |
+| `guest-boot-retry.yml` | `proxmox` | Applies `guest_boot_retry`. |
 | `homelab-schedule.yml` | `proxmox` | Applies `homelab_schedule`. |
 | `jellyfin-user-prefs.yml` | `vm100` | Applies `jellyfin_user_prefs`. |
 | `jellyfin-watchdog.yml` | `vm100` | Applies `jellyfin_watchdog`. |
@@ -175,6 +176,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `fleet_drift` | lxc250 | Weekly timer running the drift sweep as `devops` and exporting the result as a metric. |
 | `fleet_snapshot` | lxc250 | Weekly timer running `fleet-snapshot.yml`, ordered before the Saturday host jobs. |
 | `guest_backup` | Proxmox host | Weekly `vzdump` of the nine guests to `/mnt/vzdump` (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
+| `guest_boot_retry` | Proxmox host | Once per boot, after `startall`, starts the onboot guests that are still stopped, in startup order ([KE-27](known-errors.md#ke-27)). |
 | `homelab_schedule` | Proxmox host | Renders the RTC wake and shutdown scripts and the one cron line in `/etc/cron.d/homelab-schedule`; wake plans are role variables. |
 | `jellyfin_user_prefs` | vm100 | Asserts `SubtitleMode` on every Jellyfin user through the API and reports drifted users under `--check`. |
 | `jellyfin_watchdog` | vm100 | Deploys the CUDA watchdog script, its one-minute monotonic timer and a root-only API-key header file. |
