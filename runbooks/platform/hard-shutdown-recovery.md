@@ -7,12 +7,16 @@
   on the boot SSD ([KE-7](../../docs/platform/known-errors.md#ke-7) class); more guest starts on a
   boot SSD that logs I/O errors add load to a failing device
   ([KE-14](../../docs/platform/known-errors.md#ke-14)).
-- **Last exercised:** never
+- **Last exercised:** 2026-11-10, step 4 for lxc260 after a power cut
 
 Guests autostart by `startup: order=N,up=M` ([boot ordering](../../docs/platform/proxmox-host.md#boot-ordering)):
 vm102 first, because the host's `/mnt/smb/*` CIFS automounts and the bind mounts of lxc210, lxc220
 and lxc260 depend on its shares. After an unclean shutdown that order can break: lxc260's pre-start
 hook exits 19 (`ENODEV`) when `/mnt/smb/postgres-backups` is not ready.
+
+`guest_boot_retry` repeats such a start for three minutes after `startall`
+([KE-27](../../docs/platform/known-errors.md#ke-27)). This runbook covers what is still down after
+it; `journalctl -b -t guest-boot-retry` on the host names those guests.
 
 ## Preconditions
 

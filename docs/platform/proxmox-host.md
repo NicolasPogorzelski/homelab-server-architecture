@@ -30,6 +30,9 @@ Order 4 is unused. lxc250 starts on boot (`onboot: yes`); its order
 value is not recorded here. vm100 starts last: its media services depend on vm102, and nothing
 depends on vm100 at boot.
 
+`startall` tries each guest once and ends `OK` even when a start fails. `guest_boot_retry` starts
+the onboot guests still stopped after it, in this order ([KE-27](known-errors.md#ke-27)).
+
 ## pveproxy Tailscale-IP Boot Ordering
 
 `pveproxy` (web UI and API on `:8006`) binds only the host's Tailscale address
@@ -174,6 +177,7 @@ play ([ansible.md](ansible.md#why-sweeps-target-guests-and-not-all)).
 | Pending-update metric (`apt.sh`) | `apt_metrics` |
 | Power schedule scripts and cron file | `homelab_schedule` |
 | Guest backup, host-config backup, `platform-restore.sh` | `guest_backup` |
+| Retry of onboot guests whose start failed | `guest_boot_retry` |
 | Kernel panic sysctls | `kernel_panic_policy` |
 | LAN nftables table with break-glass paths | `lan_guard` |
 | Units masked on the host | `systemd_hygiene` |

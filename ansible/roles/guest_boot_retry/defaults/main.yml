@@ -1,0 +1,17 @@
+---
+# === guest_boot_retry (Proxmox host) ===
+#
+# Starts, once per boot, the onboot guests whose start failed. pve-guests runs
+# `startall` once and reports OK regardless, so a guest whose bind-mount source
+# on vm102 was not reachable yet stays stopped until someone starts it. See KE-27.
+#
+# A retry keeps the guest's start independent of vm102; ordering the start after
+# the CIFS mounts would tie the whole host boot to the storage VM it boots.
+
+guest_boot_retry_script_src: "{{ playbook_dir }}/../../snippets/scripts/guest-boot-retry.sh"
+guest_boot_retry_script_dest: /usr/local/sbin/guest-boot-retry.sh
+
+# Six passes, 30 s apart, as docker_boot_retry: on 2026-11-10 the share mounted
+# four minutes after the failed attempt, the minute startall finished.
+guest_boot_retry_attempts: 6
+guest_boot_retry_interval: 30

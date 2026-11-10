@@ -1,0 +1,16 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Start onboot guests whose start failed at boot
+# `After=` alone: pve-guests is a oneshot, so the unit starts once startall has
+# finished. No Requires=, so the unit still runs when startall failed and left
+# guests stopped.
+After=pve-guests.service
+
+[Service]
+# Type=exec, not oneshot: a oneshot holds multi-user.target until it exits,
+# and this one sleeps for up to {{ (guest_boot_retry_attempts * guest_boot_retry_interval / 60) | round(1) }} minutes.
+Type=exec
+ExecStart={{ guest_boot_retry_script_dest }} {{ guest_boot_retry_attempts }} {{ guest_boot_retry_interval }}
+
+[Install]
+WantedBy=multi-user.target

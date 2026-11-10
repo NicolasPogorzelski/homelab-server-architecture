@@ -38,7 +38,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15; second instance 2026-10-08 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
-| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated 2026-10-03 - first real retry 2026-10-22 |
+| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated - Docker retry 2026-10-03, first real retry 2026-10-22; guest retry 2026-11-10, not yet exercised |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
@@ -1010,9 +1010,10 @@ so output reaches the journal instead of cron's local mailer.
 
 ## KE-27: A container whose start fails at boot stays down until someone starts it
 
-- **Status:** Mitigated 2026-10-03 - first real retry 2026-10-22
+- **Status:** Mitigated - Docker retry 2026-10-03, first real retry 2026-10-22; guest retry
+  2026-11-10, not yet exercised by a real failure
 - **Affects:** vm100 containers that bind a CIFS automount or need the NVIDIA prestart hook
-  (Jellyfin, Audiobookshelf, `llama-server`)
+  (Jellyfin, Audiobookshelf, `llama-server`); Proxmox guests with a CIFS bind mount (lxc260 `mp1`)
 
 **Symptom.** After boot, the container is `Exited (128)` while Docker and the other containers run.
 `docker inspect` shows the reason in `State.Error`:
@@ -1042,11 +1043,24 @@ single connection to vm102.
 mount succeeding. Ordering Docker after the mounts themselves would tie it to vm102 being up
 ([KE-15](#ke-15)).
 
+Guest instance, 2026-11-10 after a power cut: lxc260's prestart triggered the host automount
+`/mnt/smb/postgres-backups` (vm102's Tailscale address), which failed with
+`cifs_mount failed w/return code = -115`; `pve-container@260` failed, and `startall` still ended
+`OK` and tried nothing again. The share mounted four minutes later. PostgreSQL stayed down, and with
+it Paperless and OpenWebUI, until the container was started by hand. Whether the host's or vm102's
+side was not ready was not measured.
+
 **Fix.** Role `docker_boot_retry` (`snippets/scripts/docker-boot-retry.sh`): a unit after
 `docker.service` runs once per boot and starts every exited container with policy `always` or
 `unless-stopped` and a non-empty `State.Error`; six passes, 30 s apart. If something is still down,
 the unit fails and `SystemdUnitFailed` reports it. `docker stop` leaves `State.Error` empty, so
 a container stopped by hand is not touched.
+
+The guest retry is a host unit that runs after `pve-guests.service` (`guest_boot_retry`,
+`snippets/scripts/guest-boot-retry.sh`). It starts every stopped guest with `onboot: 1`, no lock
+and no template flag, in `startup: order=` sequence, with the same passes and failure signal. A
+guest whose share is still missing fails its start again, as lxc260 did, so the retry does not
+start it on an empty mountpoint.
 
 **Verification.** Applied 2026-10-03, re-check `changed=0`; selection tested against the live node
 (nothing to start) and four synthetic rows.
@@ -1054,7 +1068,11 @@ a container stopped by hand is not touched.
 Verified 2026-10-22: Jellyfin failed on the `/srv/media/filme` mount at 09:00 and was
 `started jellyfin (attempt 1/6)` at 09:02, by `journalctl -t docker-boot-retry` on vm100.
 
-Related: [KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md).
+Verified 2026-11-10: guest selection empty on the live host, three of seven synthetic rows chosen,
+by `failed_guests` on the host and against a stub `pvesh`. Proof of a real retry:
+`started lxc <id> (attempt n/6)` in `journalctl -b -t guest-boot-retry`.
+
+Related: [KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md), [hard-shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
 
 ---
 
