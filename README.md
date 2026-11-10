@@ -9,7 +9,7 @@ real data.
 
 ## What this repository shows
 
-- **Configuration management:** 53 playbooks and 48 roles, secrets in Ansible Vault, deployed from a
+- **Configuration management:** 57 playbooks and 51 roles, secrets in Ansible Vault, deployed from a
   control node that refuses to run from a tree that matches no published commit
   ([Ansible](docs/platform/ansible.md)).
 - **CI and supply chain:** every push runs the repository validator, ansible-lint and gitleaks over
@@ -71,7 +71,7 @@ left are SMB from vm100 and the hypervisor to vm102, break-glass SSH to the hype
 netconsole from vm100 to the hypervisor.
 
 High availability is not a goal on a single host. The design invests in recovery instead: modelled
-dependencies, tested restores and a runbook per failure. All copies are on site today; the off-site
+dependencies, tested restores and a runbook per failure. All copies are on site; the off-site
 copy is the first item of the [remediation plan](docs/platform/remediation-plan.md).
 
 ## Where to start
@@ -109,12 +109,12 @@ documentation conventions are in
 
 ### Decisions
 
-17 decision records; the [design decisions](docs/decisions/design-decisions.md) collect the
+21 decision records; the [design decisions](docs/decisions/design-decisions.md) collect the
 foundational ones.
 
-- [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md) - [Media over the tailnet](docs/decisions/media-over-the-tailnet.md) - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) - [sshd binding](docs/decisions/sshd-listen-address.md)
+- [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md) - [Media over the tailnet](docs/decisions/media-over-the-tailnet.md) - [Streaming box over the LAN](docs/decisions/streaming-box-over-the-lan.md) - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) - [sshd binding](docs/decisions/sshd-listen-address.md)
 - [PostgreSQL boot ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) - [pveproxy boot ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) - [LXC200 systemd visibility](docs/decisions/lxc200-systemd-visibility.md)
-- [Hypervisor panic policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) - [Calibre auto-import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) - [LXC250 control node](docs/decisions/lxc250-devops.md) - [Off-site backup target](docs/decisions/offsite-backup-target.md) - [Vaultwarden decommissioning](docs/decisions/vaultwarden-decommission.md) - [Headscale migration](docs/decisions/headscale-migration.md) - [Identity before Terraform](docs/decisions/identity-before-terraform.md) - [Controls built to be learned](docs/decisions/exercise-scope-before-terraform.md)
+- [Hypervisor panic policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) - [Calibre auto-import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) - [LXC250 control node](docs/decisions/lxc250-devops.md) - [Off-site backup target](docs/decisions/offsite-backup-target.md) - [Vaultwarden decommissioning](docs/decisions/vaultwarden-decommission.md) - [Headscale migration](docs/decisions/headscale-migration.md) - [Identity before Terraform](docs/decisions/identity-before-terraform.md) - [Controls built to be learned](docs/decisions/exercise-scope-before-terraform.md) - [Scratch pool on the former boot SSD](docs/decisions/scratch-pool-on-former-boot-ssd.md) - [Media ingest pipeline](docs/decisions/media-ingest-pipeline.md) - [Media ingest duplicates](docs/decisions/media-ingest-duplicates.md)
 
 ### Security, risk and operations
 
@@ -136,7 +136,7 @@ foundational ones.
 
 ### Runbooks, nodes and services
 
-23 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
+24 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
 exercised. Index: [runbooks/README.md](runbooks/README.md).
 
 <details>

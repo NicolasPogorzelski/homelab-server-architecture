@@ -100,7 +100,7 @@ A repair attempt (`fsck`) or decommissioning starts only after the rescued data 
 
 ## Background
 
-`tar` rather than `rsync`: ownership and permissions are stored inside the archive, so the receiver
+The rescue uses `tar`: ownership and permissions are stored inside the archive, so the receiver
 needs no root and container-mapped UIDs are restored exactly later (`--numeric-owner`, because those
 IDs have no names on the rescue target). `--ignore-failed-read` keeps one unreadable file from
 aborting the archive. One archive per directory means an interruption or one bad directory loses

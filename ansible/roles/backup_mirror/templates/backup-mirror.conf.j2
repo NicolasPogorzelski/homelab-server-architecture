@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+TARGET="{{ backup_mirror_target }}"
+KEEP={{ backup_mirror_keep }}
+TEXTFILE_DIR="{{ backup_mirror_textfile_dir }}"
+SOURCES=(
+{% for s in backup_mirror_sources %}
+  '{{ s }}'
+{% endfor %}
+)

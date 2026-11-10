@@ -1,0 +1,18 @@
+---
+# Two writers to the Backup-Archive on vm102: the host (guest and host
+# configuration archives) and vm100 (application archives). Each node sets its
+# own target and sources.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Monthly backup mirror on the Proxmox host
+  hosts: proxmox
+  become: false # the inventory connects as root on the hypervisor
+  roles:
+    - backup_mirror
+
+- name: Monthly backup mirror on vm100
+  hosts: vm100
+  become: true
+  roles:
+    - backup_mirror

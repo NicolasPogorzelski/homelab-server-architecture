@@ -64,8 +64,12 @@ jobs:
         # line, so metacharacters in the value would be executed rather than quoted.
         env:
           IMAGE: ${{ matrix.image }}
+        # Tag and digest are cut off: a category that changes with every update leaves the
+        # alerts of the old version open for good, since nothing uploads to it again.
         run: |
-          slug="$(printf '%s' "${IMAGE}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9._-')"
+          name="${IMAGE%%@*}"
+          case "${name##*/}" in *:*) name="${name%:*}" ;; esac
+          slug="$(printf '%s' "${name}" | tr '/:' '__' | tr -cd 'A-Za-z0-9._-')"
           echo "value=${slug}" >> "$GITHUB_OUTPUT"
 
       - name: Trivy scan - counts for the trend metric
@@ -100,7 +104,7 @@ jobs:
           exit-code: "0"
 
       - name: Publish results to the Security tab
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: trivy.sarif
           # One category per image; otherwise each upload overwrites the previous one.

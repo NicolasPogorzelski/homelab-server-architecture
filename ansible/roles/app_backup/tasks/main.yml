@@ -1,0 +1,62 @@
+---
+# The data disk is a separate block device; without it the archives would land
+# on the root disk, which the guest backup copies every day.
+- name: Assert /mnt/vm-data is a mountpoint off the root device
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.mounts | selectattr('mount', 'equalto', '/mnt/vm-data') | list | length == 1
+    fail_msg: /mnt/vm-data is not mounted; the application backups have no target.
+
+- name: Create the Audiobookshelf backup directory
+  ansible.builtin.file:
+    path: "{{ app_backup_abs_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the application backup script
+  ansible.builtin.copy:
+    src: "{{ app_backup_script_src }}"
+    dest: "{{ app_backup_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+# 0600: the file carries the Jellyfin API key.
+- name: Deploy the environment file
+  ansible.builtin.template:
+    src: app-backup.env.j2
+    dest: "{{ app_backup_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ app_backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the application backup units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - app-backup.service
+    - app-backup.timer
+  notify: Reload systemd
+
+- name: Enable and start the application backup timer
+  ansible.builtin.systemd_service:
+    name: app-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

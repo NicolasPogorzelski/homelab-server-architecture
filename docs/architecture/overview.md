@@ -42,7 +42,8 @@ Two qualifications:
 
 - "No public exposure" holds at the network boundary, not at every socket. A few services bind
   wildcard addresses; the router's missing forwarding rules keep the internet out and, since
-  2026-10-01, `lan_guard` on every node keeps the LAN out. The measured list is in the
+  2026-10-01, `lan_guard` on every node keeps the LAN out, except for named flows such as Jellyfin
+  for the streaming box. The measured list is in the
   [exposure model](exposure-diagram.md).
 - Reboot safety is enforced where the faults were found: units ordered after `tailscaled` without
   waiting for an address ([KE-18](../platform/known-errors.md#ke-18)) and fstab mounts of shares
@@ -54,7 +55,7 @@ Two qualifications:
 - Grants name a port, and a host where a tag holds several services
 - The policy lives in the Tailscale admin console, which is the source of truth;
   [tailscale-acl.md](../platform/tailscale-acl.md) mirrors it and is applied by hand
-- No service is published to the LAN or the internet
+- No service is published to the internet; on the LAN, only Jellyfin for the streaming box
 
 ## The Four Views
 

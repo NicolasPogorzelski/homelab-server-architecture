@@ -1,7 +1,7 @@
 # Ansible Platform
 
 Every node of the platform - the Proxmox host and its nine guests - is managed by Ansible from
-the control node lxc250. This document is the catalogue of playbooks and roles; node membership
+the control node lxc250. The catalogue of playbooks and roles follows; node membership
 lives in `ansible/inventory/hosts.yml.example`, schedules in each role's `defaults/main.yml`.
 
 ## Control Node
@@ -29,8 +29,7 @@ or left mid-merge runs whatever is on disk.
 - **File:** `hosts.yml` beside the example (gitignored, holds the real addresses).
 - **Example:** `ansible/inventory/hosts.yml.example` (sanitized, committed; owner of node and group
   membership).
-- **Managed nodes:** 10 - the Proxmox host (since 2026-08-21) and nine guests. lxc250 is in the
-  inventory since 2026-08-20.
+- **Managed nodes:** 10 - the Proxmox host and nine guests, lxc250 among them.
 
 | Group | Members |
 |---|---|
@@ -70,7 +69,7 @@ with the password in `~/.vault_pass` on lxc250 (mode 600, gitignored, loaded by 
 |---|---|
 | `vault_paperless_dbhost`, `vault_paperless_dbpass`, `vault_paperless_secret_key` | `paperless_env` |
 | `vault_postgres_exporter_dsn` | `postgres_exporter` |
-| `vault_jellyfin_api_key` | `jellyfin_watchdog`, `jellyfin_user_prefs` |
+| `vault_jellyfin_api_key` | `jellyfin_watchdog`, `jellyfin_user_prefs`, `app_backup` |
 | `vault_offsite_backup_repository`, `vault_offsite_backup_password` | `offsite_backup` (not yet defined; the role is not deployed) |
 
 Inline vault strings cannot be rekeyed with `ansible-vault rekey`. To change the password: read
@@ -80,18 +79,21 @@ each value with `ansible-vault encrypt_string`, and replace it in `vault.yml`.
 ## Configuration
 
 `ansible/ansible.cfg` sets `inventory = ./inventory/hosts.yml`, `remote_user = ansible`,
-`roles_path = ./roles`, `vault_password_file = ~/.vault_pass` and `host_key_checking = False`.
-
-**Known gap:** `host_key_checking = False` means the control node accepts any SSH host key, so a
-host impersonating a node on the tailnet would be handed the run and every secret it deploys. It is
-tracked in the [remediation plan](remediation-plan.md).
+`roles_path = ./roles`, `vault_password_file = ~/.vault_pass` and `host_key_checking = True`, with
+`StrictHostKeyChecking=yes` against `~/.ssh/known_hosts.fleet`. That file holds only keys that
+`known-hosts.yml` read on each node's disk through the hypervisor and found equal on the network;
+the hypervisor's own entry is seeded by hand ([lxc250 rebuild](../../runbooks/platform/lxc250-rebuild.md)).
+A node presenting any other key is refused before it receives a task.
 
 ## Conventions
 
-- **Scheduling:** every scheduled job is a systemd timer with `Persistent=true`, because the host
-  powers down nightly and cron loses every slot it sleeps through; a failed run surfaces through
-  `SystemdUnitFailed`. The single exception is the shutdown itself (`homelab_schedule`, cron in
-  `/etc/cron.d`).
+- **Scheduling:** jobs are systemd timers, except the two cron jobs below, because the host powers
+  down nightly and cron loses every slot it sleeps through; a failed run surfaces through
+  `SystemdUnitFailed`. Calendar timers (`OnCalendar=`) carry `Persistent=true` and catch up a slot
+  missed overnight. The monotonic timers of `listener_metrics` and `jellyfin_watchdog`
+  (`OnBootSec=`, `OnUnitActiveSec=`) restart their interval at every boot and need no catch-up.
+  Two jobs run from cron: the shutdown itself (`homelab_schedule`, `/etc/cron.d`) and Nextcloud's
+  upstream-owned `cron.php` on lxc210 ([lxc210](../nodes/lxc210.md)).
 - **Dry run:** every playbook is run with `--check --diff` before it changes live state. Read-only
   probes carry `check_mode: false` so their registered values exist under `--check`; enabling a
   freshly templated unit carries `when: not ansible_check_mode`.
@@ -109,8 +111,10 @@ tracked in the [remediation plan](remediation-plan.md).
 |---|---|---|
 | `preflight.yml` | `all`, checks run once on the control node | Refuses the run unless the checkout is a clean `main` in sync with `origin`. |
 | `apt-upgrade.yml` | `lxcs`, then `vms` | Rolling apt upgrade with a `dpkg --verify` integrity check afterwards. |
+| `app-backup.yml` | `vm100` | Applies `app_backup`. |
 | `apt-metrics.yml` | `all` | Applies `apt_metrics`. |
 | `auditd.yml` | `proxmox` | Applies `auditd` (exercise). |
+| `backup-mirror.yml` | `proxmox`, then `vm100` | Applies `backup_mirror` on both writers to the Backup-Archive. |
 | `bootstrap-ansible-user.yml` | `lxcs:!lxc250`, `vm100`, `vm102` | One-time creation of the `ansible` user, key and sudoers rule, connecting as root. |
 | `breakglass.yml` | `vms` | Applies `breakglass`. |
 | `calibre-import.yml` | `lxc220` | Applies `calibre_importer`. |
@@ -127,6 +131,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `homelab-schedule.yml` | `proxmox` | Applies `homelab_schedule`. |
 | `jellyfin-user-prefs.yml` | `vm100` | Applies `jellyfin_user_prefs`. |
 | `jellyfin-watchdog.yml` | `vm100` | Applies `jellyfin_watchdog`. |
+| `known-hosts.yml` | `proxmox`, then `localhost` | Writes `~/.ssh/known_hosts.fleet` on lxc250 from host keys read out of band; refuses a node whose network key differs. |
 | `journal-central.yml` | `lxc200`, then `guests` | Applies `journal_remote` on the receiver, then `journal_upload` on nodes that opt in (exercise). |
 | `journald.yml` | `all` | Applies `journald`. |
 | `kernel-panic-policy.yml` | `proxmox` | Applies `kernel_panic_policy`. |
@@ -160,13 +165,16 @@ tracked in the [remediation plan](remediation-plan.md).
 | `tailscale-cert.yml` | `tailscale_cert_ondisk` | Applies `tailscale_cert`. |
 | `timezone.yml` | `all` | Applies `timezone`. |
 | `unattended-upgrades.yml` | `guests` | Applies `unattended_upgrades`. |
+| `upstream-watch.yml` | `lxc250` | Applies `upstream_watch`. |
 
 ## Roles
 
 | Role | Targets | What it does |
 |---|---|---|
+| `app_backup` | vm100 | Daily Jellyfin archive through its backup API (database and subtitles, seven kept) onto `/mnt/vm-data`, and a freshness metric for the archive Audiobookshelf writes there itself. |
 | `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory, with `TMPDIR` pointed there too. |
 | `auditd` | Proxmox host | Exercise ([decision](../decisions/exercise-scope-before-terraform.md)): syscall auditing with a starter rule set, read back with `auditctl -l`, `SYSLOG` actions and a capped log; no alert reads it. |
+| `backup_mirror` | Proxmox host, vm100 | Monthly copy of the newest archive per source to the node's Backup-Archive share, sha256-checked, three months kept ([runbook](../../runbooks/platform/backup-archive.md)). |
 | `breakglass` | vm100, vm102 | Enforces the admin break-glass keys exclusively on each VM's native user and removes retired passwordless sudo rules. |
 | `calibre_importer` | lxc220 | Installs Calibre and a timer that imports ebooks dropped into `/books-rw/_import`. |
 | `chrony` | vm100, vm102 | Installs and enables `chrony` with the Debian default configuration. |
@@ -175,7 +183,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `docker_mount_ordering` | `docker` | Orders `docker.service` after the `.automount` units its containers bind (never the `.mount` units, see KE-15). |
 | `fleet_drift` | lxc250 | Weekly timer running the drift sweep as `devops` and exporting the result as a metric. |
 | `fleet_snapshot` | lxc250 | Weekly timer running `fleet-snapshot.yml`, ordered before the Saturday host jobs. |
-| `guest_backup` | Proxmox host | Weekly `vzdump` of the nine guests to `/mnt/vzdump` (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
+| `guest_backup` | Proxmox host | Daily `vzdump` of the nine guests to `/mnt/vzdump`, seven days kept (asserted to be a mountpoint off the root device), plus the daily host-config backup and `platform-restore.sh` ([runbook](../../runbooks/platform/platform-restore.md)). |
 | `guest_boot_retry` | Proxmox host | Once per boot, after `startall`, starts the onboot guests that are still stopped, in startup order ([KE-27](known-errors.md#ke-27)). |
 | `homelab_schedule` | Proxmox host | Renders the RTC wake and shutdown scripts and the one cron line in `/etc/cron.d/homelab-schedule`; wake plans are role variables. |
 | `jellyfin_user_prefs` | vm100 | Asserts `SubtitleMode` on every Jellyfin user through the API and reports drifted users under `--check`. |
@@ -196,7 +204,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `nsswitch` | nodes declaring `nsswitch_hosts` (lxc250) | Owns the `hosts:` line of `/etc/nsswitch.conf` and verifies resolution with `getent` ([decision](../decisions/magicdns-and-systemd-resolved.md)). |
 | `offsite_backup` | `offsite_sources` | `restic` to an append-only `rest-server` at a second site; built, not deployed ([decision](../decisions/offsite-backup-target.md)). |
 | `paperless_env` | lxc211 | Renders the Paperless `.env` from vaulted values and derives the Serve URL from `tailscale status`. |
-| `paperless_inbox_scan` | lxc210 | Hourly timer rescanning the Nextcloud Paperless inbox. |
+| `paperless_inbox_scan` | lxc210 | Hourly timer rescanning the Nextcloud Paperless inbox and exporting whether each ingest mount verifies. |
 | `postgres_exporter` | lxc260 | Owns `postgres_exporter.service` bound to the Tailscale address and ordered after `tailscaled`. |
 | `postgresql_backup` | lxc260 | Daily `pg_dumpall` on a timer with write-time verification; refuses to run unless `/mnt/backups` is CIFS. |
 | `postgresql_boot_order` | lxc260 | Drop-in gating PostgreSQL on the Tailscale address ([KE-9](known-errors.md#ke-9)). |
@@ -213,6 +221,7 @@ tracked in the [remediation plan](remediation-plan.md).
 | `tailscale_cert` | `tailscale_cert_ondisk` | Renews the on-disk Tailscale certificate on a timer and reloads the consumer only when it changed ([KE-16](known-errors.md#ke-16)). |
 | `timezone` | all nodes | Sets `Europe/Berlin` and reads it back; on lxc210 also pins MariaDB's `default_time_zone`. |
 | `unattended_upgrades` | all guests | Installs `unattended-upgrades`, turns the daily run on and allows the security archive alone, per distribution from `vars/` (`Allowed-Origins` on Ubuntu, `Origins-Pattern` on Debian); kernels are held back, the NVIDIA stack on vm100 too. Reads the merged config back with `apt-config` and asserts it. |
+| `upstream_watch` | lxc250 | Weekly check whether a release contains an upstream fix a known-error mitigation waits for; exports `upstream_watch_fix_released` for `UpstreamFixReleased`. |
 
 ## SSH Hardening
 

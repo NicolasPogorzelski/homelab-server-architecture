@@ -74,3 +74,13 @@ lan_guard_allow:
 listener_metrics_allowed:
   - { proto: tcp, port: 22, reason: "hypervisor sshd, step 4 of docs/decisions/sshd-listen-address.md" }
   - { proto: udp, port: 6666, reason: "netconsole receiver; netpoll cannot use Tailscale - docs/platform/proxmox-host.md" }
+
+# === Backup mirror ===
+#
+# The newest guest archive per guest and the newest host configuration archive
+# go to the array monthly. The share holds the host's credentials (inside the
+# host configuration archive), so only this host's account can open it.
+backup_mirror_target: /mnt/smb/backup-archive-guests
+backup_mirror_sources:
+  - "vzdump|/mnt/vzdump|vzdump-*.zst|vzdump-[a-z]+-([0-9]+)-"
+  - "host-config|/mnt/vzdump/host-config|host-config-*.tar.zst|"

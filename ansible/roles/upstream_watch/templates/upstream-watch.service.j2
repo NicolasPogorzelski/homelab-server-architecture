@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Check whether watched upstream fixes are released
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ upstream_watch_script_dest }} {{ upstream_watch_textfile_dir }}
+# Runs as root because the textfile directory is root-owned; ProtectSystem makes the
+# rest of the filesystem read-only to the job.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths={{ upstream_watch_textfile_dir }}

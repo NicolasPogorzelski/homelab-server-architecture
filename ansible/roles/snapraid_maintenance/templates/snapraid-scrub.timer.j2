@@ -4,7 +4,7 @@ Description=Weekly SnapRAID scrub at {{ snapraid_scrub_oncalendar }}
 
 [Timer]
 OnCalendar={{ snapraid_scrub_oncalendar }}
-# A scrub missed because the host was off on the Monday would otherwise wait a
+# A scrub missed because the host was off on Sunday night would otherwise wait a
 # full week. Persistent=true catches it up at the next boot.
 Persistent=true
 Unit=snapraid-maintenance@scrub.service

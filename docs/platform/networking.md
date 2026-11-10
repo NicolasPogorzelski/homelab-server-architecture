@@ -36,11 +36,12 @@ Access between tiers is explicitly controlled via ACL policies.
 
 ## LAN Access
 
-No service is reachable from the LAN since 2026-10-01. Media streaming was the last exception, and
-it ended when Jellyfin and Audiobookshelf moved to the tailnet
-([decision](../decisions/media-over-the-tailnet.md), [vm100](../nodes/vm100.md#no-media-ports-on-the-lan)). The `lan_guard` nftables table on every
-node's LAN interface drops new inbound connections; the named exceptions are SMB to vm102 from
-vm100 and the hypervisor, and break-glass SSH and netconsole to the hypervisor. The tailnet is never
+One service is reachable from the LAN, by one client: Jellyfin on vm100, for the streaming box
+([decision](../decisions/streaming-box-over-the-lan.md), [vm100](../nodes/vm100.md#media-ports-on-the-lan)).
+Every other media client uses the tailnet ([decision](../decisions/media-over-the-tailnet.md)).
+The `lan_guard` nftables table on every node's LAN interface drops new inbound connections; the
+named exceptions are SMB to vm102 from vm100 and the hypervisor, break-glass SSH and netconsole to
+the hypervisor, and Jellyfin on vm100 from the streaming box. The tailnet is never
 filtered by it. See the `lan_guard` role in [ansible.md](ansible.md#roles).
 
 ## Design Goal

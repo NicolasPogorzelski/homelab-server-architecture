@@ -64,8 +64,8 @@ Expected: no unsynced differences, no bad blocks; the timer shows a `NEXT` time.
 
 ## Rollback
 
-None. Parity is one equation over the present contents, not a snapshot; once written, the previous
-state is unreachable. The safety is front-loaded.
+None. Parity is one equation over the present contents; once written, the previous state is
+unreachable, so the protection lies in the abort criteria before the sync.
 
 Abort criteria, do not sync if any holds:
 

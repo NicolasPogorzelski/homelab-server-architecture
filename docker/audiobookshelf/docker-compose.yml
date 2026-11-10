@@ -12,3 +12,6 @@ services:
       - "${ABS_DATA_ROOT}/metadata:/metadata"
       - "${ABS_AUDIOBOOKS_ROOT}:/audiobooks:ro"
       - "${ABS_PODCASTS_ROOT}:/podcasts:ro"
+      # Backup target on the data disk (aux-disk), set as backupPath in the server
+      # settings; see roles/app_backup.
+      - "${ABS_BACKUP_ROOT}:/backups"

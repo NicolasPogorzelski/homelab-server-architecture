@@ -8,6 +8,9 @@ all:
     # of vm102 and netconsole sender to the host, the admin workstations as the host's
     # break-glass SSH sources. Both workstations need a fixed DHCP reservation.
     vm100_lan_ip: <lan-ip-vm100>
+    # The streaming box at the TV, the only LAN client of Jellyfin on vm100. Needs a
+    # fixed DHCP reservation like the workstations.
+    streaming_box_lan_ip: <lan-ip-streaming-box>
     admin_lan_ips:
       - <lan-ip-admin-notebook>
       - <lan-ip-admin-desktop>

@@ -44,8 +44,8 @@ See: [Runbook index](../../runbooks/README.md)
 
 - Alertmanager on lxc200, exposed with `tailscale serve --https=9093`; receiver: a Discord webhook.
 - Rules: `docker/monitoring/prometheus/rules/alert.rules.yml` (owner of every threshold). The
-  table below lists every group and alert name; the repository validator holds it against the
-  rules file, and `FleetRulesMismatch` holds the rules file against what Prometheus has loaded.
+  validator holds the table below against the rules file, and `FleetRulesMismatch` holds the
+  rules file against what Prometheus has loaded.
 
 | Group | Rules |
 |---|---|
@@ -55,17 +55,19 @@ See: [Runbook index](../../runbooks/README.md)
 | `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
-| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale` |
+| `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale`, `AppBackupStale`, `AppBackupMetricsMissing`, `BackupMirrorStale`, `BackupMirrorFailed`, `BackupMirrorMetricsMissing` |
 | `offsite` | `OffsiteBackupFailed`, `OffsiteBackupStale`, `OffsiteBackupUnverified` |
 | `snapshot` | `FleetSnapshotStale`, `FleetSnapshotIncomplete` |
 | `drift` | `FleetDriftUnexpected`, `FleetDriftStale`, `FleetDriftIncomplete`, `FleetRulesMismatch`, `FleetRulesUnverified`, `PrometheusRuleEvaluationFailing` |
 | `kernel` | `FilesystemMountTimeout`, `SystemdUnitStuckActivating` |
 | `heartbeat` | `Watchdog` |
 | `blackbox` | `ServiceDown` |
-| `smart` | `SmartAttributeDegrading`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
+| `upstream` | `UpstreamFixReleased`, `UpstreamWatchStale`, `UpstreamWatchFailed` |
+| `smart` | `SmartAttributeDegrading`, `SmartUdmaCrcErrorsGrowing`, `SmartReallocatedSectors`, `SmartWearLevelingLow`, `SmartMetricsStale` |
 | `apt` | `AptSecurityUpdatesPending`, `AptMetricsStale` |
 | `listeners` | `ListenerOutsideBindingRule`, `ListenerMetricsStale`, `ListenerMetricsMissing` |
 | `jellyfin` | `JellyfinCudaLost` |
+| `ingest` | `PaperlessIngestStorageDown`, `PaperlessInboxScanStale`, `PaperlessIngestMetricsMissing` |
 
 ### Notes on specific rules
 
@@ -77,7 +79,7 @@ See: [Runbook index](../../runbooks/README.md)
   without a backup". Details in [postgresql-platform.md](../services/postgresql-platform.md#backup-strategy).
 - **Missing metrics.** `DatabaseBackupMetricsMissing` fires when any of the four database
   timestamps (both backups, both restore tests) is absent, the case in which a staleness rule
-  evaluates to nothing rather than to red. Each absence carries a `metric` label.
+  evaluates to nothing and never turns red. Each absence carries a `metric` label.
 - **SnapRAID.** `SnapRAIDScrubStale` reads when a scrub last succeeded and fires after 10 days;
   the scrub runs weekly (`snapraid_maintenance` defaults). It cannot show how much of the array a
   scrub reached, so `SnapRAIDScrubCoverageAging` (oldest block over 200 days) and
@@ -88,6 +90,10 @@ See: [Runbook index](../../runbooks/README.md)
   write into the textfile collector on lxc250 ([ansible.md](ansible.md#roles)).
 - **Blackbox.** `ServiceDown` fires on the `blackbox-http` and `blackbox-https` targets
   ([KE-8](known-errors.md#ke-8)).
+- **Pending state across the off-window.** Prometheus restores a pending alert's `for:` after a
+  restart only if the outage was shorter than `--rules.alert.for-outage-tolerance`, set to 48 h
+  in the compose file. An alert whose `for:` is longer than one day of uptime depends on it
+  ([KE-31](known-errors.md#ke-31)).
 
 ### Watchdog and the missing heartbeat
 

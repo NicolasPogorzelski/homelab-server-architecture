@@ -26,9 +26,9 @@ BACKUP_DIR="/mnt/vzdump"
 # recheck it when the fleet changes.
 GUESTS=(250 260 210 211 200 220 230 102 100)
 
-# Keep counts are per class, in time: keep-weekly=8 is eight weeks, not eight
-# files.
-PRUNE="keep-daily=3,keep-weekly=8,keep-monthly=6"
+# Seven days on the aux-disk; the long-term tier is the monthly copy on the
+# array (backup_mirror). keep-daily counts days, not files.
+PRUNE="keep-daily=7"
 
 # A VM disk larger than this without `backup=0` stops that guest's backup. The
 # passthrough disks of vm102 are terabytes each and vm100's data disk is 300 GB;

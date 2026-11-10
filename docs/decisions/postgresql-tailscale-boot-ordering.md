@@ -20,11 +20,11 @@ failed until a manual restart. The PostgreSQL log shows the failure on the 2026-
 boots and a clean bind after the restart ([KE-9](../platform/known-errors.md#ke-9)).
 
 ## Options
-- **`listen_addresses = '*'`.** Lost: also binds the LAN interface. `pg_hba.conf` would still gate
+- **`listen_addresses = '*'`.** Also binds the LAN interface. `pg_hba.conf` would still gate
   authentication, but a listener on an untrusted network is an exposure regression.
-- **`After=network-online.target`.** Lost: `tailscaled` does not register with the wait-online
+- **`After=network-online.target`.** `tailscaled` does not register with the wait-online
   services, so the target can be reached before the Tailscale address exists.
-- **A fail-closed gate.** Lost: a slow `tailscaled` would take the whole database offline, loopback
+- **A fail-closed gate.** A slow `tailscaled` would take the whole database offline, loopback
   included - worse than the original bug for a central database.
 - **Order after `tailscaled` and gate fail-open on the address being present.** Chosen.
 

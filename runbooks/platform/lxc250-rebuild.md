@@ -58,7 +58,7 @@ lxc250 is in no service's data path; running services are unaffected while it is
    pct exec <ctid> -- useradd -m -s /bin/bash -G sudo devops
    PASS=$(openssl rand -base64 16); echo "devops:$PASS" | pct exec <ctid> -- chpasswd; echo "$PASS"
    ```
-   The temporary password is for `sudo` during setup only; step 10 locks it.
+   The temporary password is for `sudo` during setup only; step 11 locks it.
    Check: `pct exec <ctid> -- id devops` lists group `sudo`.
 5. Tailscale.
    ```bash
@@ -86,13 +86,22 @@ lxc250 is in no service's data path; running services are unaffected while it is
    cd ~/git/homelab-server-architecture/ansible && ansible-galaxy collection install -r requirements.yml
    ```
    Check: `ansible --version` prints a version and `config file = .../ansible/ansible.cfg`.
-8. On the host: create the `ansible` account on the node, as root in the container; the playbook
+8. Seed the trust anchor and build the fleet's known_hosts. Read the hypervisor's key on its
+   console (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`) and compare it with the network:
+   ```bash
+   ssh-keyscan -t ed25519 <tailscale-ip-proxmox> | ssh-keygen -lf -
+   ssh-keyscan -t ed25519 <tailscale-ip-proxmox> | ssh-keygen -H -f - > ~/.ssh/known_hosts.fleet 2>/dev/null
+   ansible-playbook playbooks/known-hosts.yml
+   ```
+   Check: both fingerprints are equal before the second line runs; the playbook reports no failed
+   host and a second run `changed=0`. `ansible.cfg` refuses every node whose key is not in the file.
+9. On the host: create the `ansible` account on the node, as root in the container; the playbook
    cannot create the account it connects with.
    ```bash
    pct exec <ctid> -- bash /home/devops/git/homelab-server-architecture/snippets/scripts/bootstrap-ansible-user-lxc250.sh
    ```
    Check: a second run reports every item unchanged.
-9. From `ansible/` as `devops`, bring the node under its own roles, gate before pin.
+10. From `ansible/` as `devops`, bring the node under its own roles, gate before pin.
    ```bash
    for p in tailscale-boot-gate ssh-hardening nsswitch; do
      ansible-playbook playbooks/$p.yml --limit lxc250 --check --diff && ansible-playbook playbooks/$p.yml --limit lxc250
@@ -101,7 +110,7 @@ lxc250 is in no service's data path; running services are unaffected while it is
    Check: `ss -ltn` shows port 22 on `<tailscale-ip-lxc250>` only. Then run every playbook in the
    `[playbooks]` section of `ansible/drift-sweep.conf` with `--limit lxc250`; the node's roles are
    listed in [lxc250.md](../../docs/nodes/lxc250.md#configuration-management).
-10. Dotfiles.
+11. Dotfiles.
     ```bash
     git clone https://github.com/NicolasPogorzelski/dotfiles.git ~/git/dotfiles
     cd ~/git/dotfiles && ./validate.sh && ./bootstrap.sh && ./install.sh --dry-run && ./install.sh

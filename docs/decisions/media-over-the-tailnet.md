@@ -2,7 +2,8 @@
 
 ## Status
 Implemented 2026-10-01. Recorded 2026-10-13. Supersedes [DD-8](design-decisions.md#dd-8) and the
-LAN-exposure part of [DD-9](design-decisions.md#dd-9). Superseded by: -.
+LAN-exposure part of [DD-9](design-decisions.md#dd-9). Superseded for the streaming box only by
+[Streaming box over the LAN](streaming-box-over-the-lan.md).
 
 Verified 2026-10-13: Jellyfin on vm100's Tailscale address, Audiobookshelf on `127.0.0.1:13378` with
 its serve forward on `tailscale0`, no global IPv6 address on `enp6s18`, and the `lan_guard` drop
@@ -19,12 +20,13 @@ the ceiling; vm102's `tailscaled` used most of one core at that rate. The uplink
 from outside the home only.
 
 ## Options
-- **Keep the LAN exception.** Lost: its performance argument does not survive the measurement, and
+- **Keep the LAN exception.** Its performance argument does not survive the measurement, and
   it leaves wildcard listeners answering every device on the home network.
 - **All clients on the tailnet, the LAN closed on every node.** Chosen.
 
 ## Decision
 No service is reachable on the LAN. Clients at home join the tailnet like clients anywhere else.
+The streaming box is the one exception ([streaming box over the LAN](streaming-box-over-the-lan.md)).
 
 - Jellyfin binds vm100's Tailscale address. Behind `tailscale serve --tcp` (2026-10-01 to
   2026-10-07) streams stalled inside the forwarder ([KE-28](../platform/known-errors.md#ke-28)); a
@@ -64,7 +66,8 @@ nft list table inet lan_guard | grep drop
 
 ## Related Documents
 - [DD-8: LAN exposure for performance-critical workloads](design-decisions.md#dd-8) (superseded)
-- [vm100: no media ports on the LAN](../nodes/vm100.md#no-media-ports-on-the-lan)
+- [vm100: media ports on the LAN](../nodes/vm100.md#media-ports-on-the-lan)
+- [Streaming box over the LAN](streaming-box-over-the-lan.md)
 - [KE-28](../platform/known-errors.md#ke-28)
 - [Tailscale ACL model](../platform/tailscale-acl.md)
 - [SMB bind and LAN access](smb-bind-and-lan-access.md) (the storage path, which still crosses the LAN)

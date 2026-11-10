@@ -11,13 +11,14 @@ Rollback. Where a step has no rollback, the runbook names its abort criteria ins
 | Runbook | Use when | Last exercised |
 |---|---|---|
 | [platform-restore](platform/platform-restore.md) | The Proxmox host has to be rebuilt on a fresh install | never |
-| [boot-ssd-replacement](platform/boot-ssd-replacement.md) | The boot SSD is replaced (KE-14) | never |
+| [boot-ssd-replacement](platform/boot-ssd-replacement.md) | The boot disk is replaced by a disk fitted beside it | 2026-10-27, pass |
 | [ke14-power-path-check](platform/ke14-power-path-check.md) | KE-14 errors persist and the 12 V power path is to be measured | never |
 | [escrow-restore-drill](platform/escrow-restore-drill.md) | The yearly restore of the escrowed vault password, inventory and SSH key is due | never |
 | [hard-shutdown-recovery](platform/hard-shutdown-recovery.md) | Guests fail to start after an unclean host shutdown | never |
 | [host-console-gpu-swap](platform/host-console-gpu-swap.md) | A local console on the host is needed while the GPU is passed through to vm100 | never |
 | [lvm-thin-pool-full](platform/lvm-thin-pool-full.md) | An `LvmThinPool*` alert fires or guests report I/O errors | 2026-04-25, pass (incident) |
 | [docker-data-root-migration](platform/docker-data-root-migration.md) | An LXC keeps its Docker data root on the thin pool | 2026-04-30, pass |
+| [backup-archive](platform/backup-archive.md) | Provisioning or checking the monthly Backup-Archive, restoring a month, or a `BackupMirror*` / `AppBackup*` alert fires | 2026-10-27, pass |
 | [guest-backup-restore](platform/guest-backup-restore.md) | A guest has to be restored, or a `GuestBackup*` alert fires | 2026-08-21, pass |
 | [lxc250-rebuild](platform/lxc250-rebuild.md) | The Ansible control node has to be recreated | never |
 | [pveproxy-tailscale-boot-race](platform/pveproxy-tailscale-boot-race.md) | The web UI on `:8006` is down after boot while SSH works (KE-12) | 2026-06-25, pass |

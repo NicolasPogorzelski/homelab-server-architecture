@@ -9,6 +9,10 @@
 # host would stay off until switched on). Either way it retries the next night.
 set -uo pipefail
 
+# Cron starts this with PATH=/usr/bin:/bin, which lacks qm in /usr/sbin; the
+# guest checks then saw "not running" and let the shutdown through (KE-32).
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 DEADLINE=$(( $(date +%s) + {{ homelab_schedule_guard_timeout_minutes }} * 60 ))
 
 # Prints the first guarded unit that is active, or nothing.
@@ -35,6 +39,14 @@ busy_unit() {
 {% endfor %}
 }
 
+{% if homelab_schedule_guard_guest_units %}
+# Without qm the guests cannot be asked, and an unanswered guest counts as idle.
+if ! command -v qm >/dev/null; then
+    echo "ERROR: qm not found - the guest guards cannot run, not shutting down tonight" >&2
+    exit 1
+fi
+
+{% endif %}
 reported=""
 while true; do
     unit="$(busy_unit)"

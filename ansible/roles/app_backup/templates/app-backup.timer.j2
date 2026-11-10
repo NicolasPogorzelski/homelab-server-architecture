@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Daily application backups at {{ app_backup_oncalendar }}
+
+[Timer]
+OnCalendar={{ app_backup_oncalendar }}
+Persistent={{ app_backup_persistent | lower }}
+Unit=app-backup.service
+
+[Install]
+WantedBy=timers.target

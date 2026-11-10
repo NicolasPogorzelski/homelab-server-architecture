@@ -14,11 +14,11 @@ and exposed inside that model. Constraints: no public-facing service, no Funnel,
 forwarding, and maintenance kept small enough for one administrator.
 
 ## Options
-- **Nginx or Caddy as reverse proxy.** Lost: certificate renewal, upstream configuration and a
+- **Nginx or Caddy as reverse proxy.** Certificate renewal, upstream configuration and a
   further daemon to patch and monitor, for a problem `tailscale serve` already solves.
-- **Traefik with Docker labels.** Lost: label and middleware configuration sized for many services
+- **Traefik with Docker labels.** Label and middleware configuration sized for many services
   per Docker host; here most nodes run one.
-- **Bind every service to its Tailscale address.** Lost as the default: no TLS termination, and the
+- **Bind every service to its Tailscale address.** Not as the default: no TLS termination, and the
   service cannot start before `tailscaled` has assigned the address
   ([KE-18](../platform/known-errors.md#ke-18)). Kept as the rule for the cases below.
 - **Bind loopback and publish through `tailscale serve`.** Chosen as the default.

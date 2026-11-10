@@ -1,12 +1,12 @@
 # {{ ansible_managed }}
 [Unit]
-Description=Weekly guest backup at {{ guest_backup_oncalendar }}
+Description=Daily guest backup at {{ guest_backup_oncalendar }}
 
 [Timer]
 OnCalendar={{ guest_backup_oncalendar }}
 
 # The host powers down nightly at 23:30 and wakes by RTC alarm (homelab_schedule),
-# so a weekly slot can be missed. Persistent=true records the last run under
+# so a slot can be missed. Persistent=true records the last run under
 # /var/lib/systemd/timers/ and fires the overdue one at the next boot.
 Persistent={{ guest_backup_persistent | lower }}
 

@@ -32,6 +32,10 @@ apt_metrics_timer: prometheus-node-exporter-apt.timer
 # default (/var/lib/prometheus/node-exporter) is read by nothing here.
 apt_metrics_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
 
+# The package's own textfile directory. Its collectors ran once there at install,
+# before the override and the masks, and left metric files that nothing updates.
+apt_metrics_package_textfile_dir: /var/lib/prometheus/node-exporter
+
 # Collectors with nothing to measure on an ordinary guest. Masked rather than
 # disabled, as in systemd_hygiene: a disabled unit is one `systemctl enable` away
 # from running.

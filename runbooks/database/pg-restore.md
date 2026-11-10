@@ -8,7 +8,7 @@
   and roles compared against live). Validation runs monthly by timer (`postgresql_restore_test`).
 
 The backup is a `pg_dumpall` of the whole cluster (all databases plus roles), written by
-`snippets/postgres/pg-backup.sh`. It cannot be replayed for one database alone. This runbook has two
+`snippets/postgres/pg-backup.sh`. It cannot be replayed for one database alone, so there are two
 paths:
 
 - **Path A (one database):** restore the dump into a scratch cluster on port 5433, `pg_dump` the one
@@ -142,7 +142,7 @@ on lxc211 (`/opt/paperless/`). All commands run on the Proxmox host.
 - After step 6: drop `<db>` again and load the safety dump from step 5 with
   `pg_restore -C -d postgres /mnt/backups/pre-restore_<db>_<ts>.dump`.
 - Path B: restore the safety `pg_dumpall` from step 3 into an empty cluster the same way.
-- Keep safety dumps until the restored service has been used, not only counted. They are not covered
+- Keep safety dumps until the restored service has been used; matching row counts are not enough. They are not covered
   by the 7-day retention glob, so delete them by hand afterwards.
 
 ## Background

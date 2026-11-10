@@ -1,6 +1,7 @@
 # Storage Design
 
-The storage layer is implemented as a dedicated VM to enforce separation of concerns between compute, storage and services.
+The storage layer is a dedicated VM, so a rebuild or migration of a compute or service guest does
+not touch the disks.
 
 ## Technologies
 
@@ -126,14 +127,16 @@ a marked `blockinfile`; the layout above it stays hand-written because it carrie
   [KE-19](known-errors.md#ke-19) rules: a database side file captured at a different moment than
   its main file yields a parity set from which a reconstruction can be corrupt
 - `exclude /Nextcloud/appdata_*/richdocuments/remoteData/` - Collabora scratch data
+- `exclude *.partial` - a database dump while it is written; the dump scripts rename it once it
+  is verified, and the finished dump is covered by parity as usual
 
 Operational note:
 - `snapraid status` is typically executed with `sudo` because SnapRAID must read content/parity state files.
 
 Important:
 
-Data written after the last `snapraid sync` is not parity-protected.
-Operational discipline (regular sync + scrub) is required to maintain protection guarantees.
+Data written after the last `snapraid sync` has no parity until the next nightly sync; the weekly
+scrub finds silent corruption in what is already covered.
 
 ### MergerFS (Unified View)
 
@@ -157,7 +160,7 @@ Global settings (high-level):
 - Mandatory signing (`server signing = mandatory`)
 
 Service shares (read-write, per-service user): `[Nextcloud]`, `[Paperless]`, `[Postgres-backups]`,
-`[DB-Backups]`, and the two Paperless ingest shares. The full list with paths is in
+`[DB-Backups]`, the two Backup-Archive shares and the two Paperless ingest shares. The full list with paths is in
 [samba.md](samba.md).
 
 Owner mapping (current state for RW shares):
@@ -203,6 +206,10 @@ Done this way for `disk06` on 2026-10-17, with the pool in use throughout:
    `snapraid devices` must list the disk. The nightly sync takes it in.
 5. `storage-permissions.yml`. The role reads the branch list from MergerFS and creates every
    share directory on the new branch with its setgid bit.
+
+A new disk gets a full surface read in four `smartctl -t select,next` spans, one per day: the
+extended test needs about 24 h on 18 TB (`smartctl -c`), longer than the host runs between wake
+and shutdown. Verified 2026-11-02: `disk06` read all four spans without error, by `smartctl -l selftest`.
 
 A data disk may not hold more than the parity disk can cover. `disk06` and the parity disk are
 the same model size, and their file systems differ by a megabyte, so the margin comes from ext4's

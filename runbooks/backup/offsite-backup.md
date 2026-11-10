@@ -83,7 +83,7 @@ The role asserts these and refuses to deploy without them.
 | Symptom | Cause | Action |
 |---|---|---|
 | `repository ... is unreachable or the password is wrong` | VPS down, or password file does not match the repository | Check the VPS, then `/etc/offsite-backup.pass`; a rotated server password invalidates every client |
-| `restic forget` / `restic prune` fails | By design: the client is append-only | Run retention on the server; never grant the client delete rights |
+| `restic forget` / `restic prune` fails | The client account is append-only | Run retention on the server; never grant the client delete rights |
 | Snapshot smaller than expected | A source path was renamed | The path check fails loudly; fix `offsite_backup_paths` |
 | `OffsiteBackupStale` silent while nothing ran | Prometheus runs on the same site and sees only uptime | Known limit; covered by the external heartbeat item in the remediation plan |
 | First run cut off | Domestic uplink, `TimeoutStartSec` reached | Start it again by hand (step 2) and let it finish |
@@ -96,7 +96,7 @@ systemctl disable --now offsite-backup.timer
 
 The repository is outside the rollback. The client cannot delete from it, which is the property
 the target was chosen for; removing snapshots is a server-side operation. Removing the role from a
-node stops new copies and destroys none.
+node stops new copies; existing snapshots stay in the repository.
 
 ## Background
 

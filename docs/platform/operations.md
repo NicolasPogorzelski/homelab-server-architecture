@@ -25,8 +25,9 @@ Node detail lives in `docs/nodes/`; membership in `ansible/inventory/hosts.yml.e
 ### Trust Boundaries
 
 - **Public Internet:** no exposure, no router port forwarding.
-- **LAN:** no service is reachable; `lan_guard` admits only SMB to vm102 from vm100 and the
-  hypervisor, and break-glass SSH and netconsole to the hypervisor.
+- **LAN:** `lan_guard` admits only SMB to vm102 from vm100 and the hypervisor, break-glass SSH
+  and netconsole to the hypervisor, and Jellyfin on vm100 from the streaming box
+  ([decision](../decisions/streaming-box-over-the-lan.md)).
 - **Tailnet:** identity-based access for administration and use ([tailscale-acl.md](tailscale-acl.md)).
 - **Storage:** segmentation at the SMB layer with separate read-write and read-only identities
   ([samba.md](samba.md)).
@@ -85,8 +86,9 @@ keeps service paths stable while disks are added or replaced ([storage-design.md
   `PostgreSQLRestoreTestStale`.
 - **Paperless-ngx (lxc211):** documents on the archive pool via SMB, database in the PostgreSQL
   platform (covered by its dump), runtime state on local storage.
-- **Machines:** weekly `vzdump` of all nine guests and a daily host-config backup on the host
-  (`guest_backup` role, [runbook](../../runbooks/platform/guest-backup-restore.md)).
+- **Machines:** daily `vzdump` of all nine guests and a daily host-config backup on the host
+  (`guest_backup` role, [runbook](../../runbooks/platform/guest-backup-restore.md)); the newest of
+  each goes to the Backup-Archive monthly ([runbook](../../runbooks/platform/backup-archive.md)).
 
 ### 2.4 Backup Scope & Residual Risk
 
@@ -113,13 +115,13 @@ Not protected:
 **Layer 1: Storage** - vm102 online, data and parity disks mounted, MergerFS at `/mnt/mergerfs`,
 Samba reachable.
 
-**Layer 2: Compute** - vm100 online; media libraries under `/srv/media/*` through one systemd
-automount per library.
-
-**Layer 3: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
+**Layer 2: Services** - LXCs 200, 210, 211, 220, 230, 250, 260 online; each service has its mounts
 before critical workloads start; Docker containers use `restart: unless-stopped`, and
 `docker_boot_retry` restarts containers whose first start failed; on the host,
 `guest_boot_retry` starts onboot guests whose start failed.
+
+**Layer 3: Compute** - vm100 online, last in the start order; media libraries under `/srv/media/*`
+through one systemd automount per library.
 
 **Layer 4: Validation** - monitoring confirms every target is up; spot-check endpoints over
 loopback or the tailnet.
@@ -212,12 +214,13 @@ Runtime data is on local block storage; the dumps are on SMB and survive a runti
 - No public reverse proxy, no router port forwarding.
 - Internal services bind loopback where possible; infrastructure services bind the Tailscale
   address.
-- No service is reachable from the LAN; the SMB path to vm102 is the only named LAN flow.
+- One service is reachable from the LAN, Jellyfin for the streaming box; the other named LAN flows
+  are SMB to vm102 and break-glass access to the hypervisor.
 
 Where a daemon cannot bind narrowly (Samba on vm102, Apache and `coolwsd` on lxc210), the
 `lan_guard` table drops LAN connections before they reach the socket
 ([SMB bind decision](../decisions/smb-bind-and-lan-access.md)). sshd is pinned to the Tailscale
-address on every guest; the hypervisor is deliberately unpinned
+address on every guest; on the hypervisor it stays on the wildcard so LAN break-glass SSH works
 ([decision](../decisions/sshd-listen-address.md)). Remaining wildcard binds are tracked in the
 [remediation plan](remediation-plan.md) and reported by `ListenerOutsideBindingRule`.
 
@@ -248,13 +251,13 @@ filesystem side in [storage-permissions.md](storage-permissions.md).
 
 ### Automated
 
-All scheduled jobs are systemd timers with `Persistent=true`; schedules are in each role's
-defaults ([ansible.md](ansible.md#conventions)).
+Scheduled jobs are systemd timers, calendar timers with `Persistent=true`; schedules are in
+each role's defaults, and the exceptions are listed in [ansible.md](ansible.md#conventions).
 
 - Hourly: Nextcloud rescan of the Paperless inbox on lxc210 (`paperless_inbox_scan`); output in
   the journal of its service.
 - Daily: database dumps, SnapRAID sync and status, host-config backup.
-- Weekly: SnapRAID scrub, guest backup, fleet snapshot and drift sweep.
+- Weekly: SnapRAID scrub, fleet snapshot and drift sweep.
 - Monthly: PostgreSQL and MariaDB restore tests.
 
 ### Manual

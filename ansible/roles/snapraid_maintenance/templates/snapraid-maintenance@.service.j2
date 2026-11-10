@@ -12,7 +12,9 @@ Type=oneshot
 User=root
 # Read by the script's scrub mode only; harmless for sync and status.
 Environment=SNAPRAID_SCRUB_PERCENT={{ snapraid_scrub_percent }}
-ExecStart={{ snapraid_script_dest }} %i
+# Sunday's sync (23:45) can still run when the scrub starts at midnight, and a
+# second snapraid refuses the array lock and fails. flock makes the later job wait.
+ExecStart=/usr/bin/flock /run/lock/snapraid-maintenance.lock {{ snapraid_script_dest }} %i
 # A multi-terabyte sync can run for hours. systemd's oneshot default is already no
 # timeout; stated explicitly.
 TimeoutStartSec=infinity

@@ -49,6 +49,23 @@
     state: directory
     mode: "0755"
 
+# Nothing scrapes these files, but they show counts from the install day to
+# anyone who reads the node by hand.
+- name: Find metric files left in the package's textfile directory
+  ansible.builtin.find:
+    paths: "{{ apt_metrics_package_textfile_dir }}"
+    patterns: "*.prom"
+  register: apt_metrics_stale_files
+
+- name: Remove the metric files left in the package's textfile directory
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ apt_metrics_stale_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: apt_metrics_package_textfile_dir != apt_metrics_textfile_dir
+
 - name: Create the drop-in directory for the apt collector unit
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ apt_metrics_unit }}.d"
@@ -126,11 +143,11 @@
     - not ansible_check_mode
     - apt_metrics_timer in (apt_metrics_unit_files.stdout | default(''))
 
-# Asserts the HELP line, not a data line: a fully patched node emits no data
-# lines, but the HELP line is always written once the collector runs to the end.
+# Asserts the cache timestamp, which every collector version writes. The trixie
+# collector omits apt_upgrades_pending entirely on a fully patched node.
 - name: Prove the collector ran to completion
   ansible.builtin.command:
-    cmd: grep -c '^# HELP apt_upgrades_pending' {{ apt_metrics_textfile_dir }}/apt.prom
+    cmd: grep -c '^apt_package_cache_timestamp_seconds ' {{ apt_metrics_textfile_dir }}/apt.prom
   register: apt_metrics_help
   changed_when: false
   failed_when: apt_metrics_help.rc != 0 or apt_metrics_help.stdout | int < 1
@@ -140,7 +157,8 @@
 
 - name: Count what is actually pending here
   ansible.builtin.command:
-    cmd: grep -c '^apt_upgrades_pending{' {{ apt_metrics_textfile_dir }}/apt.prom
+    # bookworm writes an empty-origin series with value 0 when nothing is pending.
+    cmd: grep -c '^apt_upgrades_pending{origin="[^"]' {{ apt_metrics_textfile_dir }}/apt.prom
   register: apt_metrics_series
   changed_when: false
   failed_when: false

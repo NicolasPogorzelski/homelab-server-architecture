@@ -46,15 +46,34 @@ tailscale_boot_gate_clear_restart_prevent: true
 
 ssh_hardening_listen_address: "{{ ansible_host }}"
 
+# Jellyfin over the LAN for the streaming box alone. Its Tailscale path stalled
+# streams that the LAN carried cleanly (KE-34, docs/decisions/streaming-box-over-the-lan.md).
+lan_guard_allow:
+  - proto: tcp
+    port: 8096
+    sources:
+      - "{{ streaming_box_lan_ip }}"
+    reason: Jellyfin for the streaming box, which streams over the LAN instead of its Tailscale path
+
+# Exceptions to the binding rule that listener_metrics reports. Each names its
+# decision; remove the line when the decision is withdrawn.
+listener_metrics_allowed:
+  - proto: tcp
+    port: 8096
+    reason: "Jellyfin on the LAN address for the streaming box; lan_guard admits only its address - docs/decisions/streaming-box-over-the-lan.md"
+
 # Router advertisements gave enp6s18 a global IPv6 address that every wildcard
-# listener answered on. See docs/nodes/vm100.md#no-media-ports-on-the-lan.
+# listener answered on. See docs/nodes/vm100.md#media-ports-on-the-lan.
 netplan_no_ra_interfaces:
   - enp6s18
 
 # Docker's data root and containerd's image store live on the auxiliary disk, and
 # so do the model files. Without this mount the daemon must not start at all.
+# /mnt/scratch holds Jellyfin's cache; unmounted, Jellyfin would fill the root disk
+# (docs/decisions/scratch-pool-on-former-boot-ssd.md).
 docker_mount_ordering_required_paths:
   - /mnt/vm-data
+  - /mnt/scratch
 
 # Units that can never succeed on this node. Masked by the systemd_hygiene role so
 # that every remaining failed unit on the fleet is a real fault worth alerting on.
@@ -90,3 +109,12 @@ systemd_hygiene_masked_units:
     action: remove
     reason: >-
       Backing mount unit of media-audiobookshelf.automount, superseded with it.
+
+# === Backup mirror ===
+#
+# Mounted without x-systemd.idle-timeout: an automatic unmount of a live CIFS
+# mount froze this node once (KE-20).
+backup_mirror_target: /mnt/backup-archive-apps
+backup_mirror_sources:
+  - "jellyfin|/mnt/vm-data/jellyfin/config/data/backups|*.zip|"
+  - "audiobookshelf|/mnt/vm-data/backups/audiobookshelf|*.audiobookshelf|"

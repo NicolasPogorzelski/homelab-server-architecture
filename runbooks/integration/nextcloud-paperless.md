@@ -1,7 +1,8 @@
 # Runbook: Nextcloud -> Paperless-ngx ingestion - verify and repair
 
-- **Use when:** a document dropped into a Nextcloud "Paperless Inbox" does not reach Paperless, the
-  inbox shows a red storage icon, or it keeps listing documents Paperless already consumed.
+- **Use when:** `PaperlessIngestStorageDown` fires, a document dropped into a Nextcloud "Paperless
+  Inbox" does not reach Paperless, the inbox shows a red storage icon, or it keeps listing
+  documents Paperless already consumed.
 - **Duration:** 10-20 minutes.
 - **Risk:** low; no document is touched. Removing a consumption directory that already holds a file
   deletes an ingest in flight.

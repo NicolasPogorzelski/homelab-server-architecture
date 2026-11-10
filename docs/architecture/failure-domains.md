@@ -4,7 +4,7 @@ If a piece of hardware fails, what fails with it. Containment is ownership: what
 drawn inside it. Unlike the other views, the arrows here follow loss: "if the source fails, this is
 the consequence".
 
-None of the three domains is redundant. The platform has no high availability by design; recovery is
+None of the three domains is redundant. The platform has no high availability; recovery is
 procedural.
 
 ## The Three Domains
@@ -12,9 +12,9 @@ procedural.
 ```mermaid
 flowchart TB
   accTitle: Failure domains of the platform
-  accDescr: Boot SSD, aux-disk and vm102 as three failure domains, with what each carries and what its loss causes.
+  accDescr: Boot disk, aux-disk and vm102 as three failure domains, with what each carries and what its loss causes.
 
-  subgraph boot["boot SSD - LSI SAS2008 HBA - KE-14 open"]
+  subgraph boot["boot disk - NVMe in the M.2 slot"]
     ROOTS["pve-data thin pool<br/>every VM and LXC root disk"]
     PVEROOT["pve-root and /boot/efi"]
     SECRETS["lxc250: vault password, real inventory,<br/>Ansible SSH key - escrowed off the platform"]
@@ -24,7 +24,7 @@ flowchart TB
   subgraph auxd["aux-disk - /mnt/aux-disk - KE-13, unreadable sectors growing"]
     DROOTS["Docker data-roots<br/>lxc200, lxc211, lxc220, lxc230"]
     PGDATA["lxc260: PostgreSQL data directory"]
-    VZDUMP["guest backups - weekly vzdump archives"]
+    VZDUMP["short-term backups - daily vzdump archives, 7 days"]
     MONDATA["lxc200: Prometheus TSDB,<br/>Grafana and Alertmanager state"]
     JELLY["vm100 scsi1 - jellyfin-data, qcow2"]
   end
@@ -48,16 +48,14 @@ flowchart TB
 
 ## What Each Domain Means in Practice
 
-**Boot SSD.** It carries `/boot/efi`, `pve-root` and the whole `pve-data` thin pool, so every root
-disk on the platform. It logs intermittent `DID_SOFT_ERROR` bursts under I/O load; media and
-firmware causes are excluded, and the leading hypothesis is the 12 V rail
-([KE-14](../platform/known-errors.md#ke-14)). The disk is replaced in the second half of October
-2026 ([boot SSD replacement](../platform/remediation-plan.md#boot-ssd-replacement)). Identify it by
-SCSI address or `by-id`, never by kernel letter; the letter has changed between boots.
+**Boot disk.** It carries `/boot/efi`, `pve-root` and the whole `pve-data` thin pool, so every root
+disk on the platform. It is an NVMe drive on PCIe; the former boot SSD, whose `DID_SOFT_ERROR`
+bursts on the SAS HBA are [KE-14](../platform/known-errors.md#ke-14), stays fitted outside the
+volume group ([proxmox-host.md](../platform/proxmox-host.md#boot-disk)).
 
 Two [C1](../platform/data-classification.md) datasets sit on it: lxc250's Ansible secrets and
 Nextcloud's MariaDB. MariaDB has a nightly verified dump on vm102 and a monthly restore test. The
-secrets are escrowed since 2026-08-20 in an external password manager and on paper; the escrow has
+secrets are escrowed in an external password manager and on paper; the escrow has
 not been restored from ([escrow drill](../platform/remediation-plan.md#escrow-restore-drill)). The
 host's own configuration is archived daily to the aux-disk and to the boot disk.
 
@@ -69,11 +67,13 @@ regardless, because `Current_Pending_Sector` cannot trip the self-assessment;
 - Docker images and state: class C3, rebuildable from the compose files.
 - PostgreSQL data directory: recovered from the newest nightly dump on vm102.
 - Monitoring history: no backup.
-- vm100's `jellyfin-data`: qcow2 since 2026-10-10, so vm100 can be snapshotted; the snapshots live
-  on this disk and cover a bad change, not the disk's loss. The disk is excluded from the guest
+- vm100's `jellyfin-data`: qcow2, so vm100 can be snapshotted; the snapshots of this disk live
+  here, those of its system disk in the boot disk's thin pool, and they cover a bad change, not
+  the disk's loss. The disk is excluded from the guest
   backup.
-- `/mnt/vzdump`: the weekly guest backup shares this disk with the Docker state it would rebuild
-  ([backup and recovery](backup-flow.md)).
+- `/mnt/vzdump` and the application archives on `jellyfin-data`: the short-term backups share this
+  disk with the state they would rebuild; the monthly Backup-Archive on vm102 is the copy that
+  survives it ([backup and recovery](backup-flow.md)).
 
 Replacement: [aux-disk replacement](../platform/remediation-plan.md#aux-disk-replacement-and-disposal).
 
@@ -86,9 +86,9 @@ nothing: the parity disk is in the same machine. Each dataset's protection is dr
 ## What Is Not a Failure Domain
 
 The Proxmox host is a single point of failure - one machine, no cluster - but its loss is a hardware
-problem rather than a data problem: the guests live on the disks above. A dead mainboard costs a
+problem and no data problem: the guests live on the disks above. A dead mainboard costs a
 replacement and a rebuild ([platform restore](../../runbooks/platform/platform-restore.md)); a dead
-boot SSD rolls every guest back to its last weekly backup and each database to its last nightly dump.
+boot SSD rolls every guest back to its last daily backup and each database to its last nightly dump.
 
 ## Related
 

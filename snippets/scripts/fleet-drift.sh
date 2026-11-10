@@ -79,7 +79,12 @@ for pb in "${PLAYBOOKS[@]}"; do
     rc=0
     out="$(ansible-playbook "${pb_file}" --check 2>&1)" || rc=$?
     if [[ ${rc} -ne 0 ]]; then
-        say "ERRORED  ${pb} - ansible-playbook exited ${rc}"
+        # The task that failed, or Ansible's first error line when no task ran. Without
+        # it, a refused preflight gate read as 44 bare "exited 2" lines.
+        reason="$(awk '/^TASK \[/ { t = $0 } /^fatal:/ { print t; exit }' <<< "${out}" \
+                  | sed -E 's/^TASK \[(.*)\] \**$/\1/')"
+        [[ -z "${reason}" ]] && reason="$(grep -m1 -E '^(\[ERROR\]|ERROR!)' <<< "${out}" | cut -c1-160 || true)"
+        say "ERRORED  ${pb} - ansible-playbook exited ${rc}${reason:+ at: ${reason}}"
         playbooks_errored=$((playbooks_errored + 1))
     fi
     recap="$(sed -n '/PLAY RECAP/,$p' <<< "${out}")"

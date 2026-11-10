@@ -1,7 +1,7 @@
 # Physical and Environmental Controls
 
 The ISO/IEC 27001 Annex A.7 family as it applies to one machine at a residential site: what holds
-each control, and the two decisions that leave a control deliberately open. The status of each
+each control, and the two decisions that leave a control open. The status of each
 control is owned by [`security-controls.md`](security-controls.md#physical-and-environmental-controls-a7).
 
 ## The environment
@@ -44,9 +44,10 @@ leaves the site is degaussed or destroyed, not wiped.
 ## `pve-firewall` is off
 
 The Proxmox firewall is disabled. Inbound exposure on the tailnet is governed by the Tailscale ACL
-([`tailscale-acl.md`](tailscale-acl.md)). On the LAN, `lan_guard` (since 2026-10-01) drops every new
+([`tailscale-acl.md`](tailscale-acl.md)). On the LAN, `lan_guard` drops every new
 inbound connection on every node, the hypervisor included, except SMB to vm102 from vm100 and the
-hypervisor, and break-glass SSH and netconsole to the hypervisor (`ansible/roles/lan_guard/`,
+hypervisor, break-glass SSH and netconsole to the hypervisor, and Jellyfin on vm100 from the
+streaming box (`ansible/roles/lan_guard/`,
 `ansible/inventory/group_vars/proxmox.yml`). A second, differently expressed policy in
 `pve-firewall` would have to agree with `lan_guard` on the same traffic, and two policies that must
 agree are how a rule changes in one of them only.
@@ -57,8 +58,8 @@ Tracked in the [remediation plan](remediation-plan.md):
 
 - Record the UPS (model, age, battery date) and measure one runtime under real load
   ([power path and UPS](remediation-plan.md#power-path-and-ups)).
-- Run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if the KE-14
-  errors follow the replacement boot SSD.
+- Run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if transport
+  faults continue on the HBA ports (KE-14).
 - Decide the disposal method for the KE-13 disk before the replacement arrives
   ([aux-disk replacement and disposal](remediation-plan.md#aux-disk-replacement-and-disposal)).
 

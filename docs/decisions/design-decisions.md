@@ -19,7 +19,7 @@ records of their own in this directory.
 | [1](#dd-1) | SnapRAID + MergerFS instead of ZFS | Implemented | Lower RAM than ZFS, heterogeneous disk sizes, incremental expansion; parity and namespace stay separable |
 | [2](#dd-2) | Dedicated Storage VM instead of Direct Host Mounting | Implemented | Separates storage from compute, so a rebuild or migration touches one guest |
 | [3](#dd-3) | SMB instead of NFS (after evaluation) | Implemented | Per-service identities and deterministic ownership through `force user` and the masks |
-| [4](#dd-4) | Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy | Implemented | No port-forwarding at all; access is tied to device identity rather than to the network |
+| [4](#dd-4) | Zero-Trust Overlay (Tailscale) instead of Public Reverse Proxy | Implemented | No port-forwarding at all; access is tied to device identity; network position grants nothing |
 | [5](#dd-5) | Unprivileged LXC Containers | Implemented | No root-equivalence between container and host, at the cost of UID mapping work |
 | [6](#dd-6) | Read-Only Media Consumers | Implemented | Producers and consumers of the archive are separated, so a consumer cannot delete |
 | [7](#dd-7) | Monitoring via Dedicated LXC | Implemented | Observability that does not depend on the services it watches |

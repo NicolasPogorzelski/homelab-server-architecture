@@ -92,8 +92,10 @@ if [ "${#imported_srcs[@]}" -gt 0 ]; then
     # New book directories (everything in WORK except the DB and its journals).
     # tar uses no byte-range locks, so CIFS is happy; extracting merges into any
     # existing author directories. Book files must land BEFORE the DB references them.
+    # --no-overwrite-dir: the archive holds ./ (mktemp, 0700 root), which would
+    # otherwise replace the mode of the library root and of existing author dirs.
     echo "writing ${#imported_srcs[@]} new book file(s) back to ${LIBRARY}"
-    tar -C "${WORK}" --exclude='metadata.db*' -cf - . | tar -C "${LIBRARY}" -xf -
+    tar -C "${WORK}" --exclude='metadata.db*' -cf - . | tar -C "${LIBRARY}" --no-overwrite-dir -xf -
 
     # Atomically swap the updated metadata.db in (write-then-rename on the share).
     cp "${WORK}/metadata.db" "${LIBRARY}/.metadata.db.new"

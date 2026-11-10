@@ -9,11 +9,11 @@ overhead and diverging Git state. A single management node removes that: all cha
 one place, every other node only receives them.
 
 ## Options
-- **A VM.** Lost: no hardware passthrough, no Docker and no custom kernel needed; QEMU and a second
+- **A VM.** No hardware passthrough, no Docker and no custom kernel needed; QEMU and a second
   kernel would consume part of a 2 GB budget that an LXC uses almost entirely for the workload.
-- **Ubuntu Server.** Lost: slightly larger, and no advantage for this workload; Debian matches the
+- **Ubuntu Server.** Slightly larger, and no advantage for this workload; Debian matches the
   other LXCs.
-- **Keep working from the admin workstations.** Lost: the synchronization problem above.
+- **Keep working from the admin workstations.** The synchronization problem above.
 - **A dedicated unprivileged Debian LXC.** Chosen.
 
 ## Decision

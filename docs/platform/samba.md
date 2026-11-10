@@ -45,8 +45,12 @@ The decision prioritizes operational predictability over theoretical performance
 - Paperless -> /mnt/mergerfs/Paperless (service data: media, thumbnails, exports)
 - Postgres-backups -> /mnt/mergerfs/Postgres-Backups (write path for pg_dump output from LXC260)
 - DB-Backups -> /mnt/mergerfs/DB-Backups (write path for the MariaDB dump from LXC210; a share of
-  its own rather than a directory inside the Nextcloud export, so whatever reaches the user data
+  its own outside the Nextcloud export, so whatever reaches the user data
   does not also reach its backup)
+- Backup-Archive-guests -> /mnt/mergerfs/Backup-Archive/guests (monthly copies of the guest and
+  host-config archives, written by the hypervisor only)
+- Backup-Archive-apps -> /mnt/mergerfs/Backup-Archive/apps (monthly copies of vm100's application
+  archives, written by vm100 only)
 
 Ownership enforcement:
 
@@ -127,7 +131,7 @@ This reduces risk of accidental modification or deletion.
 
 - SMB3 only, on port 445 alone
 - Mandatory signing (`server signing = required` in `testparm -s`, measured 2026-10-01)
-- No NetBIOS since 2026-10-01: `disable netbios = yes`, and `nmbd` masked through the
+- No NetBIOS: `disable netbios = yes`, and `nmbd` masked through the
   `systemd_hygiene` role, so nothing answers on UDP 137/138
 - User-based authentication
 - No anonymous access

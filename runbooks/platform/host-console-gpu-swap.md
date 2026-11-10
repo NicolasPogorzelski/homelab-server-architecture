@@ -75,7 +75,7 @@ Prometheus targets are up.
 | No picture on the spare card | Monitor on the wrong output, or firmware primary display not PCIe | Check cabling and the firmware display setting |
 | Console goes dark after a few minutes | Autostart not suppressed; vm100 took the card | Power off, boot again, step 2 |
 | GRUB menu does not appear | Firmware hand-off too fast | Press `Esc` repeatedly during hand-off |
-| vm100 fails to start after the swap back | Card not at `08:00` | `lspci -nn`; refit it in the original slot rather than changing vm100's configuration |
+| vm100 fails to start after the swap back | Card not at `08:00` | `lspci -nn`; refit it in the original slot; leave vm100's configuration as it is |
 
 ## Rollback
 

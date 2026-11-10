@@ -8,8 +8,9 @@
   reseating.
 - **Last exercised:** never
 
-KE-14: bursts of failed read commands (`DID_SOFT_ERROR`, `DID_TIME_OUT`) against the boot SSD at
-SCSI address `9:0:0:0` behind the LSI SAS2008 HBA, at boot and under load. Media and HBA firmware
+KE-14: bursts of failed read commands (`DID_SOFT_ERROR`, `DID_TIME_OUT`) against the former boot
+SSD at SCSI address `9:0:0:0` behind the LSI SAS2008 HBA, at boot and under load. The boot disk sits
+on PCIe; the HBA ports remain under observation. Media and HBA firmware
 are excluded. Candidates: 12 V rail sag and HBA heat. Identify the disk by `9:0:0:0` or `by-id`,
 never by kernel letter.
 
@@ -75,14 +76,14 @@ Written into [KE-14](../../docs/platform/known-errors.md#ke-14):
 | Result | Meaning | Action |
 |---|---|---|
 | 12 V out of tolerance under load | Power hypothesis confirmed | PSU replacement in the next hardware window; record it in KE-14 |
-| 12 V in tolerance at idle and under load | Power weakened, not excluded (a handheld meter misses transients) | Move the SSD to an onboard SATA port: errors stop -> HBA path; persist -> neither |
+| 12 V in tolerance at idle and under load | Power still possible: a handheld meter misses transients | Move the SSD to an onboard SATA port: errors stop -> HBA path; persist -> neither |
 | Host does not come back | Reseating or slot problem | [hard-shutdown-recovery.md](hard-shutdown-recovery.md); the host has no console without [host-console-gpu-swap.md](host-console-gpu-swap.md) |
 
 ## Rollback
 
 No configuration changes. If the host behaves worse afterwards, put the HBA back in the noted slot
 and reseat the moved cable. If a component was swapped, put the original back before drawing a
-conclusion; two changes at once explain neither.
+conclusion, so the result can be attributed to one change.
 
 ## Background
 

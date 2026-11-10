@@ -29,14 +29,14 @@ the book files cannot move to the container. Calibre keeps `metadata.db` in the 
 so the database cannot be relocated on its own. One node writes the library and imports are rare.
 
 ## Options
-- **`nobrl` on the CIFS mount.** Lost: the client stops sending byte-range locks and SQLite works,
+- **`nobrl` on the CIFS mount.** The client stops sending byte-range locks and SQLite works,
   but a loud failure becomes silent corruption the first time two writers coincide. It also changes
   the host mount for every consumer of the share and needs a remount while the container holds it.
 - **Library (database and files) on local block storage.** Deferred: the correct separation of
   state from bulk data, but there is no block volume large enough for the books. Revisit when one
   exists.
 - **One owning service, others through its API.** Not applicable: one node already owns the
-  library; the problem is where the database lives, not how many consumers it has.
+  library, and the fault lies in the database's location on CIFS.
 - **Keep `metadata.db` on CIFS and never let SQLite open it there.** Chosen.
 
 ## Decision
@@ -68,7 +68,7 @@ relative to the library root, so a database built under `/tmp/work` resolves und
   sources in place; the next timer run retries them, and `calibredb --automerge ignore` keeps the
   retry idempotent.
 - `calibredb list --with-library /books-rw` hits the same lock and prints nothing, which looks like
-  an empty library rather than an error. Verify against a local copy of `metadata.db`.
+  an empty library and hides the error. Verify against a local copy of `metadata.db`.
 
 ## Related Documents
 - [Calibre-Web: auto-import](../services/calibre-web.md#auto-import)

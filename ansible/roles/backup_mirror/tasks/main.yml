@@ -1,0 +1,71 @@
+---
+- name: Assert sources and target are set for this node
+  ansible.builtin.assert:
+    that:
+      - backup_mirror_target | length > 0
+      - backup_mirror_sources | length > 0
+    fail_msg: backup_mirror_target and backup_mirror_sources must be set in this node's host_vars.
+
+# stat -f triggers an automount and reports the filesystem behind the path.
+# Asserted, never created: an unmounted path is a directory on the local disk.
+- name: Read the filesystem type of the target
+  ansible.builtin.command:
+    cmd: "stat -f -c %T {{ backup_mirror_target }}"
+  register: backup_mirror_fstype
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Assert the target is the CIFS mount of the Backup-Archive share
+  ansible.builtin.assert:
+    that:
+      - backup_mirror_fstype.rc == 0
+      - backup_mirror_fstype.stdout | trim in ['cifs', 'smb2']
+    fail_msg: >-
+      {{ backup_mirror_target }} is not a CIFS mount ({{ backup_mirror_fstype.stdout | default('') | trim }}).
+      Provision the share and its fstab entry first - see runbooks/platform/backup-archive.md.
+    success_msg: "{{ backup_mirror_target }} is a CIFS mount - safe to deploy."
+
+- name: Deploy the mirror script
+  ansible.builtin.copy:
+    src: "{{ backup_mirror_script_src }}"
+    dest: "{{ backup_mirror_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the mirror configuration
+  ansible.builtin.template:
+    src: backup-mirror.conf.j2
+    dest: "{{ backup_mirror_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ backup_mirror_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the mirror units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - backup-mirror.service
+    - backup-mirror.timer
+  notify: Reload systemd
+
+- name: Enable and start the mirror timer
+  ansible.builtin.systemd_service:
+    name: backup-mirror.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

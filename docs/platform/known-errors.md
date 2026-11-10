@@ -21,11 +21,11 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-7](#ke-7) | Package corruption when the LVM thin pool overflows | Resolved 2026-04-26 |
 | [KE-8](#ke-8) | Media services hang while the node stays healthy | Mitigated 2026-06-08 - service probes alert; cause not found |
 | [KE-9](#ke-9) | PostgreSQL binds only loopback after boot | Resolved 2026-06-09 |
-| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Mitigated - fault active, stream-aware watchdog restart |
+| [KE-10](#ke-10) | Jellyfin loses CUDA access intermittently | Mitigated - no loss since 2026-10-08; watchdog kept |
 | [KE-11](#ke-11) | Grafana admin password not updated after first start | Open - Grafana design behaviour, non-blocking |
 | [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12 |
 | [KE-13](#ke-13) | aux-disk physical failure | Open - degrading, in service, replacement planned |
-| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Open - drive replacement in the second half of October 2026 |
+| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched |
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - cause unknown, one occurrence |
@@ -38,8 +38,14 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-24](#ke-24) | sshd's reload is a re-exec and cannot rebind | Resolved 2026-09-04 |
 | [KE-25](#ke-25) | A UID map that exists only in the container's description | Resolved 2026-09-15; second instance 2026-10-08 |
 | [KE-26](#ke-26) | The wake alarm was programmed for the right time on the wrong day | Resolved 2026-09-25 |
-| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated - Docker retry 2026-10-03, guest retry 2026-11-10; neither yet exercised by a real failure |
+| [KE-27](#ke-27) | A container whose start fails at boot stays down until someone starts it | Mitigated - Docker retry 2026-10-03, first real retry 2026-10-22; guest retry 2026-11-10, not yet exercised |
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
+| [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
+| [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
+| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
+| [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
+| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09 |
+| [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
 
 ---
 
@@ -99,7 +105,7 @@ pulled in `rpcbind`, listening on `0.0.0.0:111`.
 
 **Fix.** `nfs-common` and `rpcbind` removed through `systemd_hygiene_absent_packages` in
 `ansible/inventory/host_vars/lxc210.yml`. The `systemd_hygiene` role simulates the removal with
-`apt-get -s` and refuses if apt would remove anything else. The earlier mask is deleted.
+`apt-get -s` and refuses if apt would remove anything else. No mask remains.
 
 **Verification.** Verified 2026-09-12: both packages absent on lxc210, port 111 closed, no failed
 unit ([ansible.md](ansible.md#roles)).
@@ -300,7 +306,7 @@ sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # configured binds
 A separate fault surfaced in the same window: Paperless crash-looped (`RestartCount` 2443) on
 `Error 111 connecting to localhost:6379`. The `paperless_env` default was
 `redis://localhost:6379`; on a Compose bridge network Redis is reachable by service name. Default
-is now `redis://redis:6379`.
+is `redis://redis:6379`.
 
 **Verification.** Verified 2026-06-09 by reboot of lxc260: gate logged `tailscale IP present after
 2s`, PostgreSQL bound `<tailscale-ip-lxc260>:5432`; Paperless `healthy`, backend HTTP 302. See
@@ -312,7 +318,7 @@ is now `redis://redis:6379`.
 
 ## KE-10: Jellyfin loses CUDA access intermittently - container restart required
 
-- **Status:** Mitigated - fault active, stream-aware watchdog restart
+- **Status:** Mitigated - no loss since 2026-10-08; watchdog kept
 - **Affects:** Jellyfin (vm100)
 
 **Symptom.** Hardware transcoding stops; playback that needs a transcode stalls or fails. The
@@ -329,8 +335,13 @@ holds while only direct streams play, since a restart ends every running stream.
 `JellyfinCudaLost` fires after ten minutes without CUDA, so a held restart is visible
 ([jellyfin.md](../services/jellyfin.md)).
 
-**Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, the
-latest 2026-10-08 11:29:
+**Verification.** Fault frequency: 30 watchdog restarts between 2026-05-29 and 2026-10-08, one
+every four to five days, the latest 2026-10-08 11:29.
+
+Verified 2026-10-27: none since, nineteen
+days in which the earlier rate predicts about four, by the command below. The Jellyfin 12
+upgrade (2026-10-13) and the host's 7.0 kernel (2026-10-12) fall into the quiet period; neither is shown
+to be the cause, so the watchdog stays:
 
 ```
 journalctl -t jellyfin-cuda-watchdog | grep "CUDA access lost"
@@ -413,18 +424,21 @@ was found on 2026-07-09: the same partition was mounted on the host and passed t
 
 SMART, identified by serial (`by-id`), never by kernel letter ([KE-14](#ke-14)):
 
-| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 |
-|---|---|---|---|---|
-| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 |
-| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 |
-| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 |
-| `Reported_Uncorrect` | 18 | 21 | 21 | 21 |
+| Attribute | 2026-06-25 | 2026-07-09 to 2026-09-15 | 2026-10-08 | 2026-10-13 | 2026-10-27 | 2026-10-31 |
+|---|---|---|---|---|---|---|
+| `Current_Pending_Sector` | 7688 | 7680 | 8168 | 8784 | 8880 | 9200 |
+| `Offline_Uncorrectable` | 7688 | 7680 | 8168 | 8784 | 8880 | 9200 |
+| `Reallocated_Sector_Ct` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `Reported_Uncorrect` | 18 | 21 | 21 | 21 | 21 | 21 |
 
 The first step happened at the boot of 2026-09-20 (Prometheus history: 7848 at 20:17, 8168 at
-20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38). `Reported_Uncorrect`
-has not moved since July, so no read by a consumer has failed; the new sectors point at the drive's
-own offline scan. `smartctl -H` reports `PASSED`, because `Current_Pending_Sector` normalises to
-`054` against threshold `000`; do not read it as a health check.
+20:30), the second at the boot of 2026-10-13 (8344 at 12:25, 8784 at 12:38), the third across the
+nightly off-window before the boot of 2026-10-19 (8784 the evening before, 8880 at 08:53), the
+fourth at the boot of 2026-10-29 (8880 the evening before, 9016 at 11:47, 9200 at 11:57).
+`Reported_Uncorrect` has not moved since July, so no read by a consumer has failed; the new sectors
+point at the drive's own offline scan. `smartctl -H` reports `PASSED`:
+`Current_Pending_Sector` normalises to `054` against threshold `000`, and the flag ignores the raw
+count.
 
 **Fix.** Mitigations in place:
 
@@ -453,10 +467,10 @@ guest backup wrote about 13 GB to the disk on 2026-10-13 with all four counters 
 
 ## KE-14: Read commands to the boot SSD time out under load (SAS HBA transport, not media)
 
-- **Status:** Open - drive replacement in the second half of October 2026
+- **Status:** Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched
 - **Affects:** Proxmox host boot SSD behind the LSI SAS2008 HBA (`scsi 9:0:0:0`, `phy(3)`,
-  `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`); it holds `/boot/efi`, `pve-root` and the
-  `pve-data` thin pool with every guest root disk
+  `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`), which held `/boot/efi`, `pve-root` and the
+  `pve-data` thin pool until 2026-10-27; it stays fitted at `9:0:0:0` and carries the losable `scratch` pool
 
 **Symptom.** Bursts of failed read commands, each a roughly 30 s stall:
 
@@ -504,17 +518,18 @@ A second port shows transport faults. On 2026-10-15 at boot, one `DID_SOFT_ERROR
 and at 393 on 2026-10-17. Faults on two ports fit the HBA, its cabling or its power better than the
 SSD alone.
 
-**Fix.** The drive is replaced in the second half of October 2026
-([boot SSD replacement](../../runbooks/platform/boot-ssd-replacement.md), [remediation plan](remediation-plan.md#boot-ssd-replacement)); its 110 GiB volume
-group is also too small. The 6.17.13 kernel pin was released 2026-10-12 so the kernel and the
-drive do not change together; the baseline is the old drive on the 7.0 kernel from 2026-10-13.
+**Fix.** 2026-10-27: the volume group moved by `pvmove` to an NVMe disk in the M.2 slot, attached over
+PCIe ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)).
+Drive and transport changed together, so the swap cannot tell which of them caused the faults.
 
-**Verification.** Failed commands per boot before and after the swap. On the same port and cable
-this separates drive from transport; on an onboard SATA port it separates the HBA path from power.
-Since the boot of 2026-10-17 10:51 a sixth 7200 rpm data disk runs on the HBA (`9:0:5:0`) and adds
-12 V load on an unrecorded rail; counts after the swap are compared against this configuration.
-If errors persist, run the
+**Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
+NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the old
+drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
+count, and six data disks. If faults continue there, run the
 [power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
+
+Verified 2026-10-31: 0 transport messages in each of the five boots since the move, by the same
+command per boot; the CRC count at `9:0:2:0` unchanged at 393 over 14 days in Prometheus.
 
 ---
 
@@ -652,7 +667,7 @@ could not determine the node's MagicDNS name # query-time variant
 `Type=simple` service counts as started when its process exists, before it joins the tailnet and
 gets an address. With `Restart=on-failure` and the default `RestartSec=100ms`, five attempts run
 inside about 24 ms and the start limit stops the unit for good. The host powers down nightly, so
-every day is a cold boot, and `Persistent=true` timers fire inside the boot window by design.
+every day is a cold boot, and `Persistent=true` timers catch up on missed runs inside the boot window.
 
 Retry loops can hide the fault: on 2026-08-20 all nine guest `node_exporter` units showed
 `NRestarts=1`, and `SystemdUnitFailed` (`for: 15m`) never saw the 15-second failure.
@@ -724,7 +739,7 @@ exclude /Nextcloud/appdata_*/richdocuments/remoteData/
 exclude *.partial
 ```
 
-Exclude by what changes, not by suffix: `exclude *.log` also dropped static files from the
+Exclusions name the changing files by path: `exclude *.log` also dropped static files from the
 archive and was narrowed. SQLite side files are excluded because parity taken at a different moment
 than the main database is inconsistent. The disk and parity layout above the block stays
 hand-written, because it carries real device labels.
@@ -878,7 +893,7 @@ exactly that; `00-` sorts first.
 
 **Fix.** Role applied to the nine guests on 2026-09-04 and to the host on 2026-09-16, the host run
 behind a `systemd-run --on-active=300` dead-man switch. The host keeps `prohibit-password` from
-`ansible/inventory/group_vars/proxmox.yml`. The weekly drift sweep now reports such gaps
+`ansible/inventory/group_vars/proxmox.yml`. The weekly drift sweep reports such gaps
 ([remediation plan](remediation-plan.md#open-items)). Applying the role surfaced [KE-24](#ke-24).
 
 **Verification.** `sshd -T` across all ten nodes matches the expected values; the drop-in is present
@@ -995,8 +1010,8 @@ so output reaches the journal instead of cron's local mailer.
 
 ## KE-27: A container whose start fails at boot stays down until someone starts it
 
-- **Status:** Mitigated - Docker retry 2026-10-03, guest retry 2026-11-10; neither yet exercised
-  by a real failure
+- **Status:** Mitigated - Docker retry 2026-10-03, first real retry 2026-10-22; guest retry
+  2026-11-10, not yet exercised by a real failure
 - **Affects:** vm100 containers that bind a CIFS automount or need the NVIDIA prestart hook
   (Jellyfin, Audiobookshelf, `llama-server`); Proxmox guests with a CIFS bind mount (lxc260 `mp1`)
 
@@ -1016,6 +1031,7 @@ instances (`journalctl -u docker.service | grep "failed to start container"`):
 2026-08-24 22:55  prestart hook #0: ... nvidia-container-cli: initialization error: nvcgo rpc error: timed out
 2026-09-29 10:19  error mounting "/srv/media/filme" ...      (and "/srv/media/audiobooks")
 2026-10-03 09:02  error mounting "/srv/media/filme" ...
+2026-10-22 09:00  error mounting "/srv/media/filme" ...
 ```
 
 2026-09-29: vm102 unreachable (`cifs_mount failed w/return code = -113`). 2026-10-03: vm102 up;
@@ -1038,21 +1054,25 @@ side was not ready was not measured.
 `docker.service` runs once per boot and starts every exited container with policy `always` or
 `unless-stopped` and a non-empty `State.Error`; six passes, 30 s apart. If something is still down,
 the unit fails and `SystemdUnitFailed` reports it. `docker stop` leaves `State.Error` empty, so
-containers stopped with `docker stop` are not touched.
+a container stopped by hand is not touched.
 
 The guest retry is a host unit that runs after `pve-guests.service` (`guest_boot_retry`,
 `snippets/scripts/guest-boot-retry.sh`). It starts every stopped guest with `onboot: 1`, no lock
-and no template flag, in `startup: order=` sequence, with the same passes and failure signal.
+and no template flag, in `startup: order=` sequence, with the same passes and failure signal. A
+guest whose share is still missing fails its start again, as lxc260 did, so the retry does not
+start it on an empty mountpoint.
 
-**Verification.** Docker retry applied 2026-10-03, re-check `changed=0`; selection tested against
-the live node (nothing to start) and four synthetic rows. Proof of a real retry: a
-`started <name> (attempt n/6)` line in `journalctl -b -t docker-boot-retry`.
+**Verification.** Applied 2026-10-03, re-check `changed=0`; selection tested against the live node
+(nothing to start) and four synthetic rows.
 
-Verified 2026-11-10: the guest selection returns no rows on the live host and selects three of seven
-synthetic rows (locked, template and non-onboot excluded), by running `failed_guests` from the
-script under `bash -s` on the host and against a stub `pvesh`. Proof of a real retry: a
-`started lxc <id> (attempt n/6)` line in `journalctl -b -t guest-boot-retry`. Related:
-[KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md).
+Verified 2026-10-22: Jellyfin failed on the `/srv/media/filme` mount at 09:00 and was
+`started jellyfin (attempt 1/6)` at 09:02, by `journalctl -t docker-boot-retry` on vm100.
+
+Verified 2026-11-10: guest selection empty on the live host, three of seven synthetic rows chosen,
+by `failed_guests` on the host and against a stub `pvesh`. Proof of a real retry:
+`started lxc <id> (attempt n/6)` in `journalctl -b -t guest-boot-retry`.
+
+Related: [KE-18](#ke-18), [KE-28](#ke-28), [vm100](../nodes/vm100.md), [hard-shutdown recovery](../../runbooks/platform/hard-shutdown-recovery.md).
 
 ---
 
@@ -1096,3 +1116,204 @@ address through `tailscale_boot_gate`, with `docker_boot_retry` ([KE-27](#ke-27)
 2026-10-10: Jellyfin up with no `docker-boot-retry` line; the gate held again on 2026-10-13. Audiobookshelf and
 `llama-server` still sit behind `serve` on loopback and have not shown the fault. Not yet measured:
 three concurrent 4K streams. See [jellyfin.md](../services/jellyfin.md).
+
+<a id="ke-29"></a>
+## KE-29: Files uploaded to the Nextcloud ingest folders never reach Paperless
+
+- **Status:** Resolved 2026-10-27
+- **Affects:** Nextcloud External Storage mounts 4 and 5 on lxc210, the two Paperless ingest
+  shares on vm102; failing from at least 2026-09-29 to 2026-10-27
+
+**Symptom.** A document dropped into either ingest folder stays out of Paperless. Nextcloud logs
+`Storage smb::paperless-ingest@storage//Paperless-ingest-<user>// not available` 15 to 20 times a
+day, and `occ files_external:verify 4` returns `status: error`. No alert covers it.
+
+**Cause.** Both mounts addressed vm102 as `storage`, which resolves to its LAN address on lxc210,
+where `smb_guard` refuses lxc210. The tailnet route needs [Rule 15](tailscale-acl.md#rule-15---nextcloud-the-paperless-ingest-shares),
+which existed in the repository only: lxc210 and vm102 do not list each other as peers in
+`tailscale status --json`, while every other host-alias grant shows its peer. The 2026-10-10 fix
+wrote the rule; the remediation plan of 2026-10-14 dropped the item to apply it before the
+console and mount changes were made. Same class as the inference rollout of 2026-09-29, whose
+policy change reached only the documents.
+
+**Fix.** 2026-10-27: Rule 15 in the admin console, with the `nextcloud` test moving
+`tag:storage:445` from deny to accept; then `occ files_external:config <id> host
+storage.<tailnet-id>.ts.net` for mounts 4 and 5.
+
+**Verification.** 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
+`occ files_external:verify 4` and `5` return `status: ok`; the last `not available` line is from
+the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. 2026-10-31: a test PDF written through mount 4 with
+`occ files:put` left the share after 50 s, and Paperless logged `consumption finished` 44 s after
+the upload; the test document was then deleted. `PaperlessIngestStorageDown` reads the hourly `files_external:verify` result
+of each mount.
+
+---
+
+<a id="ke-30"></a>
+
+## KE-30: The Audiobookshelf collections page stays empty
+
+- **Status:** Mitigated 2026-10-27 - large groupings moved to tags and filters; waiting for the
+  upstream fix, watched by `upstream_watch`
+- **Affects:** Audiobookshelf on vm100, the Collections view of the web interface
+
+**Symptom.** The Collections view shows nothing for a long time, then empty cards. The
+collections themselves are intact: `GET /api/collections/<id>` returns every book.
+
+**Cause.** The view requests `GET /api/libraries/<id>/collections?minified=1`, but the server
+serializes each book inside a collection in full, with its file and track lists, and builds every
+collection before it pages (`getOldCollectionsJsonExpanded` in `server/models/Collection.js`,
+v2.37.1). The response grows with the number of files per book, so collections of episodic
+audio dramas outgrow what the browser renders. Upstream issue
+[#5170](https://github.com/advplyr/audiobookshelf/issues/5170); the fix is
+[#5358](https://github.com/advplyr/audiobookshelf/pull/5358); no release up to v2.37.2 contains it.
+
+**Fix.** Mitigation until a release contains #5358: groupings that span a large part of the library
+are tags or the built-in genre filter instead of collections (audio dramas carry a tag); collections stay
+for cross-series universes. A locally patched image was not built: it would add an image build and
+a release lag to the supply chain for one view. `upstream_watch` on lxc250 checks weekly whether a
+release contains #5358, and `UpstreamFixReleased` fires when it does.
+
+**Verification.** Verified 2026-10-27: the Collections view renders after the large collections were
+removed. When `UpstreamFixReleased` fires: raise the image in
+`docker/audiobookshelf/docker-compose.yml`, confirm the view loads with a large test collection,
+recreate the removed groupings as collections if wanted, and remove the item from
+`upstream_watch_items`. Related: [Audiobookshelf](../services/audiobookshelf.md).
+
+---
+
+<a id="ke-31"></a>
+
+## KE-31: An alert with a `for:` of two weeks stays pending forever
+
+- **Status:** Resolved 2026-10-31; restore across a boot not yet observed
+- **Affects:** Prometheus on lxc200; `AptSecurityUpdatesPending` (`for: 14d`), and any later rule
+  whose `for:` exceeds one day of uptime
+
+**Symptom.** Twelve security updates were pending on the hypervisor from 2026-10-17 onward, yet
+on 2026-10-31 `AptSecurityUpdatesPending` was `pending` with `activeAt` at 09:29 that morning,
+minutes after the boot. It had never fired.
+
+**Cause.** Prometheus writes a pending alert's start into `ALERTS_FOR_STATE` and reads it back
+after a restart only when the outage was shorter than `--rules.alert.for-outage-tolerance`
+([Prometheus flags](https://prometheus.io/docs/prometheus/latest/command-line/prometheus/)).
+`/api/v1/status/flags` on lxc200 returned the default `1h`. The host is off from 23:30 until the
+next wake (`homelab_schedule` defaults), at least nine hours, so every boot started the
+fourteen days again. Same class as [KE-26](#ke-26) and the backup staleness notes in
+[monitoring.md](monitoring.md#notes-on-specific-rules): time logic that assumes continuous uptime on a
+host that is off every night.
+
+**Fix.** `--rules.alert.for-outage-tolerance=48h` in `docker/monitoring/docker-compose.yml`,
+above the longest off-window of about 35 hours from Thursday night to the Saturday wake. Rolled out with
+`docker-compose-update.yml --limit lxc200` after the merge.
+
+**Verification.** 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
+Prometheus's spelling of 48 h. Not yet observed: an alert pending before a shutdown keeping its
+`activeAt` across the next boot.
+
+---
+
+<a id="ke-32"></a>
+
+## KE-32: The nightly shutdown cut off a running SnapRAID sync on vm102
+
+- **Status:** Open - fix in review, rollout before the next 23:30
+- **Affects:** the Proxmox host (`homelab_schedule`), vm102 (`snapraid_maintenance`)
+
+**Symptom.** On 2026-11-01 the host logged `shutting down` at 23:30:01 with no `waiting for` line
+before it. On vm102, `snapraid-maintenance@sync.service`, started at 23:00, ended at 23:32:31 with
+`Failed with result 'signal'` at 31 % of a sync that resized the parity. `SnapRAIDSyncStale`
+fired the next morning; the last good sync was 2026-10-31 23:04.
+
+**Cause.** `/etc/cron.d/homelab-schedule` sets no `PATH`, so cron starts the shutdown script with
+`/usr/bin:/bin`. `qm` lives in `/usr/sbin`. `env -i PATH=/usr/bin:/bin bash -c "qm status 102"`
+on the host returns `command not found`, rc 127. The script sends that error to `/dev/null`,
+`grep 'status: running'` finds nothing, and vm102 counts as stopped, so none of its guarded units
+is asked. The vm102 journal confirms it: no `guest-exec` call at 23:30. Every earlier sync ended
+before 23:30, so the guard had never been tested against a running guest unit. The host guards
+use `systemctl` from `/usr/bin` and were not affected.
+
+**Fix.** `homelab-shutdown.sh` exports a full `PATH` itself, whatever starts it, and exits 1
+when `qm` is missing, so a broken guest check keeps the host up instead of letting it go off
+(`homelab_schedule`, branch `fix/shutdown-guard-path`).
+
+**Verification.** Pending the rollout: `env -i PATH=/usr/bin:/bin` run of the script's guest
+check against vm102, and the next night's sync finishing before the host goes off.
+
+---
+
+<a id="ke-33"></a>
+## KE-33: 4K streams stall on Monday evenings while the weekly scrub reads the array
+
+- **Status:** Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09
+- **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
+  (`homelab_schedule`)
+
+**Symptom.** 2026-11-02 from 20:00: a 4K remux in direct play (about 64 Mbit/s) rebuffered every
+few minutes on the streaming box. The player's buffer fell from 5.9 s to 0.3 s before each stall.
+In the same seconds vm100 sent nothing to the client and read nothing from vm102 for one to three
+seconds (`/proc/net/dev` on `tailscale0` and `enp6s18`, sampled every second). Tailscale and the
+LAN showed no loss at those moments.
+
+**Cause.** `snapraid-scrub.timer` started `snapraid scrub -p 12` every Monday at 20:00, since
+8a512a9 (2026-09-12). It reads every data disk at 82-96 MB/s for about 105 minutes; one disk sat
+at 100 % utilisation (`/proc/diskstats`, 5 s window). Jellyfin's reads from the same disks over
+CIFS waited behind it. Stopping the scrub at 21:37 ended the stalls: from 21:38 the stream ran
+twelve minutes without a second of idle transfer, against up to 36 idle seconds per minute
+before. The member disks use the `none` I/O scheduler, so an idle I/O class or `IOWeight=` would
+not have lowered the scrub's priority.
+
+The same evening also had an unrelated fault at the client: a loose Ethernet plug on the
+streaming box dropped its link about 25 times and then held it at 100 Mbit/s.
+
+**Fix.** The scrub starts at Monday midnight (`snapraid_scrub_oncalendar` in the
+`snapraid_maintenance` defaults). `homelab_schedule` powers the host off after midnight every
+night, so on Monday the shutdown guard waits for the scrub (`homelab_schedule_guard_guest_units`).
+The template unit runs the script under `flock`, so a Sunday sync still running at midnight makes the scrub wait
+for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
+scrub after Monday's start.
+
+**Verification.** Pending 2026-11-09: `journalctl -t homelab-shutdown` on the host shows
+`waiting for vm102 snapraid-maintenance@scrub.service` at Monday's shutdown, and vm102's journal
+shows the scrub finishing before the host powers off.
+
+---
+
+<a id="ke-34"></a>
+## KE-34: Streams to the streaming box stall while vm100's Tailscale path to it keeps changing
+
+- **Status:** Mitigated 2026-11-08 - the box streams over the LAN; cause not found
+- **Affects:** Jellyfin on vm100, the streaming box (`tag:media-player`)
+
+**Symptom.** 2026-11-08, a Sunday: playback on the streaming box stalled through the evening, with
+the box on Ethernet only. Jellyfin logged the same episode stopped and started again at 18:09 and
+18:14, and at 19:54 and 19:55. Between 17:39 and 17:56, during playback, vm100's `tailscaled`
+logged about 20 path changes to the box, between its LAN endpoint, the router's public address and
+DERP:
+
+```
+magicsock: disco: node [<box>] ... now using <public-ip-router>:50579 mtu=1360
+magicsock: new contact: peer=[<box>] ... via=derp
+magicsock: disco: node [<box>] ... now using <lan-ip-streaming-box>:50040 mtu=1360
+```
+
+The box's disco key stayed the same, so its Tailscale app did not restart. Neither cause of
+[KE-33](#ke-33) applied: no scrub ran, and the box held a gigabit link.
+
+**Cause.** Not found. Measured on 2026-11-08 and ruled out:
+
+- The LAN: 967 Mbit/s from vm100 to the box, no loss in 300 pings under that load.
+- Storage and server: SMB from vm102 read at 102-106 MB/s; Jellyfin logged no error.
+- Load on the tunnel alone: ten minutes at 137 and then 205 Mbit/s produced no path change and no
+  lost ping. The box's tunnel used about 70 % CPU on all four cores at 205 Mbit/s.
+
+The path changes appeared during real playback only. Candidates not yet separated: the player and
+the tunnel competing for the box's CPU, and the Tailscale app's state while another app is in the
+foreground. Client versions at the time: Tailscale 1.104.5 on the box, 1.104.4 on vm100.
+
+**Fix.** The box reaches Jellyfin over the LAN, admitted by `lan_guard` on vm100 from its address
+only ([decision](../decisions/streaming-box-over-the-lan.md)). Nothing in the tunnel was changed.
+
+**Verification.** 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
+player buffer event; the box's `tun0` carried no bytes, CPU averaged 24 %. vm100's path log for the
+box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.

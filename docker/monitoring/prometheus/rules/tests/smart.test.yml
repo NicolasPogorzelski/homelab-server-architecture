@@ -73,3 +73,25 @@ tests:
         exp_samples:
           - {labels: 'serial:smartmon_current_pending_sector_raw_value:max{instance="h",serial_number="AUX"}', value: 8168}
           - {labels: 'serial:smartmon_current_pending_sector_raw_value:max{instance="h",serial_number="IW"}', value: 0}
+  # Case 5: a CRC rise 368 -> 393 fires the link warning; a flat non-zero count does not.
+  - interval: 1m
+    input_series:
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdc",serial_number="IW",device_model="IronWolf"}'
+        values: '1x2000'
+      - series: 'smartmon_device_info{instance="h",disk="/dev/sdd",serial_number="DT",device_model="Toshiba"}'
+        values: '1x2000'
+      - series: 'smartmon_udma_crc_error_count_raw_value{instance="h",disk="/dev/sdc"}'
+        values: '368x600 393x1400'
+      - series: 'smartmon_udma_crc_error_count_raw_value{instance="h",disk="/dev/sdd"}'
+        values: '33x2000'
+    alert_rule_test:
+      - {eval_time: 9h, alertname: SmartUdmaCrcErrorsGrowing, exp_alerts: []}
+      - eval_time: 11h
+        alertname: SmartUdmaCrcErrorsGrowing
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: h, serial_number: IW, disk: /dev/sdc, device_model: IronWolf}
+            exp_annotations:
+              summary: "IronWolf (/dev/sdc at this boot) on h logged new link CRC errors in the last day"
+              description: "UDMA_CRC_Error_Count on serial IW rose above its 25-hour minimum and now reads 393. The fault is on the path to the disk, not on the medium: check its cable and port against KE-14 and read `smartctl -A` via /dev/disk/by-id."
+      - {eval_time: 36h, alertname: SmartUdmaCrcErrorsGrowing, exp_alerts: []}
+      - {eval_time: 11h, alertname: SmartAttributeDegrading, exp_alerts: []}

@@ -7,12 +7,16 @@
   on the boot SSD ([KE-7](../../docs/platform/known-errors.md#ke-7) class); more guest starts on a
   boot SSD that logs I/O errors add load to a failing device
   ([KE-14](../../docs/platform/known-errors.md#ke-14)).
-- **Last exercised:** never
+- **Last exercised:** 2026-11-10, step 4 for lxc260 after a power cut
 
 Guests autostart by `startup: order=N,up=M` ([boot ordering](../../docs/platform/proxmox-host.md#boot-ordering)):
 vm102 first, because the host's `/mnt/smb/*` CIFS automounts and the bind mounts of lxc210, lxc220
 and lxc260 depend on its shares. After an unclean shutdown that order can break: lxc260's pre-start
 hook exits 19 (`ENODEV`) when `/mnt/smb/postgres-backups` is not ready.
+
+`guest_boot_retry` repeats such a start for three minutes after `startall`
+([KE-27](../../docs/platform/known-errors.md#ke-27)). This runbook covers what is still down after
+it; `journalctl -b -t guest-boot-retry` on the host names those guests.
 
 ## Preconditions
 
@@ -131,8 +135,8 @@ There is no prior state to return to; these are the abort criteria:
   mountpoint keeps the empty directory and writes onto the boot SSD.
 - A container fails twice for the same reason: stop and diagnose; repeating `pct start` adds
   nothing.
-- The boot SSD logs I/O errors that keep rising: stop starting guests
-  ([boot SSD replacement](../../docs/platform/remediation-plan.md#boot-ssd-replacement)).
+- The boot disk logs I/O errors that keep rising: stop starting guests
+  ([boot disk replacement](boot-ssd-replacement.md)).
 
 A container started too early is undone with `pct stop <ctid>` and started again after step 3.
 

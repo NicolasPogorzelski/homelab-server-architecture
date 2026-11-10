@@ -13,11 +13,11 @@ no alert: the component that would report the fault was the one that was blind
 ([KE-15](../platform/known-errors.md#ke-15) shows what a month of unseen failed units costs).
 
 ## Options
-- **Privileged exporter container with `/run/systemd` bind-mounted.** Lost: grants the ability to
+- **Privileged exporter container with `/run/systemd` bind-mounted.** Grants the ability to
   start and stop units on the node holding the alerting stack, to close a monitoring gap.
-- **Accept the gap.** Lost: the monitoring node is the one node not to be blind on.
-- **Replace the container exporter with a native one.** Lost as a first step: Prometheus scrapes
-  `127.0.0.1:9100` today, so it changes the monitoring configuration and what it measures at once.
+- **Accept the gap.** The monitoring node is the one node not to be blind on.
+- **Replace the container exporter with a native one.** Not as a first step: Prometheus scrapes
+  `127.0.0.1:9100`, so it would change the monitoring configuration and what it measures at once.
   It remains the tidier end state.
 - **A second, native `node_exporter` beside the container.** Chosen.
 

@@ -1,6 +1,6 @@
 # Proxmox Host
 
-The Proxmox VE hypervisor: the bare-metal layer that runs every VM and LXC. This document covers
+The Proxmox VE hypervisor, the bare-metal layer that runs every VM and LXC, and its
 host-level configuration outside any guest: boot ordering, disks, the power schedule, host units
 and timers, SSH, storage definitions and guest backup.
 
@@ -50,29 +50,25 @@ See: [decision](../decisions/pveproxy-tailscale-boot-ordering.md),
 
 ## Disk Passthrough (vm102)
 
-All ten physical disks are attached to the host. vm102 receives eight by ID as virtio-SCSI
-devices (six data disks, the parity disk and aux-pool); the host keeps the boot SSD and aux-disk.
+All eleven physical disks are attached to the host. vm102 receives eight by ID as virtio-SCSI
+devices (six data disks, the parity disk and aux-pool); the host keeps the boot NVMe, the former
+boot SSD (`scratch`) and aux-disk.
 Disk models and IDs are kept offline; the logical topology is in [vm102.md](../nodes/vm102.md).
 
 A guest sees virtio devices, so SMART is readable only on the host; the `smart_metrics` role
 exports it here.
 
-## Boot SSD - Intermittent I/O Errors (KE-14)
+## Boot Disk
 
-The boot SSD hangs off an LSI SAS2008 HBA (`mpt2sas`, SCSI address `9:0:0:0`), not the SATA
-controller. It carries `/boot/efi`, `pve-root` and the `pve-data` thin pool, which holds every VM
-and LXC root disk.
+A 512 GB NVMe disk in the board's M.2 slot (PCIe 3.0 x4), `/dev/disk/by-id/<boot-nvme-by-id>`. It
+carries the ESP (`/boot/efi`, partition 2), and on partition 3 the volume group `pve` (476 GiB):
+`root` 37.5 GiB, `swap` 8 GiB, the `pve/data` thin pool of 362.5 GiB with 4 GiB metadata, and
+about 60 GiB unallocated as a reserve. GRUB boots with shim from the `proxmox-nvme` UEFI entry.
 
-Identify it by `9:0:0:0` or `by-id`, never by kernel letter: `sd*` names follow probe order and
-change between boots. `lsblk -dno NAME,TRAN` reports the boot SSD as `sas`, the auxiliary disks as
-`sata`.
-
-Some boots log a burst of `DID_SOFT_ERROR` read failures against it, always inside the boot window.
-They are transport-layer faults: the drive's SMART error log is empty and every media counter is
-zero. Root cause is unconfirmed; the leading hypothesis is the 12 V rail under boot load. No
-filesystem damage has occurred. The SSD is to be replaced in the second half of October 2026
-([boot-ssd-replacement](../../runbooks/platform/boot-ssd-replacement.md)); the physical checks
-follow only if the errors persist on the new drive. Analysis: [KE-14](known-errors.md#ke-14).
+The former boot SSD stays fitted on the LSI SAS2008 HBA (`9:0:0:0`) and carries the `scratch`
+pool ([storage definitions](#storage-definitions)). It logged the `DID_SOFT_ERROR` bursts of
+[KE-14](known-errors.md#ke-14); identify HBA disks by SCSI address or `by-id`, never by kernel
+letter. Procedure: [boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md).
 
 ## aux-disk (degraded since 2026-06-25)
 
@@ -90,14 +86,16 @@ See: [KE-13](known-errors.md#ke-13),
 
 ## Host Cron Jobs
 
-The host starts by RTC alarm at a time set per weekday and powers off nightly at 23:30; on days
-without a start time it stays off until switched on by hand. The `homelab_schedule` role deploys
-the two scripts and the single cron file. Cron is deliberate here: the job powers the host down,
-so catch-up semantics would be wrong for it.
+The host starts by RTC alarm at a time set per weekday and powers off every night at 00:15. On
+Monday the weekly SnapRAID scrub has started at midnight, and the guard holds the shutdown until
+the scrub ends ([KE-33](known-errors.md#ke-33)). On days
+without a start time the host stays off until switched on by hand. The `homelab_schedule` role
+deploys the two scripts and the single cron file. Cron is deliberate here: the job powers the host
+down, so catch-up semantics would be wrong for it.
 
 | Schedule | User | Command | Purpose |
 |---|---|---|---|
-| `30 23 * * *` | root | `systemd-cat -t homelab-shutdown ... /usr/local/sbin/homelab-shutdown.sh` | Wait for guarded work, arm the next start, power off |
+| `15 0 * * *` | root | `systemd-cat -t homelab-shutdown ... /usr/local/sbin/homelab-shutdown.sh` | Wait for guarded work, arm the next start, power off |
 
 `journalctl -b -1 -t homelab-shutdown -t homelab-setwake` shows the last night's run;
 `homelab-setwake.sh --dry-run` prints the next start without arming anything.
@@ -118,8 +116,9 @@ back, and exits 1 if no alarm is armed or the armed time is more than 60 s off
 Before powering off, the script waits while a guarded unit is active: `guest-backup.service` and
 `lxc-fstrim.service` on the host, and on vm102, asked through the QEMU guest agent, the SnapRAID
 sync and scrub and `storage-permissions.service`. If work is still running after 180 minutes, or
-the next start cannot be armed, it exits 1 and the host stays up rather than cutting work short or
-going off with no way back on.
+the next start cannot be armed, it exits 1 and the host stays up. The script sets its own `PATH`,
+because cron's lacks `/usr/sbin` and with it `qm`, and it exits 1 when `qm` is missing
+([KE-32](known-errors.md#ke-32)).
 
 Source: `ansible/roles/homelab_schedule/templates/`.
 
@@ -133,7 +132,8 @@ defaults.
 | `lxc-fstrim.timer` | `proxmox_host_units` | Trim LXC filesystems from the host, returning freed blocks to the `pve/data` thin pool |
 | `lvm-thin-metrics.timer` | `proxmox_host_units` | Export thin-pool data and metadata usage to the textfile collector |
 | `prometheus-node-exporter-smartmon.timer` | `smart_metrics` | Export SMART attributes per disk (`smartmon.sh`) |
-| `guest-backup.timer` | `guest_backup` | Weekly `vzdump` of the nine guests |
+| `guest-backup.timer` | `guest_backup` | Daily `vzdump` of the nine guests, seven days kept |
+| `backup-mirror.timer` | `backup_mirror` | Monthly copy of the newest guest and host-config archives to the Backup-Archive |
 | `host-config-backup.timer` | `guest_backup` | Daily archive of the host configuration |
 
 ### lxc-fstrim.timer
@@ -163,7 +163,7 @@ exists because vm100 froze so completely that its own journal recorded nothing
 
 ## Ansible Management
 
-The host is an Ansible node since 2026-08-21: group `proxmox`, connecting as root because root is
+The host is an Ansible node in group `proxmox`, connecting as root because root is
 its only administrative account. State-changing sweeps reach it only through a named `proxmox`
 play ([ansible.md](ansible.md#why-sweeps-target-guests-and-not-all)).
 
@@ -190,7 +190,8 @@ upgrade touches the kernel and the guest stack and belongs in a watched window. 
 transient unit so an SSH session dropped by a `tailscaled` restart cannot kill `dpkg` halfway:
 
 ```bash
-systemd-run --unit=host-upgrade-<date> /root/host-upgrade.sh   # apt-get dist-upgrade with --force-confold
+systemd-run --unit=host-upgrade-<date> --setenv=DEBIAN_FRONTEND=noninteractive \
+  /bin/bash -c 'apt-get update && apt-get -y -o Dpkg::Options::=--force-confold dist-upgrade && apt-get clean'
 journalctl -u host-upgrade-<date>
 ```
 
@@ -210,7 +211,7 @@ a person through Alertmanager only.
 | `PasswordAuthentication` | `no` | Same as the guests |
 | `PermitRootLogin` | `prohibit-password` | Root is the only administrative account; `no` would end SSH administration (`group_vars/proxmox.yml`) |
 
-sshd is deliberately not pinned to the Tailscale address on the host
+sshd on the host listens on the wildcard address, so SSH works without Tailscale
 ([decision](../decisions/sshd-listen-address.md)); `lan_guard` admits break-glass SSH from the two
 admin workstations only.
 
@@ -232,14 +233,16 @@ it; one would have to write through the symlink and keep the host's own key.
 
 - `appdata_aux-disk` carries `is_mountpoint 1`, so Proxmox treats the storage as inactive unless a
   filesystem is mounted at the path and cannot write into the empty directory on `pve-root`
-  ([KE-7](known-errors.md#ke-7) class). `mkdir 0` on it is deprecated in PVE 9; the replacement is
-  `create-base-path 0`.
-- No `dir` storage points at an unmounted path on `pve-root`; the former `mergerfs` storage of
-  that kind was removed after verifying it was unused.
+  ([KE-7](known-errors.md#ke-7) class). It carries `create-base-path 0` and `create-subdirs 0`, the
+  PVE 9 replacements for the deprecated `mkdir 0`.
+- No `dir` storage points at an unmounted path on `pve-root`.
+- `scratch` is an `lvmthin` storage on the former boot SSD (VG `scratch`, thin pool of 104 GiB)
+  for data whose loss costs nothing; its volumes are not overcommitted
+  ([decision](../decisions/scratch-pool-on-former-boot-ssd.md)).
 
 ## Guest Backup
 
-Weekly `vzdump --mode snapshot` of all nine guests, deployed by the `guest_backup` role and
+Daily `vzdump --mode snapshot` of all nine guests, seven days kept, deployed by the `guest_backup` role and
 documented in [guest-backup-restore.md](../../runbooks/platform/guest-backup-restore.md). vm100 is
 backed up with its root disk only; its data disk carries `backup=0`. A daily archive of the host
 configuration sits beside the guest archives, and `platform-restore.sh` rebuilds the platform from
@@ -247,7 +250,7 @@ both ([platform restore](../../runbooks/platform/platform-restore.md)).
 
 The target `/mnt/vzdump` is bound to whichever disk currently holds the role, so a disk change is
 an fstab edit. The role refuses to deploy unless the path is a mountpoint whose backing device
-differs from root, because an unmounted target would fill the boot SSD with backups of the guests
+differs from root, because an unmounted target would fill the boot disk with backups of the guests
 living on it.
 
 ## Failure Impact
@@ -259,17 +262,18 @@ anything on the platform - it is noticed by a person.
 | Layer | What its loss takes with it |
 |---|---|
 | Host OS on `pve-root` | Guest configs in `/etc/pve`, host units, the power schedule |
-| `pve/data` thin pool | Every VM and LXC root disk; the volume group has no free extents, so `lvextend` is not a remedy |
-| Boot SSD ([KE-14](known-errors.md#ke-14)) | Both of the above at once; a single consumer drive behind the HBA with unexplained boot-window errors |
+| `pve/data` thin pool | Every VM and LXC root disk; about 60 GiB of the volume group are unallocated for `lvextend` |
+| Boot disk | Both of the above at once; a single consumer NVMe drive without redundancy |
 | aux-disk ([KE-13](known-errors.md#ke-13)) | Docker engine state of the Docker-in-LXC services, vm100's data disk, lxc260's database files, and the guest backup target |
-| Tailscale identity | Every service address; nodes are reached by MagicDNS name, and the LAN is deliberately not a fallback |
+| Tailscale identity | Every service address; nodes are reached by MagicDNS name, and the LAN is no fallback for them |
 
 After a total loss of the machine:
 
 - **Survives:** everything on vm102's disks (passed through by ID, readable in another machine),
   including the database dumps; this repository, which reproduces every role-managed artefact.
 - **Survives only with aux-disk:** the guest archives and the host-config archive under
-  `/mnt/vzdump`; a second host-config copy sits on the boot SSD. No copy exists off site.
+  `/mnt/vzdump`; a second host-config copy sits on `pve-root`, on the boot NVMe. No copy exists off
+  site.
 
 Recovery is a fresh Proxmox install followed by
 [platform-restore.md](../../runbooks/platform/platform-restore.md): the host configuration first,

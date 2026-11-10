@@ -17,12 +17,12 @@ down nightly, each produces output nobody reads.
 
 They are built anyway, to have run each control once, seen what it emits, and be able to say what
 it looks like where a security team, a change process and an on-call rota exist. That goal is
-legitimate but not operational, and a control that is indistinguishable from a needed one is later
-defended as needed.
+legitimate but not operational. Without a label, such a control would later be defended as a
+needed one.
 
 ## Options
-- **Skip them.** Lost: the learning goal is not met.
-- **Build them like any other control.** Lost: they would read as necessary and accumulate.
+- **Skip them.** The learning goal is not met.
+- **Build them like any other control.** They would read as necessary and accumulate.
 - **Build them, and label each as an exercise everywhere a reader meets it.** Chosen.
 
 ## Decision
@@ -31,8 +31,7 @@ defended as needed.
   for it.
 - None enters `docs/platform/security-controls.md` as `Enforced`: a running unit proves the control
   runs, not that it is needed or read. It may appear as `Practised`, or not at all.
-- No alerting for them unless the alert would exist anyway. An exercise that pages trains its
-  recipient to ignore pages.
+- No alerting for them unless the alert would exist anyway: nobody is on call for an exercise.
 
 | Control | Here | Where it belongs | What this setup cannot exercise |
 |---|---|---|---|
@@ -42,8 +41,8 @@ defended as needed.
 | SBOM and signature verification | A bill of materials for the compose images, signatures verified where published | Knowing within an hour whether a new CVE touches anything running; refusing images without provenance | No procurement, no registry of record, a fleet small enough to answer by hand |
 
 ## Consequences
-- Four controls cost maintenance whose benefit here is knowledge; the cost is stated, not
-  discovered later.
+- Four controls cost maintenance whose benefit here is knowledge; the table above lists what each
+  needs.
 - Each adds surface (a daemon, a port, a log stream, a job) and is subject to the same binding
   rule, drift sweep and review as everything else.
 - Exit: each control is revisited once the Terraform track starts and is either kept with an

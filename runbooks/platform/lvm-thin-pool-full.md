@@ -8,10 +8,10 @@
 - **Last exercised:** 2026-04-25, pass (incident: pool at 100 %, vm102 in io-error, corrupt
   `tailscaled` and `bash` on lxc230 and lxc260; recovered to 82.7 %).
 
-The `pve/data` thin pool on the boot SSD holds every guest root disk. It allocates chunks on first
+The `pve/data` thin pool on the boot disk holds every guest root disk. It allocates chunks on first
 write and gets them back only through discard, so a guest's `df` can show free space while the pool
-is full. The VG has no free extents, so `lvextend` is not available without shrinking `root`/`swap`
-or adding a PV. Background and the corruption pattern: [KE-7](../../docs/platform/known-errors.md#ke-7).
+is full. About 60 GiB of the volume group are unallocated, so `lvextend -L +<n>G pve/data` is a
+remedy until they are spent; a thin pool cannot shrink afterwards. Background and the corruption pattern: [KE-7](../../docs/platform/known-errors.md#ke-7).
 
 ## Preconditions
 
@@ -144,7 +144,7 @@ Prevention is deployed by the
   thresholds are in `docker/monitoring/prometheus/rules/alert.rules.yml` (group `lvm`).
 
 `apt-upgrade.yml` runs `serial: 1`, cleans the apt cache after each node and verifies binaries with
-`dpkg --verify`, so one overflow cannot corrupt the whole fleet at once.
+`dpkg --verify`, so a failure on one node stops the rollout before the next.
 
 Containers cannot trim themselves: the stock `fstrim.timer` carries
 `ConditionVirtualization=!container` and the ioctl is refused, and both report healthy. For a

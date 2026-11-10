@@ -2,7 +2,7 @@
 
 The register of open platform work, ranked by loss risk and dependency. Each row names the risk of
 leaving the item and the next step. Items whose next step needs more than one sentence have a short
-section below the table. Closed items are removed; the pull request that closed them is the record.
+section below the table. Closed items are removed from the table.
 The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](security-controls.md).
 
 ## Open items
@@ -10,20 +10,23 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | Rank | Item | Risk if left | Next step |
 |---|---|---|---|
 | 1 | [Off-site backup](#off-site-backup) | Every copy of the C1 data is on one site; fire, theft or ransomware reaching the SMB mounts destroys originals and backups together | Provision the VPS with [`offsite-vps-provision.md`](../../runbooks/platform/offsite-vps-provision.md), then deploy the `offsite_backup` role |
-| 2 | [Boot SSD replacement](#boot-ssd-replacement) ([KE-14](known-errors.md#ke-14)) | The disk carrying Proxmox and every guest root disk logs I/O errors in operation | Replace it in the second half of October 2026 with [`boot-ssd-replacement.md`](../../runbooks/platform/boot-ssd-replacement.md) |
-| 3 | [Escrow restore drill](#escrow-restore-drill) | The escrow of the vault password, the real inventory and the Ansible SSH key has never been restored from; a gap would be found on the day lxc250 is lost | Run [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) once and record the result |
-| 4 | SSH host key checking in Ansible | `ansible/ansible.cfg` sets `host_key_checking = False`, so a spoofed node is not detected and receives every secret the playbooks deploy to it | Record each node's host key in the control node's `known_hosts` from the inventory, then remove the setting |
-| 5 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
-| 6 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 produces silence, not an alert | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
-| 7 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Record the UPS and measure its runtime; run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if errors persist after rank 2 |
-| 8 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
-| 9 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
-| 10 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
-| 11 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
-| 12 | [Identity track](#identity-track) | Every service keeps its own accounts; Terraform waits on this track | Choose a start date, then build the identity node per [the decision](../decisions/identity-before-terraform.md) |
-| 13 | Nextcloud 35 needs Debian 13 on lxc210 | Nextcloud 34 is the last major that runs on Debian 12's PHP 8.2 and is supported until 2027-06 | Upgrade lxc210 to Debian 13, then run `occ maintenance:repair --include-expensive` in its own window |
-| 14 | Trailers and the Letterboxd diary after Jellyfin 12 | Cinema Mode and LetterboxdSync have no build for 12, so trailers before films and the diary sync are gone | Install Jellyscribe for the diary; read the code of Trailer Preroll 2.x, which downloads from YouTube and has a single maintainer, before it runs on the GPU node |
-| 15 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
+| 2 | [Escrow restore drill](#escrow-restore-drill) | The escrow of the vault password, the real inventory and the Ansible SSH key has never been restored from; a gap would be found on the day lxc250 is lost | Run [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) once and record the result |
+| 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
+| 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
+| 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Record the UPS and measure its runtime; run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if transport faults continue on the HBA ports |
+| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
+| 7 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
+| 8 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
+| 9 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
+| 10 | [Identity track](#identity-track) | Every service keeps its own accounts; Terraform waits on this track | Choose a start date, then build the identity node per [the decision](../decisions/identity-before-terraform.md) |
+| 11 | Nextcloud 35 needs Debian 13 on lxc210 | Nextcloud 34 is the last major that runs on Debian 12's PHP 8.2 and is supported until 2027-06 | Upgrade lxc210 to Debian 13, then run `occ maintenance:repair --include-expensive` in its own window |
+| 12 | Trailers and the Letterboxd diary after Jellyfin 12 | Cinema Mode and LetterboxdSync have no build for 12, so trailers before films and the diary sync are gone | Install Jellyscribe for the diary; read the code of Trailer Preroll 2.x, which downloads from YouTube and has a single maintainer, before it runs on the GPU node |
+| 13 | Apache on lxc210 binds the wildcard address | `lan_guard` closes the LAN side, but the binding rule stays broken on 80 and 443 | Move Nextcloud behind `tailscale serve`, which also retires [KE-16](known-errors.md#ke-16) |
+| 14 | Power-only Proxmox user for the admin phone | The phone logs in to the Proxmox interface as root, so a stolen phone holds full control of the hypervisor | Create a user whose role holds only `Sys.PowerMgmt`, with a second factor, as [tailscale-acl.md](tailscale-acl.md) describes |
+| 15 | [Package supply track](#package-supply-track), stages 1 to 4 and 6 | Every node fetches packages and images from public sources itself; nothing records or controls what enters the fleet, and an egress filter cannot be built | Read the theory of stage 1, then record every package source per node |
+| 16 | [Egress filter](#package-supply-track), stage 5 | No guest is limited in the outbound connections it opens, and the hypervisor firewall is disabled; a compromised service can reach any address | After stage 4, list per guest the outbound destinations it needs, then write the decision record |
+| 17 | Full platform restore test | The boot disk moved by `pvmove`, so [`platform-restore.md`](../../runbooks/platform/platform-restore.md) has still never rebuilt the host from the guest backups | Rebuild onto a spare disk or into a scratch VM from one day's archives and record the result in the runbook |
+| 18 | Operating system lifecycle | The seven LXCs and vm102 run Debian 12, in LTS since 2026-06-11 and unsupported after 2028-06-30; vm100's Ubuntu 22.04 leaves standard security maintenance in May 2027 | Upgrade the Debian 12 guests to Debian 13 one at a time, lxc210 first (rank 11), and choose vm100's path to a newer Ubuntu LTS before May 2027 |
 
 ## Item notes
 
@@ -44,21 +47,11 @@ until the target exists.
 
 Residual risk, accepted in the decision: root on the VPS can still delete the repositories.
 
-### Boot SSD replacement
-
-The replacement is a rebuild, not a clone: Proxmox installed fresh on the new disk and the platform
-restored with [`platform-restore.md`](../../runbooks/platform/platform-restore.md). It is the first
-full restore test, and the old SSD stays untouched as the rollback.
-
-Decide the port before the swap. The same HBA port and cable separates the media from the
-transport; an onboard SATA port separates the HBA path from the power and gives the SSD the TRIM
-the HBA blocks. The per-boot count of failed commands before and after is the KE-14 test.
-
 ### Escrow restore drill
 
-The escrow exists since 2026-08-20: a password manager operated by a third party, plus a paper copy
+The escrow is a password manager operated by a third party, plus a paper copy
 off site. Two of the three artefacts are files (`hosts.yml` and the Ansible SSH key), so the drill
-confirms that the escrow holds them, not only the vault password. After the first run, repeat it
+confirms that the escrow holds both files as well as the vault password. After the first run, repeat it
 yearly and record each run in the runbook's execution log.
 
 ### aux-disk replacement and disposal
@@ -81,16 +74,16 @@ live file on lxc200 still has the single Discord route (measured 2026-09-24).
 
 1. Sign up for a heartbeat service operated by a third party; a self-hosted receiver would need a
    watcher of its own.
-2. Set its grace period above the nightly off-window (`homelab_schedule` defaults), or every
-   morning opens with an alarm.
+2. Set its grace period above the longest off-window (`homelab_schedule` defaults), so that a
+   planned shutdown raises no alarm.
 3. Deploy the route and the receiver URL in the live `alertmanager.yml` together.
 
 ### Power path and UPS
 
 [`physical-controls.md`](physical-controls.md) names supporting utilities as the weakest physical
 control. Record the UPS model, age and battery date, and measure one runtime under real load. The
-KE-14 power-path check runs only if the errors follow the new boot SSD (rank 2); it needs host
-downtime and no purchase.
+KE-14 power-path check runs if transport faults continue on the HBA ports; it needs host downtime
+and no purchase.
 
 ### Storage network
 
@@ -124,6 +117,57 @@ start condition, the exercise block applied, is met. Order:
 2. The clients: Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum that gates
    Terraform; Audiobookshelf and Calibre-Web follow. Nextcloud and Proxmox VE are deferred for the
    reasons in the decision.
+
+### Package supply track
+
+A learning track as well as a fix: each stage starts with the theory it needs, written up before
+any configuration exists. Stages 3, 4 and 6 are exercises in the sense of
+[`exercise-scope-before-terraform.md`](../decisions/exercise-scope-before-terraform.md).
+
+**In place.** Security-only `unattended_upgrades` with kernels and the NVIDIA stack held back;
+`apt-upgrade.yml` for the rest; `apt_metrics` and `AptSecurityUpdatesPending`; a weekly
+`dpkg --verify` projection in `fleet_snapshot`; compose images pinned by tag, one by digest; the
+weekly Trivy scan; the monthly SBOM and signature check; Actions pinned to SHAs under Dependabot.
+
+Verified 2026-10-22: no APT proxy on any node; no nftables output chain on any node drops or
+rejects, every one accepts by policy; `pve-firewall status` reports `disabled/running`; by Ansible
+ad-hoc from lxc250. Third-party APT sources: Tailscale on every node, Docker on lxc200, lxc211,
+lxc220, lxc230 and vm100, NVIDIA container toolkit and the graphics-drivers PPA on vm100, HashiCorp
+on lxc250. Every third-party list except the PPA names its key with `signed-by`.
+
+1. **Trust chain and inventory.** How APT trusts a package (`InRelease`, the hash chain from
+   `Release` to `Packages` to the `.deb`, `signed-by` keyrings) and how it chooses a version
+   (`apt-cache policy`, pinning) are covered by [SecureApt](https://wiki.debian.org/SecureApt), the
+   [repository format](https://wiki.debian.org/DebianRepository/Format) and `man apt_preferences`.
+   The package sources per node then go into the node documents, and the PPA is bound to its key
+   with `signed-by`.
+2. **APT cache.** A caching proxy and a mirror differ in what they store and when; HTTPS sources
+   need their own handling behind a proxy, and the cache becomes a single point of failure for
+   patching ([apt-cacher-ng manual](https://www.unix-ag.uni-kl.de/~bloch/acng/)). A decision record
+   comes first, then the `apt-cacher-ng` container, a role that sets `Acquire::http::Proxy` on every
+   node, and a scrape target or alert for the cache.
+3. **Offline install drill (exercise).** An air-gapped site gets packages by downloading them on an
+   identical system, transferring them with checksums and importing them into a local repository
+   ([aptly overview](https://www.aptly.info/doc/overview/)). One disposable container without a
+   route out receives a package that is not cached, and the steps become a runbook.
+4. **Staged rollout from snapshots (exercise).** An `aptly` snapshot freezes a package set; it is
+   published through the cache, tried on one guest, then promoted to the fleet.
+5. **Egress filter.** Default-deny outbound with an allowlist per role, read in the
+   [Proxmox VE firewall](https://pve.proxmox.com/wiki/Firewall) documentation,
+   [Tailscale firewall ports](https://tailscale.com/kb/1082/firewall-ports) and the
+   [nftables wiki](https://wiki.nftables.org/). Known needs: Tailscale coordination and DERP on
+   every node, registries and media metadata on vm100, the off-site target, the issuer for
+   `tailscale_cert`, NTP for `chrony`. The decision record precedes the filter, which is applied one
+   guest at a time; it must not flush Tailscale's chains
+   ([`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)), and LAN SSH to the
+   hypervisor stays the recovery path.
+6. **Container images (exercise).** Compose images are pinned by tag, which a registry can repoint
+   to another image; `registry-mirrors` in the
+   Docker daemon covers Docker Hub only
+   ([pull-through cache](https://distribution.github.io/distribution/recipes/mirror/)); provenance
+   is the subject of [Sigstore cosign](https://docs.sigstore.dev/) and [SLSA](https://slsa.dev/).
+   Every compose image ends pinned by digest, and a decision says whether a pull-through registry
+   is worth running here.
 
 ## Deferred on purpose
 

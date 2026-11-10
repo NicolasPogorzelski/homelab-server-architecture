@@ -1,0 +1,44 @@
+---
+- name: Deploy the upstream watch script
+  ansible.builtin.copy:
+    src: "{{ upstream_watch_script_src }}"
+    dest: "{{ upstream_watch_script_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the watched items
+  ansible.builtin.template:
+    src: upstream-watch.conf.j2
+    dest: "{{ upstream_watch_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ upstream_watch_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the upstream watch units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - upstream-watch.service
+    - upstream-watch.timer
+  notify: Reload systemd
+
+- name: Enable and start the upstream watch timer
+  ansible.builtin.systemd_service:
+    name: upstream-watch.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

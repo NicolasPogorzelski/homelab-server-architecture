@@ -15,11 +15,12 @@ subdirectories of `rules/`. CI does not run them; run them before changing a cov
 | File | Covers |
 |---|---|
 | `database.test.yml` | `DatabaseBackupMetricsMissing`: one alert per missing metric, two on one job |
+| `ingest.test.yml` | `ingest` group: one failed check stays quiet, a lasting failure fires, stale scan, absent metric |
 | `host-config.test.yml` | `HostConfigBackupStale`: stale archive and absent metric |
 | `jellyfin.test.yml` | `JellyfinCudaLost`: quick recovery stays quiet, ten minutes without CUDA fires |
 | `listeners.test.yml` | `listeners` group: wildcard listener hold time, missing listener metrics |
 | `rule-health.test.yml` | `PrometheusRuleEvaluationFailing` |
-| `smart.test.yml` | `smart` group: kernel letters swapping across boots, real rise, fall |
+| `smart.test.yml` | `smart` group: kernel letters swapping across boots, real rise, fall, link CRC rise |
 
 Run them with the Prometheus image the monitoring stack pins, so the tests use the PromQL engine
 that evaluates the rules in production:
