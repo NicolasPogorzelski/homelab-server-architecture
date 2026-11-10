@@ -1,0 +1,10 @@
+---
+# Retry, once per boot, the onboot guests that pve-guests failed to start.
+- name: Preflight - the control node must match a published commit
+  import_playbook: preflight.yml
+
+- name: Retry guest starts that failed at boot
+  hosts: proxmox
+  become: false # the inventory already connects as root; there is no ansible user here
+  roles:
+    - guest_boot_retry

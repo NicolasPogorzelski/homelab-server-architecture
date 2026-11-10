@@ -1,0 +1,34 @@
+---
+# The script parses the Proxmox API's JSON with jq, so jq is installed explicitly:
+# without it the unit fails at every boot and retries nothing.
+- name: Install jq for the retry script
+  ansible.builtin.apt:
+    name: jq
+    state: present
+
+- name: Deploy the retry script
+  ansible.builtin.copy:
+    src: "{{ guest_boot_retry_script_src }}"
+    dest: "{{ guest_boot_retry_script_dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the retry service unit
+  ansible.builtin.template:
+    src: guest-boot-retry.service.j2
+    dest: /etc/systemd/system/guest-boot-retry.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# The unit is enabled but not started: it exists for the boot sequence, and a
+# start now would sleep and then find nothing to do. Skipped in check mode for
+# the reason jellyfin_watchdog gives: the unit file was not really written.
+- name: Enable the retry service for the next boot
+  ansible.builtin.systemd_service:
+    name: guest-boot-retry.service
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
