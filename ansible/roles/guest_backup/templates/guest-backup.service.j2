@@ -10,6 +10,11 @@ Description=Full guest backup of every VM and LXC (vzdump)
 # instead of writing to the wrong directory, and SystemdUnitFailed fires.
 RequiresMountsFor={{ guest_backup_dir }}
 
+# A boot after the timer slot runs the overdue backup at once (Persistent=true).
+# Beside startall, vzdump starts a stopped onboot VM for its archive, startall
+# skips it as running, and vzdump stops it again (KE-35).
+After=pve-guests.service
+
 [Service]
 Type=oneshot
 User=root

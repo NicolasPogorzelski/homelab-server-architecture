@@ -46,6 +46,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
 | [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09 |
 | [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
+| [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending |
 
 ---
 
@@ -1317,3 +1318,42 @@ only ([decision](../decisions/streaming-box-over-the-lan.md)). Nothing in the tu
 **Verification.** 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
 player buffer event; the box's `tun0` carried no bytes, CPU averaged 24 %. vm100's path log for the
 box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.
+
+---
+
+<a id="ke-35"></a>
+## KE-35: An onboot VM stays off after a boot that catches up the guest backup
+
+- **Status:** Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending
+- **Affects:** the Proxmox host (`guest_backup`, `pve-guests`), every onboot guest; seen on vm100
+
+**Symptom.** 2026-11-11, host booted by hand at 12:20, after the backup slot: vm100 `stopped`,
+Jellyfin unreachable, every other guest running. `pve-guests` logged no `Starting VM 100` and
+ended `OK`; `guest-boot-retry` exited 0 without a line. The same run logged
+`vzdump 250 exited 111` after `ipcc_send_rec[1] failed: Connection refused`.
+
+**Cause.** `guest-backup.timer` is `Persistent=true`, so a boot after its slot starts the overdue
+run at once. `guest-backup.service` had no order against `pve-guests`, and both ran together:
+
+```
+12:21:06 guest-backup.service starts; vzdump 250 fails, pmxcfs not yet up
+12:23:42 vzdump 100: "VM 100 started" - a stopped VM is run for its archive
+12:23:56 startall reaches order 6 while vm100 runs, and skips it
+12:24:31 guest-boot-retry exits 0: vm100 is running and locked
+12:25:34 vzdump 100: "stopping kvm after backup task"
+```
+
+`startall` skips a running VM without a message
+(`return if PVE::QemuServer::check_running($vmid, 1)` in `/usr/share/perl5/PVE/API2/Nodes.pm`).
+The power cut of the day before only moved the boot past the slot. Same class as
+[KE-26](#ke-26) and [KE-31](#ke-31): time logic that assumes a host that is up at the slot.
+
+**Fix.** `After=pve-guests.service` in the `guest_backup` unit template: a catch-up run waits
+until `startall` has finished, by which time pmxcfs is up and every onboot VM it started is
+running, so `vzdump` archives it in snapshot mode and leaves it running. Recovery:
+`qm start <vmid>`.
+
+**Verification.** 2026-11-11: `qm start 100` at 12:31; vm100's `docker.service` active at 12:32:44
+with `NRestarts=0`, Jellyfin `/health` `200`. Pending: on the next boot after the slot,
+`journalctl -b -u guest-backup.service` starts after `Finished pve-guests.service`, and
+`qm list` shows every onboot guest running.
