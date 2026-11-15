@@ -15,11 +15,16 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 DEADLINE=$(( $(date +%s) + {{ homelab_schedule_guard_timeout_minutes }} * 60 ))
 
-# Prints the first guarded unit that is active, or nothing.
+# Every guarded unit is Type=oneshot without RemainAfterExit: while it runs,
+# is-active prints "activating" and exits 3, and only "active" counted before,
+# so no running unit ever held the shutdown (KE-32).
+BUSY_STATES='^(active|activating|deactivating|reloading)$'
+
+# Prints the first guarded unit that is running, or nothing.
 busy_unit() {
     local unit
     for unit in {{ homelab_schedule_guard_host_units | join(' ') }}; do
-        if systemctl is-active --quiet "${unit}"; then
+        if [[ "$(systemctl is-active "${unit}")" =~ ${BUSY_STATES} ]]; then
             echo "host ${unit}"
             return 0
         fi
@@ -30,7 +35,7 @@ busy_unit() {
     if qm status {{ vmid }} 2>/dev/null | grep -q 'status: running'; then
         for unit in {{ units | join(' ') }}; do
             if qm guest exec {{ vmid }} -- systemctl is-active "${unit}" 2>/dev/null \
-                | grep -q '"out-data" : "active'; then
+                | grep -Eq '"out-data" : "(active|activating|deactivating|reloading)\\n'; then
                 echo "vm{{ vmid }} ${unit}"
                 return 0
             fi
