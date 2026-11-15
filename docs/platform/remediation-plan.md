@@ -13,7 +13,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 2 | [Escrow restore drill](#escrow-restore-drill) | The escrow of the vault password, the real inventory and the Ansible SSH key has never been restored from; a gap would be found on the day lxc250 is lost | Run [`escrow-restore-drill.md`](../../runbooks/platform/escrow-restore-drill.md) once and record the result |
 | 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
 | 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
-| 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Record the UPS and measure its runtime; run [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md) if transport faults continue on the HBA ports |
+| 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Transport faults continue on phy 0 and 1 ([KE-36](known-errors.md#ke-36)): replace that breakout cable with step 2 of [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md), run the rest of the check if they persist; record the UPS and measure its runtime |
 | 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
 | 7 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
 | 8 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
@@ -81,9 +81,10 @@ live file on lxc200 still has the single Discord route (measured 2026-09-24).
 ### Power path and UPS
 
 [`physical-controls.md`](physical-controls.md) names supporting utilities as the weakest physical
-control. Record the UPS model, age and battery date, and measure one runtime under real load. The
-KE-14 power-path check runs if transport faults continue on the HBA ports; it needs host downtime
-and no purchase.
+control. Record the UPS model, age and battery date, and measure one runtime under real load.
+Transport faults continue on the HBA ports ([KE-36](known-errors.md#ke-36)). The breakout cable for
+phy 0-3 is replaced first, together with step 2 of the KE-14 power-path check; the remaining steps
+need host downtime and no purchase.
 
 ### Storage network
 

@@ -89,7 +89,9 @@ See: [Runbook index](../../runbooks/README.md)
   units, crontabs, mounts, images); `fleet-drift.sh` runs the drift sweep with `--check`. Both
   write into the textfile collector on lxc250 ([ansible.md](ansible.md#roles)).
 - **Blackbox.** `ServiceDown` fires on the `blackbox-http` and `blackbox-https` targets
-  ([KE-8](known-errors.md#ke-8)).
+  ([KE-8](known-errors.md#ke-8)). It holds for ten minutes after a Prometheus start: the nightly
+  shutdown stops the services before lxc200; without the hold, the pending state restored at boot
+  ([KE-31](known-errors.md#ke-31)) fires it while the guests start.
 - **Pending state across the off-window.** Prometheus restores a pending alert's `for:` after a
   restart only if the outage was shorter than `--rules.alert.for-outage-tolerance`, set to 48 h
   in the compose file. An alert whose `for:` is longer than one day of uptime depends on it

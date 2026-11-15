@@ -25,7 +25,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-11](#ke-11) | Grafana admin password not updated after first start | Open - Grafana design behaviour, non-blocking |
 | [KE-12](#ke-12) | pveproxy fails to start after boot | Resolved 2026-06-25; gate owned by `tailscale_boot_gate` since 2026-09-12 |
 | [KE-13](#ke-13) | aux-disk physical failure | Open - degrading, in service, replacement planned |
-| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched |
+| [KE-14](#ke-14) | Read commands to the boot SSD time out under load | Mitigated 2026-10-27 - boot disk off the HBA; HBA faults continue as KE-36 |
 | [KE-15](#ke-15) | Guard tests mount existence, not mount identity | Resolved 2026-07-14 |
 | [KE-16](#ke-16) | Apache serves a certificate already renewed on disk | Resolved 2026-07-10 |
 | [KE-17](#ke-17) | VM100 silent guest hard-freeze | Open - cause unknown, one occurrence |
@@ -42,11 +42,13 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-28](#ke-28) | Jellyfin streams stalled inside the `tailscale serve` TCP forwarder | Resolved 2026-10-07 |
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
-| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31; restore across a boot not yet observed |
-| [KE-32](#ke-32) | The nightly shutdown cut off a running SnapRAID sync on vm102 | Open - fix in review, rollout before the next 23:30 |
-| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09 |
+| [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31 |
+| [KE-32](#ke-32) | The nightly shutdown cut off running SnapRAID jobs on vm102 | Mitigated 2026-11-15 - guard counts running oneshot units; first guarded scrub 2026-11-16 |
+| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first full run pending 2026-11-16 |
 | [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
 | [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending |
+| [KE-36](#ke-36) | Link CRC errors at boot on two data disks behind the HBA | Open - breakout cable for phy 0-3 to be replaced |
+| [KE-37](#ke-37) | lxc-fstrim fails on a container the catch-up backup has locked | Resolved 2026-11-15 - trim ordered after the guest backup; next late boot pending |
 
 ---
 
@@ -468,7 +470,7 @@ guest backup wrote about 13 GB to the disk on 2026-10-13 with all four counters 
 
 ## KE-14: Read commands to the boot SSD time out under load (SAS HBA transport, not media)
 
-- **Status:** Mitigated 2026-10-27 - boot disk off the HBA; HBA ports watched
+- **Status:** Mitigated 2026-10-27 - boot disk off the HBA; HBA faults continue as KE-36
 - **Affects:** Proxmox host boot SSD behind the LSI SAS2008 HBA (`scsi 9:0:0:0`, `phy(3)`,
   `mpt2sas`, `/dev/disk/by-id/<boot-ssd-by-id>`), which held `/boot/efi`, `pve-root` and the
   `pve-data` thin pool until 2026-10-27; it stays fitted at `9:0:0:0` and carries the losable `scratch` pool
@@ -526,8 +528,8 @@ Drive and transport changed together, so the swap cannot tell which of them caus
 **Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
 NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the old
 drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
-count, and six data disks. If faults continue there, run the
-[power-path check](../../runbooks/platform/ke14-power-path-check.md) and record the result here.
+count, and six data disks. From 2026-11-03 link CRC errors hit `9:0:1:0` and `9:0:2:0` at boot:
+[KE-36](#ke-36).
 
 Verified 2026-10-31: 0 transport messages in each of the five boots since the move, by the same
 command per boot; the CRC count at `9:0:2:0` unchanged at 393 over 14 days in Prometheus.
@@ -1187,7 +1189,7 @@ recreate the removed groupings as collections if wanted, and remove the item fro
 
 ## KE-31: An alert with a `for:` of two weeks stays pending forever
 
-- **Status:** Resolved 2026-10-31; restore across a boot not yet observed
+- **Status:** Resolved 2026-10-31
 - **Affects:** Prometheus on lxc200; `AptSecurityUpdatesPending` (`for: 14d`), and any later rule
   whose `for:` exceeds one day of uptime
 
@@ -1209,44 +1211,53 @@ above the longest off-window of about 35 hours from Thursday night to the Saturd
 `docker-compose-update.yml --limit lxc200` after the merge.
 
 **Verification.** 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
-Prometheus's spelling of 48 h. Not yet observed: an alert pending before a shutdown keeping its
-`activeAt` across the next boot.
+Prometheus's spelling of 48 h. 2026-11-15: `ALERTS_FOR_STATE` for `ServiceDown` kept `activeAt`
+00:15:53 across the night; Prometheus started at 12:18 and the alert fired within two minutes,
+while the guests were still booting. `ServiceDown` therefore waits ten minutes after a Prometheus
+start ([monitoring.md](monitoring.md#notes-on-specific-rules)).
 
 ---
 
 <a id="ke-32"></a>
 
-## KE-32: The nightly shutdown cut off a running SnapRAID sync on vm102
+## KE-32: The nightly shutdown cut off running SnapRAID jobs on vm102
 
-- **Status:** Open - fix in review, rollout before the next 23:30
+- **Status:** Mitigated 2026-11-15 - guard counts running oneshot units; first guarded scrub 2026-11-16
 - **Affects:** the Proxmox host (`homelab_schedule`), vm102 (`snapraid_maintenance`)
 
 **Symptom.** On 2026-11-01 the host logged `shutting down` at 23:30:01 with no `waiting for` line
 before it. On vm102, `snapraid-maintenance@sync.service`, started at 23:00, ended at 23:32:31 with
-`Failed with result 'signal'` at 31 % of a sync that resized the parity. `SnapRAIDSyncStale`
-fired the next morning; the last good sync was 2026-10-31 23:04.
+`Failed with result 'signal'` at 31 % of a sync that resized the parity. On 2026-11-09 the same
+happened to the weekly scrub: started at 00:00, `shutting down` at 00:15:05, scrub killed at
+00:16:23 (`status=15/TERM`) at 16 %. That night vm102's `qemu-ga` logged the guard's
+`guest-exec` call for the scrub at 00:15:04.
 
-**Cause.** `/etc/cron.d/homelab-schedule` sets no `PATH`, so cron starts the shutdown script with
-`/usr/bin:/bin`. `qm` lives in `/usr/sbin`. `env -i PATH=/usr/bin:/bin bash -c "qm status 102"`
-on the host returns `command not found`, rc 127. The script sends that error to `/dev/null`,
-`grep 'status: running'` finds nothing, and vm102 counts as stopped, so none of its guarded units
-is asked. The vm102 journal confirms it: no `guest-exec` call at 23:30. Every earlier sync ended
-before 23:30, so the guard had never been tested against a running guest unit. The host guards
-use `systemctl` from `/usr/bin` and were not affected.
+**Cause.** Two faults in `homelab-shutdown.sh`, the second hidden behind the first.
 
-**Fix.** `homelab-shutdown.sh` exports a full `PATH` itself, whatever starts it, and exits 1
-when `qm` is missing, so a broken guest check keeps the host up instead of letting it go off
-(`homelab_schedule`, branch `fix/shutdown-guard-path`).
+1. `/etc/cron.d/homelab-schedule` sets no `PATH`, so cron starts the script with `/usr/bin:/bin`,
+   and `qm` lives in `/usr/sbin`. `qm status 102` failed with rc 127 into `/dev/null`, vm102
+   counted as stopped, and none of its units was asked.
+2. Every guarded unit, on the host and in vm102, is `Type=oneshot` without `RemainAfterExit`.
+   While it runs, `systemctl is-active` prints `activating` and exits 3. The guard matched
+   `active` only (`--quiet` on the host, `grep '"out-data" : "active'` for the guest), so no
+   running unit had ever held the shutdown. Reproduced with
+   `systemd-run --user -p Type=oneshot sleep 15`: `activating`, rc 3.
 
-**Verification.** Pending the rollout: `env -i PATH=/usr/bin:/bin` run of the script's guest
-check against vm102, and the next night's sync finishing before the host goes off.
+**Fix.** The script exports a full `PATH` and exits 1 when `qm` is missing (563990a).
+It counts `active`, `activating`, `deactivating` and `reloading` as running (fdeaa49).
+
+**Verification.** 2026-11-15: the deployed `busy_unit` function, run alone on the host, returned
+`vm102 snapraid-maintenance@sync.service` for a sync waiting on the scrub's lock (`activating`).
+Pending: at the 2026-11-16 shutdown, `journalctl -t homelab-shutdown` shows
+`waiting for vm102 snapraid-maintenance@scrub.service`, and the scrub ends before
+`shutting down`.
 
 ---
 
 <a id="ke-33"></a>
 ## KE-33: 4K streams stall on Monday evenings while the weekly scrub reads the array
 
-- **Status:** Mitigated 2026-11-02 - scrub starts Sunday midnight; first run 2026-11-09
+- **Status:** Mitigated 2026-11-02 - scrub starts Sunday midnight; first full run pending 2026-11-16
 - **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
   (`homelab_schedule`)
 
@@ -1274,9 +1285,10 @@ The template unit runs the script under `flock`, so a Sunday sync still running 
 for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
 scrub after Monday's start.
 
-**Verification.** Pending 2026-11-09: `journalctl -t homelab-shutdown` on the host shows
-`waiting for vm102 snapraid-maintenance@scrub.service` at Monday's shutdown, and vm102's journal
-shows the scrub finishing before the host powers off.
+**Verification.** The first run, 2026-11-09, was killed at 16 % by the 00:15 shutdown, whose
+guard missed it ([KE-32](#ke-32)). Pending 2026-11-16: `journalctl -t homelab-shutdown` on the
+host shows `waiting for vm102 snapraid-maintenance@scrub.service`, and vm102's journal shows the
+scrub finishing before the host powers off.
 
 ---
 
@@ -1357,3 +1369,72 @@ running, so `vzdump` archives it in snapshot mode and leaves it running. Recover
 with `NRestarts=0`, Jellyfin `/health` `200`. Pending: on the next boot after the slot,
 `journalctl -b -u guest-backup.service` starts after `Finished pve-guests.service`, and
 `qm list` shows every onboot guest running.
+
+---
+
+<a id="ke-36"></a>
+## KE-36: Link CRC errors at boot on two data disks behind the HBA
+
+- **Status:** Open - breakout cable for phy 0-3 to be replaced
+- **Affects:** Proxmox host, LSI SAS2008 `phy(0)` (`9:0:1:0`) and `phy(1)` (`9:0:2:0`), both
+  8 TB data disks of vm102's SnapRAID array; identify them by `by-id`, never by kernel letter
+
+**Symptom.** `SmartUdmaCrcErrorsGrowing` from 2026-11-03. `UDMA_CRC_Error_Count` at `9:0:2:0`
+held 393 from 2026-10-17 and read 447, 510, 591, 846 and 902 by 2026-11-14; 223 of the rise came
+in the boot of 2026-11-12, when `9:0:1:0` went from 4 to 32. The kernel logs, all `READ`:
+
+```
+sd 9:0:2:0: [<disk>] tag#2819 Sense Key : Aborted Command [current]
+sd 9:0:2:0: [<disk>] tag#2819 Add. Sense: Information unit iuCRC error detected
+I/O error, dev <disk>, sector 0 op 0x0:(READ) flags 0x880700 phys_seg 1 prio class 2
+```
+
+`I/O error` lines per boot since 2026-10-27: 11, 12, 16, 27 (8 of them at `9:0:1:0`) and 12 on
+2026-11-03, -05, -07, -12 and -14; none on the other fifteen boots. Every one fell between 5 and
+40 s after kernel start.
+
+**Cause.** Not confirmed. The fault sits on the SATA link, not the medium: `iuCRC` is a frame
+that failed its CRC and is retried, and SMART at `9:0:2:0` shows reallocated, pending,
+offline-uncorrectable and reported-uncorrect counts at 0 with `No Errors Logged`. Both disks hang
+off the first SFF-8087 breakout cable (phy 0-3); the CRC counts of the six other HBA disks did not
+move. The errors fall in the seconds when all eight disks spin up together, which leaves the
+cable and its connectors, and the power at spin-up ([KE-14](#ke-14)'s 12 V hypothesis).
+Same class as KE-14: transport faults on the HBA.
+
+**Fix.** Pending: replace the breakout cable for phy 0-3 in the off-window, with step 2 of the
+[power-path check](../../runbooks/platform/ke14-power-path-check.md) (the two disks' power leads,
+splitters in the path). Swapping the two breakout cables at the HBA first separates cable from
+port: the errors move with the cable or stay on the port.
+
+**Verification.** Pending: over seven boots after the swap, the CRC counts at `9:0:1:0` and
+`9:0:2:0` flat in Prometheus, and `journalctl -k -b | grep -c iuCRC` at 0 per boot.
+
+---
+
+<a id="ke-37"></a>
+## KE-37: lxc-fstrim fails on a container the catch-up backup has locked
+
+- **Status:** Resolved 2026-11-15 - trim ordered after the guest backup; next late boot pending
+- **Affects:** the Proxmox host (`proxmox_host_units`, `guest_backup`); seen on lxc250
+
+**Symptom.** `SystemdUnitFailed` for `lxc-fstrim.service` on 2026-11-14 and 2026-11-15, both
+after a boot past the 10:30 and 12:00 slots. The unit stayed failed until its next run:
+
+```
+ct250: FAILED -- CT is locked (backup)
+fstrim FAILED for 1 container(s): 250
+```
+
+**Cause.** `lxc-fstrim.timer` and `guest-backup.timer` are `Persistent=true`, so a boot after
+both slots starts both overdue runs, and both wait only for `pve-guests` ([KE-35](#ke-35)).
+`vzdump` locks each container while it archives it and starts with ct250. On 2026-11-15 it held
+ct250 from 12:20:59 to 12:21:46; `pct fstrim 250` came at 12:21:39. Same off-window gap as
+[KE-35](#ke-35): both timers were overdue at one boot.
+
+**Fix.** `After=pve-guests.service guest-backup.service` in `snippets/systemd/lxc-fstrim.service`
+(`proxmox_host_units`): when both are queued, the trim starts after the backup has finished.
+
+**Verification.** 2026-11-15: `systemctl show -p After lxc-fstrim.service` lists
+`guest-backup.service`; a manual start finished without a failed container. Pending: on the next
+boot after both slots, `journalctl -b -u lxc-fstrim.service` starts after
+`Finished guest-backup.service`.
