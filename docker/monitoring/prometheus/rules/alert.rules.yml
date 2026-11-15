@@ -756,8 +756,12 @@ groups:
 
   - name: blackbox
     rules:
+      # The nightly shutdown stops the services before lxc200, and the 48h outage
+      # tolerance (KE-31) restores that pending state at boot, so the alert fired
+      # while the guests were still starting. Ten minutes after a Prometheus start
+      # it waits again; without the metric, unless leaves the alert as it was.
       - alert: ServiceDown
-        expr: probe_success == 0
+        expr: probe_success == 0 unless on() (time() - process_start_time_seconds{job="prometheus"} < 600)
         for: 3m
         labels:
           severity: critical

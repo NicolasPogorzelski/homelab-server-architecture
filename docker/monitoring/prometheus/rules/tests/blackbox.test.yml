@@ -1,0 +1,48 @@
+# promtool unit tests for ServiceDown in ../alert.rules.yml.
+# Run from this directory the way README.md one level up describes.
+rule_files: [../alert.rules.yml]
+evaluation_interval: 1m
+tests:
+  # Prometheus starts at 0 with the probe already failing, as after the nightly
+  # power-down: quiet for the first ten minutes, then the usual three.
+  - interval: 1m
+    input_series:
+      - series: 'process_start_time_seconds{job="prometheus",instance="127.0.0.1:9090"}'
+        values: '0x30'
+      - series: 'probe_success{job="blackbox-http",instance="http://vm100:8096/",service="jellyfin"}'
+        values: '0x30'
+    alert_rule_test:
+      - {eval_time: 9m, alertname: ServiceDown, exp_alerts: []}
+      - {eval_time: 12m, alertname: ServiceDown, exp_alerts: []}
+      - eval_time: 14m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: blackbox-http, instance: "http://vm100:8096/", service: jellyfin}
+            exp_annotations:
+              summary: "Service jellyfin is down"
+              description: "blackbox probe for jellyfin (http://vm100:8096/) reports probe_success=0 for more than 3 minutes. A node can be up while its service is not answering (see KE-8)."
+
+  # A service that starts in time stays quiet.
+  - interval: 1m
+    input_series:
+      - series: 'process_start_time_seconds{job="prometheus",instance="127.0.0.1:9090"}'
+        values: '0x30'
+      - series: 'probe_success{job="blackbox-http",instance="http://vm100:8096/",service="jellyfin"}'
+        values: '0x5 1x25'
+    alert_rule_test:
+      - {eval_time: 15m, alertname: ServiceDown, exp_alerts: []}
+
+  # Without the self-scrape metric the gate is empty and the rule fires after 3m.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="http://vm100:8096/",service="jellyfin"}'
+        values: '0x10'
+    alert_rule_test:
+      - {eval_time: 2m, alertname: ServiceDown, exp_alerts: []}
+      - eval_time: 4m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: blackbox-http, instance: "http://vm100:8096/", service: jellyfin}
+            exp_annotations:
+              summary: "Service jellyfin is down"
+              description: "blackbox probe for jellyfin (http://vm100:8096/) reports probe_success=0 for more than 3 minutes. A node can be up while its service is not answering (see KE-8)."
