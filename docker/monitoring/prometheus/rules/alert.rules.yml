@@ -756,8 +756,11 @@ groups:
 
   - name: blackbox
     rules:
+      # Quiet for ten minutes after a Prometheus start: the 48h outage tolerance (KE-31)
+      # restores the pending state from the nightly shutdown, which fires while guests boot.
+      # Without the start-time series, `unless` matches nothing and the rule works as before.
       - alert: ServiceDown
-        expr: probe_success == 0
+        expr: probe_success == 0 unless on() (time() - process_start_time_seconds{job="prometheus"} < 600)
         for: 3m
         labels:
           severity: critical

@@ -113,7 +113,8 @@ back, and exits 1 if no alarm is armed or the armed time is more than 60 s off
 
 ### Shutdown (homelab-shutdown.sh)
 
-Before powering off, the script waits while a guarded unit is active: `guest-backup.service` and
+Before powering off, the script waits while a guarded unit runs, which for these oneshot units
+means `activating` as well as `active` ([KE-32](known-errors.md#ke-32)): `guest-backup.service` and
 `lxc-fstrim.service` on the host, and on vm102, asked through the QEMU guest agent, the SnapRAID
 sync and scrub and `storage-permissions.service`. If work is still running after 180 minutes, or
 the next start cannot be armed, it exits 1 and the host stays up. The script sets its own `PATH`,
@@ -142,6 +143,8 @@ Containers cannot trim themselves: the stock `fstrim.timer` carries
 `ConditionVirtualization=!container`, and an unprivileged container is refused the ioctl. Without
 a host-side job, freed blocks stay allocated in the thin pool. `Persistent=true` matters because the
 host is off at the scheduled time on many days; the overdue run fires after the next start.
+The service is ordered after `guest-backup.service`, whose `vzdump` locks each container while
+it archives it ([KE-37](known-errors.md#ke-37)).
 The PostgreSQL restore test depends on this trim reclaiming its throwaway cluster the same morning.
 
 See: [LVM thin pool full](../../runbooks/platform/lvm-thin-pool-full.md).

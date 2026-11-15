@@ -2,7 +2,9 @@
 Description=Return blocks freed inside LXC containers to the LVM thin pool
 Documentation=https://github.com/NicolasPogorzelski/homelab-server-architecture/blob/main/runbooks/platform/lvm-thin-pool-full.md
 # pct fstrim enters each container's mount namespace, so the containers must be up.
-After=pve-guests.service
+# After a late boot both timers catch up at once; vzdump locks each container and
+# fstrim fails on the locked one, so the trim waits for the backup to finish.
+After=pve-guests.service guest-backup.service
 
 [Service]
 Type=oneshot
