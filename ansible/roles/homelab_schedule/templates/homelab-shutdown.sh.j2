@@ -16,8 +16,8 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 DEADLINE=$(( $(date +%s) + {{ homelab_schedule_guard_timeout_minutes }} * 60 ))
 
 # Every guarded unit is Type=oneshot without RemainAfterExit: while it runs,
-# is-active prints "activating" and exits 3, and only "active" counted before,
-# so no running unit ever held the shutdown (KE-32).
+# is-active prints "activating" and exits 3. Matching "active" alone lets a
+# running unit past the guard (KE-32).
 BUSY_STATES='^(active|activating|deactivating|reloading)$'
 
 # Prints the first guarded unit that is running, or nothing.
