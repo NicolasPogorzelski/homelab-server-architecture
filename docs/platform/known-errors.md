@@ -44,7 +44,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
 | [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31 |
 | [KE-32](#ke-32) | The nightly shutdown cut off running SnapRAID jobs on vm102 | Mitigated 2026-11-15 - guard counts running oneshot units; first guarded scrub 2026-11-16 |
-| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Sunday midnight; first full run pending 2026-11-16 |
+| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Monday midnight; first full run pending 2026-11-16 |
 | [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
 | [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending |
 | [KE-36](#ke-36) | Link CRC errors at boot on two data disks behind the HBA | Open - breakout cable for phy 0-3 to be replaced |
@@ -1257,7 +1257,7 @@ Pending: at the 2026-11-16 shutdown, `journalctl -t homelab-shutdown` shows
 <a id="ke-33"></a>
 ## KE-33: 4K streams stall on Monday evenings while the weekly scrub reads the array
 
-- **Status:** Mitigated 2026-11-02 - scrub starts Sunday midnight; first full run pending 2026-11-16
+- **Status:** Mitigated 2026-11-02 - scrub starts Monday midnight; first full run pending 2026-11-16
 - **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
   (`homelab_schedule`)
 
