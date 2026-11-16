@@ -43,8 +43,8 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-29](#ke-29) | Files uploaded to the Nextcloud ingest folders never reach Paperless | Resolved 2026-10-27 |
 | [KE-30](#ke-30) | The Audiobookshelf collections page stays empty | Mitigated 2026-10-27 - large groupings moved to tags; upstream fix watched |
 | [KE-31](#ke-31) | An alert with a `for:` of two weeks stays pending forever | Resolved 2026-10-31 |
-| [KE-32](#ke-32) | The nightly shutdown cut off running SnapRAID jobs on vm102 | Mitigated 2026-11-15 - guard counts running oneshot units; first guarded scrub 2026-11-16 |
-| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Mitigated 2026-11-02 - scrub starts Monday midnight; first full run pending 2026-11-16 |
+| [KE-32](#ke-32) | The nightly shutdown cut off running SnapRAID jobs on vm102 | Resolved 2026-11-16 - guard counts running oneshot units |
+| [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Resolved 2026-11-16 - scrub starts Monday midnight |
 | [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
 | [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending |
 | [KE-36](#ke-36) | Link CRC errors at boot on two data disks behind the HBA | Open - breakout cable for phy 0-3 to be replaced |
@@ -1222,7 +1222,7 @@ start ([monitoring.md](monitoring.md#notes-on-specific-rules)).
 
 ## KE-32: The nightly shutdown cut off running SnapRAID jobs on vm102
 
-- **Status:** Mitigated 2026-11-15 - guard counts running oneshot units; first guarded scrub 2026-11-16
+- **Status:** Resolved 2026-11-16 - guard counts running oneshot units
 - **Affects:** the Proxmox host (`homelab_schedule`), vm102 (`snapraid_maintenance`)
 
 **Symptom.** On 2026-11-01 the host logged `shutting down` at 23:30:01 with no `waiting for` line
@@ -1248,16 +1248,16 @@ It counts `active`, `activating`, `deactivating` and `reloading` as running (fde
 
 **Verification.** 2026-11-15: the deployed `busy_unit` function, run alone on the host, returned
 `vm102 snapraid-maintenance@sync.service` for a sync waiting on the scrub's lock (`activating`).
-Pending: at the 2026-11-16 shutdown, `journalctl -t homelab-shutdown` shows
-`waiting for vm102 snapraid-maintenance@scrub.service`, and the scrub ends before
-`shutting down`.
+2026-11-16: `journalctl -t homelab-shutdown` logged `waiting for vm102
+snapraid-maintenance@scrub.service` at 00:15:04 and `shutting down` at 02:17:30, after the scrub
+had finished at 02:16:26.
 
 ---
 
 <a id="ke-33"></a>
 ## KE-33: 4K streams stall on Monday evenings while the weekly scrub reads the array
 
-- **Status:** Mitigated 2026-11-02 - scrub starts Monday midnight; first full run pending 2026-11-16
+- **Status:** Resolved 2026-11-16 - scrub starts Monday midnight
 - **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
   (`homelab_schedule`)
 
@@ -1285,10 +1285,9 @@ The template unit runs the script under `flock`, so a Sunday sync still running 
 for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
 scrub after Monday's start.
 
-**Verification.** The first run, 2026-11-09, was killed at 16 % by the 00:15 shutdown, whose
-guard missed it ([KE-32](#ke-32)). Pending 2026-11-16: `journalctl -t homelab-shutdown` on the
-host shows `waiting for vm102 snapraid-maintenance@scrub.service`, and vm102's journal shows the
-scrub finishing before the host powers off.
+**Verification.** 2026-11-16: the scrub started at 00:00 and logged `OK: snapraid scrub of 12%
+completed ... in 8167s`; the unit finished at 02:16:26, and the host held its 00:15 shutdown until
+then ([KE-32](#ke-32)).
 
 ---
 

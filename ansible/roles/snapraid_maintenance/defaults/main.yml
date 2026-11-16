@@ -9,7 +9,7 @@ snapraid_script_src: "{{ playbook_dir }}/../../snippets/storage/snapraid-mainten
 snapraid_script_dest: /usr/local/sbin/snapraid-maintenance.sh
 
 # Weekly scrub of 12% of the array, a full pass about every two months (inside SnapRAIDScrubCoverageAging).
-# Starts Monday midnight: a 12% run takes about 105 minutes and stalled evening streams (KE-33).
+# Starts Monday midnight: a 12% run takes about 135 minutes and stalled evening streams (KE-33).
 # homelab_schedule holds the 00:15 shutdown until it ends; Persistent=true covers a Sunday the host was off.
 snapraid_scrub_oncalendar: "Mon *-*-* 00:00:00"
 
