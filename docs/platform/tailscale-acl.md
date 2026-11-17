@@ -163,8 +163,10 @@ every other node.
 
 ### Rule 4 - Hypervisor: SMB from vm102
 
-Verified 2026-10-17: the host mounts six shares from vm102, two of them over the tailnet and four
-over the LAN, by `findmnt -t cifs`. On the LAN, `smb_guard` and `lan_guard` on vm102 admit the host
+Verified 2026-11-17: the host mounts seven shares from vm102, the three backup targets over the
+tailnet and the four service shares over the LAN, by `findmnt -t cifs`.
+
+On the LAN, `smb_guard` and `lan_guard` on vm102 admit the host
 and vm100 only ([samba.md](samba.md)). Nothing else the host does crosses the tailnet; guests are
 managed through `pct` and `qm` on the host itself.
 
