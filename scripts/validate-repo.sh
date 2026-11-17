@@ -776,6 +776,7 @@ echo "Check 44: image versions are not repeated in documents"
 
 while read -r compose; do
     while read -r img; do
+        img="${img%%@*}"   # the digest is not a version; without this the hash is read as the tag
         tag="${img##*:}"; short="${img%:*}"; short="${short##*/}"
         [[ "${tag}" == "${img}" || "${tag}" == *'${'* || "${tag}" != *[0-9]* ]] && continue
         while read -r rel; do
