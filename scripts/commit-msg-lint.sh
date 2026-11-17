@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Commit message gate. Two rules:
+# Commit message gate. Rules:
 #
 #   1. Conventional Commits with a scope, checked on the subject line.
 #   2. No tool attribution in the message. Authorship is the commit author; how AI
 #      assistance is used is stated once, in the README, not per commit.
+#   3. Subject at most 72 characters; GitHub cuts a longer pull request title.
+#   4. Pull request only: the template's "What and why" section carries text.
 #
 # Usage:
-#   commit-msg-lint.sh <file>                       # commit-msg hook and CI
-#   commit-msg-lint.sh --attribution-only <file>    # pull request title and body
+#   commit-msg-lint.sh <file>                  # commit-msg hook and CI, rules 1-3
+#   commit-msg-lint.sh --no-length <file>      # Dependabot commits, rules 1-2
+#   commit-msg-lint.sh --pull-request <file>   # title as subject, then body; rules 1-4
 
-ATTRIBUTION_ONLY=0
-if [[ "${1:-}" == "--attribution-only" ]]; then
-    ATTRIBUTION_ONLY=1
-    shift
-fi
+PULL_REQUEST=0
+CHECK_LENGTH=1
+case "${1:-}" in
+    --pull-request) PULL_REQUEST=1; shift ;;
+    --no-length) CHECK_LENGTH=0; shift ;;
+esac
 
 MSG_FILE="$1"
 SUBJECT="$(head -1 "$MSG_FILE")"
@@ -32,7 +36,7 @@ fi
 # ---------------------------------------------------------------------------
 PATTERN='^(feat|fix|docs|refactor|chore|test|ci)\([a-z0-9-]+\): .+'
 
-if (( SKIP_FORMAT == 0 )) && (( ATTRIBUTION_ONLY == 0 )) && ! echo "$SUBJECT" | grep -qP "$PATTERN"; then
+if (( SKIP_FORMAT == 0 )) && ! echo "$SUBJECT" | grep -qP "$PATTERN"; then
     echo "ERROR: Commit message format invalid." >&2
     echo "Expected: type(scope): description" >&2
     echo "Types:    feat fix docs refactor chore test ci" >&2
@@ -65,4 +69,27 @@ if MATCH="$(printf '%s' "$STRIPPED" | grep -inE "$AI_PATTERN" | head -3)"; then
     printf '  %s\n' "$MATCH" >&2
     echo "" >&2
     exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Rule 3: subject length
+# ---------------------------------------------------------------------------
+if (( SKIP_FORMAT == 0 )) && (( CHECK_LENGTH == 1 )) && (( ${#SUBJECT} > 72 )); then
+    echo "ERROR: Subject is ${#SUBJECT} characters; the limit is 72." >&2
+    echo "Got:      $SUBJECT" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Rule 4: the pull request template is filled in
+# ---------------------------------------------------------------------------
+if (( PULL_REQUEST == 1 )); then
+    WHAT="$(printf '%s\n' "$BODY" \
+        | awk '/^## What and why/ { on = 1; next } /^## / { on = 0 } on' \
+        | perl -0pe 's/<!--.*?-->//gs' | tr -d '[:space:]')"
+    if [[ -z "$WHAT" ]]; then
+        echo "ERROR: The pull request body leaves \"What and why\" empty." >&2
+        echo "Fill in the template from .github/pull_request_template.md." >&2
+        exit 1
+    fi
 fi
