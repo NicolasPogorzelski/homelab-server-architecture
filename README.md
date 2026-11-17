@@ -8,7 +8,7 @@ Pogorzelski as a learning platform for DevOps and security engineering.
 
 ## What this repository shows
 
-- **Configuration management:** 57 playbooks and 51 roles, secrets in Ansible Vault, deployed from a
+- **Configuration management:** 58 playbooks and 52 roles, secrets in Ansible Vault, deployed from a
   control node that refuses to run from a tree that matches no published commit
   ([Ansible](docs/platform/ansible.md)).
 - **CI and supply chain:** every push runs the repository validator, ansible-lint and gitleaks over
@@ -109,12 +109,12 @@ documentation conventions are in
 
 ### Decisions
 
-22 decision records; the [design decisions](docs/decisions/design-decisions.md) collect the
+23 decision records; the [design decisions](docs/decisions/design-decisions.md) collect the
 foundational ones.
 
 - [SMB bind and LAN access](docs/decisions/smb-bind-and-lan-access.md) - [Media over the tailnet](docs/decisions/media-over-the-tailnet.md) - [Streaming box over the LAN](docs/decisions/streaming-box-over-the-lan.md) - [Loopback + Tailscale Serve](docs/decisions/loopback-tailscale-serve.md) - [sshd binding](docs/decisions/sshd-listen-address.md)
 - [PostgreSQL boot ordering](docs/decisions/postgresql-tailscale-boot-ordering.md) - [pveproxy boot ordering](docs/decisions/pveproxy-tailscale-boot-ordering.md) - [MagicDNS and systemd-resolved](docs/decisions/magicdns-and-systemd-resolved.md) - [LXC200 systemd visibility](docs/decisions/lxc200-systemd-visibility.md)
-- [Hypervisor panic policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) - [Calibre auto-import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) - [LXC250 control node](docs/decisions/lxc250-devops.md) - [Off-site backup target](docs/decisions/offsite-backup-target.md) - [Vaultwarden decommissioning](docs/decisions/vaultwarden-decommission.md) - [Headscale migration](docs/decisions/headscale-migration.md) - [Identity before Terraform](docs/decisions/identity-before-terraform.md) - [Controls built to be learned](docs/decisions/exercise-scope-before-terraform.md) - [Scratch pool on the former boot SSD](docs/decisions/scratch-pool-on-former-boot-ssd.md) - [Media ingest pipeline](docs/decisions/media-ingest-pipeline.md) - [Media ingest duplicates](docs/decisions/media-ingest-duplicates.md) - [Tailnet policy as code](docs/decisions/tailnet-policy-as-code.md)
+- [Hypervisor panic policy and softdog](docs/decisions/hypervisor-panic-and-watchdog.md) - [Calibre auto-import on CIFS](docs/decisions/calibre-cifs-sqlite-import.md) - [LXC250 control node](docs/decisions/lxc250-devops.md) - [Off-site backup target](docs/decisions/offsite-backup-target.md) - [Vaultwarden decommissioning](docs/decisions/vaultwarden-decommission.md) - [Headscale migration](docs/decisions/headscale-migration.md) - [Identity before Terraform](docs/decisions/identity-before-terraform.md) - [Controls built to be learned](docs/decisions/exercise-scope-before-terraform.md) - [Scratch pool on the former boot SSD](docs/decisions/scratch-pool-on-former-boot-ssd.md) - [Media ingest pipeline](docs/decisions/media-ingest-pipeline.md) - [Media ingest duplicates](docs/decisions/media-ingest-duplicates.md) - [Tailnet policy as code](docs/decisions/tailnet-policy-as-code.md) - [Automation key through the control node](docs/decisions/automation-identity.md)
 
 ### Security, risk and operations
 

@@ -92,6 +92,9 @@ all:
         lxc250:
           ansible_host: <tailscale-ip-devops>
           prometheus_label: devops
+          # Workstations whose automated sessions may use the agent key (agent_access).
+          agent_access_source_ips:
+            - <tailscale-ip-admin-desktop>
         lxc260:
           ansible_host: <tailscale-ip-postgres>
           prometheus_label: postgres
