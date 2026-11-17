@@ -90,8 +90,9 @@ The host starts by RTC alarm at a time set per weekday and powers off every nigh
 Monday the weekly SnapRAID scrub has started at midnight, and the guard holds the shutdown until
 the scrub ends ([KE-33](known-errors.md#ke-33)). On days
 without a start time the host stays off until switched on by hand. The `homelab_schedule` role
-deploys the two scripts and the single cron file. Cron is deliberate here: the job powers the host
-down, so catch-up semantics would be wrong for it.
+deploys the two scripts and the single cron file. The job stays in cron because it powers the host
+down: a systemd timer's catch-up run after a missed slot would switch the host off at an unplanned
+time.
 
 | Schedule | User | Command | Purpose |
 |---|---|---|---|
@@ -159,7 +160,7 @@ exists because vm100 froze so completely that its own journal recorded nothing
 
 - It binds the host's LAN address, resolved on the node at apply time. netpoll writes frames from
   inside the kernel, and a Tailscale address lives on a TUN device served by a userspace daemon
-  that is frozen exactly when the channel is needed.
+  that stops with the rest of vm100 in such a freeze.
 - The sending side (`netconsole` role on vm100) pins the receiver's MAC; without it the kernel
   broadcasts every frame to the whole segment.
 - `lan_guard` admits the netconsole flow from vm100 to the host.
@@ -259,8 +260,8 @@ living on it.
 ## Failure Impact
 
 There is no second node and no HA; the design is recovery-oriented. All nine guests, every
-service, all monitoring and all alerting run on this machine, so a host failure is not reported by
-anything on the platform - it is noticed by a person.
+service, all monitoring and all alerting run on this machine, so a host failure produces no alert from
+the platform; a person notices it when a service is unreachable.
 
 | Layer | What its loss takes with it |
 |---|---|

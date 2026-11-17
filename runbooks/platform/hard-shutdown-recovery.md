@@ -4,9 +4,9 @@
   reboot guests are stopped, fail to start, or are unreachable.
 - **Duration:** 10-20 minutes.
 - **Risk:** a container started before its SMB share is mounted writes into the empty mountpoint
-  on the boot SSD ([KE-7](../../docs/platform/known-errors.md#ke-7) class); more guest starts on a
-  boot SSD that logs I/O errors add load to a failing device
-  ([KE-14](../../docs/platform/known-errors.md#ke-14)).
+  on the boot disk ([KE-7](../../docs/platform/known-errors.md#ke-7) class); starting vm102 on a
+  disk path that keeps logging I/O errors adds load to it
+  ([KE-36](../../docs/platform/known-errors.md#ke-36)).
 - **Last exercised:** 2026-11-10, step 4 for lxc260 after a power cut
 
 Guests autostart by `startup: order=N,up=M` ([boot ordering](../../docs/platform/proxmox-host.md#boot-ordering)):
@@ -34,12 +34,14 @@ it; `journalctl -b -t guest-boot-retry` on the host names those guests.
 
 ## Steps
 
-1. Read the state and the boot SSD before starting anything.
+1. Read the state and the disk paths before starting anything.
    ```bash
    qm list; pct list
-   journalctl -k -b | grep -cE '9:0:0:0.*(DID_SOFT_ERROR|DID_TIME_OUT)'
+   journalctl -k -b | grep -c 'I/O error'
    ```
-   Check: a count above zero that keeps rising means stop here (see Rollback).
+   Check: a count that keeps rising after the first minute of the boot means stop here (see
+   Rollback); the error window at boot is recorded in
+   [KE-36](../../docs/platform/known-errors.md#ke-36).
 2. Start vm102 if it is not running.
    ```bash
    qm start 102
@@ -132,7 +134,7 @@ screen goes dark after GRUB.
 There is no prior state to return to; these are the abort criteria:
 
 - Step 3 does not pass: do not start SMB-dependent containers. A container started on an empty
-  mountpoint keeps the empty directory and writes onto the boot SSD.
+  mountpoint keeps the empty directory and writes onto the boot disk.
 - A container fails twice for the same reason: stop and diagnose; repeating `pct start` adds
   nothing.
 - The boot disk logs I/O errors that keep rising: stop starting guests

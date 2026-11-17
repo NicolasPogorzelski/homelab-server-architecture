@@ -3,8 +3,8 @@
 Faults observed on this platform, their root cause, fix and current status. Generic failure
 scenarios and response procedures are in [operations.md](./operations.md).
 
-Every entry carries an explicit `<a id="ke-N"></a>` anchor; link to `known-errors.md#ke-N`, not to
-the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
+Anchors are `ke-N`; link as `known-errors.md#ke-N`. Entry format:
+[CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 
 ---
 
@@ -46,7 +46,7 @@ the heading slug. Format: [CONVENTIONS.md](../CONVENTIONS.md#known-error-entry).
 | [KE-32](#ke-32) | The nightly shutdown cut off running SnapRAID jobs on vm102 | Resolved 2026-11-16 - guard counts running oneshot units |
 | [KE-33](#ke-33) | 4K streams stall on Monday evenings while the weekly scrub reads the array | Resolved 2026-11-16 - scrub starts Monday midnight |
 | [KE-34](#ke-34) | Streams to the streaming box stall while vm100's Tailscale path to it keeps changing | Mitigated 2026-11-08 - the box streams over the LAN; cause not found |
-| [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending |
+| [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; verified at a late boot 2026-11-15 |
 | [KE-36](#ke-36) | Link CRC errors at boot on two data disks behind the HBA | Open - breakout cable for phy 0-3 to be replaced |
 | [KE-37](#ke-37) | lxc-fstrim fails on a container the catch-up backup has locked | Resolved 2026-11-15 - trim ordered after the guest backup; next late boot pending |
 
@@ -1232,7 +1232,8 @@ happened to the weekly scrub: started at 00:00, `shutting down` at 00:15:05, scr
 00:16:23 (`status=15/TERM`) at 16 %. That night vm102's `qemu-ga` logged the guard's
 `guest-exec` call for the scrub at 00:15:04.
 
-**Cause.** Two faults in `homelab-shutdown.sh`, the second hidden behind the first.
+**Cause.** Two faults in `homelab-shutdown.sh`. The first hid vm102 from the guard; the second
+meant that no running unit held the shutdown.
 
 1. `/etc/cron.d/homelab-schedule` sets no `PATH`, so cron starts the script with `/usr/bin:/bin`,
    and `qm` lives in `/usr/sbin`. `qm status 102` failed with rc 127 into `/dev/null`, vm102
@@ -1324,7 +1325,8 @@ the tunnel competing for the box's CPU, and the Tailscale app's state while anot
 foreground. Client versions at the time: Tailscale 1.104.5 on the box, 1.104.4 on vm100.
 
 **Fix.** The box reaches Jellyfin over the LAN, admitted by `lan_guard` on vm100 from its address
-only ([decision](../decisions/streaming-box-over-the-lan.md)). Nothing in the tunnel was changed.
+only ([decision](../decisions/streaming-box-over-the-lan.md)). The tunnel is unchanged: the box keeps
+its tag and its ACL rule.
 
 **Verification.** 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
 player buffer event; the box's `tun0` carried no bytes, CPU averaged 24 %. vm100's path log for the
@@ -1335,7 +1337,7 @@ box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.
 <a id="ke-35"></a>
 ## KE-35: An onboot VM stays off after a boot that catches up the guest backup
 
-- **Status:** Resolved 2026-11-11 - backup ordered after `pve-guests`; next late boot pending
+- **Status:** Resolved 2026-11-11 - backup ordered after `pve-guests`; verified at a late boot 2026-11-15
 - **Affects:** the Proxmox host (`guest_backup`, `pve-guests`), every onboot guest; seen on vm100
 
 **Symptom.** 2026-11-11, host booted by hand at 12:20, after the backup slot: vm100 `stopped`,
@@ -1365,9 +1367,12 @@ running, so `vzdump` archives it in snapshot mode and leaves it running. Recover
 `qm start <vmid>`.
 
 **Verification.** 2026-11-11: `qm start 100` at 12:31; vm100's `docker.service` active at 12:32:44
-with `NRestarts=0`, Jellyfin `/health` `200`. Pending: on the next boot after the slot,
-`journalctl -b -u guest-backup.service` starts after `Finished pve-guests.service`, and
-`qm list` shows every onboot guest running.
+with `NRestarts=0`, Jellyfin `/health` `200`.
+
+Verified 2026-11-15: host booted at 12:17, after the slot; `startall` started vm100 at 12:20:14,
+`pve-guests` finished and the catch-up `guest-backup` started at 12:20:58, `vzdump 100` ran in
+snapshot mode (`resuming VM again`) and vm100 ran until the night's shutdown, by
+`journalctl -b <boot> -u pve-guests -u guest-backup` and `qm list`.
 
 ---
 
@@ -1392,7 +1397,7 @@ I/O error, dev <disk>, sector 0 op 0x0:(READ) flags 0x880700 phys_seg 1 prio cla
 2026-11-03, -05, -07, -12 and -14; none on the other fifteen boots. Every one fell between 5 and
 40 s after kernel start.
 
-**Cause.** Not confirmed. The fault sits on the SATA link, not the medium: `iuCRC` is a frame
+**Cause.** Unconfirmed; the fault sits on the SATA link, not the medium: `iuCRC` is a frame
 that failed its CRC and is retried, and SMART at `9:0:2:0` shows reallocated, pending,
 offline-uncorrectable and reported-uncorrect counts at 0 with `No Errors Logged`. Both disks hang
 off the first SFF-8087 breakout cable (phy 0-3); the CRC counts of the six other HBA disks did not

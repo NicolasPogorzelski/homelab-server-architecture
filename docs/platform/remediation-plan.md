@@ -1,8 +1,6 @@
 # Remediation Plan
 
-The register of open platform work, ranked by loss risk and dependency. Each row names the risk of
-leaving the item and the next step. Items whose next step needs more than one sentence have a short
-section below the table. Closed items are removed from the table.
+Open platform work, ranked by loss risk and dependency.
 The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](security-controls.md).
 
 ## Open items
@@ -14,7 +12,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
 | 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
 | 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Transport faults continue on phy 0 and 1 ([KE-36](known-errors.md#ke-36)): replace that breakout cable with step 2 of [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md), run the rest of the check if they persist; record the UPS and measure its runtime |
-| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
+| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor's service shares to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
 | 7 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
 | 8 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
 | 9 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
@@ -70,7 +68,7 @@ physical destruction, decided before the disk is removed (A.7.14 in
 The `Watchdog` rule fires permanently and is loaded. The route that sends it to an external
 receiver instead of Discord exists only in
 [`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example); the
-live file on lxc200 still has the single Discord route (measured 2026-09-24).
+live file on lxc200 has the Discord route only ([monitoring](monitoring.md#watchdog-and-the-missing-heartbeat)).
 
 1. Sign up for a heartbeat service operated by a third party; a self-hosted receiver would need a
    watcher of its own.
@@ -88,12 +86,12 @@ need host downtime and no purchase.
 
 ### Storage network
 
-SMB from vm100 and the hypervisor reaches vm102's LAN address, admitted by `smb_guard` and by the
+SMB from vm100 and the hypervisor's four service-share mounts reaches vm102's LAN address, admitted by `smb_guard` and by the
 `lan_guard` exception in `ansible/inventory/host_vars/vm102.yml`. The target replaces step 2 of
 [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md):
 
 - a host-only bridge `vmbr1` without `bridge-ports`, static addresses for the host, vm100 and vm102;
-- the host mounts and vm100's mounts move to it one at a time, each with automount and a reboot
+- the host's service-share mounts and vm100's mounts move to it one at a time, each with automount and a reboot
   test;
 - afterwards `smb_guard` drops 445 on vm102's LAN interface and the `lan_guard` exception for 445
   is removed.

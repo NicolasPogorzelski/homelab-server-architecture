@@ -4,13 +4,13 @@
   hand, or `MariaDBBackupStale` / `DatabaseBackupMetricsMissing` fires.
 - **Duration:** 10 minutes for the role; 30 minutes including share provisioning.
 - **Risk:** low; the procedure writes a new dump and never touches the database. Binding a share
-  that is not mounted sends dumps to the container rootfs on the boot SSD (KE-7 class).
+  that is not mounted sends dumps to the container rootfs on the boot disk (KE-7 class).
 - **Last exercised:** 2026-08-15, pass (share provisioned, role deployed, manual run verified). The
   dump itself runs daily by timer.
 
 Nextcloud on lxc210 runs its own MariaDB; the `pg_dumpall` on lxc260 does not cover it. Its user
-files are on the vm102 archive pool, its database on the boot SSD
-([KE-14](../../docs/platform/known-errors.md#ke-14)); without the database the files are unusable.
+files are on the vm102 archive pool, its database in the container's
+root disk on the boot NVMe; without the database the files are unusable.
 
 The [`mariadb_backup`](../../ansible/roles/mariadb_backup/) role deploys
 `snippets/mariadb/mariadb-backup.sh` to `/usr/local/sbin/mariadb-backup.sh`, plus

@@ -105,7 +105,7 @@ depends on the overlay and on its control plane ([Headscale migration](headscale
 **Rationale.** No root-equivalence between container and host; stronger isolation; least privilege;
 a smaller blast radius when a container is compromised.
 
-**Trade-offs.** UID/GID mapping work, deliberate mount permissions, and some kernel features
+**Trade-offs.** UID/GID mapping work, mount permissions set per mapped ID, and some kernel features
 unavailable.
 
 ---

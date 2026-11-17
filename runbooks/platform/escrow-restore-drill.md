@@ -7,8 +7,8 @@
 - **Risk:** secret material on a second machine until step 6; nothing on the platform changes.
 - **Last exercised:** never
 
-Three artefacts exist on lxc250 only, which lives on the boot SSD
-([KE-14](../../docs/platform/known-errors.md#ke-14)):
+Three artefacts exist on lxc250 only, whose root disk is in the thin pool
+on the boot NVMe:
 
 - `~/.vault_pass`, the Ansible Vault password (`vault_password_file` in `ansible/ansible.cfg`).
 - `ansible/inventory/hosts.yml`, the real inventory, gitignored.

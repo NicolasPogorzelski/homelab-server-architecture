@@ -31,7 +31,7 @@ flowchart LR
 
   VZDUMP["/mnt/vzdump on the aux-disk<br/>7 days"]
   VMDATA["/mnt/vm-data on the aux-disk<br/>7 days"]
-  BOOTCOPY["/var/backups/host-config<br/>on the boot SSD"]
+  BOOTCOPY["/var/backups/host-config<br/>on the boot NVMe"]
   RESTORE["monthly restore test<br/>throwaway cluster on port 5433"]
   MRESTORE["monthly restore test<br/>throwaway database"]
   OFFSITE["off-site copy<br/>does not exist"]
@@ -67,7 +67,7 @@ flowchart LR
 
 Both database chains are verified at write time. Each dump is written under a `.partial` name
 and renamed only after three checks pass: non-empty, `gzip -t`, and exactly one completion marker.
-The marker check is the one that catches a dump killed halfway, which is still valid gzip. The
+A dump killed halfway is still valid gzip, so the marker check is what catches it. The
 checks run before the retention delete, so a failed run never removes the last good dump.
 
 Both chains are restored monthly. The PostgreSQL dump goes into a throwaway cluster on port 5433,
@@ -79,7 +79,7 @@ writes a `vzdump` of all nine guests to `/mnt/vzdump`, lxc250 first, and keeps s
 contributes its root disk only; its `jellyfin-data` disk carries `backup=0`, so `app_backup` writes
 Jellyfin's own archive (database and subtitles) through its API onto that disk, and Audiobookshelf
 writes its archive there on its own schedule. The host's configuration
-is archived daily to the same disk and to the boot SSD, so either survives the loss of the other
+is archived daily to the same disk and to `pve-root` on the boot NVMe, so either survives the loss of the other
 ([platform restore](../../runbooks/platform/platform-restore.md)).
 
 Verified 2026-08-21: a guest restored from its vzdump archive, by the

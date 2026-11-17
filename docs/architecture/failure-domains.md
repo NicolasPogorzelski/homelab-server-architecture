@@ -88,7 +88,7 @@ nothing: the parity disk is in the same machine. Each dataset's protection is dr
 The Proxmox host is a single point of failure - one machine, no cluster - but its loss is a hardware
 problem and no data problem: the guests live on the disks above. A dead mainboard costs a
 replacement and a rebuild ([platform restore](../../runbooks/platform/platform-restore.md)); a dead
-boot SSD rolls every guest back to its last daily backup and each database to its last nightly dump.
+boot disk rolls every guest back to its last daily backup and each database to its last nightly dump.
 
 ## Related
 
