@@ -28,13 +28,14 @@ a to-do list in this order:
 
 1. Read the newest `.claude/handover-*.md`, `git status` / `git log`, `./scripts/validate-repo.sh`.
 2. Live, read-only (every write is a person's step):
-   - Host: `ssh server` - shutdown/wake schedule, failed units, timers, listeners, SMART
-     (by-id), KE-14 kernel messages, thin pool, Postfix queue, `sshd -T`, root
-     `authorized_keys`, pending apt, Tailscale version and Tailnet Lock.
-   - Guests: through lxc250 (`ssh devops`, `export PATH=$HOME/.local/bin:$PATH`, `cd
-     ~/git/homelab-server-architecture/ansible`), one read script via `ansible guests -b -m
-     script` - OS, failed units, listeners, `sshd -T`, pending apt and security updates, Docker
-     images and ports, `authorized_keys`, NOPASSWD sudo, Tailscale version.
+   - Everything through lxc250: `ssh agent-devops`, `export PATH=$HOME/.local/bin:$PATH`, `cd
+     ~/git/homelab-server-architecture/ansible`.
+   - Host: one read script via `ansible proxmox -m script` - shutdown/wake schedule, failed
+     units, timers, listeners, SMART (by-id), KE-14 kernel messages, thin pool, Postfix queue,
+     `sshd -T`, root `authorized_keys`, pending apt, Tailscale version and Tailnet Lock.
+   - Guests: one read script via `ansible guests -b -m script` - OS, failed units, listeners,
+     `sshd -T`, pending apt and security updates, Docker images and ports, `authorized_keys`,
+     NOPASSWD sudo, Tailscale version.
    - Prometheus on lxc200 (`ansible lxc200 -m script -a "executable=/usr/bin/python3 ..."`):
      alerts, targets, SMART history, backup, restore, drift and offsite metrics.
    - Drift report `/var/lib/fleet-drift/report.txt` on lxc250.

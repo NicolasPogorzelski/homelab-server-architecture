@@ -1,0 +1,17 @@
+---
+# === agent_access ===
+#
+# The SSH key that automated sessions on the admin workstation use, kept apart from the
+# person's break-glass key so a log line names who acted and the key can be revoked alone.
+# See docs/decisions/automation-identity.md.
+#
+# Accepted by one account on the control node only. From there automated sessions work through
+# Ansible like a person; it has no key for root on the hypervisor or for the VM admin users.
+agent_access_user: devops
+
+# Public key, not secret. Empty skips the role's key task.
+agent_access_pubkey: ""
+
+# Tailscale addresses the key is accepted from (`from=` in authorized_keys). Real values live
+# in the private inventory; an empty list refuses the run rather than accept from anywhere.
+agent_access_source_ips: []

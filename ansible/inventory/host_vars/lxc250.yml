@@ -24,3 +24,6 @@ nsswitch_hosts: "files myhostname dns"
 # 0.0.0.0:5355, unauthenticated, on the LAN. It is stopped and disabled; the role
 # refuses if anything still points at the 127.0.0.53 stub.
 nsswitch_disable_resolved: true
+
+# The key automated sessions use (agent_access). The source addresses are in hosts.yml.
+agent_access_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoWFhtRzsjnURAgyOKNVYDojMsP13YSxWY9CGOqeOEw agent@admin-workstation"

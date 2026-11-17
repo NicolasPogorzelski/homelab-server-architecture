@@ -64,6 +64,8 @@ and its findings are listed with the diff. It advises; the validator is the gate
 ## Fleet access
 
 - Read-only unless a change is explicitly approved.
+- The assistant connects with its own key through the `agent-devops` alias and reaches every
+  other node only through Ansible from the control node. It does not use the person's key.
 - Playbooks run from lxc250 with `--check --diff` first; the diff is shown before any apply.
 - Sanitize by placeholder as `docs/CONVENTIONS.md` defines. Nothing about the owner goes in:
   describe the shape of a removed value, never the value.
