@@ -19,8 +19,14 @@ jobs:
         run: |
           pip install 'ansible-lint==26.6.0'
           # --no-cache: the response cache starts empty on every runner, and a
-          # truncated Galaxy reply in it failed run 40720138964.
-          ansible-galaxy collection install --no-cache -r ansible/requirements.yml
+          # truncated Galaxy reply in it failed run 40720138964. Galaxy still cuts
+          # replies short (IncompleteRead, run 44142699953), so the install retries.
+          for attempt in 1 2 3; do
+            ansible-galaxy collection install --no-cache -r ansible/requirements.yml && break
+            [ "$attempt" -eq 3 ] && exit 1
+            echo "Galaxy install failed, attempt ${attempt} of 3; retrying in $((attempt * 15)) s"
+            sleep $((attempt * 15))
+          done
       - name: Provide a vault password file for syntax-check
         # ansible.cfg points vault_password_file at ~/.vault_pass, and syntax-check
         # aborts if the file is missing. It parses but never decrypts the vault vars,
