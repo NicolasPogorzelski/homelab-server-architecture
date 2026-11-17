@@ -12,7 +12,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
 | 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
 | 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Transport faults continue on phy 0 and 1 ([KE-36](known-errors.md#ke-36)): replace that breakout cable with step 2 of [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md), run the rest of the check if they persist; record the UPS and measure its runtime |
-| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor's service shares to vm102 crosses the LAN, filtered by source address only | Write the decision record for a host-only bridge before any live change |
+| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor's service shares to vm102 crosses the LAN, filtered by source address only, and the guest and database backups depend on `tailscaled` on the host | Write the decision record for a host-only bridge before any live change |
 | 7 | Automation key separate from the break-glass key | Automated work on the admin workstation authenticates with the break-glass key, so an automated process holds the access reserved for a person in an emergency | Create a restricted key and account for automated work, the way Ansible has `ansible`, and keep the break-glass key for people |
 | 8 | Data protection reassessment | One external user reaches Jellyfin, Audiobookshelf and Nextcloud through machine sharing; the household exemption in [`data-classification.md`](data-classification.md#data-protection-assessment) may no longer cover those services | Redo the assessment for the three services and record the result there |
 | 9 | Retention and deletion policy | No retention period exists for documents, logs or monitoring history (A.8.10) | Write retention periods per class into [`data-classification.md`](data-classification.md#retention-and-deletion) |
@@ -25,6 +25,8 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 16 | [Egress filter](#package-supply-track), stage 5 | No guest is limited in the outbound connections it opens, and the hypervisor firewall is disabled; a compromised service can reach any address | After stage 4, list per guest the outbound destinations it needs, then write the decision record |
 | 17 | Full platform restore test | The boot disk moved by `pvmove`, so [`platform-restore.md`](../../runbooks/platform/platform-restore.md) has still never rebuilt the host from the guest backups | Rebuild onto a spare disk or into a scratch VM from one day's archives and record the result in the runbook |
 | 18 | Operating system lifecycle | The seven LXCs and vm102 run Debian 12, in LTS since 2026-06-11 and unsupported after 2028-06-30; vm100's Ubuntu 22.04 leaves standard security maintenance in May 2027 | Upgrade the Debian 12 guests to Debian 13 one at a time, lxc210 first (rank 11), and choose vm100's path to a newer Ubuntu LTS before May 2027 |
+| 19 | [Tailnet trust](#tailnet-trust): policy from Git | A policy change in the admin console goes through no review, and the sanitized copy in [`tailscale-acl.md`](tailscale-acl.md) can drift from it unnoticed | Create the private repository and its workflow per [the decision](../decisions/tailnet-policy-as-code.md) |
+| 20 | [Tailnet trust](#tailnet-trust): Tailnet Lock | Whoever controls the Tailscale account or the coordination server can add a node, and the grants in [`tailscale-acl.md`](tailscale-acl.md) then apply to it | After rank 19, write the runbook and enable Tailnet Lock in its own window |
 
 ## Item notes
 
@@ -91,13 +93,14 @@ SMB from vm100 and the hypervisor's four service-share mounts reaches vm102's LA
 [`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md):
 
 - a host-only bridge `vmbr1` without `bridge-ports`, static addresses for the host, vm100 and vm102;
-- the host's service-share mounts and vm100's mounts move to it one at a time, each with automount and a reboot
-  test;
+- the host's seven mounts, the three backup targets on the tailnet included, and vm100's mounts move
+  to it one at a time, each with automount and a reboot test;
 - afterwards `smb_guard` drops 445 on vm102's LAN interface and the `lan_guard` exception for 445
   is removed.
 
 Samba keeps its wildcard bind, because an explicit bind cuts the Tailscale path the admin
-workstations use; check that path after every step. The ACL does not change. In the same window,
+workstations use; check that path after every step. When the backup targets have moved, ACL
+[Rule 4](tailscale-acl.md#rule-4---hypervisor-smb-from-vm102) is removed. In the same window,
 adopt the hand-deployed `smb-guard` table (`snippets/storage/smb-guard.nft`) into the `nft_guard`
 role.
 
@@ -116,6 +119,22 @@ start condition, the exercise block applied, is met. Order:
 2. The clients: Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum that gates
    Terraform; Audiobookshelf and Calibre-Web follow. Nextcloud and Proxmox VE are deferred for the
    reasons in the decision.
+
+### Tailnet trust
+
+The policy pipeline comes first, because it changes how the policy is applied; Tailnet Lock, which
+changes which nodes may join, follows in a window of its own
+([documentation](https://tailscale.com/kb/1226/tailnet-lock)):
+
+- signing nodes: the admin workstation and the notebook, no server; an Android device cannot sign;
+- the disablement secrets go into the escrow before any node is signed, because losing all of them
+  leaves the tailnet unrecoverable unless one is held by Tailscale support;
+- device approval and Tailnet Lock exclude each other, so the console setting is checked first;
+- the external user's devices stay in their own tailnet but need a signature from a signing node
+  here before they can reach a shared node
+  ([Rule 13](tailscale-acl.md#rule-13---external-user-through-machine-sharing));
+- the runbook covers signing a new device and the recovery path, `tailscale lock local-disable` on
+  each node.
 
 ### Package supply track
 

@@ -16,7 +16,9 @@ Principles:
 sanitized: addresses are placeholders, and people appear by role, never by name, device name or
 e-mail address. Nothing synchronises the two: a change is written here, applied to the console by
 hand, and the console's `tests` block rejects a policy that breaks an assertion on save. A drift
-between this file and the console is found only by comparing them.
+between this file and the console is found only by comparing them. The
+[policy-as-code decision](../decisions/tailnet-policy-as-code.md) moves the source to a private
+repository once its first `apply` has run.
 
 Every rule answers to one of two sources: a connection observed on a node, or a need the owner of
 a device stated. Anything else is closed.
@@ -168,7 +170,8 @@ tailnet and the four service shares over the LAN, by `findmnt -t cifs`.
 
 On the LAN, `smb_guard` and `lan_guard` on vm102 admit the host
 and vm100 only ([samba.md](samba.md)). Nothing else the host does crosses the tailnet; guests are
-managed through `pct` and `qm` on the host itself.
+managed through `pct` and `qm` on the host itself. Once the [storage network](remediation-plan.md#storage-network)
+item moves the backup targets to the host-only bridge, this rule has no use and is removed.
 
 ```json
 {

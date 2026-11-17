@@ -1,7 +1,7 @@
 # The Tailnet Policy Is Applied From Git
 
 ## Status
-Proposed 2026-11-17. Supersedes / superseded by: -.
+Accepted 2026-11-17. Supersedes / superseded by: -.
 
 ## Context
 The tailnet policy (tag owners, host aliases, rules, node attributes and the `tests` block) lives in
@@ -30,16 +30,16 @@ because policy files carry e-mail addresses.
   it publishes the tailnet ID, an external user's e-mail address and every node address, which the
   [sanitization rule](../CONVENTIONS.md#sanitization) forbids.
 - **A private repository holding the policy, applied by the action, with the sanitized mirror kept
-  here.** Proposed.
+  here.** Chosen.
 
 ## Decision
-No option is decided yet; the third is proposed. A private repository holds `policy.hujson`
-with its `tests` block and one workflow: `test` on every pull request, `apply` on a push to `main`.
-The action authenticates by federated identity with the `policy_file` scope, and is pinned by commit
-SHA like every other action here. The console is set to refuse edits; an override there is a
-break-glass step, and the next `apply` replaces it. `tailscale-acl.md` stays the public description,
-and a check in the private repository fails when its rules (source, destination, port) differ from
-the sanitized blocks in that document.
+A private repository holds `policy.hujson` with its `tests` block and one workflow: `test` on every
+pull request, `apply` on a push to `main`. The action authenticates by two federated identities: one
+with `policy_file:read` that trusts only pull-request tokens for `test`, one with `policy_file` that
+trusts only `main` for `apply`. It is pinned by commit SHA like every other action here. The console
+is set to refuse edits; an override there is a break-glass step, and the next `apply` replaces it.
+`tailscale-acl.md` stays the public description, and a check in the private repository fails when
+its rules (source, destination, port) differ from the sanitized blocks in that document.
 
 ## Consequences
 - Whoever can merge to `main` of the private repository rewrites the tailnet policy. That
@@ -53,8 +53,8 @@ the sanitized blocks in that document.
 - Tailscale's policy history in the console stays the second record of every change.
 - The [Headscale migration](headscale-migration.md) replaces the step that applies the policy.
   Whether Headscale accepts the same file and its `tests` block is checked when that track starts.
-- If chosen, the "Source of truth" paragraph of `tailscale-acl.md` names the private repository
-  as the source.
+- After the first `apply`, the "Source of truth" paragraph of `tailscale-acl.md` names the private
+  repository.
 
 ## Related Documents
 - [Tailscale ACL & tagging model](../platform/tailscale-acl.md)
