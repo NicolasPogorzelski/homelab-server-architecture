@@ -4,8 +4,7 @@
 
 A single-host Proxmox platform with nine guests, reachable only over Tailscale, and every node -
 hypervisor and control node included - managed by Ansible. Built and operated by Nicolas
-Pogorzelski as a learning platform for DevOps and security engineering, running real services with
-real data.
+Pogorzelski as a learning platform for DevOps and security engineering.
 
 ## What this repository shows
 
@@ -23,7 +22,7 @@ real data.
 - **Monitoring:** Prometheus, Grafana and Alertmanager, with alert rules covered by promtool unit
   tests ([monitoring](docs/platform/monitoring.md)).
 - **Security assessment:** an ISO/IEC 27001 Annex A mapping that separates enforced controls from
-  practices - a self-assessment, not a compliance claim
+  practices, assessed by the owner without an external audit
   ([security controls](docs/platform/security-controls.md)).
 
 ## At a glance
@@ -71,8 +70,8 @@ service-share mounts to vm102, Jellyfin for the streaming box
 ([decision](docs/decisions/streaming-box-over-the-lan.md)), break-glass SSH to the hypervisor, and
 netconsole from vm100 to the hypervisor.
 
-High availability is not a goal on a single host. The design invests in recovery instead: modelled
-dependencies, tested restores and a runbook per failure. All copies are on site; the off-site
+This single host runs without high availability; recovery rests on modelled dependencies, tested
+restores and a runbook per failure. All copies are on site; the off-site
 copy is the first item of the [remediation plan](docs/platform/remediation-plan.md).
 
 ## Where to start
