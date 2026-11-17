@@ -1,13 +1,13 @@
 # Automated Sessions Use Their Own Key Through the Control Node
 
 ## Status
-Accepted 2026-11-17. Supersedes / superseded by: -.
+Implemented 2026-11-17. Supersedes / superseded by: -.
 
 ## Context
-Automated sessions on the admin workstation use the person's SSH key: root on the hypervisor,
+Automated sessions on the admin workstation used the person's SSH key: root on the hypervisor,
 `devops` on lxc250, and the break-glass accounts `storage` on vm102 and `gpu` on vm100, whose keys
-`breakglass` enforces. The key has no passphrase and is held in the desktop's ssh-agent, so any
-process under the workstation account can use it without a prompt.
+`breakglass` enforces. The key had no passphrase and was held in the desktop's ssh-agent, so any
+process under the workstation account could use it without a prompt.
 
 Verified 2026-11-17: 37 root logins on the hypervisor that day with that key, all from one
 automated session, by `journalctl -u ssh` on the hypervisor.
@@ -39,5 +39,24 @@ alias that names their own key with `IdentitiesOnly`.
 - Through `devops` and Ansible, automated sessions can still change any node: `ansible` has
   passwordless sudo. Read-only automation needs an Ansible identity without sudo, which is not
   built.
-- A passphrase stored in the desktop keyring with automatic unlock would undo the separation.
+- The desktop agent (`gcr-ssh-agent`) unlocks a key at login without a prompt when its passphrase
+  equals the login password, or when the keyring stores it. Either undoes the separation.
+- The person's SSH aliases set `IdentityAgent none`, so the person's own logins do not load the
+  key into the agent.
 - Host checks that used direct root SSH run as ad-hoc Ansible against the `proxmox` group.
+
+Verified 2026-11-17: the agent key reaches the hypervisor and vm102 through Ansible, by
+`ssh agent-devops` with `ansible proxmox` and `ansible vm102`.
+
+Verified 2026-11-17: a port forward over the agent key is refused with `administratively
+prohibited`, by `ssh -L` to `agent-devops` and a connection through the tunnel.
+
+Verified 2026-11-17: lxc250's sshd log names the agent key's fingerprint, by `journalctl -u ssh`.
+
+Verified 2026-11-17: the person's key is absent from the agent's loaded identities, by `ssh-add -l`
+against the agent's inner socket.
+
+Verified 2026-11-17: the desktop keyring holds no unlock entry for the person's key, by listing the
+login collection's item labels.
+
+Verified 2026-11-17: the person's aliases resolve to `identityagent none`, by `ssh -G`.
