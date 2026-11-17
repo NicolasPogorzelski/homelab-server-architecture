@@ -30,7 +30,7 @@ not touch the disks.
 - Dedicated system disk (OS + swap)
 - Multiple data disks formatted with ext4
 - One dedicated parity disk
-- Additional auxiliary disks for non-parity workloads
+- `aux-pool`, an auxiliary data disk inside the union and under parity like the others
 
 ### Mount Strategy
 
