@@ -11,7 +11,7 @@ groups:
           description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
 
       # Percentage suits a root filesystem, not an archive designed to fill. Excluded here
-      # and covered by ArchivePoolLowSpace instead:
+      # and covered by ArchivePoolLowSpace and ArchiveBranchLowSpace instead:
       #   - cifs: a remote view of storage another node owns; that node alerts.
       #   - the MergerFS pool and its member disks on vm102.
       - alert: DiskSpaceCritical
@@ -205,6 +205,18 @@ groups:
         annotations:
           summary: "MergerFS archive pool below 100 GiB free on {{ $labels.instance }}"
           description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. Write consumers (Nextcloud, Paperless, pg_dumpall to /mnt/backups) will fail with ENOSPC before read consumers notice. Expand capacity."
+
+      # New files go to the branch with the most free space, but an existing file grows on the
+      # branch it lies on, and moveonenospc is off: a full branch fails that write with ENOSPC
+      # while the pool still shows terabytes free. 15 GiB leaves room above minfreespace (4 GiB).
+      - alert: ArchiveBranchLowSpace
+        expr: node_filesystem_avail_bytes{job="node-vm102-storage", fstype="ext4", mountpoint=~"/mnt/disk[0-9]+|/mnt/aux[0-9]+TB"} < 15 * 1024 * 1024 * 1024
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "MergerFS branch {{ $labels.mountpoint }} below 15 GiB free on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} has {{ $value | humanize1024 }}B free. A file that grows on this branch fails with ENOSPC although the pool has space. See the mergerfs item in docs/platform/remediation-plan.md."
 
       # Access on vm102 is granted through groups only. This metric counts objects that
       # deviate from the matrix, for example read permission for "other", which would let
