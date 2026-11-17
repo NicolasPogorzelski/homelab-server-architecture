@@ -168,7 +168,8 @@ tailnet and the four service shares over the LAN, by `findmnt -t cifs`.
 
 On the LAN, `smb_guard` and `lan_guard` on vm102 admit the host
 and vm100 only ([samba.md](samba.md)). Nothing else the host does crosses the tailnet; guests are
-managed through `pct` and `qm` on the host itself.
+managed through `pct` and `qm` on the host itself. Once the [storage network](remediation-plan.md#storage-network)
+item moves the backup targets to the host-only bridge, this rule has no use and is removed.
 
 ```json
 {
