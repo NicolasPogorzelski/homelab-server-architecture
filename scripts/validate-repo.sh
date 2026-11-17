@@ -844,6 +844,17 @@ fi
 flush_errors
 
 # =============================================================================
+# Check 47: writing patterns a regular expression can decide
+# =============================================================================
+# The patterns live in prose-lint.sh, which the PostToolUse hook also runs on each file as it is
+# written; this check catches what was written without the hook.
+echo "Check 47: writing patterns (prose-lint.sh)"
+
+{ md_files | sed "s|^|${REPO_ROOT}/|" | xargs -r -d '\n' "${REPO_ROOT}/scripts/prose-lint.sh" || true; } \
+    | while read -r m; do fail "${m#"${REPO_ROOT}/"}"; done
+flush_errors
+
+# =============================================================================
 # Results
 # =============================================================================
 echo ""

@@ -71,7 +71,7 @@ sessions intact).
 - **Explicit bind in Samba.** Measured above, it cuts the tailnet path it was meant to keep.
 - **Keep `hosts allow` as the only control.** An application filter after the TCP accept, on a
   socket bound to a routable IPv6 address.
-- **Move every LAN mount to the Tailscale address at once.** Not in this change: it couples each
+- **Move every LAN mount to the Tailscale address at once.** Not chosen for this step: it couples each
   mount to `tailscaled` at boot, the fault class of [KE-15](../platform/known-errors.md#ke-15).
 - **Wildcard bind, boundary enforced by an nftables table on vm102.** Chosen.
 
