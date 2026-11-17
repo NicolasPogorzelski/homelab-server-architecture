@@ -632,9 +632,11 @@ fi
 flush_errors
 
 # =============================================================================
-# Check 36: container images carry an explicit version
+# Check 36: container images carry an explicit version and a digest
 # =============================================================================
-echo "Check 36: container images carry an explicit tag"
+# Docker pulls by digest, so a repointed tag cannot change what runs without a change to the
+# compose file.
+echo "Check 36: container images carry an explicit tag and a digest"
 
 while read -r rel; do
     while read -r line; do
@@ -642,8 +644,10 @@ while read -r rel; do
         [[ -z "${image}" || "${image}" == *'${'* ]] && continue
         if [[ "${image}" != *:* ]]; then
             fail "Image without a tag: ${rel} -> ${image}"
-        elif [[ "${image}" =~ :(latest|main|master|stable)$ ]]; then
+        elif [[ "${image%%@*}" =~ :(latest|main|master|stable)$ ]]; then
             fail "Image not pinned: ${rel} -> ${image}"
+        elif [[ ! "${image}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            fail "Image without a digest: ${rel} -> ${image}"
         fi
     done < <(grep -E '^\s*image:' "${REPO_ROOT}/${rel}" || true)
 done < <(repo_files -- 'docker/*docker-compose.yml')
@@ -776,6 +780,7 @@ echo "Check 44: image versions are not repeated in documents"
 
 while read -r compose; do
     while read -r img; do
+        img="${img%%@*}"   # the digest is not a version; without this the hash is read as the tag
         tag="${img##*:}"; short="${img%:*}"; short="${short##*/}"
         [[ "${tag}" == "${img}" || "${tag}" == *'${'* || "${tag}" != *[0-9]* ]] && continue
         while read -r rel; do
@@ -841,6 +846,17 @@ elif git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
         fail "commit-msg hook does not run scripts/commit-msg-lint.sh: ${hook_path}"
     fi
 fi
+flush_errors
+
+# =============================================================================
+# Check 47: writing patterns a regular expression can decide
+# =============================================================================
+# The patterns live in prose-lint.sh, which the PostToolUse hook also runs on each file as it is
+# written; this check catches what was written without the hook.
+echo "Check 47: writing patterns (prose-lint.sh)"
+
+{ md_files | sed "s|^|${REPO_ROOT}/|" | xargs -r -d '\n' "${REPO_ROOT}/scripts/prose-lint.sh" || true; } \
+    | while read -r m; do fail "${m#"${REPO_ROOT}/"}"; done
 flush_errors
 
 # =============================================================================

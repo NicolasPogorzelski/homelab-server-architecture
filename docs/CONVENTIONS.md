@@ -1,7 +1,8 @@
 # Documentation Conventions
 
 How documents in this repository are structured, how long they may get, and which file owns which
-fact. `scripts/validate-repo.sh` enforces the mechanical parts; the rest is review.
+fact. `scripts/validate-repo.sh` enforces the mechanical parts, `scripts/prose-lint.sh` the writing
+patterns a regular expression can decide; the rest is review.
 
 ## Principles
 
@@ -121,7 +122,7 @@ no history.
 **Symptom.** What was observed, with the log line or metric.
 **Cause.** The root cause, and the measurement that proves it.
 **Fix.** What changed, with the role, commit or PR.
-**Verification.** How the fix is known to work.
+**Verification.** Verified <date>: <result>, by <command>. | Pending: <what is measured, and when>.
 ```
 
 The status line is updated in place when the state changes. Superseded measurements are removed,

@@ -49,7 +49,7 @@ its rules (source, destination, port) differ from the sanitized blocks in that d
   takes its place as a repository secret; an API key is ruled out by its 90-day expiry.
 - An emergency change in the console is overwritten by the next `apply` unless the same change is
   merged into the private repository afterwards.
-- The comparison check is new code. Until it exists, the mirror is compared by hand, as now.
+- The comparison check is new code. Until it exists, the mirror is compared by hand.
 - Tailscale's policy history in the console stays the second record of every change.
 - The [Headscale migration](headscale-migration.md) replaces the step that applies the policy.
   Whether Headscale accepts the same file and its `tests` block is checked when that track starts.

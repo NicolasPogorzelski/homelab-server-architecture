@@ -33,7 +33,7 @@ none.
 - **Keep the box on the tailnet until the cause is found.** The stalls would continue for an
   unknown time, and the tunnel's CPU cost on the box stays whatever the cause turns out to be.
 - **Open Jellyfin to the whole LAN, as DD-8 did.** Every device at home would reach it, phones and
-  TVs included, for a problem only one device has.
+  TVs included.
 - **The LAN for the streaming box alone.** Chosen.
 
 ## Decision

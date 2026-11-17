@@ -56,7 +56,10 @@ additionally avoid the patterns that make generated text recognisable:
 - Templates carry the structure; sentences inside them do not all open the same way.
 - Comments say why a value is what it is, in one to three lines.
 
-The `prose-tics` agent checks a draft against these rules before it is committed.
+`scripts/hooks/prose-lint-hook.sh`, registered in `.claude/settings.json`, runs `scripts/prose-lint.sh`
+on every Markdown file as it is written and returns its findings; they are fixed before the diff
+is shown. The `prose-tics` agent then reads every documentation draft before its diff is shown,
+and its findings are listed with the diff. It advises; the validator is the gate.
 
 ## Fleet access
 

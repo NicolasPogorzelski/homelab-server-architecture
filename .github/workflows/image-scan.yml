@@ -1,8 +1,8 @@
 name: Image vulnerability scan
 
 # Weekly CVE report for every image pinned in docker/. Pinned images age between
-# updates; this measures how exposed they are, while Dependabot version updates
-# for them stay off (see .github/dependabot.yml).
+# updates; this measures how exposed they are between the Dependabot proposals
+# configured in .github/dependabot.yml.
 #
 # Reports, does not gate: it is not a pull-request check, because an upstream CVE
 # is not a defect in the change under review.

@@ -12,6 +12,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/prose-lint-hook.sh",
+            "timeout": 30,
+            "statusMessage": "Checking writing patterns"
+          }
+        ]
+      }
     ]
   }
 }
