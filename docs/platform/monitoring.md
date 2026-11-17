@@ -52,7 +52,7 @@ See: [Runbook index](../../runbooks/README.md)
 | `node` | `NodeDown`, `DiskSpaceCritical`, `HighMemoryUsage`, `PostgreSQLBackupStale`, `PostgreSQLRestoreTestStale`, `MariaDBRestoreTestStale`, `MariaDBBackupStale`, `DatabaseBackupMetricsMissing` |
 | `postgres` | `PostgreSQLDown`, `PostgreSQLConnectionsHigh` |
 | `snapraid` | `SnapRAIDSyncStale`, `SnapRAIDScrubStale`, `SnapRAIDScrubCoverageAging`, `SnapRAIDArrayUnscrubbed`, `SnapRAIDStatusStale`, `SnapRAIDStatusUnreadable` |
-| `storage` | `ArchivePoolLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
+| `storage` | `ArchivePoolLowSpace`, `ArchiveBranchLowSpace`, `StoragePermissionDrift`, `StoragePermissionCheckStale` |
 | `lvm` | `LvmThinPoolWarning`, `LvmThinPoolCritical`, `LvmThinPoolMetadataCritical`, `LvmThinMetricsStale` |
 | `systemd` | `SystemdUnitFailed` |
 | `backup` | `GuestBackupStale`, `GuestBackupPartial`, `GuestBackupMetricsMissing`, `HostConfigBackupStale`, `AppBackupStale`, `AppBackupMetricsMissing`, `BackupMirrorStale`, `BackupMirrorFailed`, `BackupMirrorMetricsMissing` |
