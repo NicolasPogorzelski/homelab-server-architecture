@@ -25,6 +25,8 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 16 | [Egress filter](#package-supply-track), stage 5 | No guest is limited in the outbound connections it opens, and the hypervisor firewall is disabled; a compromised service can reach any address | After stage 4, list per guest the outbound destinations it needs, then write the decision record |
 | 17 | Full platform restore test | The boot disk moved by `pvmove`, so [`platform-restore.md`](../../runbooks/platform/platform-restore.md) has still never rebuilt the host from the guest backups | Rebuild onto a spare disk or into a scratch VM from one day's archives and record the result in the runbook |
 | 18 | Operating system lifecycle | The seven LXCs and vm102 run Debian 12, in LTS since 2026-06-11 and unsupported after 2028-06-30; vm100's Ubuntu 22.04 leaves standard security maintenance in May 2027 | Upgrade the Debian 12 guests to Debian 13 one at a time, lxc210 first (rank 11), and choose vm100's path to a newer Ubuntu LTS before May 2027 |
+| 19 | [Tailnet trust](#tailnet-trust): policy from Git | A policy change in the admin console goes through no review, and the sanitized copy in [`tailscale-acl.md`](tailscale-acl.md) can drift from it unnoticed | Create the private repository and its workflow per [the decision](../decisions/tailnet-policy-as-code.md) |
+| 20 | [Tailnet trust](#tailnet-trust): Tailnet Lock | Whoever controls the Tailscale account or the coordination server can add a node, and the grants in [`tailscale-acl.md`](tailscale-acl.md) then apply to it | After rank 19, write the runbook and enable Tailnet Lock in its own window |
 
 ## Item notes
 
@@ -117,6 +119,22 @@ start condition, the exercise block applied, is met. Order:
 2. The clients: Grafana, OpenWebUI, Paperless-ngx and Jellyfin are the minimum that gates
    Terraform; Audiobookshelf and Calibre-Web follow. Nextcloud and Proxmox VE are deferred for the
    reasons in the decision.
+
+### Tailnet trust
+
+The policy pipeline comes first, because it changes how the policy is applied; Tailnet Lock, which
+changes which nodes may join, follows in a window of its own
+([documentation](https://tailscale.com/kb/1226/tailnet-lock)):
+
+- signing nodes: the admin workstation and the notebook, no server; an Android device cannot sign;
+- the disablement secrets go into the escrow before any node is signed, because losing all of them
+  leaves the tailnet unrecoverable unless one is held by Tailscale support;
+- device approval and Tailnet Lock exclude each other, so the console setting is checked first;
+- the external user's devices stay in their own tailnet but need a signature from a signing node
+  here before they can reach a shared node
+  ([Rule 13](tailscale-acl.md#rule-13---external-user-through-machine-sharing));
+- the runbook covers signing a new device and the recovery path, `tailscale lock local-disable` on
+  each node.
 
 ### Package supply track
 
