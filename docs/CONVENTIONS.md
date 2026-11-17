@@ -176,7 +176,10 @@ removed; the pull request that closed them is the record.
 - Branches use `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `test/` or `ci/`.
 - `main` is protected: changes arrive by pull request with the validation and lint checks green.
 - `scripts/commit-msg-lint.sh` runs as the `commit-msg` hook (`git config core.hooksPath
-  scripts/hooks`).
+  scripts/hooks`). Subjects stay within 72 characters.
+- A pull request's title follows the commit format within 72 characters, and its body fills in
+  the template; the commit-messages workflow checks both. Boxes are ticked where true, otherwise
+  marked not applicable with the reason.
 
 How AI assistance is used in this repository is stated in the [README](../README.md#how-this-repository-is-built);
 the rules the assistant works under are in [CLAUDE.md](../CLAUDE.md).

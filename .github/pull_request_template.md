@@ -8,7 +8,7 @@
 - [ ] Remediation plan: item closed (row removed) or new item added with rank and next step
 - [ ] Known errors: status line updated for any entry this touches
 - [ ] Runbooks: `Last exercised` updated if a runbook was run
-- [ ] `./scripts/validate-repo.sh` passes locally; Ansible changes were run with `--check --diff` first
+- [ ] Ansible changes were run with `--check --diff` first and the diff was shown
 
 ## Verification
 

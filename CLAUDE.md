@@ -87,6 +87,8 @@ and its findings are listed with the diff. It advises; the validator is the gate
   `main-protection` ruleset enforce this.
 - Before a push, the branch is reviewed in the conversation: the full diff, one line per commit,
   what becomes public, the validator output quoted, and the commands to run.
+- With every pushed branch the assistant supplies a command that opens the pull request with a
+  conventional title and a body file filling in the template, instead of a bare `pull/new` link.
 
 ## Agents
 

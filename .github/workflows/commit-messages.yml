@@ -1,12 +1,14 @@
 name: Commit messages
 
-# Checks every commit in the pull request for the Conventional Commits format and
-# refuses attribution trailers; the title and body are checked for trailers only.
-# Runs in CI because the local commit-msg hook is per-clone configuration.
+# Checks every commit in the pull request and the pull request's title and body:
+# Conventional Commits format, no attribution trailers, 72-character subjects, and a
+# filled-in template. Runs in CI because the local commit-msg hook is per-clone
+# configuration. `edited` re-runs the check after a title or body is corrected.
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -34,16 +36,21 @@ jobs:
             [ -z "$sha" ] && continue
             git log -1 --format=%B "$sha" > "${RUNNER_TEMP}/msg.txt"
             printf '%s %s\n' "${sha:0:9}" "$(git log -1 --format=%s "$sha")"
-            ./scripts/commit-msg-lint.sh "${RUNNER_TEMP}/msg.txt" || failed=1
+            # Dependabot writes its own subjects, longer than 72 characters.
+            length_flag=""
+            [ "$(git log -1 --format=%an "$sha")" = "dependabot[bot]" ] && length_flag="--no-length"
+            ./scripts/commit-msg-lint.sh ${length_flag} "${RUNNER_TEMP}/msg.txt" || failed=1
           done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
           exit "$failed"
 
       # Title and body pass through the environment: interpolating `${{ }}` into the
       # script would splice author-controlled text into the shell.
+      # Dependabot's titles exceed 72 characters and its bodies carry no template.
       - name: Lint the pull request title and body
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           { printf '%s\n\n' "$PR_TITLE"; printf '%s\n' "$PR_BODY"; } > "${RUNNER_TEMP}/pr.txt"
-          ./scripts/commit-msg-lint.sh --attribution-only "${RUNNER_TEMP}/pr.txt"
+          ./scripts/commit-msg-lint.sh --pull-request "${RUNNER_TEMP}/pr.txt"
