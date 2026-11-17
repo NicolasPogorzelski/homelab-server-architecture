@@ -32,10 +32,11 @@ Who used the LAN path, from `smbstatus -b` and the per-client logs (`log file = 
 | `<lan-ip-proxmox>` | Proxmox host | `books-svc`, `openwebui`, `paperless`, `nextcloud` | active |
 | `<lan-ip-device3>` | admin desktop | - | no session; client log empty since 2026-06-17 |
 
-Measured 2026-09-26: the host mounts eight shares, six over vm102's LAN address and two
-(`postgres-backups`, `db-backups`) over its Tailscale address; vm100 mounts four, one per library,
-over the LAN address. One of the host's six LAN mounts was removed on 2026-10-10 with the service it
-served ([decommission](vaultwarden-decommission.md)). The admin workstations mount over the
+Verified 2026-11-17: the host mounts seven shares, four over vm102's LAN address and three over
+its Tailscale address; vm100 mounts five over the LAN address, by `findmnt -t cifs` on both.
+
+The host's LAN mounts are its service shares, the Tailscale ones its backup targets; vm100's are
+one per library and its application-backup archive. The admin workstations mount over the
 Tailscale address.
 
 ### Is the tailnet slower?
