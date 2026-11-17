@@ -168,7 +168,7 @@ on lxc250. Every third-party list except the PPA names its key with `signed-by`.
    Every compose image ends pinned by digest, and a decision says whether a pull-through registry
    is worth running here.
 
-## Deferred on purpose
+## Deferred, with reasons
 
 - **Alertmanager routing and per-tier dashboards.** The alerts exist; delivery is a single channel.
 - **Molecule and a test estate.** Out of scope until the Terraform track; `--check --diff` and the

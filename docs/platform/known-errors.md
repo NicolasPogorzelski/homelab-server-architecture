@@ -525,7 +525,7 @@ SSD alone.
 PCIe ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)).
 Drive and transport changed together, so the swap cannot tell which of them caused the faults.
 
-**Verification.** 2026-10-27: 0 failed commands during the move and on the first boot from the
+**Verification.** Verified 2026-10-27: 0 failed commands during the move and on the first boot from the
 NVMe, by `journalctl -k -b | grep -c DID_SOFT_ERROR`. The HBA ports keep the evidence: the old
 drive at `9:0:0:0`, the 8 TB disk at `9:0:2:0` with `SmartUdmaCrcErrorsGrowing` on its CRC
 count, and six data disks. From 2026-11-03 link CRC errors hit `9:0:1:0` and `9:0:2:0` at boot:
@@ -747,7 +747,7 @@ archive and was narrowed. SQLite side files are excluded because parity taken at
 than the main database is inconsistent. The disk and parity layout above the block stays
 hand-written, because it carries real device labels.
 
-**Verification.** 2026-08-15, in order (sync has no rollback,
+**Verification.** Verified 2026-08-15, in order (sync has no rollback,
 [snapraid-sync runbook](../../runbooks/storage/snapraid-sync.md)): `snapraid diff` before and after
 the excludes, every change explained; `systemctl start snapraid-maintenance@sync.service`
 `Result=success`; `snapraid diff` reports no differences; both alerts cleared. Live block marker on
@@ -975,7 +975,7 @@ Second instance, lxc210, 2026-10-08: 13,944 files of `/var/www/nextcloud` owned 
 (`www-data`) could not replace them, and a host process running as UID 1000 could rewrite the PHP
 Nextcloud executes. Fixed after a fresh `vzdump 210` by `chown -h 100033:100033` from the host.
 
-**Verification.** 2026-09-15: the container's `vzdump` exited 0. 2026-10-08: all 39,354 entries
+**Verification.** Verified 2026-09-15: the container's `vzdump` exited 0. 2026-10-08: all 39,354 entries
 read `100033:100033`, `occ integrity:check-core` clean, Nextcloud upgrade ran on that tree.
 
 ---
@@ -1143,7 +1143,7 @@ policy change reached only the documents.
 `tag:storage:445` from deny to accept; then `occ files_external:config <id> host
 storage.<tailnet-id>.ts.net` for mounts 4 and 5.
 
-**Verification.** 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
+**Verification.** Verified 2026-10-27: lxc210 lists vm102 as a peer and reaches 445 on the full name;
 `occ files_external:verify 4` and `5` return `status: ok`; the last `not available` line is from
 the boot at 12:04, before the change, and the 13:00 `files:scan` logged none. 2026-10-31: a test PDF written through mount 4 with
 `occ files:put` left the share after 50 s, and Paperless logged `consumption finished` 44 s after
@@ -1210,7 +1210,7 @@ host that is off every night.
 above the longest off-window of about 35 hours from Thursday night to the Saturday wake. Rolled out with
 `docker-compose-update.yml --limit lxc200` after the merge.
 
-**Verification.** 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
+**Verification.** Verified 2026-10-31, after the rollout: `/api/v1/status/flags` on lxc200 returns `2d`,
 Prometheus's spelling of 48 h. 2026-11-15: `ALERTS_FOR_STATE` for `ServiceDown` kept `activeAt`
 00:15:53 across the night; Prometheus started at 12:18 and the alert fired within two minutes,
 while the guests were still booting. `ServiceDown` therefore waits ten minutes after a Prometheus
@@ -1225,7 +1225,7 @@ start ([monitoring.md](monitoring.md#notes-on-specific-rules)).
 - **Status:** Resolved 2026-11-16 - guard counts running oneshot units
 - **Affects:** the Proxmox host (`homelab_schedule`), vm102 (`snapraid_maintenance`)
 
-**Symptom.** On 2026-11-01 the host logged `shutting down` at 23:30:01 with no `waiting for` line
+**Symptom.** The host logged `shutting down` at 23:30:01 on 2026-11-01 with no `waiting for` line
 before it. On vm102, `snapraid-maintenance@sync.service`, started at 23:00, ended at 23:32:31 with
 `Failed with result 'signal'` at 31 % of a sync that resized the parity. On 2026-11-09 the same
 happened to the weekly scrub: started at 00:00, `shutting down` at 00:15:05, scrub killed at
@@ -1247,7 +1247,7 @@ meant that no running unit held the shutdown.
 **Fix.** The script exports a full `PATH` and exits 1 when `qm` is missing (563990a).
 It counts `active`, `activating`, `deactivating` and `reloading` as running (fdeaa49).
 
-**Verification.** 2026-11-15: the deployed `busy_unit` function, run alone on the host, returned
+**Verification.** Verified 2026-11-15: the deployed `busy_unit` function, run alone on the host, returned
 `vm102 snapraid-maintenance@sync.service` for a sync waiting on the scrub's lock (`activating`).
 2026-11-16: `journalctl -t homelab-shutdown` logged `waiting for vm102
 snapraid-maintenance@scrub.service` at 00:15:04 and `shutting down` at 02:17:30, after the scrub
@@ -1262,8 +1262,8 @@ had finished at 02:16:26.
 - **Affects:** vm102 (`snapraid_maintenance`), Jellyfin on vm100, the Proxmox host
   (`homelab_schedule`)
 
-**Symptom.** 2026-11-02 from 20:00: a 4K remux in direct play (about 64 Mbit/s) rebuffered every
-few minutes on the streaming box. The player's buffer fell from 5.9 s to 0.3 s before each stall.
+**Symptom.** A 4K remux in direct play (about 64 Mbit/s) rebuffered every few minutes on the
+streaming box from 20:00 on 2026-11-02. The player's buffer fell from 5.9 s to 0.3 s before each stall.
 In the same seconds vm100 sent nothing to the client and read nothing from vm102 for one to three
 seconds (`/proc/net/dev` on `tailscale0` and `enp6s18`, sampled every second). Tailscale and the
 LAN showed no loss at those moments.
@@ -1286,7 +1286,7 @@ The template unit runs the script under `flock`, so a Sunday sync still running 
 for the lock, and SnapRAID does not fail it. With the host off on Sunday, `Persistent=true` runs the
 scrub after Monday's start.
 
-**Verification.** 2026-11-16: the scrub started at 00:00 and logged `OK: snapraid scrub of 12%
+**Verification.** Verified 2026-11-16: the scrub started at 00:00 and logged `OK: snapraid scrub of 12%
 completed ... in 8167s`; the unit finished at 02:16:26, and the host held its 00:15 shutdown until
 then ([KE-32](#ke-32)).
 
@@ -1298,8 +1298,8 @@ then ([KE-32](#ke-32)).
 - **Status:** Mitigated 2026-11-08 - the box streams over the LAN; cause not found
 - **Affects:** Jellyfin on vm100, the streaming box (`tag:media-player`)
 
-**Symptom.** 2026-11-08, a Sunday: playback on the streaming box stalled through the evening, with
-the box on Ethernet only. Jellyfin logged the same episode stopped and started again at 18:09 and
+**Symptom.** Playback on the streaming box stalled through the evening of 2026-11-08, a Sunday,
+with the box on Ethernet only. Jellyfin logged the same episode stopped and started again at 18:09 and
 18:14, and at 19:54 and 19:55. Between 17:39 and 17:56, during playback, vm100's `tailscaled`
 logged about 20 path changes to the box, between its LAN endpoint, the router's public address and
 DERP:
@@ -1328,7 +1328,7 @@ foreground. Client versions at the time: Tailscale 1.104.5 on the box, 1.104.4 o
 only ([decision](../decisions/streaming-box-over-the-lan.md)). The tunnel is unchanged: the box keeps
 its tag and its ACL rule.
 
-**Verification.** 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
+**Verification.** Verified 2026-11-08 21:43-22:13: 29 minutes of playback over the LAN with no stall and no
 player buffer event; the box's `tun0` carried no bytes, CPU averaged 24 %. vm100's path log for the
 box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.
 
@@ -1340,8 +1340,8 @@ box: `journalctl -u tailscaled | grep "now using"`, with the node's short key.
 - **Status:** Resolved 2026-11-11 - backup ordered after `pve-guests`; verified at a late boot 2026-11-15
 - **Affects:** the Proxmox host (`guest_backup`, `pve-guests`), every onboot guest; seen on vm100
 
-**Symptom.** 2026-11-11, host booted by hand at 12:20, after the backup slot: vm100 `stopped`,
-Jellyfin unreachable, every other guest running. `pve-guests` logged no `Starting VM 100` and
+**Symptom.** vm100 stayed `stopped` after the host was booted by hand at 12:20 on 2026-11-11, after
+the backup slot: Jellyfin unreachable, every other guest running. `pve-guests` logged no `Starting VM 100` and
 ended `OK`; `guest-boot-retry` exited 0 without a line. The same run logged
 `vzdump 250 exited 111` after `ipcc_send_rec[1] failed: Connection refused`.
 
@@ -1366,7 +1366,7 @@ until `startall` has finished, by which time pmxcfs is up and every onboot VM it
 running, so `vzdump` archives it in snapshot mode and leaves it running. Recovery:
 `qm start <vmid>`.
 
-**Verification.** 2026-11-11: `qm start 100` at 12:31; vm100's `docker.service` active at 12:32:44
+**Verification.** Verified 2026-11-11: `qm start 100` at 12:31; vm100's `docker.service` active at 12:32:44
 with `NRestarts=0`, Jellyfin `/health` `200`.
 
 Verified 2026-11-15: host booted at 12:17, after the slot; `startall` started vm100 at 12:20:14,
@@ -1438,7 +1438,7 @@ ct250 from 12:20:59 to 12:21:46; `pct fstrim 250` came at 12:21:39. Same off-win
 **Fix.** `After=pve-guests.service guest-backup.service` in `snippets/systemd/lxc-fstrim.service`
 (`proxmox_host_units`): when both are queued, the trim starts after the backup has finished.
 
-**Verification.** 2026-11-15: `systemctl show -p After lxc-fstrim.service` lists
+**Verification.** Verified 2026-11-15: `systemctl show -p After lxc-fstrim.service` lists
 `guest-backup.service`; a manual start finished without a failed container. Pending: on the next
 boot after both slots, `journalctl -b -u lxc-fstrim.service` starts after
 `Finished guest-backup.service`.
