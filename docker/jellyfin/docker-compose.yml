@@ -1,6 +1,6 @@
 services:
   jellyfin:
-    image: jellyfin/jellyfin:12.2  # 12.x versions have two parts; 12.2 is a release, not a moving minor tag
+    image: jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037  # 12.x versions have two parts; 12.2 is a release, not a moving minor tag
     container_name: jellyfin
     pid: "host"
     restart: unless-stopped

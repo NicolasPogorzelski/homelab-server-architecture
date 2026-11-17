@@ -9,7 +9,7 @@
 # the CPU it takes minutes per image.
 services:
   llama-server:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda-b11243  # CUDA 12 build; the cuda13 variant needs a newer driver than 580
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda-b11243@sha256:1c568d229561bbd4577698f1f38d3ed9bf3f5ab343e04f7a508e11ef63f4ced1  # CUDA 12 build; the cuda13 variant needs a newer driver than 580
     container_name: llama-server
     restart: unless-stopped
     deploy:
