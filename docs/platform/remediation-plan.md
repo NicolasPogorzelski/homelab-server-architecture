@@ -125,7 +125,7 @@ any configuration exists. Stages 3, 4 and 6 are exercises in the sense of
 
 **In place.** Security-only `unattended_upgrades` with kernels and the NVIDIA stack held back;
 `apt-upgrade.yml` for the rest; `apt_metrics` and `AptSecurityUpdatesPending`; a weekly
-`dpkg --verify` projection in `fleet_snapshot`; compose images pinned by tag, one by digest; the
+`dpkg --verify` projection in `fleet_snapshot`; compose images pinned by tag and digest under Dependabot; the
 weekly Trivy scan; the monthly SBOM and signature check; Actions pinned to SHAs under Dependabot.
 
 Verified 2026-10-22: no APT proxy on any node; no nftables output chain on any node drops or
@@ -160,13 +160,12 @@ on lxc250. Every third-party list except the PPA names its key with `signed-by`.
    guest at a time; it must not flush Tailscale's chains
    ([`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md)), and LAN SSH to the
    hypervisor stays the recovery path.
-6. **Container images (exercise).** Compose images are pinned by tag, which a registry can repoint
-   to another image; `registry-mirrors` in the
+6. **Container images (exercise).** Compose images are pinned by digest, so a registry that
+   repoints a tag changes nothing until a Dependabot proposal is merged; `registry-mirrors` in the
    Docker daemon covers Docker Hub only
    ([pull-through cache](https://distribution.github.io/distribution/recipes/mirror/)); provenance
    is the subject of [Sigstore cosign](https://docs.sigstore.dev/) and [SLSA](https://slsa.dev/).
-   Every compose image ends pinned by digest, and a decision says whether a pull-through registry
-   is worth running here.
+   A decision says whether a pull-through registry is worth running here.
 
 ## Deferred, with reasons
 

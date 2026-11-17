@@ -632,9 +632,11 @@ fi
 flush_errors
 
 # =============================================================================
-# Check 36: container images carry an explicit version
+# Check 36: container images carry an explicit version and a digest
 # =============================================================================
-echo "Check 36: container images carry an explicit tag"
+# Docker pulls by digest, so a repointed tag cannot change what runs without a change to the
+# compose file.
+echo "Check 36: container images carry an explicit tag and a digest"
 
 while read -r rel; do
     while read -r line; do
@@ -642,8 +644,10 @@ while read -r rel; do
         [[ -z "${image}" || "${image}" == *'${'* ]] && continue
         if [[ "${image}" != *:* ]]; then
             fail "Image without a tag: ${rel} -> ${image}"
-        elif [[ "${image}" =~ :(latest|main|master|stable)$ ]]; then
+        elif [[ "${image%%@*}" =~ :(latest|main|master|stable)$ ]]; then
             fail "Image not pinned: ${rel} -> ${image}"
+        elif [[ ! "${image}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            fail "Image without a digest: ${rel} -> ${image}"
         fi
     done < <(grep -E '^\s*image:' "${REPO_ROOT}/${rel}" || true)
 done < <(repo_files -- 'docker/*docker-compose.yml')
@@ -776,6 +780,7 @@ echo "Check 44: image versions are not repeated in documents"
 
 while read -r compose; do
     while read -r img; do
+        img="${img%%@*}"   # the digest is not a version; without this the hash is read as the tag
         tag="${img##*:}"; short="${img%:*}"; short="${short##*/}"
         [[ "${tag}" == "${img}" || "${tag}" == *'${'* || "${tag}" != *[0-9]* ]] && continue
         while read -r rel; do
