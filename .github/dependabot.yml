@@ -1,10 +1,10 @@
-# Dependabot version updates for GitHub Actions only.
+# Dependabot version updates for GitHub Actions and the compose images.
 #
 # Version updates (this file) propose every newer version; security updates (a
 # repository setting, enabled) propose a fix only when an advisory affects a
-# version in use. The Docker images in docker/ are not listed: they are pinned
-# and updated deliberately through the docker_compose_update role, and their
-# exposure is reported by .github/workflows/image-scan.yml.
+# version in use. A merged image update reaches a node only when the
+# docker_compose_update role runs; .github/workflows/image-scan.yml reports the
+# exposure of what is pinned.
 
 version: 2
 
@@ -19,4 +19,21 @@ updates:
     commit-message:
       # Emits `ci(deps): ...`, which satisfies scripts/commit-msg-lint.sh.
       prefix: "ci"
+      include: "scope"
+
+  - package-ecosystem: "docker-compose"
+    # Every image is pinned as tag@sha256; Dependabot replaces both together.
+    directories:
+      - "/docker/*"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+    # A release is proposed a week after publication, which gives a compromised
+    # release time to be found and withdrawn upstream first.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      # Emits `chore(deps): ...`, which satisfies scripts/commit-msg-lint.sh.
+      prefix: "chore"
       include: "scope"
