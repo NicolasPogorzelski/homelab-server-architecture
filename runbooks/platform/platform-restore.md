@@ -1,6 +1,6 @@
 # Runbook: Platform restore onto a fresh Proxmox host
 
-- **Use when:** the boot SSD is lost or replaced and the host is reinstalled; `plan` and
+- **Use when:** the boot disk is lost or replaced and the host is reinstalled; `plan` and
   `test-restore` also run on the live host as a backup check.
 - **Duration:** `plan` and `test-restore` a few minutes; a full rebuild several hours, mostly
   restore time.

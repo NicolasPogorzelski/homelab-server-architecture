@@ -109,9 +109,9 @@ into the containers, so a failed host mount appears inside a container as an emp
 ```mermaid
 flowchart TB
   accTitle: The three storage layers of the platform
-  accDescr: Boot SSD thin pool with all guest root disks, aux-disk with Docker data roots, PostgreSQL data and vm100's data disk, and the vm102 archive pool with parity, showing which consumer uses which.
+  accDescr: Boot NVMe thin pool with all guest root disks, aux-disk with Docker data roots, PostgreSQL data and vm100's data disk, and the vm102 archive pool with parity, showing which consumer uses which.
 
-  subgraph boot["boot SSD - behind the LSI SAS2008 HBA"]
+  subgraph boot["boot disk - NVMe in the M.2 slot"]
     THIN[("pve-data thin pool")]
     PVEROOT[("pve-root, /boot/efi")]
   end
@@ -144,17 +144,18 @@ flowchart TB
   classDef sick fill:#7a1f1f,stroke:#571414,color:#ffffff
   classDef ok fill:#6a4a9c,stroke:#4c3570,color:#ffffff
   classDef consumer fill:#1f6f43,stroke:#14512f,color:#ffffff
-  class THIN,PVEROOT,DOCKERROOTS,PGDATA,JELLY,VZDUMP sick
-  class DISKS,PARITY,MERGER,SAMBA ok
+  class DOCKERROOTS,PGDATA,JELLY,VZDUMP sick
+  class THIN,PVEROOT,DISKS,PARITY,MERGER,SAMBA ok
   class GUESTS,VM100,CIFSLXC,DOCKERLXC,HOSTCIFS,PG consumer
 ```
 
 The two container groups differ: lxc210 and lxc260 receive CIFS data but run no Docker; lxc200 and
 lxc230 run Docker but have no CIFS mount. Loss per disk is therefore asked per node.
 
-Red marks hardware with an open fault: the boot SSD logs transport-layer I/O errors
-([KE-14](../platform/known-errors.md#ke-14)), and the aux-disk has a growing count of unreadable
-sectors ([KE-13](../platform/known-errors.md#ke-13)). See [failure domains](failure-domains.md).
+Red marks hardware with an open fault: the aux-disk has a growing count of unreadable sectors
+([KE-13](../platform/known-errors.md#ke-13)). Two of the pool's data disks log link CRC errors at
+boot on their HBA cable ([KE-36](../platform/known-errors.md#ke-36)); their media read clean.
+See [failure domains](failure-domains.md).
 
 ## View 3 - Monitoring Coverage
 

@@ -24,7 +24,7 @@ The role asserts 1 to 3 and refuses to deploy without them.
 
 1. The host is in the `proxmox` inventory group; otherwise the playbook matches no host and exits 0.
 2. `/mnt/vzdump` is a mountpoint on a device other than root. A missing mount would leave an empty
-   directory on `pve-root` and the run would fill the boot SSD
+   directory on `pve-root` and the run would fill the boot disk
    ([KE-7](../../docs/platform/known-errors.md#ke-7)).
 3. At least 25 GB free on `/mnt/vzdump`. vzdump prunes only after a successful write, so a full
    target fails instead of rotating.
