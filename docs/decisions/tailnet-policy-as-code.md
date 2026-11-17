@@ -33,7 +33,7 @@ because policy files carry e-mail addresses.
   here.** Proposed.
 
 ## Decision
-No option is decided yet; this record proposes the third. A private repository holds `policy.hujson`
+No option is decided yet; the third is proposed. A private repository holds `policy.hujson`
 with its `tests` block and one workflow: `test` on every pull request, `apply` on a push to `main`.
 The action authenticates by federated identity with the `policy_file` scope, and is pinned by commit
 SHA like every other action here. The console is set to refuse edits; an override there is a
@@ -49,12 +49,12 @@ the sanitized blocks in that document.
   takes its place as a repository secret; an API key is ruled out by its 90-day expiry.
 - An emergency change in the console is overwritten by the next `apply` unless the same change is
   merged into the private repository afterwards.
-- The comparison check is new code. Until it exists, the mirror is compared by hand, as now.
+- The comparison check is new code. Until it exists, the mirror is compared by hand.
 - Tailscale's policy history in the console stays the second record of every change.
 - The [Headscale migration](headscale-migration.md) replaces the step that applies the policy.
   Whether Headscale accepts the same file and its `tests` block is checked when that track starts.
 - If chosen, the "Source of truth" paragraph of `tailscale-acl.md` names the private repository
-  instead of the console.
+  as the source.
 
 ## Related Documents
 - [Tailscale ACL & tagging model](../platform/tailscale-acl.md)
