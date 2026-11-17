@@ -67,7 +67,7 @@ flowchart LR
 
 Both database chains are verified at write time. Each dump is written under a `.partial` name
 and renamed only after three checks pass: non-empty, `gzip -t`, and exactly one completion marker.
-The marker check is the one that catches a dump killed halfway, which is still valid gzip. The
+A dump killed halfway is still valid gzip, so the marker check is what catches it. The
 checks run before the retention delete, so a failed run never removes the last good dump.
 
 Both chains are restored monthly. The PostgreSQL dump goes into a throwaway cluster on port 5433,

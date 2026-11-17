@@ -22,7 +22,7 @@ Two mechanisms make the pin harder than one `ListenAddress` line:
   Debian's `ssh.service` sets `RestartPreventExitStatus=255`, so the packaged unit never retries.
 - **Socket activation.** Measured 2026-09-17: `ssh.socket` was enabled on lxc200, lxc210, lxc211,
   lxc220, lxc230 and lxc260. There systemd holds `*:22` and hands sshd a connected descriptor, so
-  `ListenAddress` is inert; applied to lxc220 it changed the file and not the bind
+  `ListenAddress` has no effect until the socket unit is disabled
   ([KE-24](../platform/known-errors.md#ke-24)).
 
 ## Options
@@ -46,7 +46,7 @@ Two mechanisms make the pin harder than one `ListenAddress` line:
 4. fails the run unless `ss` shows the Tailscale address alone on 22.
 
 The variable is empty by default and never derived from `ansible_host`, so a merge cannot pin a node
-unsupervised. Each node was changed in a window with a second terminal open: the containers first
+unsupervised. Rollout order, one node at a time with a second terminal open: the containers first
 (`pct exec` recovers them), then vm100 behind a snapshot, then vm102.
 
 The Proxmox host stays on the wildcard bind. It has no out-of-band console (the GPU is passed

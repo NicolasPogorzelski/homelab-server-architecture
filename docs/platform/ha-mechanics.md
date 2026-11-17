@@ -61,7 +61,7 @@ process dies its descriptor closes and the timer stops with it - the watchdog is
 lost, not the host. With `nowayout=1` the timer would keep running after
 `watchdog-mux` died, and reset the host ten seconds later.
 
-## What is missing, and it is the only thing missing
+## Missing: the agent lock
 
 ```
 # cat /etc/pve/nodes/<node>/lrm_status

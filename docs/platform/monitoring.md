@@ -99,14 +99,17 @@ See: [Runbook index](../../runbooks/README.md)
 
 ### Watchdog and the missing heartbeat
 
-`Watchdog` fires permanently; its absence is the signal. It is meant to be routed to an external
+`Watchdog` fires permanently, and the external receiver alerts when it stops arriving. It is meant
+to be routed to an external
 heartbeat receiver whose grace period exceeds the nightly off-window, so that the alerting chain
 being down - including the host being off - is noticed off site. The route is defined in
 `docker/monitoring/alertmanager/alertmanager.yml.example`.
 
-Verified 2026-09-24: the live `alertmanager.yml` on lxc200 still has only the `discord` route, so
-the Watchdog arrives in Discord and nothing outside the site notices when it stops. The route and
-the receiver go live together; the item is in the [remediation plan](remediation-plan.md).
+Verified 2026-11-17: the live `alertmanager.yml` on lxc200 has only the `discord` receiver, by
+`grep receiver: /opt/monitoring/alertmanager/alertmanager.yml`.
+
+The Watchdog therefore arrives in Discord and nothing outside the site notices when it stops. The
+route and the receiver go live together; the item is in the [remediation plan](remediation-plan.md).
 
 ## Failure / Dependency Notes
 

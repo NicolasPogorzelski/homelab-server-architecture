@@ -148,9 +148,8 @@ LAN interfaces"). `bind interfaces only = no` makes `smbd` accept on every inter
 the LAN interface and its globally routable IPv6 address; access control rests entirely on
 `hosts allow` / `hosts deny`, which Samba applies *after* accepting the TCP connection.
 
-The deviation persists for a reason that is not configuration laziness: **Samba cannot bind an
-IPv4 address on `tailscale0` at all.** The interface is a point-to-point TUN device without the
-`BROADCAST` flag, and Samba's IPv4 interface selection skips such interfaces. Tried and verified
+The deviation stays because Samba cannot bind an IPv4 address on `tailscale0` at all. The interface
+is a point-to-point TUN device without the `BROADCAST` flag, and Samba's IPv4 interface selection skips such interfaces. Tried and verified
 2026-07-14 with `<ip>/32`, with the bare IP, and with the interface name - none binds the Tailscale
 IPv4 address, and an explicit `interfaces` list therefore removes the Tailscale SMB path instead
 of securing it. (The IPv6 ULA does bind as `/128`, because IPv6 has no broadcast concept.)

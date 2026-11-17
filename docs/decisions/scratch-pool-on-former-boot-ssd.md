@@ -4,7 +4,7 @@
 Implemented 2026-10-27. Supersedes / superseded by: -.
 
 ## Context
-The volume group `pve` moved to an NVMe disk on 2026-10-27
+The volume group `pve` is on an NVMe disk
 ([boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md)). The former boot SSD,
 a Samsung 840 EVO 120 GB, stays fitted on the SAS HBA at `9:0:0:0`, the port where
 [KE-14](../platform/known-errors.md#ke-14) logged its `DID_SOFT_ERROR` bursts. Measured that day:

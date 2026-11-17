@@ -1,7 +1,7 @@
 # One Control Node for All Changes (lxc250)
 
 ## Status
-Implemented 2026-03-04. Tag changed to `tag:control` on 2026-09-26. Supersedes / superseded by: -.
+Implemented 2026-03-04. Tag: `tag:control`. Supersedes / superseded by: -.
 
 ## Context
 Code and infrastructure changes were made from several admin machines, which caused synchronization

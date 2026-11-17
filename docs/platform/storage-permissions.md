@@ -112,7 +112,7 @@ a failed unit means the check itself could not run.
 # on vm102
 /usr/local/sbin/storage-permissions.sh --check
 
-# what the consumers can actually reach - the test that matters
+# positive test: what each consumer account can list
 for u in media-jf media-abs books-svc; do
   printf '%-10s: ' "$u"
   for d in Filme Serien Audiobooks Podcasts Books openwebui; do

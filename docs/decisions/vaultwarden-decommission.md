@@ -58,7 +58,7 @@ matter are in the external password manager and the paper escrow
 ([remediation plan](../platform/remediation-plan.md)). No client export was taken.
 
 ## Consequences
-- KE-5 is closed by removing its subject, not by solving SQLite on CIFS.
+- KE-5 is closed by the decommissioning; SQLite on CIFS stays unsolved and stays forbidden ([KE-1](../platform/known-errors.md#ke-1)).
 - Credential escrow is a single mechanism; its annual retrieval drill is the only evidence it
   works.
 - One fewer service to patch, probe, certify and back up.

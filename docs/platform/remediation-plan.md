@@ -1,8 +1,6 @@
 # Remediation Plan
 
-The register of open platform work, ranked by loss risk and dependency. Each row names the risk of
-leaving the item and the next step. Items whose next step needs more than one sentence have a short
-section below the table. Closed items are removed from the table.
+Open platform work, ranked by loss risk and dependency.
 The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](security-controls.md).
 
 ## Open items
@@ -70,7 +68,7 @@ physical destruction, decided before the disk is removed (A.7.14 in
 The `Watchdog` rule fires permanently and is loaded. The route that sends it to an external
 receiver instead of Discord exists only in
 [`alertmanager.yml.example`](../../docker/monitoring/alertmanager/alertmanager.yml.example); the
-live file on lxc200 still has the single Discord route (measured 2026-09-24).
+live file on lxc200 has the Discord route only ([monitoring](monitoring.md#watchdog-and-the-missing-heartbeat)).
 
 1. Sign up for a heartbeat service operated by a third party; a self-hosted receiver would need a
    watcher of its own.
