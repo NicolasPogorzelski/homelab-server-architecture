@@ -34,9 +34,10 @@ because policy files carry e-mail addresses.
 
 ## Decision
 A private repository holds `policy.hujson` with its `tests` block and one workflow: `test` on every
-pull request, `apply` on a push to `main`. The action authenticates by federated identity with the
-`policy_file` scope, and is pinned by commit SHA like every other action here. The console is set to
-refuse edits; an override there is a break-glass step, and the next `apply` replaces it.
+pull request, `apply` on a push to `main`. The action authenticates by two federated identities: one
+with `policy_file:read` that trusts only pull-request tokens for `test`, one with `policy_file` that
+trusts only `main` for `apply`. It is pinned by commit SHA like every other action here. The console
+is set to refuse edits; an override there is a break-glass step, and the next `apply` replaces it.
 `tailscale-acl.md` stays the public description, and a check in the private repository fails when
 its rules (source, destination, port) differ from the sanitized blocks in that document.
 
