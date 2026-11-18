@@ -100,6 +100,9 @@ jobs:
           format: sarif
           output: trivy.sarif
           severity: CRITICAL
+          # SARIF output ignores `severity` unless this is set, and every finding of every
+          # image would land in the Security tab.
+          limit-severities-for-sarif: true
           ignore-unfixed: true
           exit-code: "0"
 
