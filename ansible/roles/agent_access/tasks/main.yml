@@ -1,21 +1,27 @@
 ---
-- name: Refuse to install the automation key without a source restriction
+- name: Refuse to install an automation key without a source restriction
   ansible.builtin.assert:
     that:
-      - agent_access_source_ips | length > 0
+      - agent_access_source_ips is mapping
+      - agent_access_source_ips[item.name] | default([]) | length > 0
     fail_msg: >-
-      agent_access_source_ips is empty. Without `from=` the automation key would be accepted
-      from any address that reaches sshd. Set the workstation addresses in hosts.yml.
+      agent_access_source_ips has no addresses for {{ item.name }}. Without `from=` the key would
+      be accepted from any address that reaches sshd. Set the workstation's addresses in
+      hosts.yml under its name.
     quiet: true
-  when: agent_access_pubkey | length > 0
+  loop: "{{ agent_access_keys }}"
+  loop_control:
+    label: "{{ item.name }}"
 
 # exclusive: false, because the account also carries the person's keys, which this role does
 # not own. `restrict` turns off forwarding, PTY allocation and ~/.ssh/rc; commands still run.
-- name: Install the automation key with a source restriction
+- name: Install each automation key with its workstation's source restriction
   ansible.posix.authorized_key:
     user: "{{ agent_access_user }}"
     state: present
     exclusive: false
-    key: "{{ agent_access_pubkey }}"
-    key_options: 'from="{{ agent_access_source_ips | join(",") }}",restrict'
-  when: agent_access_pubkey | length > 0
+    key: "{{ item.pubkey }}"
+    key_options: 'from="{{ agent_access_source_ips[item.name] | join(",") }}",restrict'
+  loop: "{{ agent_access_keys }}"
+  loop_control:
+    label: "{{ item.name }}"

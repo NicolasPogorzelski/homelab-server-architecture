@@ -172,7 +172,7 @@ A node presenting any other key is refused before it receives a task.
 
 | Role | Targets | What it does |
 |---|---|---|
-| `agent_access` | lxc250 | Installs the automation key for `devops`; its restrictions are in the [decision](../decisions/automation-identity.md). |
+| `agent_access` | lxc250 | Installs one automation key per admin workstation for `devops`; its restrictions are in the [decision](../decisions/automation-identity.md). |
 | `app_backup` | vm100 | Daily Jellyfin archive through its backup API (database and subtitles, seven kept) onto `/mnt/vm-data`, and a freshness metric for the archive Audiobookshelf writes there itself. |
 | `apt_metrics` | all nodes | Exports pending package upgrades through Debian's `apt.sh` collector, redirected by drop-in to the fleet's textfile directory, with `TMPDIR` pointed there too. |
 | `auditd` | Proxmox host | Exercise ([decision](../decisions/exercise-scope-before-terraform.md)): syscall auditing with a starter rule set, read back with `auditctl -l`, `SYSLOG` actions and a capped log; no alert reads it. |

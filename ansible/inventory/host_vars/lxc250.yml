@@ -25,5 +25,10 @@ nsswitch_hosts: "files myhostname dns"
 # refuses if anything still points at the 127.0.0.53 stub.
 nsswitch_disable_resolved: true
 
-# The key automated sessions use (agent_access). The source addresses are in hosts.yml.
-agent_access_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoWFhtRzsjnURAgyOKNVYDojMsP13YSxWY9CGOqeOEw agent@admin-workstation"
+# The keys automated sessions use (agent_access), one per workstation. The source addresses
+# are in hosts.yml under the same names.
+agent_access_keys:
+  - name: admin-desktop
+    pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoWFhtRzsjnURAgyOKNVYDojMsP13YSxWY9CGOqeOEw agent@admin-workstation"
+  - name: admin-notebook
+    pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG9wKH8l5wuaS26DK4rnHZQDWfK+HwSyvx6Trxy0OnQt agent@notebook"
