@@ -65,7 +65,6 @@ loopback and publish through `tailscale serve`. These listeners do not follow it
 | Proxmox host | sshd `*:22` | the only path in without Tailscale, unpinned by decision | [sshd decision](../decisions/sshd-listen-address.md) |
 | Proxmox host | netconsole receiver, UDP 6666 | netpoll cannot use a Tailscale address | [Proxmox host](../platform/proxmox-host.md) |
 | lxc210 | Apache `*:80`, `*:443` | deferred | [remediation plan](../platform/remediation-plan.md#open-items) |
-| lxc210 | Collabora `*:9983` | no listen-address setting; `nft_guard` allows loopback only | [Nextcloud](../services/nextcloud.md) |
 | vm102 | Samba `0.0.0.0:445` | Samba cannot bind `tailscale0`; `smb_guard` filters it | [SMB bind decision](../decisions/smb-bind-and-lan-access.md) |
 
 sshd binds the Tailscale address on all nine guests. `listener_metrics` exports every listener outside the rule that the inventory does not
