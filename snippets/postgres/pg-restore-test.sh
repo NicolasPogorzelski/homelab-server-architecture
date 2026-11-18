@@ -15,7 +15,10 @@ set -euo pipefail
 
 # === Configuration ===
 BACKUP_DIR="/mnt/backups"
-PG_VERSION="15"
+# The throwaway cluster uses the version of the running main cluster, the one whose
+# pg_dumpall wrote the dump; an older server rejects a newer dump's syntax.
+PG_VERSION="$(pg_lsclusters --no-header | awk '$2 == "main" && $4 == "online" && !v { v = $1 } END { print v }')"
+[ -n "${PG_VERSION}" ] || { echo "ERROR: no online main cluster to take the version from" >&2; exit 1; }
 TEST_CLUSTER="restoretest"
 TEST_PORT="5433"
 
