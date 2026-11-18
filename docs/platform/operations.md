@@ -2,7 +2,6 @@
 
 The operational model of the platform: what is monitored, how data is protected, how the platform
 comes up after a power-on, how common failures are handled, and which routines keep it healthy.
-The goal is reboot-safe, least-privilege infrastructure whose recovery is written down.
 
 See: [Runbook index](../../runbooks/README.md), [Known errors](known-errors.md)
 

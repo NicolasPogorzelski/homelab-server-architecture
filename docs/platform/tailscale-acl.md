@@ -10,7 +10,7 @@ Principles:
 - No public ingress / no port-forwarding
 - Access is identity-based and explicitly allowed
 - Every grant names a port and, where a tag holds more than one service, a host
-- The policy is one JSON document with tests, not ad-hoc per service
+- The policy is one JSON document with tests
 
 **Source of truth:** the policy in the Tailscale admin console, mirrored here
 sanitized: addresses are placeholders, and people appear by role, never by name, device name or
@@ -529,7 +529,7 @@ three tier1 nodes it describes.
 ]
 ```
 
-The tests check the policy, not the fleet. The fleet is checked by TCP probes from the source nodes.
+The tests check the policy; TCP probes from the source nodes check the fleet.
 
 Verified 2026-09-26: 70 TCP connections from the servers and the admin notebook, every allowed path
 open and every denied one closed, every node reachable by Ansible and every Prometheus target up.

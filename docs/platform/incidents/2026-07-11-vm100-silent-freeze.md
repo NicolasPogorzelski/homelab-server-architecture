@@ -71,8 +71,8 @@ journal replay after the unclean stop was low-risk. `ssh gpu` worked again and a
 | 11:45 | all resolved | after `qm stop`/`qm start` |
 
 The alert reached Discord at 03:45 and stayed firing for about 8 hours. There is no overnight
-escalation and no automatic recovery. A `qm status` of `running` is not a guest health check; the
-guest agent ping and the serial console are.
+escalation and no automatic recovery. The guest agent ping and the serial console show
+whether the guest responds; `qm status` reported `running` throughout.
 
 ## State after recovery
 

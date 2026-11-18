@@ -70,7 +70,7 @@ pool ([storage definitions](#storage-definitions)). It logged the `DID_SOFT_ERRO
 [KE-14](known-errors.md#ke-14); identify HBA disks by SCSI address or `by-id`, never by kernel
 letter. Procedure: [boot disk replacement](../../runbooks/platform/boot-ssd-replacement.md).
 
-## aux-disk (degraded since 2026-06-25)
+## aux-disk (degraded)
 
 aux-disk is mounted at `/mnt/aux-disk` (fstab, `nofail`). It holds the Docker data-roots of the
 Docker-in-LXC services, vm100's `jellyfin-data` disk (qcow2) and the PostgreSQL data of lxc260.

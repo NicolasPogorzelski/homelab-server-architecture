@@ -1,7 +1,6 @@
 # Failure Domains - What Dies With What
 
-If a piece of hardware fails, what fails with it. Containment is ownership: what a device carries is
-drawn inside it. Unlike the other views, the arrows here follow loss: "if the source fails, this is
+If a piece of hardware fails, what fails with it. What a device carries is drawn inside it. Unlike the other views, the arrows here follow loss: "if the source fails, this is
 the consequence".
 
 None of the three domains is redundant. The platform has no high availability; recovery is
@@ -85,8 +84,8 @@ nothing: the parity disk is in the same machine. Each dataset's protection is dr
 
 ## What Is Not a Failure Domain
 
-The Proxmox host is a single point of failure - one machine, no cluster - but its loss is a hardware
-problem and no data problem: the guests live on the disks above. A dead mainboard costs a
+The Proxmox host is a single point of failure - one machine, no cluster - but its loss destroys no
+data: the guests live on the disks above. A dead mainboard costs a
 replacement and a rebuild ([platform restore](../../runbooks/platform/platform-restore.md)); a dead
 boot disk rolls every guest back to its last daily backup and each database to its last nightly dump.
 

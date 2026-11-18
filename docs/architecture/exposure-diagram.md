@@ -55,7 +55,7 @@ flowchart LR
 
 ## What the diagram does not show
 
-The diagram is accurate at the network boundary. It is not a statement about how each service binds.
+The diagram is accurate at the network boundary; how each service binds is listed below.
 
 The binding rule ([networking](../platform/networking.md)) is: bind the Tailscale address, or bind
 loopback and publish through `tailscale serve`. These listeners do not follow it:
@@ -68,8 +68,7 @@ loopback and publish through `tailscale serve`. These listeners do not follow it
 | lxc210 | Collabora `*:9983` | no listen-address setting; `nft_guard` allows loopback only | [Nextcloud](../services/nextcloud.md) |
 | vm102 | Samba `0.0.0.0:445` | Samba cannot bind `tailscale0`; `smb_guard` filters it | [SMB bind decision](../decisions/smb-bind-and-lan-access.md) |
 
-sshd binds the Tailscale address on all nine guests; vm100 and vm102 were the last, pinned on
-2026-10-12. `listener_metrics` exports every listener outside the rule that the inventory does not
+sshd binds the Tailscale address on all nine guests. `listener_metrics` exports every listener outside the rule that the inventory does not
 allow on record, and `ListenerOutsideBindingRule` fires on it.
 
 What keeps the LAN out is the `lan_guard` nftables table on every node.

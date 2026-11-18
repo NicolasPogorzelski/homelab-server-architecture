@@ -52,7 +52,7 @@ The storage VM (VM102) represents a single failure domain.
 
 - All persistent service data depends on this VM.
 - Failure of VM102 results in loss of SMB access and MergerFS namespace.
-- Parity protects against individual disk failures, not VM-level outage.
+- Parity protects against the failure of single disks; an outage of VM102 stops every share.
 
 High availability is not implemented; recovery is procedure-based.
 
@@ -77,9 +77,8 @@ Storage VM (VM102, Debian 12) uses a multi-disk layout:
 - Auxiliary disk:
   - `aux-pool` -> `/mnt/aux-pool` (a SnapRAID data disk and MergerFS branch like the others)
 
-`aux-pool` stays in the pool while the enclosure has free bays. It was meant to leave when
-`disk06` arrived; instead it is replaced once the last two bays are in use, because only then is
-the bay worth more than the 3 TB in it.
+`aux-pool` stays in the pool while the enclosure has free bays and is replaced once the last two
+bays are in use; until then its bay costs nothing and adds 3 TB.
 
 `aux-pool` is distinct from `aux-disk`, the application-data disk attached to the Proxmox host
 ([KE-13](known-errors.md#ke-13), [proxmox-host.md](proxmox-host.md)); vm102 has no aux-disk mount.
@@ -191,7 +190,7 @@ Least privilege on both sides:
 
 ### Adding a data disk
 
-Done this way for `disk06` on 2026-10-17, with the pool in use throughout:
+The pool stays in use throughout:
 
 1. On the host, one GPT partition from sector 2048, type `8300`, as on every pool disk, then
    `qm set 102 --scsiN /dev/disk/by-id/<disk>-part1,backup=0`. The disk hot-plugs into the
