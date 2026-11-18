@@ -5,13 +5,13 @@ details: [lxc210](../nodes/lxc210.md).
 
 ## Components
 
-- Apache 2.4 with PHP 8.2 (Debian packages); application in `/var/www/nextcloud`, owned by
+- Apache 2.4 with PHP 8.4 as `mod_php` (Debian packages); application in `/var/www/nextcloud`, owned by
   `www-data` ([KE-25](../platform/known-errors.md#ke-25))
 - MariaDB in the container (`dbhost=localhost`, database `nextcloud`), not on the PostgreSQL
   platform: Nextcloud predates lxc260 and upstream recommends MariaDB. No migration is planned.
 - Redis on `127.0.0.1:6379` for file locking, APCu as local cache
 - Collabora Online for document editing (below)
-- Nextcloud 34, the last major that runs on PHP 8.2
+- Nextcloud 34; 35 follows in its own window ([remediation plan](../platform/remediation-plan.md#open-items))
 
 ## Storage
 

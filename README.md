@@ -136,7 +136,7 @@ foundational ones.
 
 ### Runbooks, nodes and services
 
-24 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
+25 runbooks, each with preconditions, verification, failure modes, rollback and the date it was last
 exercised. Index: [runbooks/README.md](runbooks/README.md).
 
 <details>
