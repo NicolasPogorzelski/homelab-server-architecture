@@ -106,11 +106,28 @@ Verified 2026-11-18: `ActivityLogRetentionDays` is 30 in Jellyfin's `system.xml`
 
 ## Retention and deletion
 
-No retention period exists for documents, logs or monitoring history; the only rule is the dump
-retention above. No deletion procedure exists for media leaving the site, and the next one is due:
-the aux-disk holds C1 application data and cannot be assumed erasable by software, since thousands
-of its sectors are unreadable ([KE-13](known-errors.md#ke-13)). Both are open items in the
-[remediation plan](remediation-plan.md).
+Periods in force, as configured:
+
+| Data | Period | Set by |
+|---|---|---|
+| PostgreSQL and MariaDB dumps | 7 days | `RETENTION_DAYS=7` in the backup scripts |
+| Guest backups (`vzdump`) | 7 archives | `guest_backup` |
+| Backup-Archive copies | 3 months | `backup_mirror` |
+| Monitoring history | 30 days | `--storage.tsdb.retention.time` on Prometheus |
+| System journals | Size only: 512 MiB per node, which holds two to six months | `journald` |
+| Jellyfin activity log | 30 days | Jellyfin default |
+| Nextcloud trash and file versions | `auto`: at least 30 days, then deleted as space is needed | Nextcloud default, no key set |
+| Paperless documents, Nextcloud files, Talk messages, playback and listening history | None; kept until deleted by a person | - |
+
+No deletion procedure exists for media leaving the site, and the next one is due: the aux-disk
+holds C1 application data and cannot be assumed erasable by software, since thousands of its
+sectors are unreadable ([KE-13](known-errors.md#ke-13)). Periods for the rows without one are
+proposed in [`retention-periods.md`](../decisions/retention-periods.md).
+
+Verified 2026-11-18: Prometheus runs with `--storage.tsdb.retention.time=30d`, by `docker inspect`
+on lxc200; `trashbin_retention_obligation` and `versions_retention_obligation` are unset, by
+`occ config:system:get` on lxc210; the oldest journal on each node dates from 2026-05-15 to
+2026-09-24, by `journalctl --list-boots`.
 
 ## Off-site scope
 
