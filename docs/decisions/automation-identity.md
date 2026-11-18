@@ -27,15 +27,17 @@ read every file the person can.
 - **A second key for the control node only, with the person's key behind a passphrase.**
 
 ## Decision
-Automated sessions use `~/.ssh/id_ed25519_agent`, which `agent_access` installs for `devops` on
-lxc250, accepted only from the workstation's Tailscale address (`from=`) and with `restrict`. They
-reach the guests and the hypervisor only through Ansible from there, including read-only checks.
-The person's key keeps its reach and gets a passphrase; automated sessions connect through an SSH
-alias that names their own key with `IdentitiesOnly`.
+Automated sessions use `~/.ssh/id_ed25519_agent`, a separate key on each admin workstation, which
+`agent_access` installs for `devops` on lxc250. Each key is accepted only from its own
+workstation's Tailscale address (`from=`) and with `restrict`. They reach the guests and the
+hypervisor only through Ansible from there, including read-only checks. The person's key keeps its
+reach and gets a passphrase; automated sessions connect through an SSH alias that names their own
+key with `IdentitiesOnly`.
 
 ## Consequences
-- Every automated login shows the agent key's fingerprint in lxc250's sshd log, and removing one
-  line in `host_vars/lxc250.yml` revokes it without touching break-glass access.
+- Every automated login shows the fingerprint of its workstation's agent key in lxc250's sshd log,
+  and moving that key from `agent_access_keys` to `agent_access_revoked_keys` in
+  `host_vars/lxc250.yml` revokes it without touching the other workstation or break-glass access.
 - Through `devops` and Ansible, automated sessions can still change any node: `ansible` has
   passwordless sudo. Read-only automation needs an Ansible identity without sudo, which is not
   built.
