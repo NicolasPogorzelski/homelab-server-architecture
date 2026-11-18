@@ -112,6 +112,13 @@
     line: AllowTcpForwarding {{ ssh_hardening_allow_tcp_forwarding }}
   notify: Reload ssh_config
 
+- name: Agent forwarding
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?AllowAgentForwarding
+    line: AllowAgentForwarding {{ ssh_hardening_allow_agent_forwarding }}
+  notify: Reload ssh_config
+
 - name: Authentication attempts per connection
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
