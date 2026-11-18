@@ -62,3 +62,13 @@ Verified 2026-11-17: the desktop keyring holds no unlock entry for the person's 
 login collection's item labels.
 
 Verified 2026-11-17: the person's aliases resolve to `identityagent none`, by `ssh -G`.
+
+Verified 2026-11-18: the notebook's agent key logs in to lxc250 without a PTY, reaches the
+hypervisor and vm102 through Ansible, and its port forward is refused with `administratively
+prohibited`, by `ssh agent-devops`, `ansible proxmox,vm102 -m command` and `ssh -L`.
+
+Verified 2026-11-18: lxc250's sshd log names the notebook agent key's fingerprint, by
+`journalctl -u ssh` through `ansible lxc250 -b`.
+
+Pending: the person's key on the notebook has no passphrase and sits in the session's agent, by
+`ssh-keygen -y -P ''` succeeding and `ssh-add -l`.

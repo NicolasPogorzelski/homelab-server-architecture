@@ -6,8 +6,9 @@
 # through agent_access_revoked_keys.
 # See docs/decisions/automation-identity.md.
 #
-# Accepted by one account on the control node only. From there automated sessions work through
-# Ansible like a person; it has no key for root on the hypervisor or for the VM admin users.
+# Accepted by one account on the control node only. From there automated sessions reach every
+# node through Ansible and the control node's own key; this key opens no login of its own on
+# the hypervisor or the VMs.
 agent_access_user: devops
 
 # One entry per workstation: `name` and the public key, which is not secret. An empty list
