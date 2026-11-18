@@ -2,7 +2,8 @@
 # === agent_access ===
 #
 # The SSH keys that automated sessions on the admin workstations use, kept apart from the
-# person's break-glass key so a log line names who acted and each key can be revoked alone.
+# person's break-glass key so a log line names who acted and each key can be revoked alone
+# through agent_access_revoked_keys.
 # See docs/decisions/automation-identity.md.
 #
 # Accepted by one account on the control node only. From there automated sessions work through
@@ -17,3 +18,7 @@ agent_access_keys: []
 # only from its own workstation. Real values live in the private inventory; a key whose name has
 # no addresses fails the run, because without `from=` sshd would accept it from any address.
 agent_access_source_ips: {}
+
+# Public keys to remove from the account. Deleting an entry from agent_access_keys does not
+# revoke it, because the install task leaves keys it no longer lists in place (exclusive: false).
+agent_access_revoked_keys: []

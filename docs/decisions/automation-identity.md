@@ -36,8 +36,8 @@ key with `IdentitiesOnly`.
 
 ## Consequences
 - Every automated login shows the fingerprint of its workstation's agent key in lxc250's sshd log,
-  and removing that key's entry in `host_vars/lxc250.yml` revokes it without touching the other
-  workstation or break-glass access.
+  and moving that key from `agent_access_keys` to `agent_access_revoked_keys` in
+  `host_vars/lxc250.yml` revokes it without touching the other workstation or break-glass access.
 - Through `devops` and Ansible, automated sessions can still change any node: `ansible` has
   passwordless sudo. Read-only automation needs an Ansible identity without sudo, which is not
   built.

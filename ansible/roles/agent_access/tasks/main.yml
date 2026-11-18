@@ -25,3 +25,12 @@
   loop: "{{ agent_access_keys }}"
   loop_control:
     label: "{{ item.name }}"
+
+- name: Remove revoked automation keys
+  ansible.posix.authorized_key:
+    user: "{{ agent_access_user }}"
+    state: absent
+    key: "{{ item }}"
+  loop: "{{ agent_access_revoked_keys }}"
+  loop_control:
+    label: "{{ item.split()[-1] }}"
