@@ -10,12 +10,15 @@ ssh_hardening_permit_root_login: "no"
 
 # === Forwarding and authentication attempts ===
 #
-# Debian ships X11 and TCP forwarding on and six attempts per connection. No node
-# runs a display, and no documented path tunnels through sshd; Ansible multiplexes
-# sessions, which needs neither. Four attempts is the CIS limit and leaves room for
-# an agent that offers three keys before the right one.
+# Debian ships X11, TCP and agent forwarding on and six attempts per connection. No
+# node runs a display, no documented path tunnels through sshd, and no hop uses a
+# forwarded agent: lxc250 pulls over HTTPS and Ansible uses the control node's own
+# key. A forwarded agent would let root on a node sign with the caller's keys. Four
+# attempts is the CIS limit and leaves room for an agent that offers three keys
+# before the right one.
 ssh_hardening_x11_forwarding: "no"
 ssh_hardening_allow_tcp_forwarding: "no"
+ssh_hardening_allow_agent_forwarding: "no"
 ssh_hardening_max_auth_tries: 4
 
 # === ListenAddress ===
