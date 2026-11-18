@@ -21,3 +21,15 @@ systemd_hygiene_group_units:
       Observed on lxc230 (2026-08-17, 06:04:50 to 06:04:52); the remaining
       six containers carry the identical trigger and had not yet hit the
       timing. Listed here rather than per host for exactly that reason.
+  - name: systemd-networkd.socket
+    reason: >-
+      Enabled in the container template although ifupdown configures eth0. The
+      netlink socket starts systemd-networkd, which then runs with every link
+      unmanaged. apt-helper sees it active and calls systemd-networkd-wait-online
+      before apt-daily-upgrade, which times out after 30 s and logs an error on
+      every node at every catch-up run. Masking the trigger keeps networkd down.
+  - name: systemd-networkd.service
+    reason: >-
+      Manages no link on these containers (networkctl lists every link as
+      unmanaged); ifupdown owns eth0 and Docker its bridges. Masked with its
+      socket, so nothing else starts it.
