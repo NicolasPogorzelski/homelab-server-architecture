@@ -40,9 +40,13 @@ leading_cd="$(printf '%s' "${command_line}" \
     | grep -oE '^[[:space:]]*cd[[:space:]]+[^[:space:];&|]+' | head -1 | awk '{print $2}')"
 session_cwd="$(printf '%s' "${payload}" | jq -r '.cwd // ""' 2>/dev/null)"
 
+# A candidate that is no local directory (a `-C` inside an ssh command, a variable
+# the shell would expand later) says nothing about this checkout and is skipped.
 for candidate in "${explicit_c}" "${leading_cd}" "${session_cwd}"; do
     [ -n "${candidate}" ] || continue
-    target_dir="${candidate/#\~/${HOME}}"
+    candidate="${candidate/#\~/${HOME}}"
+    [ -d "${candidate}" ] || continue
+    target_dir="${candidate}"
     break
 done
 
