@@ -29,18 +29,6 @@ systemd_hygiene_retired_units:
 # is the only node with such a database, so the timezone role pins it here.
 timezone_pin_mariadb: true
 
-# Collabora Online (coolwsd) runs from an AppImage that the richdocumentscode app
-# extracts into /tmp and starts as www-data: no package, no unit, no listen-address
-# setting. It binds *:9983, and Nextcloud reaches it only through proxy.php over
-# loopback, so the filter costs nothing. It runs without capability or seccomp
-# confinement (not available in an unprivileged LXC), so the container boundary
-# is the only isolation around the documents it parses.
-nft_guard_local_only_ports:
-  - port: 9983
-    reason: >-
-      Collabora Online (CODE AppImage, no listen-address setting). Reached only
-      through Nextcloud's proxy.php over loopback.
-
 # === sshd bound to the Tailscale address only ===
 # docs/decisions/sshd-listen-address.md; the reasoning is in lxc220's host_vars,
 # the first node it ran on. ssh_hardening disables `ssh.socket` where the bind is
@@ -58,4 +46,3 @@ ssh_hardening_listen_address: "{{ ansible_host }}"
 listener_metrics_allowed:
   - { proto: tcp, port: 80, reason: "Apache wildcard bind, deferred design decision - docs/nodes/lxc210.md" }
   - { proto: tcp, port: 443, reason: "Apache wildcard bind, deferred design decision - docs/nodes/lxc210.md" }
-  - { proto: tcp, port: 9983, reason: "coolwsd takes no bind address from the app - docs/services/nextcloud.md" }

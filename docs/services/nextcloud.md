@@ -10,7 +10,7 @@ details: [lxc210](../nodes/lxc210.md).
 - MariaDB in the container (`dbhost=localhost`, database `nextcloud`), not on the PostgreSQL
   platform: Nextcloud predates lxc260 and upstream recommends MariaDB. No migration is planned.
 - Redis on `127.0.0.1:6379` for file locking, APCu as local cache
-- Collabora Online for document editing (below)
+- Collabora Online in a container for document editing (below)
 - Nextcloud 34; 35 follows in its own window ([remediation plan](../platform/remediation-plan.md#open-items))
 
 ## Storage
@@ -22,16 +22,21 @@ details: [lxc210](../nodes/lxc210.md).
 
 ## Collabora Online
 
-The `richdocumentscode` app extracts a Collabora (CODE) AppImage into `/tmp` and runs it as
-`www-data`. There is no package and no unit, so no role can own it without owning the app.
+Collabora Online runs as the `collabora/code` container from
+[`docker/collabora/docker-compose.yml`](../../docker/collabora/docker-compose.yml), published on
+`127.0.0.1:9980` only ([decision](../decisions/collabora-container.md)).
 
-- It listens on `*:9983` and accepts no listen address. Nextcloud reaches it through `proxy.php` on
-  its own web server, over loopback. `nft_guard` drops 9983 on every interface except loopback, and
-  `listener_metrics` lists it as a recorded exception.
-- Its process sandbox (capabilities and seccomp) is switched off by the AppImage, because it does
-  not work in an unprivileged LXC; uploaded documents are confined by the container boundary.
+- Apache proxies `/browser`, `/hosting/*` and `/cool` on the Nextcloud name to it, the WebSocket
+  path included ([`snippets/apache/collabora-proxy.conf`](../../snippets/apache/collabora-proxy.conf),
+  included in both virtual hosts).
+- `richdocuments` uses the Nextcloud URL for `wopi_url` and `public_wopi_url`, so the browser and
+  Nextcloud reach Collabora through the same proxy; Collabora calls back to the same name.
+  `aliasgroup1` in the container names that origin as an escaped regular expression.
+- The container's sandbox runs (`seccomp` and capabilities report ok); bind-mounting the jail tree
+  is unavailable in the unprivileged LXC, so jails are copied.
 - vm102's `snapraid.conf` excludes `/Nextcloud/appdata_*/richdocuments/remoteData/`.
-- The `onlyoffice` app is disabled; editing runs through `richdocuments` alone.
+- The `richdocumentscode` and `onlyoffice` apps are disabled; editing runs through `richdocuments`
+  alone.
 
 ## Access Model
 

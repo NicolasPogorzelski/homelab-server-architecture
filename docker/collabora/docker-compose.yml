@@ -1,0 +1,16 @@
+services:
+  collabora:
+    image: collabora/code:26.04.6.1.1@sha256:95f29f1c0a1778999125f53f058d968fe0afb37c95e32ebfb9f3444140faebd2
+    container_name: collabora
+    environment:
+      # The Nextcloud origin allowed to embed the editor and to serve WOPI files,
+      # as an escaped regular expression (see .env.example).
+      - aliasgroup1=${NEXTCLOUD_ORIGIN}
+      # Apache on lxc210 terminates TLS and proxies plain HTTP and WebSockets to it.
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true
+      - dictionaries=de_DE en_US en_GB
+    # Loopback only: browsers reach it through Apache's proxy paths on the
+    # Nextcloud name, Nextcloud through 127.0.0.1:9980.
+    ports:
+      - "127.0.0.1:9980:9980"
+    restart: unless-stopped

@@ -3,9 +3,9 @@
 #
 # A kernel packet filter that limits a port to loopback, for services that bind the
 # wildcard address and offer no setting to bind anywhere else. The platform rule is
-# Tailscale address or loopback, never a LAN interface. Example: Collabora on
-# lxc210 is an AppImage extracted by a Nextcloud app and has no listen-address
-# setting. The filter is evaluated before the daemon accepts the connection.
+# Tailscale address or loopback, never a LAN interface. No node lists a port at
+# present; the role keeps the table empty. The filter is evaluated before the
+# daemon accepts the connection.
 #
 # Each entry in nft_guard_local_only_ports:
 #   port:   TCP port number
