@@ -1,7 +1,7 @@
 # SMB to vm102 Over a Host-Only Bridge
 
 ## Status
-Proposed 2026-11-18. Replaces step 2 of
+Accepted 2026-11-18. Replaces step 2 of
 [`smb-bind-and-lan-access.md`](smb-bind-and-lan-access.md). Supersedes / superseded by: -.
 
 ## Context
