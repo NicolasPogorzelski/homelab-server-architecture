@@ -224,7 +224,16 @@ MergerFS is defined in `/etc/fstab`, which makes the mount reboot-safe. On boot,
 - Generated unit: `/run/systemd/generator/mnt-mergerfs.mount`
 - Mount: `/mnt/disk01:/mnt/disk02:/mnt/disk03:/mnt/disk04:/mnt/disk05:/mnt/aux-pool:/mnt/disk06` -> `/mnt/mergerfs`
 - Type: `fuse.mergerfs`
-- Options (fstab): `defaults,allow_other,use_ino,category.create=mfs`
+- Options (fstab): `defaults,allow_other,use_ino,category.create=mfs,moveonenospc=true`
+
+New files follow `category.create=mfs` to the branch with the most free space. A file that already
+exists grows on its own branch; when that branch runs out of space, `moveonenospc=true` moves the
+file to the branch with the most free space and retries the write, which otherwise fails with
+ENOSPC while the pool still reports space. Writers into existing files are Nextcloud, Paperless,
+the Calibre import and the backup shares; Jellyfin and Audiobookshelf mount the media read-only.
+
+Verified 2026-11-18: `moveonenospc` reads `mfs`, `minfreespace` 4 GiB, `category.create=mfs` on
+mergerfs 2.33.5, by `getfattr -n user.mergerfs.<option> /mnt/mergerfs/.mergerfs` on vm102.
 
 Effective runtime state can be inspected via:
 

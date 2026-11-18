@@ -26,7 +26,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 17 | Operating system lifecycle | The seven LXCs and vm102 run Debian 12, in LTS since 2026-06-11 and unsupported after 2028-06-30; vm100's Ubuntu 22.04 leaves standard security maintenance in May 2027 | Upgrade the Debian 12 guests to Debian 13 one at a time, lxc210 first (rank 10), and choose vm100's path to a newer Ubuntu LTS before May 2027 |
 | 18 | [Tailnet trust](#tailnet-trust): policy from Git | A policy change in the admin console goes through no review, and the sanitized copy in [`tailscale-acl.md`](tailscale-acl.md) can drift from it unnoticed | Create the private repository and its workflow per [the decision](../decisions/tailnet-policy-as-code.md) |
 | 19 | [Tailnet trust](#tailnet-trust): Tailnet Lock | Whoever controls the Tailscale account or the coordination server can add a node, and the grants in [`tailscale-acl.md`](tailscale-acl.md) then apply to it | After rank 18, write the runbook and enable Tailnet Lock in its own window |
-| 20 | [MergerFS writes on full branches](#mergerfs-writes-on-full-branches) | `moveonenospc` is off, so a file that grows on a branch with no space left fails with ENOSPC while the pool still has space; `ArchiveBranchLowSpace` warns before that point | Read how the installed mergerfs version handles `moveonenospc`, then set it in the pool's fstab line in a window without streams; rebalancing the branches waits for the [KE-36](known-errors.md#ke-36) cable swap |
+| 20 | MergerFS branch balance | Six of seven branches are 99 to 100 % full, so every new file lands on disk06 and reads concentrate there | Rebalance the branches after the [KE-36](known-errors.md#ke-36) cable swap |
 
 ## Item notes
 
@@ -135,16 +135,6 @@ changes which nodes may join, follows in a window of its own
   ([Rule 13](tailscale-acl.md#rule-13---external-user-through-machine-sharing));
 - the runbook covers signing a new device and the recovery path, `tailscale lock local-disable` on
   each node.
-
-### MergerFS writes on full branches
-
-New files follow `category.create=mfs` to the branch with the most free space. A file that already
-exists grows on its own branch, and with `moveonenospc` off a full branch refuses that write while
-the pool reports free space. Writers into existing files are Nextcloud, Paperless, the Calibre
-import and the backup shares; Jellyfin and Audiobookshelf mount the media read-only.
-
-Verified 2026-11-17: `moveonenospc=false`, `minfreespace` 4 GiB, `category.create=mfs` on mergerfs
-2.33.5, by `getfattr -n user.mergerfs.<option> /mnt/mergerfs/.mergerfs` on vm102.
 
 ### Package supply track
 
