@@ -102,3 +102,43 @@
   when:
     - nft_guard_local_only_ports | length > 0
     - not ansible_check_mode
+
+# With no port listed, a guard left from an earlier list is taken down: the unit,
+# its rules file and the loaded table. Without this the old table keeps dropping
+# a port nobody uses and returns at every boot.
+- name: Check for a guard left from an earlier port list
+  ansible.builtin.stat:
+    path: /etc/systemd/system/{{ nft_guard_unit }}
+  register: nft_guard_leftover
+  when: nft_guard_local_only_ports | length == 0
+
+- name: Stop and disable the leftover guard
+  ansible.builtin.systemd_service:
+    name: "{{ nft_guard_unit }}"
+    state: stopped
+    enabled: false
+  when:
+    - nft_guard_local_only_ports | length == 0
+    - nft_guard_leftover.stat.exists
+
+- name: Delete the leftover table from the running ruleset
+  ansible.builtin.command:
+    cmd: nft delete table inet {{ nft_guard_table }}
+  register: nft_guard_delete
+  changed_when: nft_guard_delete.rc == 0
+  failed_when: false
+  when:
+    - nft_guard_local_only_ports | length == 0
+    - nft_guard_leftover.stat.exists
+
+- name: Remove the leftover unit and rules file
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/{{ nft_guard_unit }}
+    - "{{ nft_guard_rules_file }}"
+  when:
+    - nft_guard_local_only_ports | length == 0
+    - nft_guard_leftover.stat.exists
+  notify: Reload systemd after removing the guard
