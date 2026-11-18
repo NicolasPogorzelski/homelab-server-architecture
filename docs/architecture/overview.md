@@ -1,8 +1,7 @@
 # Architecture Overview
 
 One Proxmox host runs nine guests, separated by responsibility: compute, storage, and one service
-per container. The host and all nine guests are Ansible-managed from lxc250. The document index is
-in the [README](../../README.md#documentation).
+per container. The host and all nine guests are Ansible-managed from lxc250.
 
 ## Components
 
@@ -40,9 +39,9 @@ Each node has its own document under [`docs/nodes/`](../nodes/).
 
 Two qualifications:
 
-- "No public exposure" holds at the network boundary, not at every socket. A few services bind
-  wildcard addresses; the router's missing forwarding rules keep the internet out and, since
-  2026-10-01, `lan_guard` on every node keeps the LAN out, except for named flows such as Jellyfin
+- "No public exposure" describes the network boundary. A few services bind wildcard addresses;
+  the router has no forwarding rule, which keeps the internet out, and `lan_guard` on every node
+  keeps the LAN out, except for named flows such as Jellyfin
   for the streaming box. The measured list is in the
   [exposure model](exposure-diagram.md).
 - Reboot safety is enforced where the faults were found: units ordered after `tailscaled` without

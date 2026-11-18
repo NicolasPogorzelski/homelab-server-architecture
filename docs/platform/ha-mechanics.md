@@ -28,8 +28,7 @@ it runs in local mode and is quorate with itself:
 quorum OK
 ```
 
-That line says nothing about a cluster. It says one node agrees with itself, and
-it reads as healthy only without the `pvecm` output above it.
+That line says one node agrees with itself; it describes no cluster.
 
 **The CRM**, one cluster resource manager, decides what should run where.
 **The LRM**, one local resource manager per node, does it. Both run here and are
@@ -57,8 +56,7 @@ active
 
 A ten-second timer runs against this hypervisor, held open and
 fed by `watchdog-mux`. The kernel loads `softdog` at `nowayout=0`, so if that
-process dies its descriptor closes and the timer stops with it - the watchdog is
-lost, not the host. With `nowayout=1` the timer would keep running after
+process dies its descriptor closes and the timer stops; the host keeps running. With `nowayout=1` the timer would keep running after
 `watchdog-mux` died, and reset the host ten seconds later.
 
 ## Missing: the agent lock
@@ -87,8 +85,8 @@ and started, and no resource exists to start the feeding chain below.
 
 Step 6 is fencing, and it is the correct behaviour: a node that cannot prove it
 is healthy must not keep running guests another node may be about to start. In a
-cluster that protects shared data; on one node the reset only reboots the host
-into the same situation.
+cluster that protects shared data; on one node no other machine can take the
+guests, so the reset reboots the same host with the same guests.
 
 ## Why it stays off here, in one sentence per reason
 

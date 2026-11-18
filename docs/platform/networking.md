@@ -43,7 +43,3 @@ The `lan_guard` nftables table on every node's LAN interface drops new inbound c
 named exceptions are SMB to vm102 from vm100 and the hypervisor, break-glass SSH and netconsole to
 the hypervisor, and Jellyfin on vm100 from the streaming box. The tailnet is never
 filtered by it. See the `lan_guard` role in [ansible.md](ansible.md#roles).
-
-## Design Goal
-
-Minimize attack surface while preserving operational usability.

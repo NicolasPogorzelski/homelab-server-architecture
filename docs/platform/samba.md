@@ -33,7 +33,6 @@ SMB was selected because it allows:
 - Controlled read-only exports
 - Clear identity boundaries
 
-The decision prioritizes operational predictability over theoretical performance.
 
 ---
 
@@ -183,9 +182,7 @@ Samba acts as a segmentation and identity boundary between:
 - Compute layer (VM100)
 - Service LXCs
 
-It is not used for public file sharing.
-
-It is an internal platform component.
+Nothing outside the platform uses it.
 
 ## Failure Impact
 
@@ -194,8 +191,6 @@ If Samba becomes unavailable:
 - All dependent services lose access to their storage paths
 - Containers may start but fail due to missing mounts
 - Monitoring should detect mount and service degradation
-
-This reinforces that VM102 represents a single storage failure domain.
 
 ## Reference Configuration
 
