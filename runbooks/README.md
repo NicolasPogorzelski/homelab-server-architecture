@@ -20,6 +20,7 @@ Rollback. Where a step has no rollback, the runbook names its abort criteria ins
 | [docker-data-root-migration](platform/docker-data-root-migration.md) | An LXC keeps its Docker data root on the thin pool | 2026-04-30, pass |
 | [backup-archive](platform/backup-archive.md) | Provisioning or checking the monthly Backup-Archive, restoring a month, or a `BackupMirror*` / `AppBackup*` alert fires | 2026-10-27, pass |
 | [guest-backup-restore](platform/guest-backup-restore.md) | A guest has to be restored, or a `GuestBackup*` alert fires | 2026-08-21, pass |
+| [lxc-debian-13-upgrade](platform/lxc-debian-13-upgrade.md) | A container still runs Debian 12 | 2026-11-18, pass |
 | [lxc250-rebuild](platform/lxc250-rebuild.md) | The Ansible control node has to be recreated | never |
 | [pveproxy-tailscale-boot-race](platform/pveproxy-tailscale-boot-race.md) | The web UI on `:8006` is down after boot while SSH works (KE-12) | 2026-06-25, pass |
 | [offsite-vps-provision](platform/offsite-vps-provision.md) | The off-site backup VPS is built | never |
