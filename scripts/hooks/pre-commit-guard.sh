@@ -6,15 +6,17 @@
 # It matches `git ... commit` anywhere in the command, so compound commands are covered; any
 # command that mentions both words is treated as a commit, and a false refusal costs a retry.
 # The target repository is resolved from `git -C`, a leading `cd`, or the session directory;
-# the guard steps aside only for a worktree that is provably a different repository.
-# Both roots come from `git rev-parse`, because `pwd` keeps symlinks (/home -> /var/home on
-# rpm-ostree) and would never match.
+# the guard steps aside only for a checkout that is provably a different repository. Linked
+# worktrees of this repository share its common git directory, so they are compared by that
+# and checked on their own branch with their own validator. Paths come from `git rev-parse`,
+# because `pwd` keeps symlinks (/home -> /var/home on rpm-ostree) and would never match.
 #
 # Exit code is always 0; a refusal is the JSON permission decision on stdout.
 
 set -uo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+REPO_COMMON="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 
 deny() {
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":%s}}' \
@@ -44,20 +46,25 @@ for candidate in "${explicit_c}" "${leading_cd}" "${session_cwd}"; do
     break
 done
 
+# The checkout the commit lands in: this one, or a linked worktree of the same repository.
+check_root="${REPO_ROOT}"
 if [ -n "${target_dir}" ] && [ -d "${target_dir}" ]; then
     target_root="$(git -C "${target_dir}" rev-parse --show-toplevel 2>/dev/null || true)"
-    # A different repository has its own branch rules and its own validator.
-    if [ -n "${target_root}" ] && [ "${target_root}" != "${REPO_ROOT}" ]; then
-        exit 0
+    target_common="$(git -C "${target_dir}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    if [ -n "${target_root}" ]; then
+        # A different repository has its own branch rules and its own validator.
+        [ "${target_common}" = "${REPO_COMMON}" ] || exit 0
+        check_root="${target_root}"
     fi
 fi
 
-branch="$(git -C "${REPO_ROOT}" branch --show-current 2>/dev/null || true)"
+branch="$(git -C "${check_root}" branch --show-current 2>/dev/null || true)"
 if [ "${branch}" = "main" ]; then
     deny "Direct commit on main is blocked. Create a branch first; main is reached through a pull request, which the GitHub ruleset also enforces."
 fi
 
-if findings="$("${REPO_ROOT}/scripts/validate-repo.sh" 2>&1)"; then
+# The worktree's own validator, run from its root, so its checks read its files.
+if findings="$(cd "${check_root}" && ./scripts/validate-repo.sh 2>&1)"; then
     exit 0
 fi
 
