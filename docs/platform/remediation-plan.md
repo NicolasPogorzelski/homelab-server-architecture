@@ -12,7 +12,7 @@ The ISO/IEC 27001 reading of the same gaps is in [`security-controls.md`](securi
 | 3 | [aux-disk replacement and disposal](#aux-disk-replacement-and-disposal) ([KE-13](known-errors.md#ke-13)) | The guest backups and the Docker data roots sit on a disk with a growing count of unreadable sectors | Order the replacement and decide the disposal method before it arrives |
 | 4 | [External heartbeat](#external-heartbeat) | A total outage of the host or of lxc200 takes the alerting chain down with it, so no alert is sent | Choose a third-party heartbeat receiver and deploy its route in the live `alertmanager.yml` |
 | 5 | [Power path and UPS](#power-path-and-ups) | The leading KE-14 hypothesis is the 12 V rail; the UPS has never been tested under load | Transport faults continue on phy 0 and 1 ([KE-36](known-errors.md#ke-36)): replace that breakout cable with step 2 of [`ke14-power-path-check.md`](../../runbooks/platform/ke14-power-path-check.md), run the rest of the check if they persist; record the UPS and measure its runtime |
-| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor's service shares to vm102 crosses the LAN, filtered by source address only, and the guest and database backups depend on `tailscaled` on the host | Write the decision record for a host-only bridge before any live change |
+| 6 | [Storage network](#storage-network) | SMB from vm100 and the hypervisor's service shares to vm102 crosses the LAN, filtered by source address only, and the guest and database backups depend on `tailscaled` on the host | Build `vmbr1` and move the mounts one at a time per [the decision](../decisions/storage-network.md) |
 | 8 | [Retention periods](../decisions/retention-periods.md) | System journals are bounded by size only, and the external user's data has no deletion rule (A.8.10) | Accept or amend the decision record, then set `MaxRetentionSec` in `journald` and write the runbook for ending the external user's access |
 | 9 | [Identity track](#identity-track) | Every service keeps its own accounts; Terraform waits on this track | Choose a start date, then build the identity node per [the decision](../decisions/identity-before-terraform.md) |
 | 10 | Nextcloud 35 on lxc210 | Nextcloud 34 is supported until 2027-06; the mimetype migrations from earlier upgrades are still pending | Run `occ maintenance:repair --include-expensive`, then update to Nextcloud 35 in its own window |
@@ -87,25 +87,9 @@ need host downtime and no purchase.
 
 ### Storage network
 
-SMB from vm100 and the hypervisor's four service-share mounts reaches vm102's LAN address, admitted by `smb_guard` and by the
-`lan_guard` exception in `ansible/inventory/host_vars/vm102.yml`. The target replaces step 2 of
-[`smb-bind-and-lan-access.md`](../decisions/smb-bind-and-lan-access.md):
-
-- a host-only bridge `vmbr1` without `bridge-ports`, static addresses for the host, vm100 and vm102;
-- the host's seven mounts, the three backup targets on the tailnet included, and vm100's mounts move
-  to it one at a time, each with automount and a reboot test;
-- afterwards `smb_guard` drops 445 on vm102's LAN interface and the `lan_guard` exception for 445
-  is removed.
-
-Samba keeps its wildcard bind, because an explicit bind cuts the Tailscale path the admin
-workstations use; check that path after every step. When the backup targets have moved, ACL
-[Rule 4](tailscale-acl.md#rule-4---hypervisor-smb-from-vm102) is removed. In the same window,
-adopt the hand-deployed `smb-guard` table (`snippets/storage/smb-guard.nft`) into the `nft_guard`
-role.
-
-Verified 2026-10-01: SMB over Tailscale from the admin desktop at 94.9 MB/s up and 104.9 MB/s down
-with `smbclient`; neither of vm102's two vCPUs saturated. On 1 GbE the link and the tunnel set the
-ceiling.
+The steps, the order of the mount moves and the checks after each are in
+[`storage-network.md`](../decisions/storage-network.md). Check the admin workstations' SMB path
+over the tailnet after every step.
 
 ### Identity track
 
