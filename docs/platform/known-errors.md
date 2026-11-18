@@ -301,7 +301,7 @@ sudo -u postgres psql -tAc 'SHOW listen_addresses;'   # configured binds
 ```
 
 **Fix.** Recovery: `systemctl restart postgresql` once the Tailscale IP exists. Durable: role
-`postgresql_boot_order` adds a drop-in to `postgresql@15-main.service` with `After=`/`Wants=`
+`postgresql_boot_order` adds a drop-in to the cluster unit (`postgresql@17-main.service`) with `After=`/`Wants=`
 `tailscaled.service` and `ExecStartPre=/usr/local/bin/wait-for-tailscale-ip.sh`.
 `listen_addresses='*'` was rejected because it binds the LAN interface
 ([ADR](../decisions/postgresql-tailscale-boot-ordering.md)).
@@ -682,7 +682,7 @@ file: systemd expands `$` in `ExecStartPre=`, and an inline loop can silently ru
 
 | Node / unit | Variant | Fix |
 |---|---|---|
-| lxc260 `postgresql@15-main` | bind | `postgresql_boot_order` ([KE-9](#ke-9)) |
+| lxc260 `postgresql@17-main` | bind | `postgresql_boot_order` ([KE-9](#ke-9)) |
 | host `pveproxy` | bind | `tailscale_boot_gate` ([KE-12](#ke-12)) |
 | host and nine guests `node_exporter` | bind | gate in the `node_exporter` unit template |
 | lxc210 `tailscale-cert-refresh` | query | FQDN poll, up to 90 s, in `snippets/scripts/tailscale-cert-refresh.sh` |

@@ -2,6 +2,6 @@
 # Safe no-op default: a host with no tenants defined loops over nothing
 # instead of failing on an undefined variable. Real tenants live in host_vars/.
 postgres_tenants: []
-# PostgreSQL major version on the DB host (LXC260 runs 15).
+# PostgreSQL major version on the DB host (LXC260 runs 17, Debian 13's version).
 # Used to locate the versioned pg_hba.conf and systemd unit.
-postgres_version: 15
+postgres_version: 17
