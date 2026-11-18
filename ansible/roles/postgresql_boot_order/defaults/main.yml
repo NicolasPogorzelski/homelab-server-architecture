@@ -12,4 +12,4 @@ pg_boot_order_wait_script: /usr/local/bin/wait-for-tailscale-ip.sh
 pg_boot_order_wait_timeout: 90
 
 # The PostgreSQL instance unit to gate (Debian: postgresql@<version>-<cluster>).
-pg_boot_order_unit: postgresql@15-main.service
+pg_boot_order_unit: postgresql@17-main.service
