@@ -71,19 +71,38 @@ for a simple, cheap platform.
 ## Data protection assessment
 
 The platform processes personal data: identity documents and correspondence in Paperless, files and
-contacts in Nextcloud, and the viewing activity of the people who use the media services.
+contacts in Nextcloud, and the viewing and listening activity of the people who use the media
+services.
 
 Article 2(2)(c) GDPR exempts processing "by a natural person in the course of a purely personal or
-household activity". The platform sits close to two edges of that exemption:
+household activity". Recital 18 counts correspondence and online activity within that context. The
+Court of Justice drew the edge in C-101/01 (Lindqvist), where data made accessible to an
+indefinite number of people left the exemption, and in C-212/13 (Rynes), where a camera covering a
+public space did.
 
-- It ends when access is granted outside the household. The [ACL model](tailscale-acl.md)
-  records one external user with access to Jellyfin, Audiobookshelf and Nextcloud through machine
-  sharing. The assessment for those three services is due again and has not been redone
-  ([remediation plan](remediation-plan.md)).
-- It never covers the security obligation: the data belongs to identifiable people.
+One external user reaches Jellyfin, Audiobookshelf and Nextcloud Talk through machine sharing
+([Rule 13](tailscale-acl.md#rule-13---external-user-through-machine-sharing)). The data of that
+user processed here:
 
-The C1 rows are therefore handled as though Article 32 applied, which their loss consequences
-demand independently.
+| Service | Data about the external user | Retention |
+|---|---|---|
+| Jellyfin | Account, playback history, activity log entries with device and address | Activity log 30 days; playback history until deleted |
+| Audiobookshelf | Account, listening sessions and progress | Until deleted |
+| Nextcloud Talk | Account, messages and call metadata with the owner | Until deleted |
+
+The access is granted to one person known personally, by name, with no payment and no
+organisational purpose, and the content is not reachable by anyone outside the two tailnets. That
+stays within a purely personal activity, so the exemption holds for the three services. It ends
+when access goes to a group that is not closed and known, when the platform serves an
+organisation, or when a service is published beyond the tailnet; each of those requires the
+assessment to be redone before the change.
+
+The exemption never covers the security obligation in substance: the data belongs to identifiable
+people. The C1 rows are therefore handled as though Article 32 applied, which their loss
+consequences demand independently.
+
+Verified 2026-11-18: `ActivityLogRetentionDays` is 30 in Jellyfin's `system.xml` on vm100, by
+`grep` on that file.
 
 ## Retention and deletion
 
