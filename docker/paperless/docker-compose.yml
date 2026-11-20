@@ -41,7 +41,7 @@ services:
   tika:
     # Tag and digest: the tag names the version, the digest is what is pulled.
     # 3.3.1.0 is the Tika release Paperless v3's own compose example pins.
-    image: apache/tika:3.3.1.0@sha256:90b7fa1dc018434075fce9e1d9b88b1e3d0ea6979d0cf86e116c79a8073ae973
+    image: apache/tika:4.2.0-1@sha256:b99f19c4fd76237dafe7d22f719b9bddfa9a449da687c597a41e2f6d9a595418
     container_name: paperless-tika
     restart: unless-stopped
 
