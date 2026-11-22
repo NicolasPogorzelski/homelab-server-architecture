@@ -49,6 +49,7 @@ Anchors are `ke-N`; link as `known-errors.md#ke-N`. Entry format:
 | [KE-35](#ke-35) | An onboot VM stays off after a boot that catches up the guest backup | Resolved 2026-11-11 - backup ordered after `pve-guests`; verified at a late boot 2026-11-15 |
 | [KE-36](#ke-36) | Link CRC errors at boot on two data disks behind the HBA | Open - breakout cable for phy 0-3 to be replaced |
 | [KE-37](#ke-37) | lxc-fstrim fails on a container the catch-up backup has locked | Resolved 2026-11-15 - trim ordered after the guest backup; next late boot pending |
+| [KE-38](#ke-38) | Playback on the streaming box hangs after a pause, track switch or refresh-rate switch with bitstreamed audio | Mitigated 2026-11-22 - passthrough off, the box decodes every format to PCM |
 
 ---
 
@@ -1442,3 +1443,45 @@ ct250 from 12:20:59 to 12:21:46; `pct fstrim 250` came at 12:21:39. Same off-win
 `guest-backup.service`; a manual start finished without a failed container. Pending: on the next
 boot after both slots, `journalctl -b -u lxc-fstrim.service` starts after
 `Finished guest-backup.service`.
+
+---
+
+<a id="ke-38"></a>
+## KE-38: Playback on the streaming box hangs after a pause, track switch or refresh-rate switch with bitstreamed audio
+
+- **Status:** Mitigated 2026-11-22 - passthrough off, the box decodes every format to PCM
+- **Affects:** Moonfin on the streaming box; Jellyfin on vm100 is not involved
+
+**Symptom.** The picture freezes and Moonfin shows buffering with more than ten seconds buffered,
+until its watchdog fails playback. Seen twice with audio passthrough on:
+
+- 2026-10-08, AC3 and E-AC3: five of seven starts that switched the display from 59.94 Hz to
+  23.976 Hz hung within two seconds. Moonfin's log: `AudioTrack write failed: -6 (the route
+  dropped the track)`, then the track reopened and playback stayed in `buffering`.
+- 2026-11-21, DTS-HD MA: hangs after pause and resume and after a switch between two audio tracks.
+  Jellyfin logged nine starts of the same title between 20:00 and 20:03, each stopped at the same
+  position.
+
+Jellyfin served the file by direct play throughout and logged no error.
+
+**Cause.** With passthrough the player owns a bitstream audio track on the HDMI output. A pause,
+a track switch or the HDMI renegotiation after a refresh-rate switch drops that track, and
+Moonfin's recovery of it races with playback (upstream
+[Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775)). Starts with the
+display already at the content's rate, and starts with passthrough off, did not hang: 4 of 4 and
+6 of 6 on 2026-10-08.
+
+**Fix.** Moonfin -> Settings -> Playback -> Audio -> Passthrough set to "disabled". Moonfin decodes
+AAC, AC3, E-AC3, DTS, DTS-HD and TrueHD itself and sends multichannel PCM; "Transcode Audio Codecs"
+stays empty, so the server converts nothing. On a 5.1 system the channels are unchanged and the
+lossless formats stay lossless. Passthrough also carried Atmos and DTS:X object metadata, which
+only height speakers use, and the receiver's own dynamic range setting for Dolby tracks.
+Passthrough is retested once the Play Store offers Moonfin 3.1.1 or later, which carries a pause
+and resume fix; the GitHub build cannot update the Play Store install because it is signed with a
+different key.
+
+**Verification.** Verified 2026-11-22 on a title with Dolby Vision profile 7 and DTS-HD MA 5.1: HDMI
+output PCM, channel mask `0x3F` (5.1), 48 kHz, no underruns; Dolby Vision active, display at
+2160p 24 Hz; pause and resume, fast forward and German -> English -> German each kept the
+position advancing. By `adb shell dumpsys media.audio_flinger` (track `Format` and `Chn mask`) and
+`adb shell dumpsys media_session` (state and position).

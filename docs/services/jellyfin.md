@@ -87,8 +87,9 @@ journalctl -t jellyfin-cuda-watchdog -n 20
 
 ## Moonfin Direct Play
 
-Playback hangs right after an audio passthrough start on the streaming box are a client fault,
-tracked upstream as [Moonfin-Core#1775](https://github.com/Moonfin-Client/Moonfin-Core/issues/1775).
+Moonfin on the streaming box has audio passthrough off and decodes every audio format to
+multichannel PCM itself, so the server transcodes no audio for it. Passthrough hung playback
+after pauses, track switches and refresh-rate switches ([KE-38](../platform/known-errors.md#ke-38)).
 Stalls on its Tailscale path are [KE-34](../platform/known-errors.md#ke-34); the box streams over
 the LAN.
 
