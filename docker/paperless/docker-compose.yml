@@ -23,7 +23,7 @@ services:
       - paperless-data:/usr/src/paperless/data
 
   redis:
-    image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     container_name: paperless-redis
     restart: unless-stopped
     volumes:
